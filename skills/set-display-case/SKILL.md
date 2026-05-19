@@ -32,10 +32,11 @@ Read all of these before beginning:
 | File | Purpose |
 | --- | --- |
 | [references/token-checklist.md](references/token-checklist.md) | Canonical token categories — gate blocks until all satisfied |
-| [references/globals-css-template.md](references/globals-css-template.md) | Template for `app/globals.css` output |
+| [references/globals-css-template.md](references/globals-css-template.md) | Template for the project's CSS entry file (path detected via framework-detect.md, e.g. `app/globals.css` / `src/index.css` / `src/app.css` / `src/styles/global.css`) |
 | [references/tailwind-config-template.md](references/tailwind-config-template.md) | Template for `tailwind.config.ts` output |
 | [references/design-system-md-template.md](references/design-system-md-template.md) | Template for `docs/design-system.md` output |
 | [references/claude-md-rules-block.md](references/claude-md-rules-block.md) | Rules block to append to the project rules file |
+| [`../setup-shop/references/framework-detect.md`](../setup-shop/references/framework-detect.md) | Canonical stack list + per-framework CSS entry path. Read this before Step 1 so the right CSS path is detected without hardcoding `app/globals.css`. |
 
 ## Subagent Roster
 
@@ -104,7 +105,7 @@ Determine which mode applies from context. If ambiguous, ask:
 Collect:
 - **Bundle path** (Mode A) OR **brand brief** (Mode B) — required
 - **Project rules file path** — CLAUDE.md or AGENTS.md (from `cook-pizzas` Q12, or ask)
-- **App structure** — `app/globals.css` or `src/app/globals.css` (detect from project, or ask)
+- **Detected stack and CSS entry path** — run the detection algorithm from [`../setup-shop/references/framework-detect.md`](../setup-shop/references/framework-detect.md). The CSS entry path varies by stack: `app/globals.css` (next-app), `styles/globals.css` (next-pages), `src/index.css` (vite-react), `src/app.css` (sveltekit), `src/styles/global.css` (astro). If detection returns `unknown`, ask the user.
 - **App shell?** — does the project include a sidebar/nav shell? (determines whether sidebar tokens are required)
 
 ---
@@ -130,7 +131,7 @@ Once the gate passes, write these files in the target project:
 
 | Artifact | Path | Notes |
 | --- | --- | --- |
-| CSS token file | `app/globals.css` or `src/app/globals.css` | Per detected project structure |
+| CSS token file | per detected stack (see [`framework-detect.md`](../setup-shop/references/framework-detect.md)) | `app/globals.css` (next-app) / `styles/globals.css` (next-pages) / `src/index.css` (vite-react) / `src/app.css` (sveltekit) / `src/styles/global.css` (astro) |
 | Tailwind config | `tailwind.config.ts` | Token bindings; extends theme |
 | Design system doc | `docs/design-system.md` | Canonical human-readable reference |
 | Bundle audit trail | `docs/design-bundle/` | Mode A only — copy of the Claude Design export |
@@ -185,11 +186,12 @@ Append the completed block to the project rules file (CLAUDE.md or AGENTS.md). D
 
 Dispatch [`agents/library-route-scaffolder.md`](agents/library-route-scaffolder.md). Pass:
 - Project root path
-- Detected `app/` location (`app/` vs `src/app/`)
+- **Detected stack** (one of: `next-app`, `next-pages`, `vite-react`, `sveltekit`, `astro`, `unknown`) — from [`framework-detect.md`](../setup-shop/references/framework-detect.md). The scaffolder uses this to pick the right route convention and theme primitive.
+- Detected route-entry directory (per stack — `app/` for next-app, `pages/` for next-pages, `src/routes/` for sveltekit, etc.)
 - `docs/design-system.md` path
-- `app/globals.css` (or `src/app/globals.css`) path
+- CSS entry path (per detected stack)
 - Project rules file path
-- Whether `next-themes` is already a dependency (read from `package.json`)
+- Theme primitive already installed? (read from `package.json` — `next-themes` for Next, `mode-watcher` for SvelteKit, custom class-based for Vite + React, etc.)
 
 The agent generates an operator-only Storybook-like preview route at `app/(dashboard)/library/` (or the detected route-group equivalent — falls back to `app/library/` if no route groups exist). The route uses **`?tab=<id>` query-param routing**: one page route reads `searchParams.tab`, validates it against a typed `LIBRARY_TABS` tuple, and dispatches to the matching component from a `STORIES` registry. Each entry is **one file** under `_entries/<id>-entry.tsx` (no folder-per-entry). Adding a new entry means appending in three places — `LIBRARY_TABS`, `STORIES`, and `entries` (sidebar metadata) — and TypeScript enforces that the tuple and the dispatch map stay in lockstep (`Record<LibraryTab, ComponentType>`).
 

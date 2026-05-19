@@ -1,6 +1,6 @@
 {
   "name": "bytheslice",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "private": false,
   "description": "A grab-and-go pizza shop for shipping software. Daily prep, slice-by-slice service, /goal-driven autonomous mode.",
   "bin": {

@@ -7,6 +7,59 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [4.1.0] — 2026-05-19
+
+**Hooks + framework decoupling.** Deterministic plugin hooks replace prose enforcement of preconditions across every skill — `/sell-slice` blocks when the master checklist is missing, `/box-it-up` refuses to run on `main`, `git commit` on `main` is blocked at the tool layer, and a `Stop` gate nudges `/sell-slice` to complete its commit loop. Framework support broadens from "Next.js only" to a canonical multi-stack contract — Next App Router and Pages Router, Vite + React, SvelteKit, Astro, and plain Node API are all detected and bootstrapped; non-Next stacks bubble HITL at the Phase 4.5 library-preview gate until per-framework templates land. GitNexus hard-coupling is removed.
+
+### Added
+
+- **`hooks/` infrastructure.** Four deterministic guard scripts:
+  - `precheck-skill.sh` (`UserPromptSubmit`) — detects a `/bytheslice` slash command and runs per-skill preconditions: BLOCKs `/sell-slice` without a master checklist, BLOCKs `/box-it-up` on `main`/`master`, WARN-injects on dirty tree / missing `gh` auth / incomplete Prep section.
+  - `shop-status.sh` (`SessionStart`) — injects a compact stage summary at session start (counts + next not-started row + Prep progress) when a checklist is present.
+  - `pre-commit-guard.sh` (`PreToolUse` Bash matcher) — BLOCKs `git commit` on `main`/`master`; WARN-injects a staged-files summary on feature branches.
+  - `stop-gate.sh` (`Stop`) — if `/sell-slice` started in the current session but no commit landed since the precheck, BLOCKs once so Claude completes the loop. Session-id-scoped: stale state from previous sessions never blocks.
+- **`hooks/scenarios.md`** — canonical hook scenario contract. Every row is one (skill / state / expected) tuple the hooks must satisfy. The single source of truth that `test.sh` enforces and every `SKILL.md` `## Preconditions` section indirectly references.
+- **`hooks/test.sh`** — 34-test regression suite. Each test sets up an isolated fixture under `$TMPDIR`, runs one hook with a synthetic JSON envelope, and asserts exit code + output substring. Pure bash, no deps beyond `git`.
+- **`hooks/lib/checklist.sh`** — shared helpers (`bts_root`, `bts_checklist_path`, `bts_prep_counts`, `bts_branch`, `bts_tree_state`, `bts_session_id`, `bts_state_dir`, `bts_detect_skill`).
+- **`hooks/README.md`** — hook reference, scenario-contract pointer, disable escape hatches (`BTS_HOOKS_DISABLED=1` per-session, `disableAllHooks` global).
+- **`skills/setup-shop/references/framework-detect.md`** — new canonical stack contract. Supported-stacks table, detection algorithm, per-stack path map, bootstrap scaffolder list, per-skill branching matrix. Every skill that branches on framework reads this file instead of duplicating detection logic.
+- **Multi-stack bootstrap support** in `/setup-shop`:
+  - `vite-react` via `pnpm create vite@latest <name> -- --template react-ts` + Tailwind install
+  - `sveltekit` via `pnpm create svelte@latest <name>` (interactive — skeleton + TS + Tailwind)
+  - `astro` via `pnpm create astro@latest <name> -- --template minimal --typescript strict` + Tailwind add-on
+  - `node-api` via `pnpm init` (framework-agnostic; `/sell-slice` runs backend / db-schema / infrastructure stages only)
+- **`bootstrap-templates-catalog.md` framework-adapter status matrix** documenting which stack ✅ works end-to-end, which ⚠️ HITLs at the library-preview gate, and the contract for adding a new stack.
+- **Per-session hook disable**: `export BTS_HOOKS_DISABLED=1` short-circuits every bytheslice hook in the current shell — useful for one-off experimental flows where the guards get in the way. Reverts on shell exit.
+
+### Changed
+
+- **CSS entry path parameterized** in `/set-display-case`. Reads from `framework-detect.md` instead of hardcoding `app/globals.css`. Per-stack: `app/globals.css` (next-app), `styles/globals.css` (next-pages), `src/index.css` (vite-react), `src/app.css` (sveltekit), `src/styles/global.css` (astro).
+- **`library-route-scaffolder` is framework-aware.** New Step 0 framework gate bubbles HITL `prd_ambiguity` for non-`next-app` stacks with the framework's idiomatic conventions, instead of silently producing wrong files. Hardened against orchestrator-paraphrase attacks ("the user already said it's fine" is the HITL trigger, not a bypass).
+- **`layout-architect` and `library-entry-writer` have matching framework gates.** Both bubble HITL for non-Next stacks at Step 0 / Step 0a, with strong anti-paraphrase language so a sibling agent or orchestrator framing cannot waive the gate. Pressure-tested four times against user-side, orchestrator-side, and orchestrator-paraphrase attacks.
+- **`setup-shop` Q-bootstrap-stack expanded** from "Next.js only" single-option to a five-option select (Next App, Vite + React, SvelteKit, Astro, Node API). The question reflects the actual support matrix from `framework-detect.md`.
+- **`discovery` agent simplified.** GitNexus fork removed from workflow — agent now uses Grep + Glob only. Output contract drops `index_freshness` and `discovery_method` fields.
+- **SKILL.md Preconditions sections trimmed** across `sell-slice`, `box-it-up`, `inspect-display`, `run-the-day`. The inline prose ("If any precondition fails, stop and surface the gap") is replaced by a one-line pointer to `hooks/precheck-skill.sh`. The checks still run when hooks are disabled; the prose enforcement just lives in one place now.
+- **`CLAUDE.md` slimmed** from 43 lines (GitNexus-focused) to 13 lines (bytheslice-focused project notes).
+
+### Removed
+
+- **GitNexus hard-coupling.** The GitNexus MCP itself remains available globally; bytheslice no longer assumes it's installed. Specifically removed:
+  - `Q6 — GitNexus` from `/cook-pizzas` plan-mode questions
+  - `gitnexus` key from `bytheslice-config-schema.md` mcps block and example config
+  - `gitnexus` from `/setup-shop` Q-mcps options
+  - GitNexus discovery fork from `sell-slice/agents/discovery.md`
+  - GitNexus context from `rules-loader` and `rules-assembler` agent inputs/outputs
+  - GitNexus rules pull (the `<!-- gitnexus:start -->...<!-- gitnexus:end -->` block) from `CLAUDE.md`
+  - `.gitnexus` entry from `.gitignore` (replaced by `.claude/.bytheslice-state/`)
+
+### Migration
+
+**Existing v4.0 projects.** No action required. Hooks activate automatically once you upgrade to v4.1 and Claude Code re-reads the plugin manifest. The `Preconditions` sections of every `SKILL.md` still enforce checks when hooks are disabled, so nothing breaks if you opt out via `BTS_HOOKS_DISABLED=1` or `disableAllHooks`. If your project's `bytheslice.config.json` has an `mcps.gitnexus` key, it's harmless — the resolver now ignores it; you can remove it on your next config edit. Your existing `CLAUDE.md` is untouched by the upgrade; if you want the new slimmer notes, re-run `/setup-shop` Step 3 or edit by hand.
+
+**New projects on non-Next.js stacks.** `/setup-shop` Q-bootstrap-stack now offers Vite + React, SvelteKit, Astro, Node API. Bootstrap + design system + CI/CD work end-to-end. The first time `/sell-slice` Phase 4.5 (Library Preview Gate) fires, the agents will bubble HITL with the framework's idiomatic conventions and ask whether to skip, approximate, or defer until the per-framework adapter ships.
+
+---
+
 ## [4.0.0] — 2026-05-14
 
 **The Pizza Shop release.** Every command is renamed to a kitchen action. Foundation skills get promoted out of being canned plan stages into being standalone, run-once-before-service prep commands. The master checklist gains a top "Prep" section. Every skill is independently invocable (auto-detected standalone vs sequential mode). `/goal` integration lands in `/run-the-day`'s auto modes and in `/sell-slice`'s Phase 2.5.

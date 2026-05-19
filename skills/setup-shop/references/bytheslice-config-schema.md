@@ -75,8 +75,7 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
     "magic": false,
     "figma": false,
     "chromeDevTools": true,
-    "supabase": false,
-    "gitnexus": true
+    "supabase": false
   },
 
   // Visual review tooling for sell-slice's visual-reviewer.

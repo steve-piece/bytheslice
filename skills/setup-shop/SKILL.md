@@ -4,7 +4,7 @@ description: Start the oven, check ingredients, prep the shop. Bootstrap a new p
 model: opus
 effort: high
 user-invocable: true
-triggers: ["/bytheslice:setup-shop", "/setup-shop", "set up the shop", "open the pizza shop", "/bytheslice:setup", "/setup", "set up bytheslice", "configure bytheslice", "scaffold a new project", "first time using bytheslice", "create a new monorepo", "create a next.js app for bytheslice"]
+triggers: ["/bytheslice:setup-shop", "/setup-shop", "set up the shop", "open the pizza shop", "/bytheslice:setup", "/setup", "set up bytheslice", "configure bytheslice", "scaffold a new project", "first time using bytheslice", "create a new monorepo", "bootstrap a new app for bytheslice"]
 ---
 
 <!-- skills/setup-shop/SKILL.md -->
@@ -27,7 +27,8 @@ Read all of these before beginning:
 | [references/bytheslice-config-schema.md](references/bytheslice-config-schema.md) | Full config schema, precedence rules, per-key documentation |
 | [references/bytheslice.config.example.json](references/bytheslice.config.example.json) | Copy-pasteable JSONC starter — every block commented out |
 | [references/model-tier-guide.md](references/model-tier-guide.md) | Per-agent model tier defaults; cross-link from `modelTiers` config block |
-| [references/bootstrap-templates-catalog.md](references/bootstrap-templates-catalog.md) | Documents which scaffolders Step 1 wraps (`create-next-app`, `create-turbo`) and why |
+| [references/bootstrap-templates-catalog.md](references/bootstrap-templates-catalog.md) | Documents which scaffolders Step 1 wraps (`create-next-app`, `create-turbo`, `create-vite`, `create-svelte`, `create-astro`) and why |
+| [references/framework-detect.md](references/framework-detect.md) | Canonical stack list, detection signals, and per-framework path map. Read this BEFORE Step 1's stack question and BEFORE any skill branches on framework. |
 
 ## Flow Selection
 
@@ -99,15 +100,15 @@ Enter plan mode and ask the user with `ask_user_input_v0`, one question at a tim
 
 **Q-bootstrap-variant**
 > "Single application or Turborepo monorepo?"
-> single_select: ["single-app — one Next.js app", "monorepo — Turborepo with apps/ and packages/"]
+> single_select: ["single-app — one frontend app", "monorepo — Turborepo with apps/ and packages/"]
 
 **Q-bootstrap-name**
 > "What's the project name? Use kebab-case (lowercase, hyphens only)."
 > text_input: regex `^[a-z][a-z0-9-]*[a-z0-9]$`
 
 **Q-bootstrap-stack**
-> "Stack? (Only Next.js is supported in v2.2 — this question exists to make the choice explicit and to forward-compat additional stacks later.)"
-> single_select: ["Next.js (TypeScript, App Router, Tailwind, Turbopack)"]
+> "Which frontend stack? Next.js App Router is the most-validated path end-to-end. Vite + React, SvelteKit, and Astro are detected and bootstrapped correctly, but the Phase 4.5 library-preview templates currently assume Next App Router conventions — non-Next stacks will hit an HITL bubble at that gate until per-framework adapters land. Pure Node API skips the frontend pipeline entirely. See [`references/framework-detect.md`](references/framework-detect.md) for the full support matrix."
+> single_select: ["Next.js (TypeScript, App Router, Tailwind, Turbopack) — recommended", "Vite + React (TypeScript, Tailwind)", "SvelteKit (TypeScript, Tailwind)", "Astro (TypeScript, Tailwind)", "Node API only (no frontend)"]
 
 **Q-bootstrap-roadmap**
 > "Create a `ROADMAP.local.md` for personal future-version notes? It will be gitignored."
@@ -175,7 +176,7 @@ Then proceed to **Step 2**.
 ### Hard constraints — Step 1
 
 - **One bootstrap per project root.** If working directory contains a `package.json`, refuse Step 1 and switch to Flow C (Config only). Surface: *"Detected an existing project at <path>. Skipping bootstrap; running per-project config setup only."*
-- **Non-Next.js stacks are out of scope for v2.2.** When the user asks for Astro / Vite / Remix / plain Node API, surface that and stop. Track interest via `/bytheslice:close-shop`.
+- **Non-Next.js stacks bootstrap fine but library-preview templates aren't fully adapted yet.** When the user picks Vite + React, SvelteKit, or Astro, run the matching scaffolder from [`references/framework-detect.md`](references/framework-detect.md) and proceed normally — they get a working design system + CI/CD scaffold. The first time `/sell-slice` Phase 4.5 (Library Preview Gate) fires on one of these stacks, it will bubble HITL asking the operator to confirm the route convention. Track which stacks see active use via `/bytheslice:close-shop` so per-framework adapters can be prioritized. **Remix and other stacks not in framework-detect.md** are still out of scope — bubble HITL and stop.
 - **Never modify files outside the new project directory** during bootstrap.
 - **Never delete anything.** Step 1 is purely additive.
 
@@ -219,7 +220,7 @@ If "No": follow up with two text inputs:
 
 **Q-mcps** (multi_select)
 > "Which MCPs do you have installed in this workspace? Pick the ones you actually have running locally — the plugin reads this in addition to the project rules file."
-> multi_select: ["shadcn", "Magic (21st.dev)", "Figma", "Chrome DevTools", "Supabase", "GitNexus", "None"]
+> multi_select: ["shadcn", "Magic (21st.dev)", "Figma", "Chrome DevTools", "Supabase", "None"]
 
 Map the selections to boolean entries in the `mcps` block. Selecting "None" sets every key to `false`.
 

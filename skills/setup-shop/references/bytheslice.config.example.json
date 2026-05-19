@@ -24,8 +24,7 @@
     // "magic": false,
     // "figma": false,
     // "chromeDevTools": true,
-    // "supabase": false,
-    // "gitnexus": true
+    // "supabase": false
   },
 
   // Visual review tooling priority.

@@ -18,7 +18,7 @@ You are the **rules-assembler** for `/cook-pizzas`. Your job: produce a clean, l
 
 - Q8 architecture answer (single-app or monorepo + tooling)
 - Q9 external-rule-file imports list
-- Q4, Q5, Q6, Q7, Q10, Q11 (DB tooling, Supabase MCP, GitNexus opt-in, design MCPs, auth, deployment) — for inline notes
+- Q4, Q5, Q7, Q10, Q11 (DB tooling, Supabase MCP, design MCPs, auth, deployment) — for inline notes
 - Q12 target file format (`CLAUDE.md` or `AGENTS.md`)
 - Path to [skills/cook-pizzas/references/architecture-conventions.md](../references/architecture-conventions.md) — Variant A and B sections + Supabase security baseline
 
@@ -46,7 +46,6 @@ You are the **rules-assembler** for `/cook-pizzas`. Your job: produce a clean, l
    - Auth provider (from Q10)
    - Deployment target (from Q11)
    - Design MCPs available (from Q7)
-   - GitNexus opt-in note (from Q6)
 
    **Section: Architecture Conventions (project-specific)**
    - Append the Q9 imports (each as its own subsection).

@@ -1,10 +1,12 @@
 # Bootstrap Templates Catalog
 
-The `bootstrap` skill (Stage 0) wraps official scaffolders rather than bundling its own templates. This document records which scaffolders are used and why, so the choice is explicit and reproducible.
+The `/setup-shop` skill (Step 1, Phase 2) wraps official scaffolders rather than bundling its own templates. This document records which scaffolders are used and why, so the choice is explicit and reproducible.
 
-## Currently supported (v2.1)
+> **See also** [`framework-detect.md`](./framework-detect.md) for the canonical per-stack scaffolder command list (kept in sync with this file). If they disagree, `framework-detect.md` wins.
 
-### Single-app
+## Currently supported
+
+### Single-app — Next.js App Router (most-validated path)
 
 ```bash
 pnpm dlx create-next-app@latest <name> \
@@ -26,6 +28,38 @@ pnpm dlx create-next-app@latest <name> \
 - `--import-alias "@/*"` — matches the import-alias convention all ByTheSlice skill examples assume
 - `--use-pnpm` — pnpm is the default package manager ByTheSlice assumes
 
+### Single-app — Vite + React
+
+```bash
+pnpm create vite@latest <name> -- --template react-ts
+cd <name>
+pnpm add -D tailwindcss postcss autoprefixer
+pnpm dlx tailwindcss init -p
+```
+
+**Notes:** Tailwind is not part of the Vite template, so ByTheSlice installs it after scaffold so `set-display-case` has somewhere to write tokens. Routing is left to the user (react-router, TanStack Router, or none) — `library-route-scaffolder` detects on its next run.
+
+### Single-app — SvelteKit
+
+```bash
+pnpm create svelte@latest <name>
+```
+
+Interactive prompt. Accept: **skeleton project**, **TypeScript syntax**, **Tailwind add-on**, **ESLint + Prettier**.
+
+### Single-app — Astro
+
+```bash
+pnpm create astro@latest <name> -- --template minimal --typescript strict --no-install --no-git
+cd <name>
+pnpm install
+pnpm astro add tailwind
+```
+
+### Single-app — Node API only
+
+No scaffolder. The user runs `pnpm init` and adds their framework of choice (express / hono / fastify). ByTheSlice does not opinionate the API framework — `/sell-slice` runs `backend` / `db-schema` / `infrastructure` stages without touching any frontend.
+
 ### Monorepo
 
 ```bash
@@ -37,27 +71,41 @@ pnpm dlx create-turbo@latest <name> --example basic
 - Lets the user `pnpm add` more apps as needed without committing to a complex example layout
 - ByTheSlice's phased-plan-writer assumes the `apps/*` and `packages/*` shape from this template
 
-After `create-turbo` runs, the user typically removes the example apps (`apps/web`, `apps/docs`) and adds their own via `pnpm dlx create-next-app apps/<name>` — flag this in the next-step pointer.
+After `create-turbo` runs, the user typically removes the example apps (`apps/web`, `apps/docs`) and adds their own — for each new app, pick a per-app scaffolder from the single-app table above (`pnpm dlx create-next-app apps/<name>`, `pnpm create vite apps/<name>`, etc.). Each app's stack is detected independently by `framework-detect.md`.
 
-## Out of scope for v2.1
+## Framework adapter status
 
-- **Astro** — would need its own design-system-gate path (different Tailwind setup), different test runner, different deploy story
-- **Remix** — similar — different routing primitives, different middleware story
-- **Vite + React** — viable but ByTheSlice's frontend skills assume Next.js conventions (Server Components, Server Actions, etc.)
-- **Plain Node API** — would need a complete frontend-design skill replacement (no UI work)
-- **Python / Django / Rails / etc.** — out of scope; this is a JS/TS plugin
+| Stack | Bootstrap | Design system | Library preview (Phase 4.5) | Frontend slice pipeline |
+|---|---|---|---|---|
+| `next-app` | ✅ | ✅ | ✅ | ✅ |
+| `next-pages` | ✅ | ✅ | ⚠️ HITL — templates not yet ported | ⚠️ HITL |
+| `vite-react` | ✅ | ✅ (CSS entry parameterized) | ⚠️ HITL — templates not yet ported | ⚠️ HITL |
+| `sveltekit` | ✅ | ✅ (CSS entry parameterized) | ⚠️ HITL — templates not yet ported | ⚠️ HITL |
+| `astro` | ✅ | ✅ (CSS entry parameterized) | ⚠️ HITL — templates not yet ported | ⚠️ HITL |
+| `node-api` | ✅ | n/a (skipped) | n/a (skipped) | ✅ backend stages only |
 
-## How to extend
+"HITL" means the agent will bubble a `prd_ambiguity` to the operator with the framework's idiomatic conventions and ask for sign-off before scaffolding. The bootstrap + design-system stages still complete cleanly.
 
-If you want to add a stack, the contract is:
-1. Add a new `Q3 — Stack` option to `skills/setup-shop/SKILL.md`'s plan-mode gate.
-2. Add the scaffold invocation to Phase 2.
-3. Verify the downstream skills (`set-display-case`, `final-quality-check`, `sell-slice` (incl. frontend pipeline)) work with the new stack — many will not without per-stack adapters.
+## How to extend (add a new stack)
 
-In practice this is a much larger change than just adding a scaffold command. Adding a non-Next.js stack to ByTheSlice is a v3 conversation, not a v2.x patch.
+The contract is:
+
+1. Add the row to [`framework-detect.md`](./framework-detect.md) (Supported stacks + Detection algorithm + Per-stack path map + Bootstrap scaffolder).
+2. Add the scaffolder invocation to **this** catalog.
+3. Walk the "Where each skill branches on stack" table in `framework-detect.md` and confirm the per-skill HITL or templated behavior. At minimum the HITL fallback path must work — silent miss is the failure mode to avoid.
+4. (Optional, Tier L) Write per-framework Phase 4.5 library-preview templates so the stack graduates from "⚠️ HITL" to "✅".
+
+Adding a non-listed stack without doing step 1 will cause `framework-detector` to return `unknown` and bubble HITL — that's the safe default.
+
+## Out of scope
+
+- **Remix** — different routing primitives, different middleware story. No detection in `framework-detect.md` yet.
+- **Nuxt / Vue** — no Tailwind-via-default; would need separate design-system gate path.
+- **Python / Django / Rails / etc.** — this is a JS/TS plugin. Use a non-bytheslice flow for these.
+
+These bubble HITL at detection time and stop. Tracking interest via `/bytheslice:close-shop`.
 
 ## Future scaffolders we might wrap
 
-- `pnpm create vite@latest` (would require a separate ByTheSlice Vite path)
-- `pnpm dlx create-astro@latest` (separate Astro path)
-- Custom internal-template scaffolders (per-org templates that include design-system + auth wired up)
+- Per-org internal-template scaffolders (companies with bytheslice-pre-wired design systems + auth)
+- Remix once routing patterns stabilize and there's user pull

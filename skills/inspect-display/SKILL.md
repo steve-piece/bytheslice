@@ -51,6 +51,8 @@ The walk itself runs as one sub-agent dispatch — sub-agents have isolated cont
 
 ## Inputs and Preconditions
 
+> Skill-routing preconditions (checklist gate, branch sanity) are pre-enforced by `hooks/precheck-skill.sh` **when hooks are active**. If `BTS_HOOKS_DISABLED=1` or `disableAllHooks` is set, run those checks inline via tools and proceed silently. The browser-MCP availability check below is skill-specific and runs in-skill regardless.
+
 - Repo root is a runnable web app (or monorepo of web apps).
 - `package.json` (or `turbo.json` / `pnpm-workspace.yaml` / `nx.json`) declares a `dev` script.
 - At least one browser MCP is available:

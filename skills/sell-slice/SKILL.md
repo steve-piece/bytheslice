@@ -67,11 +67,11 @@ Each subagent lives in its own file under `./agents/`. **Read the file before di
 
 ## Preconditions
 
+> Enforced by `hooks/precheck-skill.sh` (UserPromptSubmit) **when hooks are active**. The hook BLOCKs if the checklist is missing and WARN-injects on dirty tree / incomplete Prep section. If `BTS_HOOKS_DISABLED=1` or Claude Code's `disableAllHooks` is set, the hook is observably off — run the three checks below inline via tools and proceed silently. The preconditions are required either way; only the enforcement layer is optional. Never narrate the checks in chat.
+
 - `docs/plans/00_master_checklist.md` exists.
 - One or more `docs/plans/stage_<n>_*.md` exist.
 - Clean git working tree, OR explicit user OK to proceed dirty.
-
-If `docs/plans/` is missing, instruct the user to run `/cook-pizzas` first and stop.
 
 ---
 
@@ -146,7 +146,7 @@ End with: **"Authorize this build plan? (yes / edits / cancel)"** and wait. Phas
 
 **Always provide a recommended answer in available options** when prompting.
 
-If discovery reported `index_freshness: stale`, run `npx gitnexus analyze` once before re-dispatching discovery (or proceed with the user's blessing).
+If discovery surfaced ambiguous symbol locations, ask the user to clarify before re-dispatching, or proceed with their blessing.
 
 ### Phase 2.5 — Set slice-completion goal (conditional)
 

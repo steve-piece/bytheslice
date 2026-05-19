@@ -29,7 +29,7 @@ You are the **rules-loader** for `/sell-slice`. Your job: read the project rules
 2. If `bytheslice.config.json` exists, read it as JSONC. Apply the precedence (env vars > config file > project rules > plugin defaults) for these keys:
    - `modelTiers.<agent>`
    - `stages.maxTasksPerStage`, `stages.targetFeatureStages`
-   - `mcps.shadcn`, `mcps.magic`, `mcps.figma`, `mcps.chromeDevTools`, `mcps.supabase`, `mcps.gitnexus`
+   - `mcps.shadcn`, `mcps.magic`, `mcps.figma`, `mcps.chromeDevTools`, `mcps.supabase`
    - `visualReview.tools`, `visualReview.vizzly`
    - `hitl.additionalCategories`
    - `rules.imports`
@@ -53,7 +53,6 @@ resolved_config:
     figma: true | false
     chromeDevTools: true | false
     supabase: true | false
-    gitnexus: true | false
   visualReview:
     tools: [<ordered list>]
     vizzly: true | false
