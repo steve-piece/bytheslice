@@ -7,6 +7,16 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [4.1.1] — 2026-05-19
+
+**Hotfix.** v4.1.0 was tagged on GitHub but never published to npm — its `package.json` `files` allowlist did not include the new `hooks/` directory, so the npm tarball would have shipped without the hook infrastructure that `plugin.json` references. v4.1.1 fixes the allowlist; no code or skill changes. Treat v4.1.1 as the first usable npm release of the v4.1 series.
+
+### Fixed
+
+- `hooks` added to the `files` array in `package.json` so the hook scripts, `lib/checklist.sh`, `scenarios.md`, `test.sh`, `README.md`, and `hooks.json` are actually included in the published npm tarball. Without this fix, `plugin.json`'s `"hooks": "./hooks/hooks.json"` pointer would have resolved to a missing file in installed packages.
+
+---
+
 ## [4.1.0] — 2026-05-19
 
 **Hooks + framework decoupling.** Deterministic plugin hooks replace prose enforcement of preconditions across every skill — `/sell-slice` blocks when the master checklist is missing, `/box-it-up` refuses to run on `main`, `git commit` on `main` is blocked at the tool layer, and a `Stop` gate nudges `/sell-slice` to complete its commit loop. Framework support broadens from "Next.js only" to a canonical multi-stack contract — Next App Router and Pages Router, Vite + React, SvelteKit, Astro, and plain Node API are all detected and bootstrapped; non-Next stacks bubble HITL at the Phase 4.5 library-preview gate until per-framework templates land. GitNexus hard-coupling is removed.
