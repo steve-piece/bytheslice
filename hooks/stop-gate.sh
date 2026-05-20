@@ -45,20 +45,39 @@ fi
 [ -z "$STATE_SESSION" ] && exit 0
 [ "$STATE_SESSION" != "$CURRENT_SESSION" ] && exit 0
 
-# Only sell-slice gates on stop.
-[ "$STATE_SKILL" != "sell-slice" ] && exit 0
+# --- /sell-slice: block once if no commit landed since the precheck. ---
+if [ "$STATE_SKILL" = "sell-slice" ]; then
+  # Within this session, was there a commit after the precheck?
+  [ -z "$STATE_TS" ] && exit 0
 
-# Within this session, was there a commit after the precheck?
-[ -z "$STATE_TS" ] && exit 0
+  LAST_COMMIT_EPOCH=$(git -C "$(bts_root)" log -1 --format=%ct 2>/dev/null || echo 0)
+  PRECHECK_EPOCH=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$STATE_TS" "+%s" 2>/dev/null \
+    || date -u -d "$STATE_TS" "+%s" 2>/dev/null \
+    || echo 0)
 
-LAST_COMMIT_EPOCH=$(git -C "$(bts_root)" log -1 --format=%ct 2>/dev/null || echo 0)
-PRECHECK_EPOCH=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$STATE_TS" "+%s" 2>/dev/null \
-  || date -u -d "$STATE_TS" "+%s" 2>/dev/null \
-  || echo 0)
+  if [ "${LAST_COMMIT_EPOCH:-0}" -lt "${PRECHECK_EPOCH:-0}" ]; then
+    printf '[bytheslice] /sell-slice started but no slice commit detected since precheck. Run /sell-slice through to its commit step, or explicitly tell Claude you are pausing the loop.\n' >&2
+    exit 2
+  fi
 
-if [ "${LAST_COMMIT_EPOCH:-0}" -lt "${PRECHECK_EPOCH:-0}" ]; then
-  printf '[bytheslice] /sell-slice started but no slice commit detected since precheck. Run /sell-slice through to its commit step, or explicitly tell Claude you are pausing the loop.\n' >&2
-  exit 2
+  exit 0
 fi
 
+# --- /box-it-up: block once if the skill's PR is not merged yet. ---
+if [ "$STATE_SKILL" = "box-it-up" ]; then
+  # Fail open if gh is unavailable — we can't check PR state without it.
+  command -v gh >/dev/null 2>&1 || exit 0
+
+  PR_STATE=$(gh pr view --json state -q .state 2>/dev/null) || exit 0
+  [ -z "$PR_STATE" ] && exit 0
+
+  if [ "$PR_STATE" != "MERGED" ]; then
+    printf '[bytheslice] /box-it-up started but its PR is not merged yet. Run it through to merge, or tell Claude you are pausing the loop.\n' >&2
+    exit 2
+  fi
+
+  exit 0
+fi
+
+# Any other skill: nothing to gate on stop.
 exit 0

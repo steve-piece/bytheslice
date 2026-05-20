@@ -9,7 +9,11 @@ Deterministic guards that replace repetitive prose in CLAUDE.md and SKILL.md fil
 | `precheck-skill.sh` | `UserPromptSubmit` | Detects a /bytheslice slash command in the prompt and runs per-skill preconditions. BLOCKs `/sell-slice` when the master checklist is missing; BLOCKs `/box-it-up` on main; WARN-injects dirty-tree / missing-gh / Prep-incomplete. |
 | `shop-status.sh` | `SessionStart` | Reads `docs/plans/00_master_checklist.md` if present and injects a compact stage summary (counts + next not-started row + Prep progress). |
 | `pre-commit-guard.sh` | `PreToolUse` (Bash matcher) | BLOCKs `git commit` on main/master. Otherwise WARN-injects a short staged-files summary. |
-| `stop-gate.sh` | `Stop` | If `/sell-slice` started **in the current session** but no commit landed since the precheck, BLOCK once so Claude completes the loop. Stale state from previous sessions is ignored via `session_id` guard. Re-entry detection prevents loops. |
+| `stop-gate.sh` | `Stop` | If `/sell-slice` started **in the current session** but no commit landed since the precheck, BLOCK once so Claude completes the loop. If `/box-it-up` started in the current session but its PR is not `MERGED` (per `gh pr view`), BLOCK once. Stale state from previous sessions is ignored via `session_id` guard; missing `gh` fails open. Re-entry detection prevents loops. |
+| `stage-plan-guard.sh` | `PreToolUse` (Write/Edit matchers) | BLOCKs `Write`/`Edit` on `docs/plans/stage_*.md` while `/sell-slice` is the current session's active skill — stage plans are static during delivery. Session-id guarded; fails open if state is missing or cross-session. |
+| `library-gate-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects when a `/sell-slice` run writes to a watched production route (`app/**`, `src/app/**`, `components/**`, `src/components/**`) without a recorded library-preview approval. Never blocks. Dormant unless `library-approvals.json` exists (graceful degradation until the approval-writer ships). |
+| `commit-checklist-correlator.sh` | `PostToolUse` (Bash matcher) | After a `git commit` during `/sell-slice`, WARN-injects if the checklist shows a `Completed` stage but the commit did not touch `docs/plans/00_master_checklist.md` (possible skipped Phase 9). Session-id guarded. |
+| `compact-snapshot.sh` | `PreCompact` | Never blocks compaction (always exit 0). Writes `compact-snapshot.json` capturing session/skill/branch, last commit sha + subject, and the next up-to-3 unfinished checklist lines so the post-compaction turn can re-orient. |
 
 ## The scenario contract
 
@@ -53,6 +57,29 @@ Run it locally before committing changes to anything under `hooks/`. No CI workf
   "warnings": 1,
   "branch": "feat/foo",
   "tree": "clean"
+}
+```
+
+`.claude/.bytheslice-state/compact-snapshot.json` is written by `compact-snapshot.sh` on `PreCompact`. Schema:
+
+```json
+{
+  "session_id": "...",
+  "skill": "sell-slice",
+  "timestamp": "2026-05-20T10:00:00Z",
+  "branch": "feat/foo",
+  "last_commit_sha": "abc1234",
+  "last_commit_subject": "feat: ...",
+  "master_checklist_summary": ["| 1 | foo | Status: Not Started |"]
+}
+```
+
+`.claude/.bytheslice-state/library-approvals.json` is read (not yet written — see v4.2.2) by `library-gate-guard.sh`. Schema:
+
+```json
+{
+  "approvals": [{ "component_id": "...", "status": "approved", "at": "<iso>" }],
+  "watched_paths": ["app/**", "src/app/**", "components/**", "src/components/**"]
 }
 ```
 

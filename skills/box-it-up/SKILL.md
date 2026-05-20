@@ -43,6 +43,7 @@ CI watching itself is inline (`gh pr checks <pr> --watch` blocks until checks se
 - The slice's intended changes are committed locally OR present as uncommitted changes the skill should commit.
 - `gh` CLI installed and authenticated (`gh auth status` returns "Logged in").
 - Repository has a remote configured (`git remote -v` returns at least `origin`).
+- A `Stop` gate (`hooks/stop-gate.sh`) blocks once if this skill's PR is left unmerged when the session ends (fails open if `gh` is unavailable).
 
 ---
 

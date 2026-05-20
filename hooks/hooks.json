@@ -33,6 +33,61 @@
           "statusMessage": "Checking commit branch..."
         }
       ]
+    },
+    {
+      "matcher": "Write",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/stage-plan-guard.sh\"",
+          "timeout": 3,
+          "statusMessage": "Checking stage-plan write guard..."
+        },
+        {
+          "type": "command",
+          "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/library-gate-guard.sh\"",
+          "timeout": 3
+        }
+      ]
+    },
+    {
+      "matcher": "Edit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/stage-plan-guard.sh\"",
+          "timeout": 3,
+          "statusMessage": "Checking stage-plan write guard..."
+        },
+        {
+          "type": "command",
+          "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/library-gate-guard.sh\"",
+          "timeout": 3
+        }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/commit-checklist-correlator.sh\"",
+          "timeout": 4
+        }
+      ]
+    }
+  ],
+  "PreCompact": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/compact-snapshot.sh\"",
+          "timeout": 4
+        }
+      ]
     }
   ],
   "Stop": [

@@ -72,6 +72,7 @@ Each subagent lives in its own file under `./agents/`. **Read the file before di
 - `docs/plans/00_master_checklist.md` exists.
 - One or more `docs/plans/stage_<n>_*.md` exist.
 - Clean git working tree, OR explicit user OK to proceed dirty.
+- Stage plan files (`docs/plans/stage_*.md`) are write-protected during this skill by `hooks/stage-plan-guard.sh` (BLOCK); production-route edits without a recorded library approval surface a warning via `hooks/library-gate-guard.sh`.
 
 ---
 
