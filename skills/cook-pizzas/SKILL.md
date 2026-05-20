@@ -72,11 +72,6 @@ Ask each question with `ask_user_input_v0` before writing any files. Answers bui
 > single_select: ["Yes", "No — I'll set it up manually"]
 > → if Yes: appends Supabase security baseline from `references/architecture-conventions.md` to project rules file
 
-**Q6 — GitNexus**
-> "Use GitNexus for codebase graph queries? (Recommended — helps agents understand module boundaries without full file reads)"
-> single_select: ["Yes — pull GitNexus rules into project rules file", "No thanks"]
-> → if Yes: fetch rules from `https://github.com/abhigyanpatwari/GitNexus/blob/main/CLAUDE.md` and `https://github.com/abhigyanpatwari/GitNexus/blob/main/AGENTS.md` and append under `## GitNexus` in the project rules file
-
 **Q7 — Design MCPs**
 > "Which design MCPs are available? (These inform the design-system-gate stage and frontend-design skill.)"
 > multi_select: ["shadcn MCP", "Magic MCP (21st.dev)", "Figma MCP", "None"]

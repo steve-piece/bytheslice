@@ -1,0 +1,49 @@
+{
+  "UserPromptSubmit": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/precheck-skill.sh\"",
+          "timeout": 5,
+          "statusMessage": "Running bytheslice skill preconditions..."
+        }
+      ]
+    }
+  ],
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/shop-status.sh\"",
+          "timeout": 3
+        }
+      ]
+    }
+  ],
+  "PreToolUse": [
+    {
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-commit-guard.sh\"",
+          "timeout": 3,
+          "statusMessage": "Checking commit branch..."
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-gate.sh\"",
+          "timeout": 3
+        }
+      ]
+    }
+  ]
+}

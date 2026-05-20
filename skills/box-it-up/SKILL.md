@@ -37,12 +37,12 @@ CI watching itself is inline (`gh pr checks <pr> --watch` blocks until checks se
 
 ## Inputs and Preconditions
 
+> Pre-enforced by `hooks/precheck-skill.sh` **when hooks are active** (BLOCK on main, WARN on missing gh auth). If `BTS_HOOKS_DISABLED=1` or `disableAllHooks` is set, run the branch and `gh auth status` checks inline via tools and proceed silently. The preconditions are required either way; only the enforcement layer is optional. Never narrate the checks in chat.
+
 - Working tree on a feature branch (not `main` / `master`).
 - The slice's intended changes are committed locally OR present as uncommitted changes the skill should commit.
 - `gh` CLI installed and authenticated (`gh auth status` returns "Logged in").
 - Repository has a remote configured (`git remote -v` returns at least `origin`).
-
-If any precondition fails the skill stops before any push and surfaces the gap.
 
 ---
 

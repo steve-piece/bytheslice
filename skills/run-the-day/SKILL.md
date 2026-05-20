@@ -45,13 +45,13 @@ For model override paths, see `skills/setup-shop/references/model-tier-guide.md`
 
 ## Inputs and Preconditions
 
+> Pre-enforced by `hooks/precheck-skill.sh` **when hooks are active**. If `BTS_HOOKS_DISABLED=1` or `disableAllHooks` is set, run the checklist-exists and `gh auth status` checks inline via tools and proceed silently. The preconditions are required either way; only the enforcement layer is optional. Never narrate the checks in chat.
+
 - `docs/plans/00_master_checklist.md` exists and is readable.
 - Every stage referenced in the master checklist has a `docs/plans/stage_<n>_*.md` file.
 - `git status --short` is clean and the current branch is `main`.
 - Local `main` is up to date with `origin/main` (`git pull --ff-only`).
 - `gh` CLI installed and authenticated.
-
-If any precondition fails, stop and surface the gap to the user before doing anything else.
 
 ## Stage Routing
 
