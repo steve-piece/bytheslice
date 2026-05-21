@@ -7,6 +7,32 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [4.2.0] — 2026-05-21
+
+**Lifecycle hooks, expanded.** The v4.1 hook set covered the obvious gates (preconditions, commit-on-main, the `/sell-slice` stop loop). v4.2 adds four more deterministic guards that catch the quieter failure modes — editing a frozen stage plan mid-delivery, shipping a production route without a library-preview sign-off, closing a stage without updating the master checklist, and losing orientation across a context compaction. The `Stop` gate also learns `/box-it-up`: it nudges until the slice's PR is actually merged. The regression suite grows from 34 to 100 tests; every new row in `scenarios.md` has a matching assertion.
+
+### Added
+
+- **`stage-plan-guard.sh`** (`PreToolUse` on `Write`/`Edit`) — BLOCKs writes/edits to `docs/plans/stage_*.md` while `/sell-slice` is the current session's active skill. Stage plans are static during delivery; modifying one mid-slice is a sign the work has drifted from its spec. Points the operator at `/special-order` or `/cook-pizzas` to change a plan deliberately. Session-id guarded; fails open when state is missing or cross-session.
+- **`library-gate-guard.sh`** (`PreToolUse` on `Write`/`Edit`) — WARN-injects (never blocks) when a `/sell-slice` run writes to a watched production route (`app/**`, `src/app/**`, `components/**`, `src/components/**`) without a recorded library-preview approval. Dormant until `library-approvals.json` exists — graceful degradation until the approval-writer ships (v4.2.2). Session-id guarded.
+- **`commit-checklist-correlator.sh`** (`PostToolUse` on `Bash`) — after a `git commit` during `/sell-slice`, WARN-injects if the master checklist shows a `Completed` stage but the commit did not touch `docs/plans/00_master_checklist.md` (a likely skipped Phase 9 closeout). Session-id guarded.
+- **`compact-snapshot.sh`** (`PreCompact`) — never blocks compaction (always exit 0). Writes `compact-snapshot.json` capturing session/skill/branch, last commit sha + subject, and the next up-to-3 unfinished checklist lines so the post-compaction turn can re-orient.
+- **`/box-it-up` stop gating** in `stop-gate.sh` — if `/box-it-up` started in the current session but its PR is not `MERGED` (per `gh pr view`), BLOCKs once so the operator runs it through to merge. Missing `gh` fails open (can't check PR state without it).
+- **66 new regression tests** in `test.sh` (34 → 100), covering every scenario for the four new hooks plus the `/box-it-up` stop path. New assertion helper `assert_not_contains` and `write_state` fixture helper.
+- **Five new `scenarios.md` sections** documenting the contract for `stage-plan-guard`, `library-gate-guard`, `commit-checklist-correlator`, `compact-snapshot`, and the expanded `stop-gate` (both `/sell-slice` and `/box-it-up` paths).
+
+### Changed
+
+- **`hooks.json` registers the new hooks** across `Write`, `Edit`, `PostToolUse` (Bash), and `PreCompact` events. `stage-plan-guard` and `library-gate-guard` both run on the `Write` and `Edit` matchers.
+- **`stop-gate.sh` handles two skills.** Refactored from a `/sell-slice`-only gate into a per-skill dispatch: `/sell-slice` blocks on a missing slice commit, `/box-it-up` blocks on an unmerged PR. Both remain session-id-scoped and re-entry-safe.
+- **State schema documented** in `hooks/README.md` for `compact-snapshot.json` and `library-approvals.json` (the latter read-only until v4.2.2).
+
+### Known gaps
+
+- **`library-approvals.json` has no writer yet** (planned v4.2.2). `library-gate-guard.sh` reads it but nothing records approvals, so the gate stays dormant — intentional graceful degradation, not a bug. The Phase 4.5 library-preview approval flow will write this file once the approval-writer lands.
+
+---
+
 ## [4.1.1] — 2026-05-19
 
 **Hotfix.** v4.1.0 was tagged on GitHub but never published to npm — its `package.json` `files` allowlist did not include the new `hooks/` directory, so the npm tarball would have shipped without the hook infrastructure that `plugin.json` references. v4.1.1 fixes the allowlist; no code or skill changes. Treat v4.1.1 as the first usable npm release of the v4.1 series.

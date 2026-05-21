@@ -1,6 +1,6 @@
 {
   "name": "bytheslice",
-  "version": "4.1.1",
+  "version": "4.2.0",
   "description": "ByTheSlice is a Claude Code plugin that runs your project like a grab-and-go pizza shop. v4 renames every command to a kitchen action — /setup-shop, /create-menu, /cook-pizzas, /set-display-case, /final-quality-check, /open-the-shop, /sell-slice, /box-it-up — and promotes the three foundation skills (design system, CI/CD, env) out of being canned plan stages into being standalone, run-once-before-service prep commands. The master checklist gains a top 'Prep' section that /sell-slice gates on. Every skill is independently invocable (auto-detected standalone vs sequential mode), so you can drop /set-display-case onto any project to bolt on a design system, or /box-it-up onto any feature branch to push and merge. The everyday loop is /sell-slice (cook a slice) then /box-it-up (hand it across the counter). /run-the-day is the experimental autonomous variant; v4 adds /goal integration so its --auto-* modes drive the whole master checklist with a session-scoped completion goal evaluated between turns. Library Preview Gate (Phase 4.5 inside /sell-slice) still enforces preview-first delivery for any user-visible component change. Old v3 commands (/deliver-stage, /ship-pr, /plan-phases, etc.) still fire for one release as backward-compat aliases.",
   "author": {
     "name": "Steven Light"
