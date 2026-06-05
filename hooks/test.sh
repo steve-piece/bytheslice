@@ -17,11 +17,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 PRECHECK="$HERE/precheck-skill.sh"
 SHOP_STATUS="$HERE/shop-status.sh"
 COMMIT_GUARD="$HERE/pre-commit-guard.sh"
-STOP_GATE="$HERE/stop-gate.sh"
 STAGE_PLAN_GUARD="$HERE/stage-plan-guard.sh"
 LIBRARY_GATE="$HERE/library-gate-guard.sh"
 COMPACT_SNAPSHOT="$HERE/compact-snapshot.sh"
-COMMIT_CORRELATOR="$HERE/commit-checklist-correlator.sh"
 
 PASS=0
 FAIL=0
@@ -284,198 +282,28 @@ assert_empty "shop-status disabled silent"
 rm -rf "$FIX"
 
 ####################################################################
-# stop-gate.sh
-####################################################################
-
-echo
-echo "## stop-gate.sh"
-
-# No state file → PASS
-FIX=$(mk_fixture)
-CLAUDE_PROJECT_DIR=$FIX run_hook "$STOP_GATE" '{"session_id":"current"}'
-assert_exit "stop-gate no state" 0
-rm -rf "$FIX"
-
-# State from a different session → PASS (the v2 fix)
-FIX=$(mk_fixture)
-mkdir -p "$FIX/.claude/.bytheslice-state"
-cat > "$FIX/.claude/.bytheslice-state/last-precheck.json" <<EOF
-{
-  "session_id": "old-session-from-yesterday",
-  "skill": "sell-slice",
-  "timestamp": "2020-01-01T00:00:00Z"
-}
-EOF
-CLAUDE_PROJECT_DIR=$FIX run_hook "$STOP_GATE" '{"session_id":"current"}'
-assert_exit "stop-gate stale session ignored" 0
-rm -rf "$FIX"
-
-# Current session + sell-slice + no commit since precheck → BLOCK
-FIX=$(mk_fixture)
-mkdir -p "$FIX/.claude/.bytheslice-state"
-cat > "$FIX/.claude/.bytheslice-state/last-precheck.json" <<EOF
-{
-  "session_id": "current",
-  "skill": "sell-slice",
-  "timestamp": "2099-01-01T00:00:00Z"
-}
-EOF
-CLAUDE_PROJECT_DIR=$FIX run_hook "$STOP_GATE" '{"session_id":"current"}'
-assert_exit "stop-gate sell-slice no commit" 2
-assert_contains "stop-gate message" "no slice commit detected"
-rm -rf "$FIX"
-
-# Current session + commit landed after precheck → PASS
-FIX=$(mk_fixture)
-( cd "$FIX" && touch slice.txt && git add . && git commit -q -m "the slice" )
-mkdir -p "$FIX/.claude/.bytheslice-state"
-cat > "$FIX/.claude/.bytheslice-state/last-precheck.json" <<EOF
-{
-  "session_id": "current",
-  "skill": "sell-slice",
-  "timestamp": "2020-01-01T00:00:00Z"
-}
-EOF
-CLAUDE_PROJECT_DIR=$FIX run_hook "$STOP_GATE" '{"session_id":"current"}'
-assert_exit "stop-gate commit after precheck" 0
-rm -rf "$FIX"
-
-# stop_hook_active → never block
-FIX=$(mk_fixture)
-mkdir -p "$FIX/.claude/.bytheslice-state"
-cat > "$FIX/.claude/.bytheslice-state/last-precheck.json" <<EOF
-{"session_id":"current","skill":"sell-slice","timestamp":"2099-01-01T00:00:00Z"}
-EOF
-CLAUDE_PROJECT_DIR=$FIX run_hook "$STOP_GATE" '{"session_id":"current","stop_hook_active":true}'
-assert_exit "stop-gate re-entry never loops" 0
-rm -rf "$FIX"
-
-# BTS_HOOKS_DISABLED → PASS
-FIX=$(mk_fixture)
-mkdir -p "$FIX/.claude/.bytheslice-state"
-cat > "$FIX/.claude/.bytheslice-state/last-precheck.json" <<EOF
-{"session_id":"current","skill":"sell-slice","timestamp":"2099-01-01T00:00:00Z"}
-EOF
-BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_hook "$STOP_GATE" '{"session_id":"current"}'
-assert_exit "stop-gate disabled" 0
-rm -rf "$FIX"
-
-# --- box-it-up branch (stop-gate extension) ---
-
-# box-it-up in current session, gh missing → PASS (fail open).
-# Simulate a `gh`-less environment by building a sandbox PATH that symlinks
-# every command the hook needs EXCEPT gh, then running with that PATH only.
-mk_ghless_path() {
-  local bindir cmd src
-  bindir=$(mktemp -d)
-  for cmd in bash sh git dirname date mkdir sed grep cat printf head tr awk env; do
-    src=$(command -v "$cmd" 2>/dev/null) || continue
-    ln -s "$src" "$bindir/$cmd" 2>/dev/null || true
-  done
-  printf '%s' "$bindir"
-}
-FIX=$(mk_fixture)
-git -C "$FIX" checkout -q -b feat/box
-write_state "$FIX" "current" "box-it-up"
-GHLESS=$(mk_ghless_path)
-LAST_OUT=$(printf '%s' '{"session_id":"current"}' | PATH="$GHLESS" CLAUDE_PROJECT_DIR="$FIX" "$GHLESS/bash" "$STOP_GATE" 2>&1); LAST_EXIT=$?
-assert_exit "stop-gate box-it-up gh missing fails open" 0
-assert_empty "stop-gate box-it-up gh missing silent"
-rm -rf "$FIX" "$GHLESS"
-
-# Build a sandbox PATH with every needed coreutil PLUS a fake `gh` that
-# echoes a chosen PR state — exercises the actual block/pass decision.
-mk_gh_path() {
-  local state="$1" bindir cmd src
-  bindir=$(mktemp -d)
-  # Include jq — stop-gate.sh reads the state file's session_id/skill via jq
-  # only, so without it the hook fails open before reaching the box-it-up
-  # branch and the block/pass decision would never be exercised.
-  for cmd in bash sh git dirname date mkdir sed grep cat printf head tr awk env jq; do
-    src=$(command -v "$cmd" 2>/dev/null) || continue
-    ln -s "$src" "$bindir/$cmd" 2>/dev/null || true
-  done
-  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "%s"\n' "$state" > "$bindir/gh"
-  chmod +x "$bindir/gh"
-  printf '%s' "$bindir"
-}
-
-# box-it-up, PR state not MERGED (e.g. OPEN) → BLOCK once.
-FIX=$(mk_fixture)
-git -C "$FIX" checkout -q -b feat/box
-write_state "$FIX" "current" "box-it-up"
-GHPATH=$(mk_gh_path "OPEN")
-LAST_OUT=$(printf '%s' '{"session_id":"current"}' | PATH="$GHPATH" CLAUDE_PROJECT_DIR="$FIX" "$GHPATH/bash" "$STOP_GATE" 2>&1); LAST_EXIT=$?
-assert_exit "stop-gate box-it-up PR open blocks" 2
-assert_contains "stop-gate box-it-up open message" "PR is not merged"
-rm -rf "$FIX" "$GHPATH"
-
-# box-it-up, PR state MERGED → PASS silent.
-FIX=$(mk_fixture)
-git -C "$FIX" checkout -q -b feat/box
-write_state "$FIX" "current" "box-it-up"
-GHPATH=$(mk_gh_path "MERGED")
-LAST_OUT=$(printf '%s' '{"session_id":"current"}' | PATH="$GHPATH" CLAUDE_PROJECT_DIR="$FIX" "$GHPATH/bash" "$STOP_GATE" 2>&1); LAST_EXIT=$?
-assert_exit "stop-gate box-it-up PR merged passes" 0
-assert_empty "stop-gate box-it-up merged silent"
-rm -rf "$FIX" "$GHPATH"
-
-# box-it-up, re-entry guard (stop_hook_active) → never block even if PR open.
-FIX=$(mk_fixture)
-git -C "$FIX" checkout -q -b feat/box
-write_state "$FIX" "current" "box-it-up"
-GHPATH=$(mk_gh_path "OPEN")
-LAST_OUT=$(printf '%s' '{"session_id":"current","stop_hook_active":true}' | PATH="$GHPATH" CLAUDE_PROJECT_DIR="$FIX" "$GHPATH/bash" "$STOP_GATE" 2>&1); LAST_EXIT=$?
-assert_exit "stop-gate box-it-up re-entry never loops" 0
-rm -rf "$FIX" "$GHPATH"
-
-# box-it-up but skill state is from a different session → PASS.
-FIX=$(mk_fixture)
-git -C "$FIX" checkout -q -b feat/box
-write_state "$FIX" "old-session" "box-it-up"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$STOP_GATE" '{"session_id":"current"}'
-assert_exit "stop-gate box-it-up stale session ignored" 0
-rm -rf "$FIX"
-
-# box-it-up, BTS_HOOKS_DISABLED → PASS.
-FIX=$(mk_fixture)
-git -C "$FIX" checkout -q -b feat/box
-write_state "$FIX" "current" "box-it-up"
-BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_hook "$STOP_GATE" '{"session_id":"current"}'
-assert_exit "stop-gate box-it-up disabled" 0
-assert_empty "stop-gate box-it-up disabled silent"
-rm -rf "$FIX"
-
-# An unrelated skill (e.g. cook-pizzas) in current session → PASS.
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "cook-pizzas"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$STOP_GATE" '{"session_id":"current"}'
-assert_exit "stop-gate other skill passes" 0
-assert_empty "stop-gate other skill silent"
-rm -rf "$FIX"
-
-####################################################################
 # stage-plan-guard.sh
 ####################################################################
 
 echo
 echo "## stage-plan-guard.sh"
 
-# stage plan path + sell-slice current session → BLOCK
+# stage plan path + sell-slice current session → WARN (downgraded from BLOCK in v5, C4)
 FIX=$(mk_fixture)
 write_state "$FIX" "current" "sell-slice"
 CLAUDE_PROJECT_DIR=$FIX run_hook "$STAGE_PLAN_GUARD" \
   "{\"session_id\":\"current\",\"tool_input\":{\"file_path\":\"$FIX/docs/plans/stage_1_foo.md\"}}"
-assert_exit "stage-plan-guard blocks during sell-slice" 2
-assert_contains "stage-plan-guard block message" "refuses to edit stage plan files during /sell-slice"
+assert_exit "stage-plan-guard warns during sell-slice" 0
+assert_contains "stage-plan-guard warn message" "plans are normally static"
 rm -rf "$FIX"
 
-# stage plan path + relative path form + sell-slice → BLOCK
+# stage plan path + relative path form + sell-slice → WARN
 FIX=$(mk_fixture)
 write_state "$FIX" "current" "sell-slice"
 CLAUDE_PROJECT_DIR=$FIX run_hook "$STAGE_PLAN_GUARD" \
   '{"session_id":"current","tool_input":{"file_path":"docs/plans/stage_2_bar.md"}}'
-assert_exit "stage-plan-guard blocks relative path" 2
+assert_exit "stage-plan-guard warns relative path" 0
+assert_contains "stage-plan-guard warn relative path message" "plans are normally static"
 rm -rf "$FIX"
 
 # stage plan path + non-sell-slice skill → PASS
@@ -681,122 +509,6 @@ if [ -f "$FIX/.claude/.bytheslice-state/compact-snapshot.json" ]; then
 else
   PASS=$((PASS+1)); printf '  ✓ compact-snapshot disabled writes nothing\n'
 fi
-rm -rf "$FIX"
-
-####################################################################
-# commit-checklist-correlator.sh
-####################################################################
-
-echo
-echo "## commit-checklist-correlator.sh"
-
-# Helper: a fixture with a Completed checklist, where the LAST commit did NOT
-# touch the checklist (commits an unrelated file after the checklist commit).
-mk_correlator_fixture() {
-  local d
-  d=$(mk_fixture)
-  mkdir -p "$d/docs/plans"
-  cat > "$d/docs/plans/00_master_checklist.md" <<'EOF'
-# Master
-
-| 1 | foo | Status: Completed |
-EOF
-  ( cd "$d" && git add docs/plans/00_master_checklist.md && git commit -q -m "checklist" )
-  printf '%s' "$d"
-}
-
-# sell-slice + Completed row + last commit did NOT touch checklist → WARN
-FIX=$(mk_correlator_fixture)
-( cd "$FIX" && touch slice.txt && git add slice.txt && git commit -q -m "slice work" )
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$COMMIT_CORRELATOR" \
-  '{"session_id":"current","tool_input":{"command":"git commit -m slice"}}'
-assert_exit "correlator warns on missing checklist in closeout" 0
-assert_contains "correlator warn message" "docs/plans/00_master_checklist.md was not part of it"
-rm -rf "$FIX"
-
-# leading whitespace before git commit still triggers
-FIX=$(mk_correlator_fixture)
-( cd "$FIX" && touch slice.txt && git add slice.txt && git commit -q -m "slice work" )
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$COMMIT_CORRELATOR" \
-  '{"session_id":"current","tool_input":{"command":"   git commit -m slice"}}'
-assert_exit "correlator handles leading whitespace" 0
-assert_contains "correlator whitespace warn" "was not part of it"
-rm -rf "$FIX"
-
-# sell-slice + Completed row + last commit DID touch checklist → PASS
-FIX=$(mk_correlator_fixture)
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$COMMIT_CORRELATOR" \
-  '{"session_id":"current","tool_input":{"command":"git commit -m closeout"}}'
-assert_exit "correlator passes when checklist in commit" 0
-assert_empty "correlator passes silent when checklist in commit"
-rm -rf "$FIX"
-
-# sell-slice but checklist has no Completed row → PASS
-FIX=$(mk_fixture)
-mkdir -p "$FIX/docs/plans"
-cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
-# Master
-
-| 1 | foo | Status: Not Started |
-EOF
-( cd "$FIX" && git add docs/plans/00_master_checklist.md && git commit -q -m "checklist" )
-( cd "$FIX" && touch slice.txt && git add slice.txt && git commit -q -m "slice" )
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$COMMIT_CORRELATOR" \
-  '{"session_id":"current","tool_input":{"command":"git commit -m slice"}}'
-assert_exit "correlator no Completed row passes" 0
-assert_empty "correlator no Completed row silent"
-rm -rf "$FIX"
-
-# not a git commit → PASS
-FIX=$(mk_correlator_fixture)
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$COMMIT_CORRELATOR" \
-  '{"session_id":"current","tool_input":{"command":"git status"}}'
-assert_exit "correlator non-commit passes" 0
-assert_empty "correlator non-commit silent"
-rm -rf "$FIX"
-
-# sell-slice mismatch (cook-pizzas) → PASS
-FIX=$(mk_correlator_fixture)
-( cd "$FIX" && touch slice.txt && git add slice.txt && git commit -q -m "slice" )
-write_state "$FIX" "current" "cook-pizzas"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$COMMIT_CORRELATOR" \
-  '{"session_id":"current","tool_input":{"command":"git commit -m slice"}}'
-assert_exit "correlator non-sell-slice passes" 0
-assert_empty "correlator non-sell-slice silent"
-rm -rf "$FIX"
-
-# stale session → PASS
-FIX=$(mk_correlator_fixture)
-( cd "$FIX" && touch slice.txt && git add slice.txt && git commit -q -m "slice" )
-write_state "$FIX" "old-session" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$COMMIT_CORRELATOR" \
-  '{"session_id":"current","tool_input":{"command":"git commit -m slice"}}'
-assert_exit "correlator stale session passes" 0
-assert_empty "correlator stale session silent"
-rm -rf "$FIX"
-
-# no state file → PASS
-FIX=$(mk_correlator_fixture)
-( cd "$FIX" && touch slice.txt && git add slice.txt && git commit -q -m "slice" )
-CLAUDE_PROJECT_DIR=$FIX run_hook "$COMMIT_CORRELATOR" \
-  '{"session_id":"current","tool_input":{"command":"git commit -m slice"}}'
-assert_exit "correlator no state passes" 0
-assert_empty "correlator no state silent"
-rm -rf "$FIX"
-
-# BTS_HOOKS_DISABLED → PASS
-FIX=$(mk_correlator_fixture)
-( cd "$FIX" && touch slice.txt && git add slice.txt && git commit -q -m "slice" )
-write_state "$FIX" "current" "sell-slice"
-BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_hook "$COMMIT_CORRELATOR" \
-  '{"session_id":"current","tool_input":{"command":"git commit -m slice"}}'
-assert_exit "correlator disabled passes" 0
-assert_empty "correlator disabled silent"
 rm -rf "$FIX"
 
 ####################################################################

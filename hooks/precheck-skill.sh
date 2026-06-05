@@ -76,10 +76,11 @@ case "$SKILL" in
     ;;
 esac
 
-# Persist state for the Stop hook. session_id is the dedup key — stop-gate
-# ignores any state whose session_id does not match the current session,
+# Persist state for the session-id-guarded Write/Edit guards (stage-plan-guard,
+# library-gate-guard) and compact-snapshot. session_id is the dedup key — those
+# guards ignore any state whose session_id does not match the current session,
 # which prevents stale prechecks from a previous chat from triggering a
-# false-positive block.
+# false-positive warning.
 STATE_DIR=$(bts_state_dir)
 {
   printf '{\n'

@@ -9,10 +9,8 @@ Deterministic guards that replace repetitive prose in CLAUDE.md and SKILL.md fil
 | `precheck-skill.sh` | `UserPromptSubmit` | Detects a /bytheslice slash command in the prompt and runs per-skill preconditions. BLOCKs `/sell-slice` when the master checklist is missing; BLOCKs `/box-it-up` on main; WARN-injects dirty-tree / missing-gh / Prep-incomplete. |
 | `shop-status.sh` | `SessionStart` | Reads `docs/plans/00_master_checklist.md` if present and injects a compact stage summary (counts + next not-started row + Prep progress). |
 | `pre-commit-guard.sh` | `PreToolUse` (Bash matcher) | BLOCKs `git commit` on main/master. Otherwise WARN-injects a short staged-files summary. |
-| `stop-gate.sh` | `Stop` | If `/sell-slice` started **in the current session** but no commit landed since the precheck, BLOCK once so Claude completes the loop. If `/box-it-up` started in the current session but its PR is not `MERGED` (per `gh pr view`), BLOCK once. Stale state from previous sessions is ignored via `session_id` guard; missing `gh` fails open. Re-entry detection prevents loops. |
-| `stage-plan-guard.sh` | `PreToolUse` (Write/Edit matchers) | BLOCKs `Write`/`Edit` on `docs/plans/stage_*.md` while `/sell-slice` is the current session's active skill — stage plans are static during delivery. Session-id guarded; fails open if state is missing or cross-session. |
+| `stage-plan-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects (exit 0) on `Write`/`Edit` to `docs/plans/stage_*.md` while `/sell-slice` is the current session's active skill — plans are normally static during delivery. Never blocks (downgraded from BLOCK in v5). Session-id guarded; fails open if state is missing or cross-session. |
 | `library-gate-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects when a `/sell-slice` run writes to a watched production route (`app/**`, `src/app/**`, `components/**`, `src/components/**`) without a recorded library-preview approval. Never blocks. Dormant unless `library-approvals.json` exists (graceful degradation until the approval-writer ships). |
-| `commit-checklist-correlator.sh` | `PostToolUse` (Bash matcher) | After a `git commit` during `/sell-slice`, WARN-injects if the checklist shows a `Completed` stage but the commit did not touch `docs/plans/00_master_checklist.md` (possible skipped Phase 9). Session-id guarded. |
 | `compact-snapshot.sh` | `PreCompact` | Never blocks compaction (always exit 0). Writes `compact-snapshot.json` capturing session/skill/branch, last commit sha + subject, and the next up-to-3 unfinished checklist lines so the post-compaction turn can re-orient. |
 
 ## The scenario contract
@@ -25,7 +23,7 @@ Deterministic guards that replace repetitive prose in CLAUDE.md and SKILL.md fil
 bash hooks/test.sh
 ```
 
-Runs 30+ isolated-fixture tests covering every row in `scenarios.md`. Pure bash, no deps beyond `git`. Each test sets up a throwaway repo under `$TMPDIR`, runs one hook with a synthetic JSON envelope, and asserts exit code + output substring. Failures print the divergence inline.
+Runs 64 isolated-fixture tests covering every row in `scenarios.md`. Pure bash, no deps beyond `git`. Each test sets up a throwaway repo under `$TMPDIR`, runs one hook with a synthetic JSON envelope, and asserts exit code + output substring. Failures print the divergence inline.
 
 Run it locally before committing changes to anything under `hooks/`. No CI workflow is wired — this is intentional given the plugin's "$0 Actions budget" stance; opt in later if you want it on PRs.
 
@@ -42,15 +40,18 @@ Run it locally before committing changes to anything under `hooks/`. No CI workf
 | `bts_tree_state` | `"clean"` or `"dirty"` |
 | `bts_state_dir` | ensures `.claude/.bytheslice-state/` exists, echoes path |
 | `bts_session_id <json>` | extracts `session_id` from a hook input envelope |
-| `bts_detect_skill <prompt>` | first /bytheslice slash command in the prompt (canonical short form) |
+| `bts_detect_skill <prompt>` | first /bytheslice slash command in the prompt (canonical short form; `sell-pie` matched ahead of `sell-slice`) |
+| `bts_checklist_layout` | dual-read layout detection: `"pie"` (any `## Pie N`), `"stage"` (any `## Stage N`, no Pie), or `""` (neither) |
+| `bts_unit_counts` | `"<done> <total>"` of top-level work units — `## Pie N` (v5) or `## Stage N` (v4), Pie layout preferred; empty if neither |
+| `bts_slice_counts` | `"<done> <total>"` of `### Slice N.M` headings; empty on a flat v4 checklist |
 
 ## State
 
-`.claude/.bytheslice-state/last-precheck.json` is written by `precheck-skill.sh` and read by `stop-gate.sh`. Schema:
+`.claude/.bytheslice-state/last-precheck.json` is written by `precheck-skill.sh` and read by the session-id-guarded Write/Edit guards (`stage-plan-guard.sh`, `library-gate-guard.sh`) and `compact-snapshot.sh`. Schema:
 
 ```json
 {
-  "session_id": "...",   // stop-gate compares against current session
+  "session_id": "...",   // guards compare against the current session
   "skill": "sell-slice",
   "timestamp": "2026-05-18T15:42:00Z",
   "blocks": 0,

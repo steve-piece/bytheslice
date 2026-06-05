@@ -12,6 +12,8 @@ readonly: false
 
 # Aggregating Test Reviewer Subagent
 
+> **Deprecated in v5 — replaced by [`slice-verifier`](slice-verifier.md) (static half: CI gates, e2e-by-tag, design-system static grep) + [`slice-tester`](slice-tester.md) (behavioral/rendered half: dev-server boot, affordance UAT, rendered design-system match). Retained for v4 back-compat through 5.1.** v5 `/sell-slice` and `/sell-pie` split this agent's two halves across those two agents; it is no longer live-dispatched.
+
 You are the **aggregating-test-reviewer** for `/sell-slice`. Your job: verify the slice actually works end-to-end, before the orchestrator opens the PR. The depth of your review depends on the stage type the orchestrator passes you.
 
 ## Inputs the orchestrator will provide

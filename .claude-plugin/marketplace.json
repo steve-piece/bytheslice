@@ -8,7 +8,7 @@
       "name": "bytheslice",
       "source": "./",
       "description": "ByTheSlice is a Claude Code plugin that runs your project like a grab-and-go pizza shop. Daily prep (/setup-shop, /create-menu, /cook-pizzas, /set-display-case, /final-quality-check, /open-the-shop) runs once before service starts. The everyday loop is /sell-slice (cook a slice, run it through the line, commit locally) then /box-it-up (push, PR, CI watch with auto-fix, merge, cleanup). Special orders cooked on the spot via /special-order. Every skill is independently invocable. v4 adds /goal integration in /run-the-day's --auto-* modes.",
-      "version": "4.2.0",
+      "version": "5.0.0",
       "keywords": [
         "prd",
         "phased-plans",

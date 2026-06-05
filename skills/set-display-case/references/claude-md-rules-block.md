@@ -1,13 +1,13 @@
 ---
 title: Design System Rules Block Template
-purpose: Verbatim rules block that set-display-case appends to the project rules file (CLAUDE.md or AGENTS.md). The design-system-stage-writer pulls from this template, fills in the token catalog path and project-specific code patterns, then appends it.
+purpose: Verbatim rules block that set-display-case appends to the project rules file (CLAUDE.md or AGENTS.md). set-display-case fills in the token catalog path and project-specific code patterns, then appends it.
 ---
 
 # Design System Rules Block Template
 
 The `set-display-case` skill appends the block below to the project rules file (the file may be named `CLAUDE.md`, `AGENTS.md`, or an equivalent — the skill detects which is present). This file is the authoritative source for that block's content and structure.
 
-## How the design-system-stage-writer uses this template
+## How set-display-case uses this template
 
 1. The skill reads this file after all token artifacts have been written.
 2. It fills in the `Token catalog` path (always `docs/design-system.md`) and populates the "Project-specific code patterns" subsection with only the code-pattern answers the user provided in Step 4.

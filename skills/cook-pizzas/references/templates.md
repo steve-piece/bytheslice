@@ -2,14 +2,16 @@
 
 ## Stage Frontmatter Template
 
-Every stage file produced by `cook-pizzas` must begin with this YAML frontmatter. See `references/stage-frontmatter-contract.md` for full field definitions.
+Every stage/slice file produced by `cook-pizzas` must begin with this YAML frontmatter. See `references/stage-frontmatter-contract.md` for full field definitions, the Pie/Slice fields, and the dual-read rule.
 
 ```yaml
 ---
 stage: <int>
+pie: <int>                # v5: which Pie this slice belongs to
+slice: "<N.M>"            # v5: dotted slice id, e.g. "2.6" — quoted string
+review: boundary | continuous   # v5: inherited from the pie (boundary = autonomous; continuous = forces /sell-slice mode)
 name: "<Title Case>"
 type: design-system | ci-cd | env-setup | db-schema | frontend | backend | full-stack | infrastructure
-slice: vertical | horizontal
 mvp: true | false
 depends_on: [<stage_ints>]
 estimated_tasks: <int, 1-6>
@@ -22,11 +24,13 @@ completion_criteria:
 ---
 ```
 
+> **Dual-read.** A v4 flat file omits `pie`/`slice`/`review` and uses `## Stage N` headings — still contract-valid (`references/stage-frontmatter-contract.md` → "Dual-read"). v5 nested files carry all three and use `## Pie N` / `### Slice N.M` headings. `/cook-pizzas` emits nested; `--repie` converts a flat checklist on explicit opt-in. Plan files are never silently rewritten.
+
 ## Master Checklist Template
 
 ```markdown
 <!-- docs/plans/00_master_checklist.md -->
-<!-- Master checklist tracking all stages and completion criteria -->
+<!-- Master checklist tracking all pies, slices, and completion criteria -->
 
 # [Project Name] — Master Checklist
 
@@ -34,54 +38,81 @@ completion_criteria:
 
 ---
 
-## Prep — run once before any feature work
+## Prep — Pie 1: Foundations (run once before any feature work)
 
-These are run-once standalone skills the user invokes directly. `/sell-slice` checks every box below before accepting any feature stage. Each foundation skill flips its own checkbox on completion when invoked in sequential mode.
+This is **Pie 1 — Foundations**: its four slices (1.1–1.4) are the run-once standalone skills the user invokes directly. The "Prep" gate IS Pie 1's completion tracker — not a separate concept. `/sell-slice` checks every box below before accepting any feature slice (feature work is Pie 2 onward). Each foundation skill flips its own checkbox on completion when invoked in sequential mode.
 
-[ ] Display case built       — run `/bytheslice:set-display-case` (design system, tokens, /library route)
-[ ] Quality line installed   — run `/bytheslice:final-quality-check` (CI/CD, E2E, design-system-compliance, visual-regression)
-[ ] Shop open                — run `/bytheslice:open-the-shop` (env vars, external service credentials)
-[ ] DB schema foundation     — run `/bytheslice:sell-slice` on `stage_4_db_schema_foundation.md` (only if backend in scope)
+[ ] Slice 1.1 — Display case built       — run `/bytheslice:set-display-case` (design system, tokens, /library route)
+[ ] Slice 1.2 — Quality line installed   — run `/bytheslice:final-quality-check` (CI/CD, E2E, design-system-compliance, visual-regression)
+[ ] Slice 1.3 — Shop open                — run `/bytheslice:open-the-shop` (env vars, external service credentials)
+[ ] Slice 1.4 — DB schema foundation     — run `/bytheslice:sell-slice` on `stage_4_db_schema_foundation.md` (only if backend in scope)
 
 ---
 
-## Stage N — [Stage Name]
-**Type:** [type] | **MVP:** Yes | No | **Depends on:** Stages [list]
+<!-- Feature pies start at Pie 2 — Pie 1 is Foundations (the Prep gate above). -->
+## Pie N — [Pie Name]    <!-- review: boundary -->
+**Pie scope:** [one line — the coherent chapter this pie delivers] | **MVP:** Yes | No | **Depends on:** Pies [list]
+**Review:** boundary (autonomous; one HITL at the pie boundary) | continuous (forces /sell-slice mode for every slice)
 **Linear milestone:** [id or —]
+
+### Slice N.1 — [Slice Name]
+**Type:** [type] | **Depends on:** Slices [list]
 
 Completion criteria:
 [ ] [criterion from frontmatter]
 [ ] tests_passing
-[ ] PR reviewer pass
-[ ] All tests added and passing
-[ ] Full CI green (visual regression + design-system-compliance + db-schema-drift if applicable)
+[ ] slice-tester pass (behavioral; per-affordance verdict + evidence)
+[ ] slice-verifier pass (lint + typecheck + build + unit/integration + e2e-by-tag + design-system grep + CI-integrity + manifest backstop)
+[ ] All unit tests added and passing
 [ ] HITL items resolved (only if hitl_required: true)
+
+Exit criteria:
+[ ] [transcript-verifiable, binary, slice-specific — e.g. `pnpm test --filter @repo/x` exits 0]
+[ ] [Route `/path` renders with no console errors (screenshot in transcript)]
+[ ] [For each component this slice authored/modified: `/library/<slug>` approved at the Phase 4.5 gate before any production import — UI-touching slices only]
+
+### Slice N.2 — [Slice Name]
+**Type:** [type] | **Depends on:** Slices [list]
+
+Completion criteria:
+[ ] [criterion from frontmatter]
+[ ] tests_passing
+[ ] slice-tester pass
+[ ] slice-verifier pass
+
+Exit criteria:
+[ ] [transcript-verifiable, binary, slice-specific]
 
 ---
 
-<!-- Repeat for all feature stages (5..N typical) -->
+<!-- Repeat ### Slice N.M for the pie's 3–8 slices, then repeat ## Pie N for each pie. -->
+<!-- The pie PR opens at the boundary (one PR per pie); per-slice work is commit + push only. -->
 
 ## MVP Summary
 
-| Stage | Name | Type | Status |
-|-------|------|------|--------|
-| 4 | DB Schema Foundation (conditional) | db-schema | [ ] |
+| Pie | Slice | Name | Type | Status |
+|-----|-------|------|------|--------|
+| 1 | 1.4 | DB Schema Foundation (conditional) | db-schema | [ ] |
 
 ## Phase 2 (Post-Launch)
 
-| Stage | Name | Type | Status |
-|-------|------|------|--------|
-| N | [Stage Name] | [type] | [ ] |
+| Pie | Slice | Name | Type | Status |
+|-----|-------|------|------|--------|
+| N | N.M | [Slice Name] | [type] | [ ] |
 ```
 
-## Feature Stage Plan Template (stages 5+)
+> The `<!-- review: boundary -->` comment on the `## Pie N` heading mirrors the pie's `review` frontmatter and is what the dual-read parser and `/sell-pie` key off. A `## Stage N` heading (no pie) is the v4 flat shape — still valid; `/sell-pie` refuses it and points at `/cook-pizzas --repie`.
+
+## Feature Slice Plan Template (feature pies)
 
 ```markdown
 ---
 stage: N
-name: "Stage Name"
+pie: <int>
+slice: "<N.M>"
+review: boundary | continuous
+name: "Slice Name"
 type: frontend | backend | full-stack | infrastructure
-slice: vertical
 mvp: true | false
 depends_on: [<prior_stage_ints>]
 estimated_tasks: <1-6>
@@ -95,20 +126,20 @@ completion_criteria:
 ---
 
 <!-- docs/plans/stage_N_short_name.md -->
-<!-- Stage N: [Brief semantic description for search] -->
+<!-- Slice N.M: [Brief semantic description for search] -->
 
-# Stage N — [Stage Name]
+# Slice N.M — [Slice Name]
 
 **Goal:** [One sentence describing the deliverable.]
 
-**Architecture:** [How this stage fits into the overall system. 2-4 sentences.]
+**Architecture:** [How this slice fits into the overall system. 2-4 sentences.]
 
 **Tech stack:**
 - [Framework / library]
 - [Relevant tool]
 
-**Dependencies from prior stages:**
-- Stage X: [package / table / component / env var assumed to exist]
+**Dependencies from prior slices:**
+- Slice X.Y: [package / table / component / env var assumed to exist]
 
 ---
 
@@ -137,7 +168,8 @@ pnpm test
 
 **Commit:**
 \`\`\`bash
-git commit -m "feat: [description]"
+# v5 per-slice commit convention (one commit per slice, pushed to the pie branch — no PR until the pie boundary):
+git commit -m "feat(pie-N): N.M — [slice name]"
 \`\`\`
 
 ---
@@ -169,7 +201,8 @@ Good examples (transcript-verifiable, binary, specific):
 - ``pnpm test --filter @repo/auth`` exits 0 with all suites green
 - `tsc --noEmit` exits 0 with no errors
 - `gh pr checks <pr-number> --watch` returns exit 0 on the merged head SHA
-- `aggregating-test-reviewer` agent returns `verdict: pass` for this slice
+- `slice-verifier` agent returns `overall: pass` (lint/typecheck/build/unit-integration/e2e-by-tag/design-system/ci-integrity all green, manifest backstop clean) for this slice
+- `slice-tester` agent returns `overall: pass` with a per-affordance verdict for every declared affordance in the build manifest
 - `quality-reviewer` and `spec-reviewer` agents both return `verdict: pass` for every in-scope task
 - `library-entry-writer` reports `production_imports_added: 0` until user approval; then user explicitly approved each entry at the Phase 4.5 gate
 - Route `/dashboard/billing` renders with no console errors (screenshot captured in transcript)
@@ -183,9 +216,9 @@ Bad examples (vague, non-transcript-verifiable, generic):
 - "Ship-ready" → meta; not a criterion
 - "Tests pass" without naming the test command → too generic
 
-### Library Preview Gate criterion (UI-touching stages only)
+### Library Preview Gate criterion (UI-touching slices only)
 
-For any stage whose `type:` is `frontend`, `full-stack`, or a `backend`/`db-schema` stage that touches a production-route's user-visible surface, the Exit criteria block MUST include:
+For any slice whose `type:` is `frontend`, `full-stack`, or a `backend`/`db-schema` slice that touches a production-route's user-visible surface, the Exit criteria block MUST include:
 
 - For every component or block this slice authored or modified: `/library/<slug>` entry rendered all variants × states, user explicitly approved at the Phase 4.5 gate before any production-route import landed
 
@@ -193,13 +226,13 @@ Drop this line only for pure internal refactors with no rendered-output delta in
 
 ## Canned Stage Templates
 
-The four foundation stage templates live in `references/canned-stages/`. Do not duplicate them here — reference them directly:
+The four foundation stage templates live in `references/canned-stages/`. In v5 they are the slices of **Pie 1** (the foundations pie, `review: boundary` — slices `1.1`–`1.4`); their on-disk filenames are unchanged for dual-read back-compat. Do not duplicate them here — reference them directly:
 
-- `references/canned-stages/stage-1-design-system-gate.md`
-- `references/canned-stages/stage-2-ci-cd-scaffold.md`
-- `references/canned-stages/stage-3-env-setup-gate.md`
-- `references/canned-stages/stage-4-db-schema-foundation.md`
-- `references/canned-stages/auth-dev-mode-switcher-task.md` (injected into auth-tagged stages)
+- `references/canned-stages/stage-1-design-system-gate.md`     (Slice 1.1)
+- `references/canned-stages/stage-2-ci-cd-scaffold.md`          (Slice 1.2)
+- `references/canned-stages/stage-3-env-setup-gate.md`          (Slice 1.3)
+- `references/canned-stages/stage-4-db-schema-foundation.md`    (Slice 1.4)
+- `references/canned-stages/auth-dev-mode-switcher-task.md` (injected into auth-tagged slices)
 
 ## Naming Conventions
 
