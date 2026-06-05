@@ -43,6 +43,71 @@ bts_prep_counts() {
   ' "$checklist"
 }
 
+# Detect the checklist's structural layout. Dual-read for v5 (C-hooks):
+#   - flat v4 checklists use `## Stage N` headings
+#   - nested v5 checklists use `## Pie N` headings with `### Slice N.M` subheadings
+# Prints one of: "pie" (any `## Pie` heading present), "stage" (any `## Stage`
+# heading and no Pie), or "" (neither — e.g. a table-only checklist).
+bts_checklist_layout() {
+  local checklist
+  checklist=$(bts_checklist_path)
+  [ -z "$checklist" ] && return
+  awk '
+    BEGIN { pie = 0; stage = 0 }
+    /^## +Pie[[:space:]]+[0-9]/        { pie = 1 }
+    /^## +Stage[[:space:]]+[0-9]/      { stage = 1 }
+    END {
+      if (pie)        print "pie"
+      else if (stage) print "stage"
+    }
+  ' "$checklist"
+}
+
+# Count top-level work units in the checklist, dual-read across both layouts.
+# A "unit" is one `## Stage N` heading (flat v4) OR one `## Pie N` heading
+# (nested v5). Prints "<done> <total>"; empty if neither heading style exists.
+#
+# Done-ness is heading-driven so it works regardless of whether a project
+# tracks status inline (checkbox on the heading line) or in a separate table:
+#   - a heading counts as done if its line carries a checked box `[x]`,
+#     a `~~strikethrough~~`, or a trailing `Status: Completed` / `Status: Done`.
+bts_unit_counts() {
+  local checklist layout pat
+  checklist=$(bts_checklist_path)
+  [ -z "$checklist" ] && return
+  layout=$(bts_checklist_layout)
+  case "$layout" in
+    pie)   pat='^## +Pie[[:space:]]+[0-9]' ;;
+    stage) pat='^## +Stage[[:space:]]+[0-9]' ;;
+    *)     return ;;
+  esac
+  awk -v pat="$pat" '
+    BEGIN { done = 0; total = 0 }
+    $0 ~ pat {
+      total++
+      if ($0 ~ /\[[xX]\]/ || $0 ~ /~~/ || $0 ~ /[Ss]tatus:[[:space:]]*(Completed|Done)/) done++
+    }
+    END { if (total) printf "%d %d\n", done, total }
+  ' "$checklist"
+}
+
+# Count v5 slices (`### Slice N.M`) and their checked state, mirroring
+# bts_unit_counts' heading-driven done detection. Prints "<done> <total>";
+# empty when the checklist has no `### Slice` headings (i.e. a flat v4 file).
+bts_slice_counts() {
+  local checklist
+  checklist=$(bts_checklist_path)
+  [ -z "$checklist" ] && return
+  awk '
+    BEGIN { done = 0; total = 0 }
+    /^### +Slice[[:space:]]+[0-9]+\.[0-9]/ {
+      total++
+      if ($0 ~ /\[[xX]\]/ || $0 ~ /~~/ || $0 ~ /[Ss]tatus:[[:space:]]*(Completed|Done)/) done++
+    }
+    END { if (total) printf "%d %d\n", done, total }
+  ' "$checklist"
+}
+
 # Current git branch. Empty if not in a repo.
 bts_branch() {
   git -C "$(bts_root)" rev-parse --abbrev-ref HEAD 2>/dev/null
@@ -90,10 +155,12 @@ bts_session_id() {
 
 # Detect the first /bytheslice slash command in a user prompt.
 # Prints the canonical short name (e.g. "sell-slice") or nothing.
+# `sell-pie` precedes `sell-slice` in the alternation so the longer, more
+# specific v5 command wins when both could match a prefix.
 bts_detect_skill() {
   local prompt="$1"
-  # Match /sell-slice, /bytheslice:sell-slice, etc. Pick the first hit.
-  printf '%s\n' "$prompt" | grep -oE '/(bytheslice:)?(sell-slice|box-it-up|cook-pizzas|special-order|run-the-day|inspect-display|close-shop|setup-shop|set-display-case|open-the-shop|create-menu|final-quality-check)\b' \
+  # Match /sell-pie, /sell-slice, /bytheslice:sell-pie, etc. Pick the first hit.
+  printf '%s\n' "$prompt" | grep -oE '/(bytheslice:)?(sell-pie|sell-slice|box-it-up|cook-pizzas|special-order|run-the-day|inspect-display|close-shop|setup-shop|set-display-case|open-the-shop|create-menu|final-quality-check)\b' \
     | head -1 \
     | sed -E 's#^/(bytheslice:)?##'
 }

@@ -12,6 +12,8 @@ readonly: false
 
 # Stage Runner Subagent
 
+> **Deprecated in v5 — replaced by [`/sell-pie`](../../sell-pie/SKILL.md).** Retained for v4 back-compat through 5.1. In v5, `/run-the-day` is a thin chainer that dispatches [`/sell-pie`](../../sell-pie/SKILL.md) once per Pie; `/sell-pie` owns the per-slice produce/verify Workflow that this stage-runner used to wrap around `/sell-slice`. This agent is no longer dispatched. The content below is preserved for projects still on the flat v4 stage model. Note: the v4 behavior here drives `/sell-slice`, which still works on flat checklists; the v5 chainer does not invoke this agent.
+
 You are the **stage-runner** for `/run-the-day` (experimental). Your job: invoke `/bytheslice:sell-slice` against exactly **one** stage from `docs/plans/`, then return its structured result. You do not implement stage delivery yourself — `sell-slice` does. You exist so that `run-the-day` and direct `sell-slice` invocations both produce the same artifacts and gates.
 
 You execute exactly **one stage per dispatch**. You do not advance to the next stage — the orchestrator owns sequencing.

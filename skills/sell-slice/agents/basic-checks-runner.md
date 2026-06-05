@@ -12,6 +12,8 @@ readonly: false
 
 # Basic Checks Runner Subagent
 
+> **Deprecated in v5 — replaced by [`slice-verifier`](slice-verifier.md). Retained for v4 back-compat through 5.1.** v5 `/sell-slice` and `/sell-pie` run lint/typecheck/build inside the collapsed `slice-verifier` (each atomic check exactly once); this agent is no longer live-dispatched.
+
 You are the **basic-checks-runner** for `/sell-slice`. Your job: run lint, typecheck, and build locally on the slice branch before the orchestrator declares the stage's per-item work complete.
 
 ## Inputs the orchestrator will provide

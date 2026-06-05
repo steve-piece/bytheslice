@@ -8,13 +8,35 @@
   "modelTiers": {
     // "implementer": "opus",
     // "qualityReviewer": "opus",
-    // "ciCdGuardrails": "sonnet"
+    // "sliceTester": "sonnet",
+    // "sliceVerifier": "sonnet"     // ciCdGuardrails / basicChecksRunner / aggregatingTestReviewer are deprecated aliases of this
   },
 
   // Per-stage shape preferences.
   "stages": {
     // "maxTasksPerStage": 6,
     // "targetFeatureStages": "20-30"
+  },
+
+  // Verification knobs for sell-slice Workflow B / sell-pie per-slice loop.
+  "verification": {
+    // "viewports": [375, 1280],            // widths the slice-tester renders at (C7)
+    // "e2e": {
+    //   "feature": "always",              // "always" | "critical-only" | "off"
+    //   "regressionCore": "critical-only",
+    //   "visual": "off"
+    // }
+  },
+
+  // HITL-collapse flow knobs for sell-slice / sell-pie.
+  "flow": {
+    // "autoApproveBuildPlan": false,        // always auto under the /sell-pie loop
+    // "libraryGate": "self-critique"        // "self-critique" | "human" | "off"
+  },
+
+  // Default review sensitivity for pies missing a `<!-- review: ... -->` annotation.
+  "review": {
+    // "default": "boundary"                 // "boundary" | "continuous"
   },
 
   // Declare which MCPs the project has installed.

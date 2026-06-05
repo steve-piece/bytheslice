@@ -37,7 +37,9 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
     "qualityReviewer": "opus",
     "specReviewer": "sonnet",
     "discovery": "haiku",
-    "ciCdGuardrails": "sonnet",
+    "sliceTester": "sonnet",      // v5 — independent behavioral tester
+    "sliceVerifier": "sonnet",    // v5 — collapsed static-gate verifier
+    "ciCdGuardrails": "sonnet",   // deprecated alias of sliceVerifier (through 5.1)
     "checklistCurator": "sonnet",
     "stageRunner": "opus",
     "prReviewer": "sonnet",
@@ -53,9 +55,6 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
     "envVerifier": "haiku",
     "prdReviewer": "sonnet",
     "phasedPlanWriter": "sonnet",
-    "designSystemStageWriter": "sonnet",
-    "ciCdScaffoldStageWriter": "sonnet",
-    "envSetupStageWriter": "sonnet",
     "dbSchemaStageWriter": "sonnet",
     "masterChecklistSynthesizer": "sonnet",
     "retrospectiveReviewer": "opus"
@@ -65,6 +64,30 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
   "stages": {
     "maxTasksPerStage": 6,            // hard cap per stage; default 6
     "targetFeatureStages": "20-30"    // splitter aims for this band; "10-15" or "30-40" also reasonable
+  },
+
+  // Verification knobs consumed by sell-slice's Workflow B (slice-tester +
+  // slice-verifier) and by sell-pie's per-slice loop. Drives viewport coverage
+  // (C7) and e2e threshold-gating by tag (C10).
+  "verification": {
+    "viewports": [375, 1280],         // widths the slice-tester renders/screenshots at; default mobile + desktop
+    "e2e": {
+      "feature": "always",            // run the slice's own feature e2e: "always" | "critical-only" | "off"
+      "regressionCore": "critical-only", // run the core regression suite: "always" | "critical-only" | "off"
+      "visual": "off"                 // run visual-regression e2e: "always" | "critical-only" | "off"
+    }
+  },
+
+  // Flow knobs that govern the HITL collapse in sell-slice / sell-pie.
+  "flow": {
+    "autoApproveBuildPlan": false,    // skip the Phase 2 build-plan authorization stop (always auto under the /sell-pie loop)
+    "libraryGate": "self-critique"    // net-new-component library gate: "self-critique" | "human" | "off"
+  },
+
+  // Default review sensitivity for pies that omit the `<!-- review: ... -->`
+  // annotation in the master checklist. A pie's own annotation always wins.
+  "review": {
+    "default": "boundary"             // "boundary" = autonomous /sell-pie; "continuous" = forced /sell-slice mode
   },
 
   // Which MCPs the project has installed. Read by sell-slice (frontend pipeline),
@@ -127,7 +150,9 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
 
 ### `modelTiers`
 
-Maps agent name → tier alias. Agent names use camelCase (e.g. `qualityReviewer`, `ciCdGuardrails`). Values must be one of `"haiku" | "sonnet" | "opus"`. Unknown agent names are ignored (with a one-line warning at session start).
+Maps agent name → tier alias. Agent names use camelCase (e.g. `qualityReviewer`, `sliceVerifier`). Values must be one of `"haiku" | "sonnet" | "opus"`. Unknown agent names are ignored (with a one-line warning at session start).
+
+The v5 verification agents are `sliceTester` (independent behavioral tester) and `sliceVerifier` (collapsed static-gate verifier). The legacy keys `ciCdGuardrails`, `basicChecksRunner`, and `aggregatingTestReviewer` are **deprecated aliases of `sliceVerifier`** (retained through 5.1 for v4 back-compat) — setting any of them is equivalent to setting `sliceVerifier`. See [`model-tier-guide.md`](./model-tier-guide.md) for the full per-agent table and the deprecation mapping.
 
 Why use this instead of the env vars: env vars override the tier *globally* (every agent typed `opus` becomes the same model). Config overrides individual agent assignments. They compose — env vars handle the alias resolution, the config picks which alias each agent uses.
 
@@ -138,6 +163,30 @@ Default `6`. Lower = more, smaller stages. Upper bound `8` (above this stages wo
 ### `stages.targetFeatureStages`
 
 Default `"20-30"`. The phased-plan splitter aims for a stage count in this band by tuning the split granularity. Smaller number = larger slices.
+
+### `verification`
+
+Knobs for Workflow B (the verify-once stage of `/sell-slice`, also driven per-slice by `/sell-pie`). Each key is independent; omit any to take the default.
+
+- **`viewports`** *(int[], default `[375, 1280]`)* — the widths the `slice-tester` renders and screenshots `frontend` slices at (C7). The list is mobile-first; add widths (e.g. `[375, 768, 1280]`) for finer breakpoint coverage. The `slice-tester` exercises every declared affordance at each width.
+- **`e2e`** *(object)* — threshold-gates which e2e suites the `slice-verifier` runs by tag (C10). Each value is `"always" | "critical-only" | "off"`:
+  - **`feature`** *(default `"always"`)* — the slice's own feature e2e specs. `"critical-only"` runs just specs tagged critical; `"off"` skips them.
+  - **`regressionCore`** *(default `"critical-only"`)* — the cross-slice core regression suite. Defaults to critical-only so per-slice loops stay cheap; raise to `"always"` near a UAT date.
+  - **`visual`** *(default `"off"`)* — visual-regression e2e. Off by default because the `slice-tester` already does a rendered design-system match; turn `"always"` on when a project pins screenshots in CI.
+
+### `flow`
+
+Governs the v5 HITL collapse. Each key is independent.
+
+- **`autoApproveBuildPlan`** *(bool, default `false`)* — when `true`, `/sell-slice` skips its Phase 2 build-plan authorization stop and proceeds straight to building. This stop is **always** auto-approved when the slice runs under the `/sell-pie` loop, regardless of this setting; the flag only affects standalone `/sell-slice`.
+- **`libraryGate`** *(string, default `"self-critique"`)* — controls the net-new-component library gate (Phase 4.5):
+  - `"self-critique"` *(default)* — the agent self-reviews net-new components against the design system and proceeds without a human stop unless it flags a concern.
+  - `"human"` — always stop for human approval of net-new components (restores the v4 hard gate).
+  - `"off"` — skip the library gate entirely (only sensible when the design-system Pie has already front-loaded all component approval).
+
+### `review`
+
+- **`default`** *(string, default `"boundary"`)* — the review sensitivity applied to a pie that omits the `<!-- review: ... -->` annotation in the master checklist. `"boundary"` lets `/sell-pie` run that pie autonomously with one HITL at the pie boundary; `"continuous"` forces `/sell-pie` into `/sell-slice` (high-touch) mode for it. **A pie's own annotation always wins over this default** — this key only fills the gap for unannotated pies. Per-slice `hitl_required` frontmatter still fires inside an autonomous pie either way.
 
 ### `mcps`
 

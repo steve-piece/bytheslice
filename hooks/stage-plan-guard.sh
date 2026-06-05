@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # hooks/stage-plan-guard.sh
-# PreToolUse hook on Write + Edit. Blocks edits to stage plan files
+# PreToolUse hook on Write + Edit. WARNs on edits to stage/slice plan files
 # (docs/plans/stage_<n>_*.md) while /sell-slice is the active skill for
-# the current session — stage plans are static during delivery.
+# the current session — plans are static during delivery, but the v5 loop
+# (/sell-pie) legitimately churns plan files, so this advises rather than
+# blocks (downgraded from BLOCK in v5, C4).
 #
 # Hook contract: reads JSON from stdin with .tool_input.file_path.
-# Exit 0 to allow; exit 2 (with stderr) to block.
+# Always exit 0; prints the advisory to stdout to WARN.
 
 set -u
 
@@ -62,5 +64,5 @@ fi
 # Only /sell-slice locks stage plans.
 [ "$STATE_SKILL" != "sell-slice" ] && exit 0
 
-printf '[bytheslice] refuses to edit stage plan files during /sell-slice — plans are static. Use /special-order or /cook-pizzas to modify a stage plan.\n' >&2
-exit 2
+printf '[bytheslice] editing a stage plan file during /sell-slice — plans are normally static. Prefer /special-order or /cook-pizzas to modify a plan; proceeding anyway.\n'
+exit 0

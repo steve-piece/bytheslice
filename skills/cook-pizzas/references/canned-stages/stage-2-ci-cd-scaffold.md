@@ -25,7 +25,7 @@ completion_criteria:
 
 **Architecture:** This stage delegates entirely to the `final-quality-check` skill. It establishes Playwright suites (`@feature`, `@regression-core`), GitHub Actions workflows (`ci.yml`, `e2e.yml`), Husky `pre-push`, PR template, and branch-protection setup. Every later stage depends on this baseline.
 
-**Architecture note (project-specific):** [populated by ci-cd-scaffold-stage-writer based on Q8 and Q11]
+**Architecture note (project-specific):** [project-specific — from Q8 and Q11]
 - Architecture variant: single-app | monorepo (from Q8)
 - Deployment target: Vercel | AWS | other (from Q11)
 - Monorepo-specific: Turborepo pipeline config, workspace-aware test scripts

@@ -26,7 +26,7 @@ completion_criteria:
 
 **Tech stack:**
 - Token tooling: design-system-specific (shadcn, Tailwind CSS variables, or custom)
-- Available design MCPs: [populated by design-system-stage-writer from Q7]
+- Available design MCPs: [project-specific — from Q7]
 - CI: design-system-compliance check (added in Stage 2, but tokens defined here)
 
 **Dependencies from prior stages:** none
@@ -35,7 +35,7 @@ completion_criteria:
 
 ## UX context (project-specific)
 
-> Populated by `design-system-stage-writer` from PRD Section 5 (UX & Content Fundamentals):
+> Populated from PRD Section 5 (UX & Content Fundamentals):
 > - Brand voice and tone:
 > - Primary brand color direction:
 > - Typography stance:

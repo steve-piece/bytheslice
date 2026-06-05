@@ -34,7 +34,7 @@ ByTheSlice runs your project like a **pizza shop**. You don't build a whole app 
 **Under the hood** *(for developers + power agentic-coding users)*
 - [The Menu — full skill reference](#the-menu--full-skill-reference)
 - [The Kitchen — workflow diagram](#the-kitchen--workflow-diagram)
-- [The master checklist — Prep + Stages](#the-master-checklist--prep--stages)
+- [The master checklist — Prep + Pies](#the-master-checklist--prep--pies)
 - [Mode detection — standalone vs sequential](#mode-detection--standalone-vs-sequential)
 - [Personalize — `bytheslice.config.json`](#personalize--bythesliceconfigjson)
 - [Conventions worth knowing](#conventions-worth-knowing)
@@ -58,7 +58,7 @@ Before you serve a single customer, six things need to happen. In order, once pe
 |---|---|---|
 | `/setup-shop` | Unlock the doors, fire up the oven, stock the line. | Bootstraps a new project or drops ByTheSlice into an existing one. |
 | `/create-menu` | Decide which pies to serve today. | Turns a free-form brief into a structured PRD. |
-| `/cook-pizzas` | Pre-bake every pie on today's menu. Each "cooked pie" is a plan file that tells the kitchen how to make that slice. | Decomposes the PRD into 20–30 vertical-slice stages + a master checklist. |
+| `/cook-pizzas` | Pre-bake every pie on today's menu. Each "cooked pie" is a plan file that tells the kitchen how to make that slice. | Decomposes the PRD into a two-level roadmap — coherent Pies (3–8 slices each) of vertical-slice features + a nested master checklist. `--repie` converts a flat v4 checklist into Pies. |
 | `/set-display-case` | Build the display case the pies will sit in. | Generates the design system — tokens, components, the `/library` preview route. |
 | `/final-quality-check` | Install the quality line every pie crosses on the way to the display. | Wires CI/CD, E2E tests, design-system-compliance, visual regression. |
 | `/open-the-shop` | Flip the OPEN sign, unlock the cash drawer, stock ingredients. | Sets up env vars + external service credentials. Most operator-attention-heavy step. |
@@ -67,14 +67,15 @@ The shop is open. Step 1 done.
 
 ### 🛎️ Step 2 — Serve customers *(the everyday loop)*
 
-This is what you'll spend most of your time doing. Two commands, run in pairs, **fresh chat per pair**.
+This is what you'll spend most of your time doing. The forefront motion is **`/sell-pie`** — bake a whole Pie (3–8 slices) autonomously, then box it at the boundary. Reach for **`/sell-slice`** when one slice needs a careful, hands-on touch.
 
 | Command | What it does, in pizza terms | What it really does |
 |---|---|---|
-| `/sell-slice` | Pull one pie off the rack, run it through the kitchen line, slice and serve. | Reads the next stage from the checklist, builds the code, runs quality checks, commits locally. |
-| `/box-it-up` | Box the slice, ring it up, hand it across the counter. | Pushes the branch, opens the PR, watches CI, gets your merge approval, cleans up. |
+| `/sell-pie` | Bake a whole pie — every slice, start to finish — then set the tray on the counter. | `/loop`-driven autonomous baker over one Pie: per-slice context-separated build → test → verify → fix, commit + push each slice (no PR), then opens the boundary PR via `/box-it-up`. Refuses flat v4 checklists. The primary everyday command. |
+| `/sell-slice` | Pull one pie off the rack, run one slice through the kitchen line, slice and serve. | High-touch single-slice delivery (build-plan + library gates intact). Reads the next slice, builds the code via Workflow A, runs verify-once (slice-tester + slice-verifier) in Workflow B, commits + pushes. For sensitive / collaborative work. |
+| `/box-it-up` | Box the pie, ring it up, hand it across the counter. | Per slice: commits + pushes only (no PR, CI stays quiet). At the pie boundary: opens one `Pie N` PR, watches CI once, auto-fixes on red, gates merge on your approval, merges preserving every per-slice commit (never squash), syncs main, cleans up branch + worktree. |
 
-After each pair, start a fresh chat and do it again. Keep going until the master checklist is empty.
+A Pie is the unit of autonomy, PR, and context-refresh. After each Pie merges, start a fresh chat and bake the next one. Keep going until the master checklist is empty.
 
 ### ✨ Step 3 — Handle the unusual *(side flows)*
 
@@ -84,15 +85,15 @@ For when normal service isn't enough. Use these on-demand, not in any specific o
 |---|---|---|
 | `/special-order` | A regular walks in wanting something not on the menu. Cook it on the spot, add it to the tray. | Bolts new features onto an in-progress project — writes fresh stage files, hands off to `/sell-slice`. |
 | `/inspect-display` | Walk past the tray and eyeball every pie. Anything wilted? Mock data? Cold spots? | Read-only audit of the running app — every route, every page, captured to a report. |
-| `/run-the-day` ⚠️ | Auto-pilot mode. Open, run the whole day's service, close out. *(Experimental. Fine for short menus, drifts on long days.)* | Drives the whole master checklist autonomously. v4 adds `/goal`-driven session continuation in `--auto-*` modes. |
+| `/run-the-day` ⚠️ | Auto-pilot mode. Run the whole day's service — bake every Pie in sequence, close out. *(Experimental. Fine for short roadmaps, drifts across many pies.)* | Thin chainer over `/sell-pie`: walks the master checklist Pie by Pie, dispatches `/sell-pie` per Pie (which bakes every slice + opens the boundary PR), confirms each Pie merged to clean main, then advances. `--auto-mvp`/`--auto-all` are pie filters. Primary entry point is `/sell-pie`. |
 | `/close-shop` ⚠️ | After service, sit down and debrief. *(Experimental.)* | Friction retro on the workflow itself — drafts plugin improvements back to disk. |
 
-That's the whole workflow. **Three steps. Twelve commands. The kitchen does the rest.**
+That's the whole workflow. **Three steps. Thirteen commands. The kitchen does the rest.**
 
 > [!IMPORTANT]
 > **Shop rules** the plugin enforces, no exceptions:
 > 1. Every slice passes the quality line (lint, type, build + UI test review). A bad pie doesn't go on the display.
-> 2. Selling and boxing are decoupled. `/sell-slice` stops at *"committed locally, ready for review"* so you can taste-test before handing over. Then `/box-it-up` handles push → CI → merge.
+> 2. Selling and boxing are decoupled. Per-slice pushes accumulate on the pie branch with no PR or CI; `/box-it-up` opens the single `Pie N` PR, runs CI once, and merges at the **pie boundary**. `/box-it-up --slice` is the per-slice commit+push entry point `/sell-pie`'s loop calls — so you can still taste-test between slices.
 > 3. Every skill is **independently invocable**. Drop `/set-display-case` onto any project to bolt on a design system, or `/box-it-up` onto any branch to push it. The full workflow is opt-in.
 
 ---
@@ -111,7 +112,9 @@ npx bytheslice install --target both
 /bytheslice:final-quality-check
 /bytheslice:open-the-shop
 
-# 3. Serve customers (repeat, fresh chat per pair)
+# 3. Serve customers (repeat, fresh chat per pie)
+/bytheslice:sell-pie          # bakes a whole Pie autonomously, opens the boundary PR
+# — or, for one careful slice at a time:
 /bytheslice:sell-slice
 /bytheslice:box-it-up
 ```
@@ -178,7 +181,7 @@ Each skill is invokable via slash command in Claude Code or Cursor. The full ref
 |---|---|---|
 | `setup-shop` | `/bytheslice:setup-shop` | Three-flow setup: (1) first-time install creates `~/.bytheslice/defaults.json`, (2) new project scaffolds a single-app (Next.js App Router, Vite + React, SvelteKit, or Astro) or a Turborepo monorepo — or a plain Node API with no frontend, (3) existing project drops a per-project `bytheslice.config.json`. Stack detection + per-framework paths live in [`framework-detect.md`](skills/setup-shop/references/framework-detect.md). |
 | `create-menu` | `/bytheslice:create-menu` | Plan-mode question gate → architecture conditional → brief mapping → Section 0–7 PRD generation → `prd-reviewer` agent loop (cap 2 revisions). |
-| `cook-pizzas` | `/bytheslice:cook-pizzas` | 12-question elicitation → stage identification (≥2 stages per PRD feature) → parallel stage-writer dispatch → `master-checklist-synthesizer` emits the Prep section + feature stages. Refuses to overwrite an existing checklist. |
+| `cook-pizzas` | `/bytheslice:cook-pizzas` | 12-question elicitation → `stage-decomposer` identifies Pies then Slices (≥2 slices per feature, 3–8 slices per pie, `review:` per pie) → schema-validated Workflow (`parallel()` plan-writers, barrier) → `master-checklist-synthesizer` consumes the writers' structured returns (no disk re-read) and emits the nested `## Pie N` / `### Slice N.M` checklist. Refuses to overwrite an existing checklist; `--repie` converts a flat v4 checklist on explicit opt-in. |
 | `set-display-case` | `/bytheslice:set-display-case` | Validates Claude Design bundle if present, otherwise expands brand brief. Outputs `globals.css`, Tailwind config, `design-system.md`, design-system rules in project rules file, `/library` preview route. Standalone or sequential — flips `[ ] Display case built` in sequential. |
 | `final-quality-check` | `/bytheslice:final-quality-check` | Dispatches eight specialized agents: `scaffold-discovery`, `framework-detector`, `e2e-installer`, `workflow-writer`, `husky-installer`, `lint-config-writer`, `branch-protection-writer`, `local-gates-runner`. Standalone or sequential — flips `[ ] Quality line installed`. |
 | `open-the-shop` | `/bytheslice:open-the-shop` | Scans `.env.example` files, matches detected services against `known-services-catalog.md`, generates a manual setup checklist, waits for user confirmation, then runs `env-verifier` to gate before any feature work. Standalone or sequential — flips `[ ] Shop open`. |
@@ -187,8 +190,9 @@ Each skill is invokable via slash command in Claude Code or Cursor. The full ref
 
 | Skill | Slash command | What it does |
 |---|---|---|
-| `sell-slice` | `/bytheslice:sell-slice` | 9-phase orchestrator. Phase 0 Prep-section precondition (v4) → reconnaissance (parallel) → Build Plan + authorization → Phase 2.5 `/goal` set (lifted from Exit criteria) → stage-type routing (frontend pipeline / internal implementer / legacy sub-skill dispatch for v3 projects) → spec + quality review loop → basic checks → type-aware aggregating test review → CI/CD guardrails → stage closeout. Library Preview Gate (Phase 4.5) HARD STOPS on user-visible UI changes. Stops at *"committed locally, ready for review"*. |
-| `box-it-up` | `/bytheslice:box-it-up` | Pre-flight safety checks (never ship from main, never force-push, branch-reuse detection) → push → reuse-or-create PR → `gh pr checks --watch` (capped at 30 min/attempt) → `ci-fix-attempter` auto-fix loop on red (capped at 3 attempts before HITL) → user-authorized merge gate → main sync (`--ff-only`) → local + remote branch deletion + worktree cleanup. Universal closeout — also safe on hand-rolled branches. |
+| `sell-pie` | `/bytheslice:sell-pie` | **Forefront delivery command.** `/loop`-driven autonomous baker over one Pie. Reads the piefied checklist → picks the active Pie → if `review: continuous` runs `/sell-slice` mode, else loops its slices: per-slice context-separated `Workflow` (builder → slice-tester → slice-verifier → fixer; the tester receives only the build manifest + Exit criteria + design-system path, never the builder's reasoning), commit + push, **no PR**. On all slices `[x]`, stops and opens the boundary `Pie N` PR via `/box-it-up`. Refuses flat v4 checklists; the four blocking HITL categories halt the loop. |
+| `sell-slice` | `/bytheslice:sell-slice` | High-touch single-slice delivery. Interactive spine (prep gate → recon → build-plan auth [auto under the `/sell-pie` loop or `flow.autoApproveBuildPlan`] → `/goal` lifted from Exit criteria → branch) + **Workflow A** (produce; builder emits the build manifest) + human **Library Preview Gate** (Phase 4.5) + **Workflow B** (verify-once = state-illustrator → slice-tester → slice-verifier, each static gate once, off-context fix loop). Dual-reads flat `## Stage N` and nested `## Pie N`/`### Slice N.M`. Stops at *"committed locally, ready for review"*; per-slice = commit + push only (PR/CI/merge are the pie boundary's job). |
+| `box-it-up` | `/bytheslice:box-it-up` | Pie-scoped, dual-mode. **Per slice** (`--slice`, how `/sell-pie`'s loop calls it): commit `feat(pie-N): N.M — <name>` + push only — no PR, so CI stays quiet. **At the pie boundary** (default): pre-flight safety checks → open one `Pie N` PR → `gh pr checks --watch` → `ci-fix-attempter` auto-fix loop on red (capped at 3) → user-authorized merge gate → merge preserving every per-slice commit (rebase/merge-commit, **never squash**) → main sync (`--ff-only`) → branch deletion + pie-worktree removal. Universal closeout — also safe on hand-rolled branches. |
 
 ### Side flows
 
@@ -201,7 +205,7 @@ Each skill is invokable via slash command in Claude Code or Cursor. The full ref
 
 | Skill | Slash command | What it does |
 |---|---|---|
-| `run-the-day` | `/bytheslice:run-the-day` | Autonomous multi-stage variant of `/sell-slice`. Phase 0.5 sets a session-scoped `/goal` in `--auto-mvp` / `--auto-all` modes. Per-stage gate checklist, platform-walk checkpoints. |
+| `run-the-day` | `/bytheslice:run-the-day` | Thin whole-roadmap chainer over `/sell-pie` (no longer a `/sell-slice` orchestrator). Holds zero implementation context: reads the piefied master checklist, builds a pie queue, dispatches `/sell-pie` once per Pie in strict sequence, and pauses/auto-advances between Pies per `--auto-mvp`/`--auto-all`. Refuses flat v4 checklists with a `/cook-pizzas --repie` hint. The `stage-runner`/`pr-reviewer` agents are deprecated v4 shims, no longer dispatched. |
 | `close-shop` | `/bytheslice:close-shop` | After-service retro. Scans recent stage executions for friction, drafts improvement PRs against the plugin repo. |
 
 ---
@@ -215,44 +219,50 @@ flowchart TD
     Cook --> Case["🪟 set-display-case"]
     Case --> QC["✅ final-quality-check"]
     QC --> Open["🚪 open-the-shop"]
-    Open --> Sell["🛎️ sell-slice<br/><i>one customer<br/>at a time</i>"]
-    Special["➕ special-order<br/><i>off-menu request</i>"] --> Sell
-    Sell --> Box["📦 box-it-up"]
-    Box --> Q{"Slices left<br/>in the case?"}
-    Q -->|Yes| Next["next customer<br/>(fresh chat / worktree)"]
-    Next --> Sell
+    Open --> Pie["🥧 sell-pie<br/><i>bake one whole pie<br/>(3–8 slices), autonomously</i>"]
+    Special["➕ special-order<br/><i>off-menu request<br/>(appends a Pie)</i>"] --> Pie
+    Pie -.->|one careful slice| Sell["🛎️ sell-slice"]
+    Pie --> Box["📦 box-it-up<br/><i>pie-boundary PR</i>"]
+    Sell -.-> Box
+    Box --> Q{"Pies left<br/>in the case?"}
+    Q -->|Yes| Next["next pie<br/>(fresh chat / worktree)"]
+    Next --> Pie
     Q -->|No| Inspect["🚶 inspect-display"]
     Inspect --> Close(["🌙 close-shop"])
 ```
 
-`/sell-slice` is the daily surface. **Finish a slice, start a fresh chat, run it again** — until the master checklist is green.
+`/sell-pie` is the daily surface — it bakes a whole Pie, then `/box-it-up` opens the boundary PR. **Finish a pie, start a fresh chat, bake the next** — until the master checklist is green. Reach for `/sell-slice` when a single slice needs a hands-on touch.
 
 ---
 
-## The master checklist — Prep + Stages
+## The master checklist — Prep + Pies
 
-`cook-pizzas` produces `docs/plans/00_master_checklist.md` with **two sections**:
+`cook-pizzas` produces `docs/plans/00_master_checklist.md` as a **two-level Pie / Slice roadmap** — **Pie 1 — Foundations** (tracked via the `## Prep` gate) then the feature Pies (2+):
 
 ```markdown
-## Prep — run once before any feature work
+## Prep — Pie 1: Foundations (run once before any feature work)
 
 [ ] Display case built       — run /bytheslice:set-display-case
 [ ] Quality line installed   — run /bytheslice:final-quality-check
 [ ] Shop open                — run /bytheslice:open-the-shop
-[ ] DB schema foundation     — run /bytheslice:sell-slice on stage 4 (if backend)
+[ ] DB schema foundation     — run /bytheslice:sell-slice on Slice 1.x (if backend)
 
-## Stages
+## Pie 2 — Blog Editor    <!-- review: boundary -->
 
-## Stage 5 — <first feature stage>
-...
+### Slice 2.6 — Build the Blog Editor frontend
+[ ] step
+[ ] step
+
+### Slice 2.7 — Wire server actions into the editor
+[ ] step
 ```
 
-`/sell-slice`'s Phase 0 **refuses to start any feature stage until every Prep box is `[x]`**. Each foundation skill flips its own checkbox when invoked in sequential mode. The DB schema row is conditional — emitted only if the PRD has a backend.
+A **Pie** is a coherent chapter of 3–8 slices carrying a `review: boundary|continuous` property; **Pie 1 is Foundations** (slices 1.1–1.4: design system, CI/CD, env, DB schema), and feature pies are Pie 2+. `/sell-slice`'s prep gate **refuses to start any feature work until every Pie-1 / Prep box is `[x]`**. Each foundation skill flips its own checkbox when invoked in sequential mode. The DB schema row is conditional — emitted only if the PRD has a backend.
 
 > [!NOTE]
-> **Hard caps per stage:** 6 tasks, ~10–15 files changed, completable in one fresh agent session. Override `stages.maxTasksPerStage` in `bytheslice.config.json` if you really need a bigger slice — but the cap exists for a reason.
+> **Hard caps per slice:** 6 tasks, ~10–15 files changed, completable in one fresh agent session. Override `stages.maxTasksPerStage` in `bytheslice.config.json` if you really need a bigger slice — but the cap exists for a reason.
 
-**Legacy v3 projects** (master checklist has `stage_1_*`/`stage_2_*`/`stage_3_*` plan files instead of a Prep section): `/sell-slice` keeps a documented legacy routing path that dispatches the foundation skills as sub-skills when it encounters those stage types. No migration required.
+**Dual-read & legacy projects.** A **flat v4 checklist** (`## Stage N` headings, no `## Pie N`) still works unchanged — `/sell-slice` and the hooks dual-read it; run `/cook-pizzas --repie` to convert it to Pies on explicit opt-in (never silent). **Legacy v3 projects** (master checklist has `stage_1_*`/`stage_2_*`/`stage_3_*` plan files instead of a Prep section): `/sell-slice` keeps a documented legacy routing path that dispatches the foundation skills as sub-skills when it encounters those stage types. No migration required.
 
 ---
 
@@ -275,11 +285,12 @@ You can override auto-detection with explicit `--standalone` or `--sequential` f
 | `set-display-case` | ✓ standalone-invocable | ✓ flips Prep box |
 | `final-quality-check` | ✓ standalone-invocable | ✓ flips Prep box |
 | `open-the-shop` | ✓ standalone-invocable | ✓ flips Prep box |
+| `sell-pie` | — | ✓ requires a piefied checklist (refuses flat v4) |
 | `sell-slice` | — | ✓ requires checklist |
-| `box-it-up` | ✓ works on any branch | ✓ flips stage status on merge if matched |
+| `box-it-up` | ✓ works on any branch | ✓ flips the Pie's status on merge if the branch maps to a `## Pie N` row |
 | `special-order` | — | ✓ extends checklist |
 | `inspect-display` | ✓ read-only audit | ✓ same |
-| `run-the-day` | — | ✓ drives whole checklist |
+| `run-the-day` | — | ✓ drives whole piefied checklist (refuses flat v4) |
 | `close-shop` | — | ✓ needs execution history |
 
 **The single rule that holds it together:** skills never assume they're being called from somewhere else. Detect mode from disk state, behave correctly in both, document both modes in the SKILL.md.
@@ -292,8 +303,13 @@ Drop a `bytheslice.config.json` at your project root to override defaults:
 
 ```jsonc
 {
-  "modelTiers":   { "implementer": "opus", "qualityReviewer": "opus" },
+  "modelTiers":   { "implementer": "opus", "qualityReviewer": "opus",
+                    "sliceTester": "sonnet", "sliceVerifier": "sonnet" },
   "stages":       { "maxTasksPerStage": 6, "targetFeatureStages": "20-30" },
+  "verification": { "viewports": [375, 1280],
+                    "e2e": { "feature": "always", "regressionCore": "critical-only", "visual": "off" } },
+  "flow":         { "autoApproveBuildPlan": false, "libraryGate": "self-critique" },
+  "review":       { "default": "boundary" },   // per-pie override via the `<!-- review: -->` annotation
   "mcps":         { "shadcn": true, "magic": false, "figma": false, "chromeDevTools": true },
   "visualReview": { "tools": ["claude-in-chrome", "chrome-devtools-mcp", "playwright"], "vizzly": false },
   "hitl":         { "additionalCategories": [] },
@@ -311,7 +327,7 @@ env vars  >  bytheslice.config.json  >  project rules file (CLAUDE.md / AGENTS.m
 ```
 
 > [!NOTE]
-> Config keys (`runPipeline.platformWalkEvery`, `modelTiers.implementer`, `stages.maxTasksPerStage`) keep their v3 names in v4 for backward compatibility. A future v5 may rename them with deprecation aliases.
+> Config keys (`runPipeline.platformWalkEvery`, `modelTiers.implementer`, `stages.maxTasksPerStage`) keep their v3 names for backward compatibility. As of v5, the verifier roles are renamed: `modelTiers.ciCdGuardrails` / `basicChecksRunner` / `aggregatingTestReviewer` are now **deprecated aliases of `sliceVerifier`** and still resolve. The new `verification`, `flow`, and `review` blocks above are v5 additions.
 
 ---
 
@@ -320,18 +336,21 @@ env vars  >  bytheslice.config.json  >  project rules file (CLAUDE.md / AGENTS.m
 > [!IMPORTANT]
 > These aren't suggestions — they're the rules of the kitchen. The plugin enforces them.
 
-- **Deterministic hook enforcement.** Preconditions and gates that used to live in prose are enforced by plugin hooks in [`hooks/`](hooks/) — `/sell-slice` blocks without a master checklist, `git commit` on `main` is blocked at the tool layer, stage plans are frozen mid-delivery, a `Stop` gate nudges `/sell-slice` and `/box-it-up` to finish their loops, and a `PreCompact` snapshot lets a post-compaction session re-orient. Every hook is session-id-scoped and fails open; a 100-test regression suite lives at `hooks/test.sh`. Disable per-session with `BTS_HOOKS_DISABLED=1`. See [`hooks/README.md`](hooks/README.md).
+- **Deterministic hook enforcement.** Preconditions and gates that used to live in prose are enforced by plugin hooks in [`hooks/`](hooks/) — `/sell-slice` blocks without a master checklist, `git commit` on `main` is blocked at the tool layer, editing a stage plan mid-delivery draws a WARN, and a `PreCompact` snapshot lets a post-compaction session re-orient. (v5 deleted the `Stop`-gate and `commit-checklist-correlator` hooks — `/loop` + the pie-completion `/goal` own loop continuation natively.) Hooks dual-read flat `## Stage N` and nested `## Pie N` / `### Slice N.M` checklists. Every hook is session-id-scoped and fails open; a 64-test regression suite lives at `hooks/test.sh`. Disable per-session with `BTS_HOOKS_DISABLED=1`. See [`hooks/README.md`](hooks/README.md).
 - **Subagent-driven everything.** Skill files are orchestrators — context, scenarios, gates, agent rosters. Heavy work lives in `skills/*/agents/*.md`. The orchestrator dispatches, reviews structured outputs, and loops to green; it does not write production code itself.
-- **Per-stage verification is non-negotiable.** Phase 6 (`basic-checks-runner`) and Phase 7 (`aggregating-test-reviewer`) gate the per-stage output summary. No "stage complete" report until both pass — or are intentionally skipped per stage type.
+- **Per-slice verify-once is non-negotiable.** Workflow B gates every slice with two agents: `slice-tester` (behavioral — rendered design-system match + per-affordance exercise + seed-and-cleanup data-flow round-trips with the bidirectional rule) and `slice-verifier` (static gates, each run **exactly once**: lint / type / build / unit / e2e-by-tag [threshold-gated per `verification.e2e`] + design-system static grep + CI-integrity + the build-manifest under-declaration backstop). No "slice done" until both pass — or are intentionally skipped per slice type. The three v4 verifiers (`basic-checks-runner`, `aggregating-test-reviewer`, `ci-cd-guardrails`) and `frontend/visual-reviewer` are deprecated shims folded into these two.
+- **Build manifest + under-declaration backstop.** The builder (`implementer`) emits a schema-validated manifest declaring every route / component / affordance / serverAction / transition it produced; `slice-verifier` independently greps the slice diff and **fails if the manifest under-counts** — so a builder cannot hide an affordance from the tester with prompt wording alone.
+- **Context-separated dispatch.** The `/sell-pie` `/loop` conductor holds zero implementation context. Per slice it routes structured artifacts between singular-goal agents — the `slice-tester` receives only the build manifest + Exit criteria + design-system path, **never the builder's reasoning**, so it cannot rationalize the builder's choices. The builder writes unit tests but never grades its own behavior; that is the tester's job.
+- **Pie / Slice hierarchy.** The master checklist is two levels: a **Pie** (`## Pie N`, 3–8 slices, a `review: boundary|continuous` property) is the unit of `/loop` autonomy, HITL checkpoint, PR, context-refresh, and worktree; a **Slice** (`### Slice N.M`) is one vertical deliverable, capped at 6 tasks / ~15 files. Flat v4 `## Stage N` checklists are dual-read — `/sell-slice` and the hooks still run them; `/cook-pizzas --repie` converts on explicit opt-in.
 - **Preview-first library delivery.** `/set-display-case` scaffolds an operator-only `/library` preview route — at `app/(dashboard)/library/` on Next.js App Router, or the framework's idiomatic location on Vite / SvelteKit / Astro (see [`framework-detect.md`](skills/setup-shop/references/framework-detect.md)) — excluded from every nav surface, sitemap, and robots. Every frontend slice through `/sell-slice` passes through Phase 4.5's **Library Preview Gate** — non-skippable for new components AND for consumer-side edits that change a user-visible surface of an existing library component. The gate runs a Phase 0 extend-vs-create check, surfaces a self-critique block + clickable preview URLs, then HARD STOPS for explicit user approval before any production-route import lands. Pure internal refactors with no rendered-output delta are exempt.
-- **Exit-criteria contract.** Every stage file's `**Exit criteria:**` block must be transcript-verifiable, binary, and specific to the slice. `/sell-slice` Phase 2.5 lifts this block verbatim into a session-scoped `/goal` condition. Vague lines like "tests pass" break the goal evaluator — `phased-plan-writer` enforces specificity (write `pnpm test --filter @repo/auth exits 0`, not "tests pass").
-- **Selling and boxing are decoupled.** `/sell-slice` stops at *slice committed locally, ready for review* — push, PR, CI watch, merge, and cleanup belong to `/box-it-up`. The split exists so you can run a manual visual UAT or local code review between commit and PR. `/box-it-up` is also safe for hand-rolled feature branches that never went through ByTheSlice delivery.
-- **Type-aware test review depth.** Frontend / full-stack stages get the FULL Phase 7 (dev-server boot, CI gates, Claude-in-Chrome UAT, visual diff). Backend / db-schema get a REDUCED review (CI gates only). Foundation stages skip Phase 7.
+- **Exit-criteria contract.** Every slice's plan file carries a `**Exit criteria:**` block that must be transcript-verifiable, binary, and specific to the slice. `/sell-slice` lifts this block verbatim into a session-scoped `/goal` condition, and `slice-tester` derives its bespoke test plan from it. Vague lines like "tests pass" break the goal evaluator — `phased-plan-writer` enforces specificity (write `pnpm test --filter @repo/auth exits 0`, not "tests pass").
+- **Selling and boxing are decoupled, at the pie boundary.** Each slice commits + pushes to the pie branch with **no PR and no CI**; `/box-it-up` opens the single `Pie N` PR, runs CI once, and merges (preserving every per-slice commit) only at the pie boundary. The split exists so you can run a manual visual UAT or local code review between slices, and so CI fires once per pie instead of once per slice. `/box-it-up` is also safe for hand-rolled feature branches that never went through ByTheSlice delivery.
+- **Type-routed behavioral testing.** `slice-tester` routes on slice type: `frontend` gets a Chrome rendered design-system match + per-affordance exercise; `full-stack` / `backend` get seed-and-cleanup data-flow round-trips (paired cleanup written first, hard non-prod guard, cleanup-in-finally, residue check) with success-and-error toasts and cross-surface bidirectional round-trips; `infrastructure` is probe/harness only, no browser. `slice-verifier`'s static gates run on every type; foundation slices that produce no behavior skip the tester.
 - **Always recommend a default in elicitation.** Every clarifying-questions phase across the plugin includes a recommended option in each choice set.
-- **HITL bubbling.** Sub-agents never prompt the user directly — they return `needs_human: true` with one of four categories: `prd_ambiguity`, `external_credentials`, `destructive_operation`, `creative_direction`. Only top-level orchestrators surface the prompt.
-- **Model tiers.** Three aliases (`haiku`, `sonnet`, `opus`); heavier tiers go to producing/verifying agents (`implementer` = `opus, xhigh`; `quality-reviewer` = `opus, high`). Full per-agent table at [`skills/setup-shop/references/model-tier-guide.md`](skills/setup-shop/references/model-tier-guide.md).
-- **Visual review tooling priority** *(hardcoded, no discovery)*: Claude in Chrome > Chrome DevTools MCP > Playwright > Vizzly. Full-page screenshots only at 375 / 768 / 1280 / 1920 viewports.
-- **One slice per PR.** Default branch naming: `feat/stage-<n>-<scope>`.
+- **HITL bubbling.** Sub-agents never prompt the user directly and never call `ask_user_input_v0` — they return `needs_human: true` with one of four categories: `prd_ambiguity`, `external_credentials`, `destructive_operation`, `creative_direction`. Only top-level orchestrators surface the prompt; under `/sell-pie`, any of the four **halts the `/loop`** (the conductor does not reschedule its wake past an unresolved HITL).
+- **Model tiers.** Three aliases (`haiku`, `sonnet`, `opus`); heavier tiers go to producing/verifying agents (`implementer` = `opus, xhigh`; `quality-reviewer` = `opus, high`; `slice-tester` and `slice-verifier` = `sonnet, high`). Full per-agent table at [`skills/setup-shop/references/model-tier-guide.md`](skills/setup-shop/references/model-tier-guide.md).
+- **Visual review tooling priority** *(hardcoded, no discovery)*: Claude in Chrome > Chrome DevTools MCP > Playwright > Vizzly. Screenshot viewports come from `verification.viewports` (default `[375, 1280]`).
+- **One Pie per PR.** Default branch naming: `pie-<n>-<scope>`, one worktree per pie (cut from freshly-fetched `origin/main`). Slices land as `feat(pie-N): N.M — <name>` commits on that branch (no per-slice PR); the single PR opens at the pie boundary. The full worktree lifecycle — setup, isolation, the runtime-isolation gap, merge, cleanup — is standardized in [`git-worktree-standard.md`](skills/cook-pizzas/references/git-worktree-standard.md).
 
 ---
 
@@ -340,15 +359,13 @@ env vars  >  bytheslice.config.json  >  project rules file (CLAUDE.md / AGENTS.m
 > [!WARNING]
 > Not currently reliable in Claude Code or Cursor — agent attention drifts on long-running multi-stage tasks. Untested elsewhere; curious how they hold up in systems with stronger long-horizon multi-agent orchestration.
 
-The intent: once daily prep is locked in, `/run-the-day` lets the coding agent take over and dispatch `/sell-slice` per slice fully autonomously until the master checklist is green. `/close-shop` follows shipping with an after-service retrospective that drafts plugin improvements back to disk.
+The intent: `/sell-pie` is the autonomous surface (one Pie per run, stopping at the boundary), and `/run-the-day` is the thin chainer that drives `/sell-pie` across **every** Pie unattended until the master checklist is green. `/close-shop` follows shipping with an after-service retrospective that drafts plugin improvements back to disk. The whole-roadmap chainer is the experimental part — `/sell-pie` itself (one pie) is forefront, not experimental.
 
-v4 adds **`/goal` integration** in `/run-the-day`'s `--auto-*` modes — Phase 0.5 sets a session-scoped goal whose condition encodes the pipeline's end state, and a prompt-based Stop hook (default Haiku) checks it between turns. HITL pauses still end turns cleanly. See [`skills/run-the-day/SKILL.md`](skills/run-the-day/SKILL.md) Phase 0.5 for the goal-condition strings per mode.
-
-**Cursor / non-Claude-Code fallback.** `/goal` is a Claude Code feature. When unavailable (running in Cursor, `disableAllHooks` set, or any other reason), `/sell-slice` and `/run-the-day` fall back to a **manual goal-tracking pattern**: WebFetch Anthropic's [`goal.md`](https://code.claude.com/docs/en/goal.md), hold the same condition in working memory, and self-evaluate after each phase. The skills do NOT silently drop goal logic — see [`skills/cook-pizzas/references/goal-fallback-pattern.md`](skills/cook-pizzas/references/goal-fallback-pattern.md) for the full protocol.
+**Cursor / non-Claude-Code fallback.** `/loop`, `Workflow`, and `/goal` are Claude Code features. When unavailable (running in Cursor, `disableAllHooks` set, or any other reason), the skills do NOT silently drop the logic: `/sell-pie` self-paces over the pie's ≤8 slices in one context, Workflow-backed skills fall back to in-context dispatch with **orchestrator-side manual schema validation**, and `/goal` falls back to the manual goal-tracking pattern. See [`loop-workflow-fallback-pattern.md`](skills/cook-pizzas/references/loop-workflow-fallback-pattern.md) and [`goal-fallback-pattern.md`](skills/cook-pizzas/references/goal-fallback-pattern.md) for the full protocols.
 
 | Skill | Slash command | What it does |
 |---|---|---|
-| `run-the-day` | `/bytheslice:run-the-day` | Autonomous multi-stage variant of `/sell-slice`. Drives every remaining stage in one chat session. Supports periodic platform-walk checkpoints — set `runPipeline.platformWalkEvery: 5` in `bytheslice.config.json` to dispatch `/inspect-display` every 5 stages and catch cross-cutting regressions before they compound. |
+| `run-the-day` | `/bytheslice:run-the-day` | Thin chainer that drives every remaining Pie in one chat session by dispatching `/sell-pie` per Pie. Holds zero implementation context; passes resolved `bytheslice.config.json` straight through to each `/sell-pie` invocation. `--auto-mvp` / `--auto-all` select which Pies to chain and the between-pie pause behavior. Refuses flat v4 checklists. The v4 platform-walk checkpoint and Phase 0.5 `/goal` wiring moved into `/sell-pie`. |
 | `close-shop` | `/bytheslice:close-shop` | After a plan completes, surfaces friction patterns across recent stages and drafts improvements back to the plugin. Bookends `/setup-shop`. |
 
 ---
