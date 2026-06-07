@@ -7,6 +7,25 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [5.0.1] — 2026-06-07
+
+**Docs polish.** No functional changes — the plugin is byte-identical to 5.0.0. The README sheds ~47% (36 KB → 19 KB) by folding the duplicated skill tables into one set of follow-along command tables, and the deep reference moves into a new `docs/architecture.md`. Ships the previously-missing MIT `LICENSE`.
+
+### Added
+
+- **`LICENSE`** (MIT) — referenced by the README and `package.json`'s `files` array since 5.0.0 but never committed, so the 5.0.0 tarball shipped without it. Now present.
+- **`docs/architecture.md`** — the under-the-hood reference (Pies & Slices, the verify-once model, the mode-detection matrix, delivery/git, orchestration principles, hook enforcement, legacy/migration, Cursor fallback), lifted out of the README and linked from it.
+
+### Changed
+
+- **README slimmed ~47%** (481 → 362 lines). The duplicate *"Menu — full skill reference"* is folded into the three *"How it works"* command tables (each command now links to its `SKILL.md`); the 15-bullet *"Conventions"* wall becomes a short teaser linking into `docs/architecture.md`; repeated concepts (selling/boxing decoupling, flat-v4 dual-read, verify-once) are stated once instead of 4–10×. The workflow diagram is color-coded by phase and validated.
+
+### Fixed
+
+- **`.gitignore` ignored all of `docs/`** — narrowed to `docs/plans/` (the generated per-project plans) so authored docs like `docs/architecture.md` actually commit and render on GitHub. The stale v2 PR/QA docs move to `docs/archive/`.
+
+---
+
 ## [5.0.0] — 2026-06-05
 
 **The Pie release.** The flat 20–30 "stages" become a two-level **Pie / Slice** hierarchy: a **Pie** is a coherent chapter (3–8 slices) and the unit of `/loop` autonomy, HITL checkpoint, PR, context-refresh, and worktree; a **Slice** is yesterday's "stage" — one vertical deliverable. A new forefront command **`/sell-pie`** bakes one Pie autonomously with **context-separated dispatch** (the builder emits a build manifest; an independent `slice-tester` verifies behavior from the manifest + Exit criteria only, never the builder's reasoning; a `slice-verifier` runs every static gate exactly once plus a diff-derived under-declaration backstop). `/sell-slice` stays the high-touch single-slice tool, `/run-the-day` demotes to a thin pie chainer, `/box-it-up` re-scopes to pie-level git dynamics (per-slice commit+push, one PR + CI + merge at the pie boundary), and `/cook-pizzas` decomposes into Pies. Dual-read keeps every flat v4 `## Stage N` checklist working; `/sell-pie` refuses flat and `/cook-pizzas --repie` converts on explicit opt-in.
