@@ -12,5 +12,6 @@ node_modules/
 .codex/
 .windsurf/
 
-docs/
+# Generated per-project plans (master checklist + stage files), not authored docs.
+docs/plans/
 .claude/.bytheslice-state/
