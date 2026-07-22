@@ -1,6 +1,3 @@
-<!-- skills/open-the-shop/agents/env-verifier.md -->
-<!-- Subagent definition: read-only scanner that checks .env.local files for completeness and non-placeholder values. Dispatched by open-the-shop after the user confirms provisioning is done. -->
-
 ---
 name: env-verifier
 description: Read-only scanner that verifies .env.local files have all keys from corresponding .env.example with non-empty, non-placeholder values. Never reads or logs actual values.

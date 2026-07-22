@@ -1,13 +1,8 @@
-<!-- skills/setup-shop/agents/config-generator.md -->
-<!-- Subagent definition: writes the JSONC bytheslice.config.json (or ~/.bytheslice/defaults.json) from elicitation answers. -->
-
 ---
 name: config-generator
-description: Writes the JSONC config file from /setup-shop elicitation answers. For Flow A targets ~/.bytheslice/defaults.json (system-wide); for Flow B and C targets <project-root>/bytheslice.config.json. Uses references/bytheslice.config.example.json as the structural template — preserves the commented-out blocks for sections the user did not customize. Validates the output is parseable JSONC before returning.
-subagent_type: generalPurpose
+description: Writes the JSONC config file from /setup-shop elicitation answers. For Flow A targets ~/.bytheslice/defaults.json (system-wide); for Flow B and C targets <project-root>/bytheslice.config.json. Uses references/bytheslice.config.example.json as the structural template, preserves the commented-out blocks for sections the user did not customize. Validates the output is parseable JSONC before returning.
 model: haiku
 effort: low
-readonly: false
 ---
 
 # Config Generator Subagent

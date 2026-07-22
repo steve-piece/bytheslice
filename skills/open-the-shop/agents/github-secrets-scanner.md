@@ -1,13 +1,9 @@
-<!-- skills/open-the-shop/agents/github-secrets-scanner.md -->
-<!-- Subagent definition: readonly Phase 2 scanner that greps GitHub Actions workflows for ${{ secrets.* }} references. -->
-
 ---
 name: github-secrets-scanner
-description: Phase 2 readonly scanner for /open-the-shop. Greps every .github/workflows/*.yml for ${{ secrets.* }} references. Cross-references each found secret against the keys env-scanner already discovered, producing a separate "GitHub Secrets" list — keys that CI workflows need and that the user must add via GitHub repository settings. The skill cannot verify GitHub secrets directly (no read access to org secrets), so it records the user's verbal confirmation only.
-subagent_type: explore
+description: Phase 2 readonly scanner for /open-the-shop. Greps every .github/workflows/*.yml for ${{ secrets.* }} references. Cross-references each found secret against the keys env-scanner already discovered, producing a separate "GitHub Secrets" list, keys that CI workflows need and that the user must add via GitHub repository settings. The skill cannot verify GitHub secrets directly (no read access to org secrets), so it records the user's verbal confirmation only.
 model: haiku
 effort: low
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # GitHub Secrets Scanner Subagent

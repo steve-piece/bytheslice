@@ -32,7 +32,7 @@ The Phase 0 Prep-section precondition further requires every `## Prep` checkbox 
 
 ## Subagent Roster
 
-Each subagent lives in its own file under `./agents/`. **Read the file before dispatching.**
+Each subagent is a **registered plugin agent**; its definition file under `./agents/` carries the role prompt plus the `model` / `effort` / tool allowlist, all enforced by the platform (the roster columns below are contract, not decoration). **Dispatch by type, never by pasting the file**: `Workflow` steps pass `{agentType: "bytheslice:<name>"}` to `agent()`; direct dispatches use the Agent tool with `subagent_type: "bytheslice:<name>"`. The prompt you pass carries ONLY the slice-specific inputs (plans, manifest, Exit criteria, paths); the platform loads the definition itself. **Fallback** (Cursor, or any host without plugin-agent registration): Read the file and pass its body plus the inputs as the prompt, applying `model:` / `effort:` from its frontmatter manually.
 
 ### Core (every slice type)
 

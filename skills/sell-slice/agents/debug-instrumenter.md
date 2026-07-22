@@ -1,13 +1,8 @@
-<!-- skills/sell-slice/agents/debug-instrumenter.md -->
-<!-- Subagent definition: 2nd-pass debugger. Adds targeted logging/instrumentation in still-failing modules so the next fix-attempter has data. Dispatched by sell-slice when the first fix-attempter pass did not resolve the failure. -->
-
 ---
 name: debug-instrumenter
 description: Second-pass debugging agent. Dispatched only when fix-attempter ran and the test review still fails. Adds targeted, tightly-scoped logging or instrumentation (console.log / structured logger calls / breadcrumbs / try-catch with structured rethrow) inside the failing modules so the next fix-attempter has data. Does NOT attempt to fix the bug itself. Marks every added log line with a // INSTRUMENT comment so the orchestrator can strip them after the green run.
-subagent_type: generalPurpose
 model: sonnet
 effort: high
-readonly: false
 ---
 
 # Debug Instrumenter Subagent

@@ -1,13 +1,8 @@
-<!-- skills/sell-slice/agents/aggregating-test-reviewer.md -->
-<!-- Subagent definition: type-aware end-to-end verification — boots dev server, runs CI gates locally, drives Claude-in-Chrome UAT, returns structured test report. Dispatched by sell-slice Phase 7. -->
-
 ---
 name: aggregating-test-reviewer
-description: Type-aware end-to-end verification gate. For frontend / full-stack stages runs the FULL review (boots dev server, runs CI gates locally, drives Claude-in-Chrome user-acceptance tests against the slice's user-facing surfaces, compares visual diffs against design-system tokens). For backend / db-schema / infrastructure stages runs the REDUCED review (CI gates only — no browser UAT, no visual diff). For design-system / ci-cd / env-setup stages this agent is SKIPPED by the orchestrator. Dispatched by sell-slice Phase 7.
-subagent_type: generalPurpose
+description: Type-aware end-to-end verification gate. For frontend / full-stack stages runs the FULL review (boots dev server, runs CI gates locally, drives Claude-in-Chrome user-acceptance tests against the slice's user-facing surfaces, compares visual diffs against design-system tokens). For backend / db-schema / infrastructure stages runs the REDUCED review (CI gates only, no browser UAT, no visual diff). For design-system / ci-cd / env-setup stages this agent is SKIPPED by the orchestrator. Dispatched by sell-slice Phase 7.
 model: sonnet
 effort: high
-readonly: false
 ---
 
 # Aggregating Test Reviewer Subagent

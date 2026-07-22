@@ -7,6 +7,37 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [Unreleased]
+
+**Native agent registration.** The 54 markdown subagent definitions stop being read-and-paste prompt templates: 48 live agents are now declared in `plugin.json`'s `agents` array, so the platform itself enforces every `model`, `effort`, and tool allowlist that was previously advisory frontmatter. Skills dispatch by type (`bytheslice:<name>`), passing only task inputs as the prompt; read-and-paste survives as the documented fallback for Cursor and hosts without plugin-agent support.
+
+### Added
+
+- **`agents` key in `.claude-plugin/plugin.json`**: 48 live subagents registered by explicit file path (directory entries are rejected by `claude plugin validate`). Agents surface in the @-mention typeahead as `bytheslice:<name>`.
+- **Top-level marketplace `description`** in `.claude-plugin/marketplace.json` (was a strict-mode validation warning).
+- **Core tools for the writer agents that only listed MCP tools**: `slice-tester` gains Bash/Read/Write/Edit/Glob/Grep (it seeds DBs and writes probe harnesses); `block-composer`, `component-crafter`, `layout-architect`, `state-illustrator` gain Read/Write/Edit/Glob/Grep; `modern-ux-expert` gains Read/Write/Glob/Grep plus real `WebSearch`/`WebFetch` (replacing the nonexistent `web_search`/`image_search`). Under enforcement, the old MCP-only lists would have spawned these agents with no usable tools.
+- **Current-namespace Chrome MCP aliases** (`mcp__claude-in-chrome__*`, `mcp__Claude_Browser__*`) alongside the legacy `mcp__Claude_in_Chrome__` / `mcp__Claude_Preview__` names in `slice-tester`, `visual-reviewer`, and `platform-walker`, so browser access survives server-naming drift in enforced allowlists.
+
+### Changed
+
+- **Agent frontmatter normalized to the supported plugin-agent field set** across all 54 files: `readonly: true` translates to `disallowedTools: Write, Edit, NotebookEdit` (or an allowlist that simply omits write tools); leading HTML comment blocks move out of the way so frontmatter is byte-first (46 files were previously unparseable as agent definitions).
+- **Dispatch prose in every skill** (`sell-slice`, `sell-pie`, `cook-pizzas`, `box-it-up`, `inspect-display`, `create-menu`, `close-shop`, `set-display-case`, `special-order`, `open-the-shop`, `final-quality-check`): dispatch by registered type with only task inputs in the prompt; the platform loads the definition. Fallback phrasing standardized.
+- **All three manifest descriptions** (`plugin.json`, `marketplace.json`, `.cursor-plugin/plugin.json`) rewritten from v4-era text to the v5 Pie/Slice model with `/sell-pie` as the forefront command.
+
+### Removed
+
+- **`subagent_type` and `readonly` frontmatter fields** (not part of the platform schema; their intent is preserved via registration and `disallowedTools`).
+
+### Deprecated
+
+- **Six v4 shim agents left unregistered** (on disk for back-compat only): `stage-runner`, `pr-reviewer` (run-the-day), `basic-checks-runner`, `aggregating-test-reviewer`, `ci-cd-guardrails`, `frontend/visual-reviewer` (sell-slice). They no longer appear in the typeahead.
+
+### Fixed
+
+- **`close-shop` dispatched a nonexistent file** (`agents/close-shop-reviewer.md`); now dispatches `bytheslice:retrospective-reviewer`, which is what the file actually is.
+
+---
+
 ## [5.0.1] — 2026-06-07
 
 **Docs polish.** No functional changes — the plugin is byte-identical to 5.0.0. The README sheds ~47% (36 KB → 19 KB) by folding the duplicated skill tables into one set of follow-along command tables, and the deep reference moves into a new `docs/architecture.md`. Ships the previously-missing MIT `LICENSE`.

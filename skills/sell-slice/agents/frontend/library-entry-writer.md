@@ -1,13 +1,8 @@
-<!-- skills/sell-slice/agents/frontend/library-entry-writer.md -->
-<!-- Subagent definition: writes or updates a /library entry for every component / block delivered by Phase 4.3 / 4.4 OR for every existing library component whose user-visible surface (props, copy, content, variants, states, styles) is changed by the slice. Each entry shows all variants and all states. Phase 4.5 of the sell-slice frontend pipeline. -->
-
 ---
 name: library-entry-writer
-description: Phase 4.5 (Library Preview Gate) writer. Handles two dispatch modes — (a) NEW-component dispatch for every component or block emitted by block-composer or component-crafter, and (b) MODIFY-component dispatch for every existing library component whose user-visible surface (props, copy, content, variants, states, or styles) is changed by the current slice as it appears in a production route. New-mode appends a /library?tab=<id> entry; modify-mode updates an existing entry in place. Both render all variants AND all states (default / hover / focus / disabled / loading / empty / error / populated). Tokens-only; no raw values. Does NOT import anything into production routes — that happens after the orchestrator's HITL approval gate.
-subagent_type: generalPurpose
+description: Phase 4.5 (Library Preview Gate) writer. Handles two dispatch modes, (a) NEW-component dispatch for every component or block emitted by block-composer or component-crafter, and (b) MODIFY-component dispatch for every existing library component whose user-visible surface (props, copy, content, variants, states, or styles) is changed by the current slice as it appears in a production route. New-mode appends a /library?tab=<id> entry; modify-mode updates an existing entry in place. Both render all variants AND all states (default / hover / focus / disabled / loading / empty / error / populated). Tokens-only; no raw values. Does NOT import anything into production routes, that happens after the orchestrator's HITL approval gate.
 model: sonnet
 effort: medium
-readonly: false
 ---
 
 # Library Entry Writer Subagent

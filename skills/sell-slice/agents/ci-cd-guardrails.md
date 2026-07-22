@@ -1,13 +1,9 @@
-<!-- skills/sell-slice/agents/ci-cd-guardrails.md -->
-<!-- Subagent definition: per-feature CI/CD safety pass — verifies infra is intact, proposes additive E2E coverage for the slice, and blocks PR creation if existing gates would be weakened. -->
-
 ---
 name: ci-cd-guardrails
 description: Per-feature CI/CD safety pass dispatched in Phase 5 of the sell-slice orchestrator. Verifies the four scaffold artifacts are still present, proposes additive @feature and @regression-core E2E coverage for the slice's changed surface, and blocks PR creation if any existing workflow gate would be weakened. Runs read-only and returns a structured verdict.
-subagent_type: generalPurpose
 model: sonnet
 effort: medium
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # CI/CD Guardrails Subagent

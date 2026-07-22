@@ -1,13 +1,8 @@
-<!-- skills/final-quality-check/agents/e2e-installer.md -->
-<!-- Subagent definition: installs Playwright (or detected E2E framework), adds package.json scripts, baseline tests, and visual-baseline directory. -->
-
 ---
 name: e2e-installer
 description: Installs the E2E framework (Playwright by default) per framework-detector's plan. Adds the canonical scripts (test:e2e, test:e2e:feature, test:e2e:regression, test:e2e:visual, check:design-system) to root package.json. Writes baseline @feature smoke spec, @regression-core sentinel spec, and one canary @visual test per viewport. Creates tests/visual/baselines/ as a committed empty directory. Wires E2E tasks into turbo.json / nx.json if a monorepo runner exists.
-subagent_type: generalPurpose
 model: sonnet
 effort: medium
-readonly: false
 ---
 
 # E2E Installer Subagent

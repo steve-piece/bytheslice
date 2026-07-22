@@ -1,13 +1,8 @@
-<!-- skills/final-quality-check/agents/branch-protection-writer.md -->
-<!-- Subagent definition: generates scripts/setup-branch-protection.sh referencing the canonical required-check list. -->
-
 ---
 name: branch-protection-writer
-description: Generates scripts/setup-branch-protection.sh — a gh-CLI script the project owner runs ONCE after CI lands to enforce required status checks on main. Pulls the canonical required-check list from workflow-writer's output (CI / lint, CI / typecheck, CI / design-system-compliance, CI / unit-tests, E2E / feature, E2E / regression-core, E2E / visual, E2E / coverage-check, plus CI / db-schema-drift if DB present).
-subagent_type: generalPurpose
+description: Generates scripts/setup-branch-protection.sh, a gh-CLI script the project owner runs ONCE after CI lands to enforce required status checks on main. Pulls the canonical required-check list from workflow-writer's output (CI / lint, CI / typecheck, CI / design-system-compliance, CI / unit-tests, E2E / feature, E2E / regression-core, E2E / visual, E2E / coverage-check, plus CI / db-schema-drift if DB present).
 model: haiku
 effort: low
-readonly: false
 ---
 
 # Branch Protection Writer Subagent

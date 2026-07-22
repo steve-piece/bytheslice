@@ -1,13 +1,8 @@
-<!-- skills/final-quality-check/agents/lint-config-writer.md -->
-<!-- Subagent definition: writes eslint-plugin-tailwindcss additions to .eslintrc.json (or equivalent), creates .stylelintrc.json, updates .gitignore for E2E artifacts. -->
-
 ---
 name: lint-config-writer
-description: Writes the design-system-compliance lint config additions. Adds eslint-plugin-tailwindcss to the project's existing ESLint config (whichever format it uses — .eslintrc.json, eslint.config.js flat, .eslintrc.cjs). Creates .stylelintrc.json for CSS-file token enforcement. Updates .gitignore to exclude playwright-report/, test-results/, .playwright/, and Vizzly artifacts.
-subagent_type: generalPurpose
+description: Writes the design-system-compliance lint config additions. Adds eslint-plugin-tailwindcss to the project's existing ESLint config (whichever format it uses, .eslintrc.json, eslint.config.js flat, .eslintrc.cjs). Creates .stylelintrc.json for CSS-file token enforcement. Updates .gitignore to exclude playwright-report/, test-results/, .playwright/, and Vizzly artifacts.
 model: haiku
 effort: low
-readonly: false
 ---
 
 # Lint Config Writer Subagent

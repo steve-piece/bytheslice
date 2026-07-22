@@ -1,5 +1,6 @@
 {
   "name": "bytheslice",
+  "description": "Marketplace for ByTheSlice, the pizza-shop delivery loop plugin: Pies, Slices, and an autonomous baker.",
   "owner": {
     "name": "Steven Light"
   },
@@ -7,7 +8,7 @@
     {
       "name": "bytheslice",
       "source": "./",
-      "description": "ByTheSlice is a Claude Code plugin that runs your project like a grab-and-go pizza shop. Daily prep (/setup-shop, /create-menu, /cook-pizzas, /set-display-case, /final-quality-check, /open-the-shop) runs once before service starts. The everyday loop is /sell-slice (cook a slice, run it through the line, commit locally) then /box-it-up (push, PR, CI watch with auto-fix, merge, cleanup). Special orders cooked on the spot via /special-order. Every skill is independently invocable. v4 adds /goal integration in /run-the-day's --auto-* modes.",
+      "description": "ByTheSlice runs your project like a grab-and-go pizza shop. v5 delivers in Pies (3 to 8 slice chapters, one PR each). Everyday loop: /sell-pie bakes a whole Pie autonomously (context-separated build/test/verify/fix per slice), then /box-it-up opens the PR, watches CI, and merges. /sell-slice is the high-touch single-slice variant. One-time prep: /setup-shop, /create-menu, /cook-pizzas, /set-display-case, /final-quality-check, /open-the-shop. All 48 live subagents natively registered with enforced model tiers, tool allowlists, and effort levels.",
       "version": "5.0.1",
       "keywords": [
         "prd",

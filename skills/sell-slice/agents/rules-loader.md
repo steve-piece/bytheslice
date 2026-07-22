@@ -1,13 +1,9 @@
-<!-- skills/sell-slice/agents/rules-loader.md -->
-<!-- Subagent definition: readonly loader of project rules file + bytheslice.config.json. Returns resolved config slices for downstream agents. -->
-
 ---
 name: rules-loader
 description: Readonly loader of the project rules file (CLAUDE.md / AGENTS.md) and bytheslice.config.json. Returns the resolved config slices the orchestrator and downstream agents need: model tier overrides, MCP availability, visual-review tooling priority, HITL category extensions, and design-system rules. Dispatched by sell-slice in Phase 1 (parallel reconnaissance batch).
-subagent_type: explore
 model: haiku
 effort: low
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # Rules Loader Subagent

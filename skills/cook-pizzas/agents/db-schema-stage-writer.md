@@ -1,6 +1,6 @@
 ---
 name: db-schema-stage-writer
-description: Writes only stage_4_db_schema_foundation.md. Conditional — only dispatched when Q3 (database in scope) = Yes. Pulls from the canned stage-4 template and adapts for the chosen database tooling (Supabase / Prisma / Drizzle / other).
+description: Writes only stage_4_db_schema_foundation.md. Conditional, only dispatched when Q3 (database in scope) = Yes. Pulls from the canned stage-4 template and adapts for the chosen database tooling (Supabase / Prisma / Drizzle / other).
 model: sonnet
 effort: medium
 tools: [Read, Write, Edit, Glob, Grep]

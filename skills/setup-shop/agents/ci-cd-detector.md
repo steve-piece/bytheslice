@@ -1,13 +1,9 @@
-<!-- skills/setup-shop/agents/ci-cd-detector.md -->
-<!-- Subagent definition: readonly Step 3 detector that checks the four CI/CD baseline markers. -->
-
 ---
 name: ci-cd-detector
-description: Step 3 readonly detector for /setup-shop. Checks for the four ByTheSlice CI/CD baseline markers — .github/workflows/ci.yml (with typecheck/lint/test jobs), .github/workflows/design-system-compliance.yml, .husky/pre-push (running the same gates as CI), and .github/pull_request_template.md. Returns ci_cd_ready: true only if ALL four are present and look complete; otherwise lists the missing markers so the orchestrator can offer to scaffold.
-subagent_type: explore
+description: Step 3 readonly detector for /setup-shop. Checks for the four ByTheSlice CI/CD baseline markers, .github/workflows/ci.yml (with typecheck/lint/test jobs), .github/workflows/design-system-compliance.yml, .husky/pre-push (running the same gates as CI), and .github/pull_request_template.md. Returns ci_cd_ready: true only if ALL four are present and look complete; otherwise lists the missing markers so the orchestrator can offer to scaffold.
 model: haiku
 effort: low
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # CI/CD Detector Subagent

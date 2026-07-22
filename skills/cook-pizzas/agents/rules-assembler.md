@@ -1,13 +1,8 @@
-<!-- skills/cook-pizzas/agents/rules-assembler.md -->
-<!-- Subagent definition: assembles the project rules file (CLAUDE.md or AGENTS.md) from baseline + Q9 imports + design-system rules block. -->
-
 ---
 name: rules-assembler
-description: Assembles the project rules file (CLAUDE.md or AGENTS.md per Q12) for /cook-pizzas. Layers content in the canonical precedence order — ByTheSlice baseline (highest), project-specific imports from Q9, design-system rules block (added later by /set-display-case), external rule files (lowest). Reads architecture-conventions.md to inject the matching Variant A or B section, and the Supabase security baseline if Q4 = Supabase + Q5 = Yes. Writes the file with a clear precedence header and section markers.
-subagent_type: generalPurpose
+description: Assembles the project rules file (CLAUDE.md or AGENTS.md per Q12) for /cook-pizzas. Layers content in the canonical precedence order, ByTheSlice baseline (highest), project-specific imports from Q9, design-system rules block (added later by /set-display-case), external rule files (lowest). Reads architecture-conventions.md to inject the matching Variant A or B section, and the Supabase security baseline if Q4 = Supabase + Q5 = Yes. Writes the file with a clear precedence header and section markers.
 model: sonnet
 effort: medium
-readonly: false
 ---
 
 # Rules Assembler Subagent

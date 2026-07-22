@@ -1,13 +1,9 @@
-<!-- skills/final-quality-check/agents/scaffold-discovery.md -->
-<!-- Subagent definition: readonly Phase 0 discovery for /final-quality-check. Detects package manager, framework, monorepo tooling, existing workflows, and DB presence. -->
-
 ---
 name: scaffold-discovery
 description: Phase 0 readonly discovery for /final-quality-check. Detects package manager (pnpm > npm > yarn > bun), app framework (Next.js / Vite / Node API / etc.), monorepo tooling (Turborepo / Nx / single-app), existing .github/workflows/* inventory, and database presence (db/schema.sql / prisma/schema.prisma / Supabase config / Drizzle). Returns a structured profile the downstream scaffold agents read to choose templates and skip already-present artifacts.
-subagent_type: explore
 model: haiku
 effort: medium
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # Scaffold Discovery Subagent

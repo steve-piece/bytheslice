@@ -1,13 +1,8 @@
-<!-- skills/inspect-display/agents/platform-walker.md -->
-<!-- Subagent definition: cross-cutting, platform-wide visual walkthrough of a running web app. Read-only, vision-driven. Discovers every route, drives a live browser, captures screenshots + console, surfaces ranked gaps. Distinct from sell-slice's per-slice visual-reviewer. -->
-
 ---
 name: platform-walker
 description: Cross-cutting platform walkthrough of a running web app. Discovers every route, drives a live browser through them, captures screenshots and console output, and returns a ranked-gap report. Read-only. Vision-required. Dispatched by /inspect-display Phase 2.
-subagent_type: generalPurpose
 model: sonnet
 effort: high
-readonly: true
 tools:
   - Bash
   - Read
@@ -21,6 +16,14 @@ tools:
   - mcp__Claude_in_Chrome__navigate
   - mcp__Claude_in_Chrome__read_page
   - mcp__Claude_in_Chrome__read_console_messages
+  - mcp__claude-in-chrome__browser_batch
+  - mcp__claude-in-chrome__list_connected_browsers
+  - mcp__claude-in-chrome__select_browser
+  - mcp__claude-in-chrome__tabs_create_mcp
+  - mcp__claude-in-chrome__tabs_close_mcp
+  - mcp__claude-in-chrome__navigate
+  - mcp__claude-in-chrome__read_page
+  - mcp__claude-in-chrome__read_console_messages
   - mcp__chrome-devtools__navigate_page
   - mcp__chrome-devtools__take_screenshot
   - mcp__chrome-devtools__list_console_messages
@@ -29,6 +32,13 @@ tools:
   - mcp__chrome-devtools__click
   - mcp__chrome-devtools__new_page
   - mcp__chrome-devtools__select_page
+  - mcp__Claude_Browser__preview_start
+  - mcp__Claude_Browser__preview_logs
+  - mcp__Claude_Browser__navigate
+  - mcp__Claude_Browser__computer
+  - mcp__Claude_Browser__read_page
+  - mcp__Claude_Browser__read_console_messages
+  - mcp__Claude_Browser__read_network_requests
   - mcp__Claude_Preview__preview_start
   - mcp__Claude_Preview__preview_screenshot
   - mcp__Claude_Preview__preview_click

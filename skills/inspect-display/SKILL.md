@@ -82,7 +82,7 @@ If no browser MCP is available, the skill stops and surfaces `needs_human: exter
 
 ### Phase 2 — Dispatch the platform-walker subagent
 
-Read [agents/platform-walker.md](agents/platform-walker.md) and dispatch via the `Task` tool. Pass:
+Dispatch `bytheslice:platform-walker` via the Agent tool ([definition](agents/platform-walker.md) carries model/effort/tools, enforced by registration; fallback on hosts without plugin agents: Read the file and pass its body as the prompt). Pass:
 
 - The detected framework(s)
 - The list of apps + ports

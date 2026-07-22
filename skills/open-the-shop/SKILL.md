@@ -22,7 +22,7 @@ Honor an explicit `--standalone` or `--sequential` flag if passed; otherwise aut
 
 ## Subagent Roster
 
-Each agent lives in its own file under `./agents/`. Read the file before dispatching.
+Each agent is a **registered plugin agent**: dispatch by type `bytheslice:<name>` (Agent tool `subagent_type`, or `Workflow` `agentType`), passing only the task inputs as the prompt. The files under `./agents/` carry the role prompt plus enforced model/effort/tools. Fallback (Cursor, or a host without plugin-agent registration): Read the file and pass its body plus inputs as the prompt.
 
 | Phase | Agent file | Model | Effort | Mode |
 |-------|-----------|-------|--------|------|

@@ -1,13 +1,9 @@
-<!-- skills/close-shop/agents/proposal-drafter.md -->
-<!-- Subagent definition: drafts unified diffs for plugin-repo improvements based on retrospective-reviewer's patterns. -->
-
 ---
 name: proposal-drafter
 description: Drafts unified diffs targeting the plugin repository (~/bytheslice or BYTHESLICE_PLUGIN_PATH) given retrospective-reviewer's patterns_observed. Each diff targets one file (skill prompt, agent prompt, reference file, or bug fix). Skips proposals that target skills/close-shop/ or commands/close-shop.md (self-modification guard). Returns diffs ready for the orchestrator to apply on the retrospective branch.
-subagent_type: generalPurpose
 model: sonnet
 effort: medium
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # Proposal Drafter Subagent

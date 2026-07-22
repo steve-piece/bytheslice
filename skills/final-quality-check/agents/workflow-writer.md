@@ -1,13 +1,8 @@
-<!-- skills/final-quality-check/agents/workflow-writer.md -->
-<!-- Subagent definition: writes the .github/workflows/ files from canonical templates. -->
-
 ---
 name: workflow-writer
-description: Writes the .github/workflows/ files from the canonical templates in scaffold-artifact-templates.md — ci.yml, e2e.yml, e2e-coverage.yml, design-system-compliance.yml, and (conditional) db-schema-drift.yml. Adjusts package manager invocations and app paths from scaffold-discovery's profile. Skips files that already exist; the orchestrator must approve overwrites.
-subagent_type: generalPurpose
+description: Writes the .github/workflows/ files from the canonical templates in scaffold-artifact-templates.md, ci.yml, e2e.yml, e2e-coverage.yml, design-system-compliance.yml, and (conditional) db-schema-drift.yml. Adjusts package manager invocations and app paths from scaffold-discovery's profile. Skips files that already exist; the orchestrator must approve overwrites.
 model: sonnet
 effort: medium
-readonly: false
 ---
 
 # Workflow Writer Subagent

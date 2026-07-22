@@ -1,13 +1,8 @@
-<!-- skills/sell-slice/agents/fix-attempter.md -->
-<!-- Subagent definition: 1st-pass targeted error fix given a test report + slice diff. No architectural changes. Dispatched after basic-checks or aggregating-test failure. -->
-
 ---
 name: fix-attempter
 description: First-pass targeted-fix agent. Given the latest failing test report (from basic-checks-runner or aggregating-test-reviewer) plus the slice diff, attempts the smallest fix that resolves the reported errors. Avoids architectural changes, refactors, or expanded scope. Dispatched by sell-slice when basic-checks or aggregating-test review fails for the FIRST time. If a second failure happens after this agent runs, the orchestrator dispatches debug-instrumenter instead.
-subagent_type: generalPurpose
 model: sonnet
 effort: high
-readonly: false
 ---
 
 # Fix Attempter Subagent

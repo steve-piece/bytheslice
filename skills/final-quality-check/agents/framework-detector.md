@@ -1,13 +1,9 @@
-<!-- skills/final-quality-check/agents/framework-detector.md -->
-<!-- Subagent definition: narrows down the E2E framework choice + target apps for Playwright (or alternative) installation. -->
-
 ---
 name: framework-detector
 description: Narrows the E2E framework choice and target-app list given scaffold-discovery's stack profile. Decides between Playwright (default for browser stacks), Vitest browser mode (Vite + small UIs), and skip-E2E (pure Node API). For monorepos, picks the apps that need their own E2E config vs apps that share a root config. Returns the structured plan e2e-installer consumes.
-subagent_type: explore
 model: haiku
 effort: low
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # Framework Detector Subagent
