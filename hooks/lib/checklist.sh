@@ -26,6 +26,9 @@ bts_checklist_path() {
 }
 
 # Count Prep checkboxes. Prints "<done> <total>" (e.g. "2 5").
+# Accepts both checkbox forms: dashless "[ ]" (canonical v5 per
+# skills/cook-pizzas/references/templates.md "Checkbox format rule")
+# and dashed "- [ ]" (legacy v4 checklists).
 # Empty output if no `## Prep` section is present.
 bts_prep_counts() {
   local checklist
@@ -35,7 +38,7 @@ bts_prep_counts() {
     BEGIN { in_prep = 0; done = 0; total = 0; seen = 0 }
     /^## +Prep([[:space:]]|$)/ { in_prep = 1; seen = 1; next }
     in_prep && /^## / { in_prep = 0 }
-    in_prep && /^[[:space:]]*-[[:space:]]*\[[ xX]\]/ {
+    in_prep && /^[[:space:]]*(-[[:space:]]*)?\[[ xX]\]/ {
       total++
       if ($0 ~ /\[[xX]\]/) done++
     }

@@ -126,7 +126,7 @@ Preconditions and gates that used to live in prose are enforced by plugin hooks 
 - Editing a stage plan mid-delivery draws a WARN.
 - A `PreCompact` snapshot lets a post-compaction session re-orient.
 
-Hooks dual-read flat `## Stage N` and nested `## Pie N` / `### Slice N.M` checklists. Every hook is session-id-scoped and fails open; a 91-test regression suite lives at `hooks/test.sh`. Disable per-session with `BTS_HOOKS_DISABLED=1`. See [`hooks/README.md`](../hooks/README.md).
+Hooks dual-read flat `## Stage N` and nested `## Pie N` / `### Slice N.M` checklists. Every hook is session-id-scoped and fails open; a 107-test regression suite lives at `hooks/test.sh`. Disable per-session with `BTS_HOOKS_DISABLED=1`. See [`hooks/README.md`](../hooks/README.md).
 
 > **v5 note:** the `Stop`-gate and `commit-checklist-correlator` hooks were deleted — `/loop` + the pie-completion `/goal` own loop continuation natively.
 

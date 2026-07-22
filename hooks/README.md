@@ -25,7 +25,7 @@ One script in this directory is not wired to an event: `record-library-approval.
 bash hooks/test.sh
 ```
 
-Runs 91 isolated-fixture tests covering every row in `scenarios.md`. Pure bash, no deps beyond `git`. Each test sets up a throwaway repo under `$TMPDIR`, runs one hook with a synthetic JSON envelope, and asserts exit code + output substring. Failures print the divergence inline.
+Runs 107 isolated-fixture tests covering every row in `scenarios.md`. Pure bash, no deps beyond `git`. Each test sets up a throwaway repo under `$TMPDIR`, runs one hook with a synthetic JSON envelope, and asserts exit code + output substring. Failures print the divergence inline.
 
 Run it locally before committing changes to anything under `hooks/`. No CI workflow is wired — this is intentional given the plugin's "$0 Actions budget" stance; opt in later if you want it on PRs.
 
