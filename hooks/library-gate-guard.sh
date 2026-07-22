@@ -2,9 +2,10 @@
 # hooks/library-gate-guard.sh
 # PreToolUse hook on Write + Edit. WARN-injects when a /sell-slice frontend
 # slice writes to a production route (per watched_paths) without a recorded
-# library-preview approval. Never blocks — graceful degradation until the
-# approval-writer ships (v4.2.2). Skips silently if the approvals file is
-# absent (the common case).
+# library-preview approval. Never blocks. The approvals file is armed and
+# written by record-library-approval.sh, which /sell-slice Phase 4.5 invokes
+# around the human approval window. Skips silently if the approvals file is
+# absent (gate not armed; e.g. a backend slice).
 #
 # Hook contract: reads JSON from stdin with .tool_input.file_path.
 # Exit 0 always; prints to stdout to WARN.

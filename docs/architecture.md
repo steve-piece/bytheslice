@@ -101,7 +101,7 @@ The split exists so you can run a manual visual UAT or local code review between
 
 **Preview-first library delivery.** `/set-display-case` scaffolds an operator-only `/library` preview route — at `app/(dashboard)/library/` on Next.js App Router, or the framework's idiomatic location on Vite / SvelteKit / Astro (see [`framework-detect.md`](../skills/setup-shop/references/framework-detect.md)) — excluded from every nav surface, sitemap, and robots.
 
-Every frontend slice through `/sell-slice` passes through Phase 4.5's **Library Preview Gate** — non-skippable for new components AND for consumer-side edits that change a user-visible surface of an existing library component. The gate runs a Phase 0 extend-vs-create check, surfaces a self-critique block + clickable preview URLs, then HARD STOPS for explicit user approval before any production-route import lands. Pure internal refactors with no rendered-output delta are exempt.
+Every frontend slice through `/sell-slice` passes through Phase 4.5's **Library Preview Gate** — non-skippable for new components AND for consumer-side edits that change a user-visible surface of an existing library component. The gate runs a Phase 0 extend-vs-create check, surfaces a self-critique block + clickable preview URLs, then HARD STOPS for explicit user approval before any production-route import lands. Pure internal refactors with no rendered-output delta are exempt. The gate is also enforced deterministically: Phase 4.5 arms `.claude/.bytheslice-state/library-approvals.json` via `hooks/record-library-approval.sh`, the `hooks/library-gate-guard.sh` PreToolUse hook warns on any production-route Write/Edit while the window is open, and the same script's `approve` subcommand records the operator's verdict (component list, session id, slice, timestamp) to silence it.
 
 **Visual review tooling priority** *(hardcoded, no discovery):* Claude in Chrome → Chrome DevTools MCP → Playwright → Vizzly. Screenshot viewports come from `verification.viewports` (default `[375, 1280]`).
 
@@ -126,7 +126,7 @@ Preconditions and gates that used to live in prose are enforced by plugin hooks 
 - Editing a stage plan mid-delivery draws a WARN.
 - A `PreCompact` snapshot lets a post-compaction session re-orient.
 
-Hooks dual-read flat `## Stage N` and nested `## Pie N` / `### Slice N.M` checklists. Every hook is session-id-scoped and fails open; a 64-test regression suite lives at `hooks/test.sh`. Disable per-session with `BTS_HOOKS_DISABLED=1`. See [`hooks/README.md`](../hooks/README.md).
+Hooks dual-read flat `## Stage N` and nested `## Pie N` / `### Slice N.M` checklists. Every hook is session-id-scoped and fails open; a 91-test regression suite lives at `hooks/test.sh`. Disable per-session with `BTS_HOOKS_DISABLED=1`. See [`hooks/README.md`](../hooks/README.md).
 
 > **v5 note:** the `Stop`-gate and `commit-checklist-correlator` hooks were deleted — `/loop` + the pie-completion `/goal` own loop continuation natively.
 

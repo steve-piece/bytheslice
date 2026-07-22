@@ -7,11 +7,13 @@ Deterministic guards that replace repetitive prose in CLAUDE.md and SKILL.md fil
 | Hook | Event | Behavior |
 |---|---|---|
 | `precheck-skill.sh` | `UserPromptSubmit` | Detects a /bytheslice slash command in the prompt and runs per-skill preconditions. BLOCKs `/sell-slice` when the master checklist is missing; BLOCKs `/box-it-up` on main; WARN-injects dirty-tree / missing-gh / Prep-incomplete. |
-| `shop-status.sh` | `SessionStart` | Reads `docs/plans/00_master_checklist.md` if present and injects a compact stage summary (counts + next not-started row + Prep progress). |
+| `shop-status.sh` | `SessionStart` | Reads `docs/plans/00_master_checklist.md` if present and injects a compact summary: Prep progress, plus pie/slice counts and the first open pie (nested v5) or stage counts and the next not-started row (flat v4). |
 | `pre-commit-guard.sh` | `PreToolUse` (Bash matcher) | BLOCKs `git commit` on main/master. Otherwise WARN-injects a short staged-files summary. |
 | `stage-plan-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects (exit 0) on `Write`/`Edit` to `docs/plans/stage_*.md` while `/sell-slice` is the current session's active skill — plans are normally static during delivery. Never blocks (downgraded from BLOCK in v5). Session-id guarded; fails open if state is missing or cross-session. |
-| `library-gate-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects when a `/sell-slice` run writes to a watched production route (`app/**`, `src/app/**`, `components/**`, `src/components/**`) without a recorded library-preview approval. Never blocks. Dormant unless `library-approvals.json` exists (graceful degradation until the approval-writer ships). |
+| `library-gate-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects when a `/sell-slice` run writes to a watched production route (`app/**`, `src/app/**`, `components/**`, `src/components/**`) without a recorded library-preview approval. Never blocks. Dormant until `record-library-approval.sh arm` writes `library-approvals.json` (Phase 4.5 arms the gate when the approval window opens). |
 | `compact-snapshot.sh` | `PreCompact` | Never blocks compaction (always exit 0). Writes `compact-snapshot.json` capturing session/skill/branch, last commit sha + subject, and the next up-to-3 unfinished checklist lines so the post-compaction turn can re-orient. |
+
+One script in this directory is not wired to an event: `record-library-approval.sh` is the state writer `/sell-slice` Phase 4.5 runs directly. `arm --slice <n.m>` opens the approval window (creates `library-approvals.json` with zero approvals, which wakes `library-gate-guard.sh`); `approve --slice <n.m> --components "<id>,<id>"` records the operator's approval (the gate then passes). It honors `BTS_HOOKS_DISABLED=1` and tolerates missing `jq` like the rest of the directory.
 
 ## The scenario contract
 
@@ -23,7 +25,7 @@ Deterministic guards that replace repetitive prose in CLAUDE.md and SKILL.md fil
 bash hooks/test.sh
 ```
 
-Runs 64 isolated-fixture tests covering every row in `scenarios.md`. Pure bash, no deps beyond `git`. Each test sets up a throwaway repo under `$TMPDIR`, runs one hook with a synthetic JSON envelope, and asserts exit code + output substring. Failures print the divergence inline.
+Runs 91 isolated-fixture tests covering every row in `scenarios.md`. Pure bash, no deps beyond `git`. Each test sets up a throwaway repo under `$TMPDIR`, runs one hook with a synthetic JSON envelope, and asserts exit code + output substring. Failures print the divergence inline.
 
 Run it locally before committing changes to anything under `hooks/`. No CI workflow is wired — this is intentional given the plugin's "$0 Actions budget" stance; opt in later if you want it on PRs.
 
@@ -75,12 +77,17 @@ Run it locally before committing changes to anything under `hooks/`. No CI workf
 }
 ```
 
-`.claude/.bytheslice-state/library-approvals.json` is read (not yet written — see v4.2.2) by `library-gate-guard.sh`. Schema:
+`.claude/.bytheslice-state/library-approvals.json` is written by `record-library-approval.sh` and read by `library-gate-guard.sh`. `/sell-slice` Phase 4.5 invokes the writer twice per frontend slice: `arm --slice <n.m>` when the approval window opens (zero approvals, the gate starts warning) and `approve --slice <n.m> --components "<id>,<id>"` the moment the operator approves (one entry per component, the gate goes silent). Re-arming resets the approvals list so the next slice starts unapproved. Schema:
 
 ```json
 {
-  "approvals": [{ "component_id": "...", "status": "approved", "at": "<iso>" }],
-  "watched_paths": ["app/**", "src/app/**", "components/**", "src/components/**"]
+  "session_id": "...",
+  "slice": "3.2",
+  "armed_at": "<iso>",
+  "watched_paths": ["app/**", "src/app/**", "components/**", "src/components/**"],
+  "approvals": [
+    { "component_id": "...", "status": "approved", "at": "<iso>", "session_id": "...", "slice": "3.2" }
+  ]
 }
 ```
 
