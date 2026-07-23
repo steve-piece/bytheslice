@@ -1,13 +1,9 @@
-<!-- skills/sell-slice/agents/checklist-curator.md -->
-<!-- Subagent definition: identifies the next in-scope slice from docs/plans/ and proposes the exact master-checklist diff. -->
-
 ---
 name: checklist-curator
 description: Reads docs/plans/00_master_checklist.md and the active stage file, identifies the next in-scope slice (one PR worth of checklist items), defines binary acceptance tests, and proposes the exact master-checklist diff. Does not edit files. Dispatched by the sell-slice orchestrator in Phase 1 (parallel batch).
-subagent_type: generalPurpose
 model: sonnet
 effort: medium
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # Checklist Curator Subagent

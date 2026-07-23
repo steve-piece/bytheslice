@@ -18,6 +18,8 @@ This file is the **canonical source of truth** for hook behavior. Every row is o
 | `/sell-slice` | no `docs/plans/00_master_checklist.md` | **BLOCK** — "requires master checklist, run /cook-pizzas first" |
 | `/sell-slice` | checklist exists, all Prep `[x]`, clean tree | **PASS** |
 | `/sell-slice` | checklist exists, some Prep `[ ]` | **WARN** — "Prep section incomplete: N/M boxes checked" |
+| `/sell-slice` | checklist exists, Prep uses dashless `[ ]` boxes (canonical v5), all checked | **PASS**: dashless and legacy dashed `- [ ]` boxes are both counted |
+| `/sell-slice` | checklist exists, Prep mixes dashed `- [x]` and dashless `[ ]` boxes | **WARN** with both forms counted in the N/M totals |
 | `/sell-slice` | checklist exists, dirty git tree | **WARN** — "working tree is dirty" |
 | `/box-it-up` | current branch is `main` or `master` | **BLOCK** — "refuses to run on main/master" |
 | `/box-it-up` | feature branch, no `gh auth` | **WARN** — "gh CLI not authenticated" |
@@ -45,6 +47,8 @@ This file is the **canonical source of truth** for hook behavior. Every row is o
 |---|---|
 | no `docs/plans/00_master_checklist.md` | **PASS** — silent (not a bytheslice project) |
 | checklist present | **CONTEXT** — stage counts, Prep progress, next not-started row |
+| checklist present, nested v5 (`## Pie N` headings) | **CONTEXT**: Prep progress, pie and slice counts via the dual-read lib helpers (`bts_unit_counts` / `bts_slice_counts`), first open pie |
+| checklist present, flat v4 (`Status:` table rows) | **CONTEXT**: Prep progress (if a `## Prep` section exists), stage counts from the `Status:` scan, next not-started row |
 | `BTS_HOOKS_DISABLED=1` | **PASS** — silent |
 
 ## PreToolUse on Write/Edit: `stage-plan-guard.sh`
@@ -63,13 +67,26 @@ This file is the **canonical source of truth** for hook behavior. Every row is o
 
 | Tool target | State | Expected |
 |---|---|---|
-| `app/dashboard/page.tsx` (watched) | no `library-approvals.json` | **PASS** — gate dormant until approval-writer ships |
+| `app/dashboard/page.tsx` (watched) | no `library-approvals.json` | **PASS**, gate not armed (Phase 4.5's `arm` step has not run, e.g. a backend slice) |
 | `app/dashboard/page.tsx` (watched) | approvals file present, no approval entry, current-session `skill == "sell-slice"` | **WARN** — "no library approval is recorded" |
 | `app/dashboard/page.tsx` (watched) | approvals file present, an approval recorded, `skill == "sell-slice"` | **PASS** |
 | `lib/util.ts` (not watched) | approvals file present, no approval, `skill == "sell-slice"` | **PASS** — path not under a watched glob |
 | `app/dashboard/page.tsx` (watched) | approvals present, no approval, `skill != "sell-slice"` | **PASS** |
 | `app/dashboard/page.tsx` (watched) | approvals present, state from a *different* `session_id` | **PASS** — stale state never warns |
 | any watched path | `BTS_HOOKS_DISABLED=1` | **PASS** |
+
+## State writer: `record-library-approval.sh`
+
+Not an event hook: `/sell-slice` Phase 4.5 invokes it directly. `arm` opens the approval window (the gate above starts warning); `approve` closes it (the gate passes). Session id defaults to the one in `last-precheck.json`, the exact value the gate compares against.
+
+| Invocation | Prior state | Expected |
+|---|---|---|
+| `arm --slice <n.m>` | file present or not | file written: zero approvals, default `watched_paths`, session id + slice + `armed_at`; gate now **WARN**s on watched paths |
+| `arm --slice <n.m>` | approvals recorded for a prior slice | file reset: approvals emptied, slice and `armed_at` updated; gate **WARN**s again |
+| `approve --slice <n.m> --components "<a>,<b>"` | file armed | one `status: "approved"` entry appended per component (`component_id`, `at`, `session_id`, `slice`); gate **PASS**es on watched paths |
+| `approve --slice <n.m> --components "<a>"` | no file (arm skipped) | file initialized with the approved entries; gate **PASS**es |
+| `approve` without `--components`, or either subcommand without `--slice` | any | usage error, exit 2, nothing written |
+| any subcommand | `BTS_HOOKS_DISABLED=1` | no-op, exit 0, nothing written |
 
 ## PreCompact: `compact-snapshot.sh`
 
@@ -85,3 +102,4 @@ This file is the **canonical source of truth** for hook behavior. Every row is o
 - Every hook honors `BTS_HOOKS_DISABLED=1` as the first action after `set -u`. That's the supported per-session disable.
 - Every hook tolerates missing `jq` — JSON parsing falls back to `sed`.
 - All state lives under `.claude/.bytheslice-state/` (gitignored).
+- All awk in the hooks is POSIX-portable (BSD awk on macOS has no gawk extensions such as the 3-argument `match()`).

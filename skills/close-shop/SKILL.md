@@ -83,11 +83,11 @@ Collect the following for the chosen scope:
 | Recent PRs (project repo) | PR titles, descriptions, review comments via `gh pr list` |
 | HITL escalation log | Any `needs_human: true` returns captured in stage output |
 
-Pass all collected data to `agents/close-shop-reviewer.md`.
+Pass all collected data to `bytheslice:retrospective-reviewer`.
 
 ### Step 3 — Analyze and draft proposals
 
-Dispatch `agents/close-shop-reviewer.md` (opus, high effort). The agent reads the collected data, identifies friction patterns, and returns structured proposals including unified diffs for each proposed change.
+Dispatch `bytheslice:retrospective-reviewer` ([definition](agents/retrospective-reviewer.md); opus, high effort, enforced by registration). The agent reads the collected data, identifies friction patterns, and returns structured proposals including unified diffs for each proposed change.
 
 ### Step 4 — Surface proposals to user
 
@@ -127,7 +127,7 @@ Return the PR URL to the user.
 
 ## D. retrospective-reviewer Agent
 
-The analysis step is delegated entirely to `agents/close-shop-reviewer.md`.
+The analysis step is delegated entirely to `bytheslice:retrospective-reviewer` ([agents/retrospective-reviewer.md](agents/retrospective-reviewer.md)).
 
 - Model: `opus`, effort: high — cross-stage pattern detection benefits from depth
 - Tools: `Read`, `Glob`, `Grep`, `Bash` (read-only invocations only)

@@ -117,7 +117,7 @@ Confirm answers before proceeding.
 
 ### Phase 2 — Complexity assessment
 
-Read `agents/complexity-assessor.md` and dispatch it. Pass:
+Dispatch `bytheslice:complexity-assessor` ([definition](agents/complexity-assessor.md); fallback on hosts without plugin agents: Read the file and pass its body as the prompt). Pass:
 - The user's feature list (from Q-features) plus annotations
 - The relationship answer (Q-relationship) per feature
 - The `mvp:` band per feature (Q-mvp-band)
@@ -151,7 +151,7 @@ If the user requests edits, re-dispatch the assessor with the user's feedback. C
 
 ### Phase 4 — Write stage files
 
-Read `../cook-pizzas/agents/phased-plan-writer.md` and dispatch it ONCE PER NEW STAGE in **incremental mode**. Pass:
+Dispatch `bytheslice:phased-plan-writer` ONCE PER NEW STAGE in **incremental mode** ([definition](../cook-pizzas/agents/phased-plan-writer.md); fallback: read-and-paste). Pass:
 - Stage number, short name, output path (`docs/plans/stage_<N>_<slug>.md`)
 - One-sentence goal
 - `mvp:` flag from Q-mvp-band

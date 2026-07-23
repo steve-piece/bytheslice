@@ -1,6 +1,6 @@
 ---
 name: master-checklist-synthesizer
-description: Runs LAST after all stage files are written. Scans every stage file's frontmatter completion_criteria and produces docs/plans/00_master_checklist.md. Mechanical aggregation — no creative decisions.
+description: Runs LAST after all stage files are written. Scans every stage file's frontmatter completion_criteria and produces docs/plans/00_master_checklist.md. Mechanical aggregation, no creative decisions.
 model: sonnet
 effort: medium
 tools: [Read, Write, Glob, Grep]

@@ -1,13 +1,9 @@
-<!-- skills/create-menu/agents/brief-analyzer.md -->
-<!-- Subagent definition: readonly analyzer that extracts signals from the brief and outputs structured ambiguities-to-resolve. -->
-
 ---
 name: brief-analyzer
-description: Readonly analyzer for /create-menu Step 1. Reads the project brief plus any uploaded specs, applies the brief mapping heuristic from the SKILL, and returns a structured list of ambiguities the plan-mode question gate must resolve. Identifies which sections of the PRD template will be sparse without user clarification, and proposes 3–7 targeted questions (single_select where realistic, otherwise text_input).
-subagent_type: explore
+description: Readonly analyzer for /create-menu Step 1. Reads the project brief plus any uploaded specs, applies the brief mapping heuristic from the SKILL, and returns a structured list of ambiguities the plan-mode question gate must resolve. Identifies which sections of the PRD template will be sparse without user clarification, and proposes 3 to 7 targeted questions (single_select where realistic, otherwise text_input).
 model: sonnet
 effort: medium
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # Brief Analyzer Subagent

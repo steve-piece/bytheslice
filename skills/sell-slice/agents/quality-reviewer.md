@@ -1,13 +1,9 @@
-<!-- skills/sell-slice/agents/quality-reviewer.md -->
-<!-- Subagent definition: code-quality review — lint, types, tests, edge cases, security smell-tests, and DB schema verification for the implementer's slice. -->
-
 ---
 name: quality-reviewer
-description: Reviews the implementer's output for code quality — lint, types, test coverage, edge-case handling, security issues, and (for backend/full-stack stages) verifies db/schema.sql was updated before any migration or query code. Runs after the spec reviewer in Phase 4 of the sell-slice orchestrator.
-subagent_type: correctness-reviewer
+description: Reviews the implementer's output for code quality, lint, types, test coverage, edge-case handling, security issues, and (for backend/full-stack stages) verifies db/schema.sql was updated before any migration or query code. Runs after the spec reviewer in Phase 4 of the sell-slice orchestrator.
 model: opus
 effort: high
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # Quality Reviewer Subagent

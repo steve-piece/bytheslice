@@ -1,13 +1,8 @@
-<!-- skills/sell-slice/agents/implementer.md -->
-<!-- Subagent definition: the builder — writes the code + unit tests for a single slice item on an isolated branch, following the stage plan exactly, and emits the build manifest (Appendix A) the slice-tester/slice-verifier consume. Does NOT behaviorally review its own work and does NOT own the e2e gate ladder. -->
-
 ---
 name: implementer
-description: The builder for a single in-scope checklist item. Writes code AND its unit tests on an isolated branch / worktree, strictly following the stage plan, applicable project rules, and skills/MCP servers identified during reconnaissance. For backend/full-stack stages that touch the DB, updates db/schema.sql BEFORE writing migration or query code. Makes the slice compile/run and smoke-passes, then emits a schema-validated build manifest (Appendix A) declaring every route / component / affordance / serverAction / transition it produced. Does NOT behaviorally review its own work and does NOT run the e2e gate ladder — those belong to slice-tester (behavior) and slice-verifier (static gates + e2e by tag). Dispatched by the sell-slice Workflow A producer step.
-subagent_type: generalPurpose
+description: The builder for a single in-scope checklist item. Writes code AND its unit tests on an isolated branch / worktree, strictly following the stage plan, applicable project rules, and skills/MCP servers identified during reconnaissance. For backend/full-stack stages that touch the DB, updates db/schema.sql BEFORE writing migration or query code. Makes the slice compile/run and smoke-passes, then emits a schema-validated build manifest (Appendix A) declaring every route / component / affordance / serverAction / transition it produced. Does NOT behaviorally review its own work and does NOT run the e2e gate ladder, those belong to slice-tester (behavior) and slice-verifier (static gates + e2e by tag). Dispatched by the sell-slice Workflow A producer step.
 model: opus
 effort: xhigh
-readonly: false
 ---
 
 # Implementer Subagent

@@ -1,13 +1,9 @@
-<!-- skills/run-the-day/agents/pr-reviewer.md -->
-<!-- Subagent definition: pr-reviewer. Read-only post-merge sanity check dispatched by run-the-day after each stage's PR merges. Confirms diff matches stage scope, CI was green, design-system compliance held, visual diffs reviewed, db/schema.sql updated if touched, and env-setup gate is recorded. -->
-
 ---
 name: pr-reviewer
 description: Quick read-only sanity check of a merged stage PR. Confirms the diff matches stage scope, CI checks were green, design-system-compliance passed, visual diffs were reviewed, db/schema.sql updated if DB code was touched, and env-setup gate completion is recorded. Dispatched by run-the-day between stages, after the stage-runner returns.
-subagent_type: generalPurpose
 model: sonnet
 effort: medium
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # PR Reviewer Subagent

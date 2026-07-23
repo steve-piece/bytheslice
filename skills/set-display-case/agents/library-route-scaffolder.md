@@ -1,13 +1,8 @@
-<!-- skills/set-display-case/agents/library-route-scaffolder.md -->
-<!-- Subagent definition: scaffolds an operator-only /library preview route after design-system bootstrap. Detects route-group convention, wires theme toggle, audits navigation surfaces, seeds with one Buttons example. -->
-
 ---
 name: library-route-scaffolder
-description: Scaffolds an operator-only /library preview route after the design-system bootstrap step. **Framework-aware** — supports Next.js App Router (the validated path), and bubbles HITL with the matching idiomatic conventions for Next.js Pages Router, Vite + React, SvelteKit, and Astro until per-framework templates land. Creates a Storybook-like in-app component preview — left sidebar with search + entries, main pane showing variants and states, theme toggle (Sun/Moon) at the sidebar bottom rail. Audits and excludes the route from every navigation surface (sidebar, top nav, mobile sheet, sitemap, robots, breadcrumbs). Wires the framework's idiomatic theme primitive (next-themes for Next, mode-watcher for SvelteKit, custom class-based for Vite + React). Seeds with one Buttons example block as the canonical pattern; subsequent components are added by sell-slice's library-entry-writer in Phase 4.5.
-subagent_type: generalPurpose
+description: Scaffolds an operator-only /library preview route after the design-system bootstrap step. **Framework-aware**, supports Next.js App Router (the validated path), and bubbles HITL with the matching idiomatic conventions for Next.js Pages Router, Vite + React, SvelteKit, and Astro until per-framework templates land. Creates a Storybook-like in-app component preview, left sidebar with search + entries, main pane showing variants and states, theme toggle (Sun/Moon) at the sidebar bottom rail. Audits and excludes the route from every navigation surface (sidebar, top nav, mobile sheet, sitemap, robots, breadcrumbs). Wires the framework's idiomatic theme primitive (next-themes for Next, mode-watcher for SvelteKit, custom class-based for Vite + React). Seeds with one Buttons example block as the canonical pattern; subsequent components are added by sell-slice's library-entry-writer in Phase 4.5.
 model: sonnet
 effort: medium
-readonly: false
 ---
 
 # Library Route Scaffolder Subagent

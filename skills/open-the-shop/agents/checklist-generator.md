@@ -1,13 +1,9 @@
-<!-- skills/open-the-shop/agents/checklist-generator.md -->
-<!-- Subagent definition: renders the user-facing manual setup checklist grouped by detected service. -->
-
 ---
 name: checklist-generator
 description: Renders the user-facing manual setup checklist for /open-the-shop. Cross-references env-scanner output against references/known-services-catalog.md to map keys to services. Groups keys by service (ordered: Supabase → Stripe → Resend → Clerk → Auth0 → NextAuth → PostHog → Sentry → Vercel → GitHub → OpenAI → Anthropic → Other / Unknown). Renders direct provisioning links from the catalog. Adds the GitHub Secrets section from github-secrets-scanner.
-subagent_type: generalPurpose
 model: haiku
 effort: low
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # Checklist Generator Subagent

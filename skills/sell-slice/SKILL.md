@@ -32,7 +32,7 @@ The Phase 0 Prep-section precondition further requires every `## Prep` checkbox 
 
 ## Subagent Roster
 
-Each subagent lives in its own file under `./agents/`. **Read the file before dispatching.**
+Each subagent is a **registered plugin agent**; its definition file under `./agents/` carries the role prompt plus the `model` / `effort` / tool allowlist, all enforced by the platform (the roster columns below are contract, not decoration). **Dispatch by type, never by pasting the file**: `Workflow` steps pass `{agentType: "bytheslice:<name>"}` to `agent()`; direct dispatches use the Agent tool with `subagent_type: "bytheslice:<name>"`. The prompt you pass carries ONLY the slice-specific inputs (plans, manifest, Exit criteria, paths); the platform loads the definition itself. **Fallback** (Cursor, or any host without plugin-agent registration): Read the file and pass its body plus the inputs as the prompt, applying `model:` / `effort:` from its frontmatter manually.
 
 ### Core (every slice type)
 
@@ -90,7 +90,7 @@ These three static verifiers collapsed into [`slice-verifier`](agents/slice-veri
 - `docs/plans/00_master_checklist.md` exists.
 - One or more `docs/plans/stage_<n>_*.md` exist (one slice plan reachable for the active unit).
 - Clean git working tree, OR explicit user OK to proceed dirty.
-- Slice/stage plan files (`docs/plans/stage_*.md`) are write-protected during this skill by `hooks/stage-plan-guard.sh` (WARN in v5 — downgraded from BLOCK); production-route edits without a recorded library approval surface a warning via `hooks/library-gate-guard.sh`.
+- Slice/stage plan files (`docs/plans/stage_*.md`) are write-protected during this skill by `hooks/stage-plan-guard.sh` (WARN in v5 — downgraded from BLOCK); production-route edits without a recorded library approval surface a warning via `hooks/library-gate-guard.sh` (armed and recorded at Phase 4.5 by `hooks/record-library-approval.sh`).
 
 ---
 
@@ -288,6 +288,14 @@ Dispatch `library-entry-writer` with one of two **modes** per item:
 
 Both modes render all variants × all states (default / hover / focus / disabled / loading / empty / error / populated) AND wire the source-path copy buttons through `<EntryHeader sourcePath=…>` / `<EntrySection sourcePath=… sourceLines=…>`.
 
+**Arm the enforcement gate.** When the round's writer dispatches complete (and before resolving the gate), arm the deterministic backstop so premature production wiring gets flagged by the plugin's `library-gate-guard.sh` PreToolUse hook:
+
+```bash
+bash "<plugin-root>/hooks/record-library-approval.sh" arm --slice <N.M>
+```
+
+`<plugin-root>` is the bytheslice plugin directory, two levels up from this SKILL.md (the recorder ships at [`hooks/record-library-approval.sh`](../../hooks/record-library-approval.sh)). The command writes `.claude/.bytheslice-state/library-approvals.json` with zero approvals for this slice (session id from `last-precheck.json`, slice label, timestamp, watched-path globs). From this moment until an approval is recorded, every Write/Edit under `app/**`, `src/app/**`, `components/**`, or `src/components/**` surfaces a non-blocking warning. Re-running `arm` resets the approvals list, so each slice starts unapproved. Warns emitted during a sanctioned revision round are expected noise; they never block.
+
 **Discover the dev port** before surfacing URLs. Check in order: `lsof -i -P | grep LISTEN | grep node` (already-serving ports), `package.json` `scripts.dev` declared port, framework-specific port hints (`next.config.js`, `proxy.ts`). If still ambiguous, ask the user.
 
 **HARD STOP** (when `flow.libraryGate: "human"`, or `"self-critique"` flagged a concern). Surface a single Phase 4.5 prompt that embeds:
@@ -298,9 +306,17 @@ Both modes render all variants × all states (default / hover / focus / disabled
 
 **Do not start production wiring** until the user explicitly approves (in `"human"` mode) or the self-critique cleared without concern (in `"self-critique"` mode). The cost asymmetry (rewriting a story file vs. rewriting story file + routes + server actions + types + tests) is what makes the gate worth enforcing.
 
-- On **approved** → import the component from the library into the production route(s) named by the slice spec (or, in the modify case, land the consumer-route edit). Continue to Workflow B.
+**Record the approval before wiring.** The moment the gate resolves in favor of wiring (the operator replied **approved** in `"human"` mode, or the self-critique cleared without concern in `"self-critique"` mode), record it BEFORE touching any production route:
+
+```bash
+bash "<plugin-root>/hooks/record-library-approval.sh" approve --slice <N.M> --components "<id1>,<id2>"
+```
+
+The component list is every `entries_added[].id` and `entries_modified[].id` from `library-entry-writer`'s output contract that was approved (a partial approval records only the approved ids). Each id becomes one `status: "approved"` entry carrying component id, session id, slice, and ISO timestamp; `library-gate-guard.sh` then passes production writes silently for the rest of the slice.
+
+- On **approved** → record the approval (the `approve` command above), then import the component from the library into the production route(s) named by the slice spec (or, in the modify case, land the consumer-route edit). Continue to Workflow B.
 - On **revision** → re-dispatch `component-crafter` with the user's notes, then re-run 4.5 for the revised component (fresh self-critique). Cap at 2 revision loops; on the 3rd round, surface as `creative_direction` HITL and stop.
-- On **rejected** → remove the entry: delete `_entries/<id>-entry.tsx`, remove the id from `_registry/tabs.ts` (`LIBRARY_TABS`), remove the import + map row from `_registry/stories.tsx` (`STORIES`), and remove the sidebar row from `_registry/entries.ts`. Surface as `creative_direction` HITL.
+- On **rejected** → remove the entry: delete `_entries/<id>-entry.tsx`, remove the id from `_registry/tabs.ts` (`LIBRARY_TABS`), remove the import + map row from `_registry/stories.tsx` (`STORIES`), and remove the sidebar row from `_registry/entries.ts`. Surface as `creative_direction` HITL. Record no approval: the armed gate keeps warning on production-route writes, which is the correct failsafe.
 - **No production-route imports happen before approval.** `library-entry-writer`'s output contract requires `production_imports_added: 0`.
 
 **Hard rules:**

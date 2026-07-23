@@ -1,13 +1,15 @@
-<!-- skills/sell-slice/agents/frontend/block-composer.md -->
-<!-- Subagent definition: shadcn block composition — tries to cover 100% of the slice UI from installed or installable shadcn blocks before any custom crafting. MUST run before component-crafter. -->
-
 ---
 name: block-composer
 description: Composes as much of the frontend slice UI as possible from shadcn blocks and components. Always runs BEFORE component-crafter. Reports ui_coverage_percent and gaps list. Dispatched by sell-slice in Phase 4a.
-subagent_type: generalPurpose
 model: sonnet
 effort: medium
 tools:
+  - Read
+  - Write
+  - Edit
+  - Glob
+  - Grep
+  - Bash
   - mcp__Shadcn_UI__list_blocks
   - mcp__Shadcn_UI__list_components
   - mcp__Shadcn_UI__get_block
