@@ -1,6 +1,6 @@
 {
   "name": "bytheslice",
-  "version": "5.0.1",
+  "version": "5.1.0",
   "description": "ByTheSlice runs your project like a grab-and-go pizza shop. v5 organizes delivery around Pies (coherent 3 to 8 slice chapters, one PR each) built from Slices (single deliverable units). Everyday loop: /sell-pie bakes a whole Pie autonomously via /loop, driving each slice through a context-separated build/test/verify/fix Workflow and committing per slice; at the pie boundary /box-it-up opens one PR, watches CI, and merges. /sell-slice is the high-touch single-slice loop. One-time prep: /setup-shop, /create-menu (PRD), /cook-pizzas (Pie/Slice roadmap; --repie migrates v4 checklists), /set-display-case (design system plus /library preview route), /final-quality-check (CI/E2E), /open-the-shop (credentials). All 48 live subagents are natively registered with enforced model tiers (opus plans, sonnet builds, haiku scans), per-agent tool allowlists, and effort levels. Hooks enforce skill preconditions; /special-order adds features mid-flight; /inspect-display audits the running app end to end.",
   "author": {
     "name": "Steven Light"

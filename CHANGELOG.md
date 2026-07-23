@@ -7,7 +7,7 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
-## [Unreleased]
+## [5.1.0] - 2026-07-22
 
 **Native agent registration.** The 54 markdown subagent definitions stop being read-and-paste prompt templates: 48 live agents are now declared in `plugin.json`'s `agents` array, so the platform itself enforces every `model`, `effort`, and tool allowlist that was previously advisory frontmatter. Skills dispatch by type (`bytheslice:<name>`), passing only task inputs as the prompt; read-and-paste survives as the documented fallback for Cursor and hosts without plugin-agent support.
 
@@ -39,6 +39,7 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 ### Fixed
 
 - **`close-shop` dispatched a nonexistent file** (`agents/close-shop-reviewer.md`); now dispatches `bytheslice:retrospective-reviewer`, which is what the file actually is.
+- **The npm tarball shipped a README linking to files it did not contain.** 5.0.1 added `docs/architecture.md` and linked it from the README in five places, but never added `docs` to `package.json`'s `files` array, so every link 404'd for anyone installing from npm. `docs/architecture.md` and `docs/agents.md` now ship with the package.
 - **The library preview gate is live after being dormant since v4.2.** `library-gate-guard.sh` read `library-approvals.json` but nothing ever wrote it (the planned v4.2.2 approval-writer never shipped), so the hook could not fire. Phase 4.5 now arms and records via `record-library-approval.sh`, and `hooks/test.sh` proves end-to-end that the gate warns on production-route writes after `arm` and passes them after `approve` (27 new end-to-end assertions).
 - **The Prep gate now counts the canonical dashless checkboxes.** `bts_prep_counts` matched only legacy dashed `- [ ]` lines, while `/cook-pizzas` emits dashless `[ ]` (the documented v5 "Checkbox format rule"), so a template-conformant `## Prep` section read as 0/0: precheck's "Prep section incomplete" warning could never fire and the shop-status header showed "Prep: 0/0". Both forms are counted now, with dashless, dashed, and mixed fixtures in `hooks/test.sh`.
 - **`shop-status.sh` no longer dies on BSD awk.** Both of its awk blocks used the gawk-only 3-argument `match()`, a fatal parse error for macOS awk, so every SessionStart header printed zeroed stage counts plus stderr noise. Rewritten POSIX-portable; nested v5 checklists now report pie and slice counts through the dual-read lib helpers (`bts_unit_counts` / `bts_slice_counts`) plus the first open pie, and the `Status:` table scan stays as the flat-v4 fallback.
