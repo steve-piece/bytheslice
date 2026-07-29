@@ -1,13 +1,9 @@
-<!-- skills/sell-slice/agents/spec-reviewer.md -->
-<!-- Subagent definition: spec-compliance review — confirms the implementer met the stage plan and the targeted checklist item. -->
-
 ---
 name: spec-reviewer
-description: Reviews the implementer's output for spec compliance — confirms the stage plan was followed, the checklist item is actually satisfied, no scope creep, and project conventions (file headers, conventional commits, applicable rules) are honored. Dispatched by the sell-slice orchestrator after each implementer slice in Phase 4.
-subagent_type: code-reviewer
+description: Reviews the implementer's output for spec compliance, confirms the stage plan was followed, the checklist item is actually satisfied, no scope creep, and project conventions (file headers, conventional commits, applicable rules) are honored. Dispatched by the sell-slice orchestrator after each implementer slice in Phase 4.
 model: sonnet
 effort: medium
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # Spec Reviewer Subagent

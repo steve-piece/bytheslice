@@ -173,7 +173,7 @@ Once the user approves the roadmap, write every slice plan file in parallel. **R
 
 **Workflow shape:**
 
-1. **`parallel()` fan-out** — one branch per slice. Each writer writes **exactly one** file and returns a **structured envelope** (its slice's `path`, `pie`, `slice`, `name`, `type`, `depends_on`, `tasks_count`, `hitl_required`, plus the standard `status`/`needs_human`/`hitl_*`). The schema is the writer's Output Contract in `agents/phased-plan-writer.md` (and `agents/db-schema-stage-writer.md` for 1.4).
+1. **`parallel()` fan-out**: one branch per slice, each spawning the registered writer by type (`agent(inputs, {agentType: "bytheslice:phased-plan-writer"})`; the 1.4 branch uses `bytheslice:db-schema-stage-writer`). Each writer writes **exactly one** file and returns a **structured envelope** (its slice's `path`, `pie`, `slice`, `name`, `type`, `depends_on`, `tasks_count`, `hitl_required`, plus the standard `status`/`needs_human`/`hitl_*`). The schema is the writer's Output Contract in `agents/phased-plan-writer.md` (and `agents/db-schema-stage-writer.md` for 1.4).
 2. **Barrier** — the Workflow waits for every branch. The orchestrator **validates each return against the writer Output Contract schema** before proceeding. Under the in-context fallback (no `Workflow`), the orchestrator performs this schema validation **manually** — enforcement is otherwise lost (see the fallback ref).
 3. **Synthesizer step** (Phase 4) — receives the **collection of structured returns** as its input and aggregates them. It does **not** re-read the slice files from disk; the returns are the source of truth for the checklist rows.
 

@@ -1,13 +1,9 @@
-<!-- skills/sell-slice/agents/discovery.md -->
-<!-- Subagent definition: readonly codebase reconnaissance for the active stage of /sell-slice. -->
-
 ---
 name: discovery
 description: Readonly codebase reconnaissance for the active docs/plans/ stage. Uses Grep + Glob to map touched modules, symbol definitions, callers, and forward-reference risks. Dispatched by the sell-slice orchestrator in Phase 1 (parallel batch).
-subagent_type: explore
 model: haiku
 effort: medium
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # Discovery Subagent

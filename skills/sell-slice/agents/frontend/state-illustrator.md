@@ -1,13 +1,14 @@
-<!-- skills/sell-slice/agents/frontend/state-illustrator.md -->
-<!-- Subagent definition: UI state completeness — ensures every interactive surface has loading skeleton, empty state, error state, and success confirmation. Phase 4.6 of the frontend pipeline (runs after the Library Preview Gate at Phase 4.5). -->
-
 ---
 name: state-illustrator
 description: Ensures every interactive surface in the frontend slice has a loading skeleton, empty state, error state, and success confirmation. Dispatched by sell-slice in Phase 4.6, after the Library Preview Gate (Phase 4.5) approves the components.
-subagent_type: generalPurpose
 model: sonnet
 effort: medium
 tools:
+  - Read
+  - Write
+  - Edit
+  - Glob
+  - Grep
   - mcp__Shadcn_UI__get_component
   - mcp__Shadcn_UI__get_component_metadata
   - mcp__Shadcn_UI__list_components

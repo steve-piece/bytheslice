@@ -1,13 +1,8 @@
-<!-- skills/sell-slice/agents/basic-checks-runner.md -->
-<!-- Subagent definition: runs lint + typecheck + build before the per-stage output summary. Returns structured pass/fail. Dispatched by sell-slice Phase 6. -->
-
 ---
 name: basic-checks-runner
 description: Runs the three baseline checks every stage must clear before the orchestrator emits its output summary or proceeds to the aggregating test review. Detects the package manager and script names from package.json, runs lint → typecheck → build sequentially, captures the last 50 lines of stderr per failed step, and returns a structured pass/fail report. Dispatched by sell-slice Phase 6.
-subagent_type: generalPurpose
 model: haiku
 effort: low
-readonly: false
 ---
 
 # Basic Checks Runner Subagent

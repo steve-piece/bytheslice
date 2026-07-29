@@ -1,6 +1,6 @@
 ---
 name: retrospective-reviewer
-description: Cross-stage friction pattern detection. Reads stage execution logs, recent commits, PRs, and HITL escalations to identify systemic plugin issues and propose specific diffs. Read-only — does not modify the plugin. Activated by /close-shop.
+description: Cross-stage friction pattern detection. Reads stage execution logs, recent commits, PRs, and HITL escalations to identify systemic plugin issues and propose specific diffs. Read-only, does not modify the plugin. Activated by /close-shop.
 model: opus
 effort: high
 tools: [Read, Glob, Grep, Bash]

@@ -1,13 +1,8 @@
-<!-- skills/setup-shop/agents/bootstrap-runner.md -->
-<!-- Subagent definition: runs create-next-app or create-turbo per Q-bootstrap-variant. -->
-
 ---
 name: bootstrap-runner
 description: Runs the project bootstrap step of /setup-shop Flow B. Invokes create-next-app (single-app variant) or create-turbo (monorepo variant) per the user's Q-bootstrap-variant answer. After scaffolding, makes the initial commit with a stable message and updates .gitignore for personal-scratchpad and AI-tooling-workspace entries.
-subagent_type: generalPurpose
 model: sonnet
 effort: medium
-readonly: false
 ---
 
 # Bootstrap Runner Subagent

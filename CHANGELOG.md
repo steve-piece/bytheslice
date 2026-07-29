@@ -7,6 +7,64 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [5.1.0] - 2026-07-22
+
+**Native agent registration.** The 54 markdown subagent definitions stop being read-and-paste prompt templates: 48 live agents are now declared in `plugin.json`'s `agents` array, so the platform itself enforces every `model`, `effort`, and tool allowlist that was previously advisory frontmatter. Skills dispatch by type (`bytheslice:<name>`), passing only task inputs as the prompt; read-and-paste survives as the documented fallback for Cursor and hosts without plugin-agent support.
+
+### Added
+
+- **`agents` key in `.claude-plugin/plugin.json`**: 48 live subagents registered by explicit file path (directory entries are rejected by `claude plugin validate`). Agents surface in the @-mention typeahead as `bytheslice:<name>`.
+- **Top-level marketplace `description`** in `.claude-plugin/marketplace.json` (was a strict-mode validation warning).
+- **`docs/agents.md`**: the full agent roster in one plain-English table, sectioned by owning skill, with the six unregistered v4 shims listed separately.
+- **`hooks/record-library-approval.sh`**: the long-planned approval writer for the Phase 4.5 library preview gate. `arm --slice <n.m>` creates `library-approvals.json` with zero approvals when the approval window opens (waking `library-gate-guard.sh`); `approve --slice <n.m> --components "<id>,<id>"` appends one `status: "approved"` entry per component (component id, session id, slice, ISO timestamp). Session id defaults to the value `precheck-skill.sh` recorded, the exact string the gate compares against. Honors `BTS_HOOKS_DISABLED=1`, tolerates missing `jq`, and writes compact single-line JSON so the gate's no-jq fallbacks keep working.
+- **Core tools for the writer agents that only listed MCP tools**: `slice-tester` gains Bash/Read/Write/Edit/Glob/Grep (it seeds DBs and writes probe harnesses); `block-composer`, `component-crafter`, `layout-architect`, `state-illustrator` gain Read/Write/Edit/Glob/Grep; `modern-ux-expert` gains Read/Write/Glob/Grep plus real `WebSearch`/`WebFetch` (replacing the nonexistent `web_search`/`image_search`). Under enforcement, the old MCP-only lists would have spawned these agents with no usable tools.
+- **Current-namespace Chrome MCP aliases** (`mcp__claude-in-chrome__*`, `mcp__Claude_Browser__*`) alongside the legacy `mcp__Claude_in_Chrome__` / `mcp__Claude_Preview__` names in `slice-tester`, `visual-reviewer`, and `platform-walker`, so browser access survives server-naming drift in enforced allowlists.
+
+### Changed
+
+- **Agent frontmatter normalized to the supported plugin-agent field set** across all 54 files: `readonly: true` translates to `disallowedTools: Write, Edit, NotebookEdit` (or an allowlist that simply omits write tools); leading HTML comment blocks move out of the way so frontmatter is byte-first (46 files were previously unparseable as agent definitions).
+- **Dispatch prose in every skill** (`sell-slice`, `sell-pie`, `cook-pizzas`, `box-it-up`, `inspect-display`, `create-menu`, `close-shop`, `set-display-case`, `special-order`, `open-the-shop`, `final-quality-check`): dispatch by registered type with only task inputs in the prompt; the platform loads the definition. Fallback phrasing standardized.
+- **All three manifest descriptions** (`plugin.json`, `marketplace.json`, `.cursor-plugin/plugin.json`) rewritten from v4-era text to the v5 Pie/Slice model with `/sell-pie` as the forefront command.
+- **Stale command wrappers and project notes caught up to v5**: `commands/sell-slice.md` (which still described the v3 flow, including PR/CI/merge steps that belong to `/box-it-up`), `commands/box-it-up.md`, `commands/inspect-display.md`, and the repo's own `CLAUDE.md` all rewritten to the current Pie/Slice model.
+- **`/sell-slice` Phase 4.5** now arms the enforcement gate once the writer dispatches complete and records the operator's approval (via `record-library-approval.sh`) before any production wiring; a rejection records nothing, so the armed gate keeps warning. `library-entry-writer`'s hard constraints state the agent never writes the approvals file itself.
+
+### Removed
+
+- **`subagent_type` and `readonly` frontmatter fields** (not part of the platform schema; their intent is preserved via registration and `disallowedTools`).
+
+### Deprecated
+
+- **Six v4 shim agents left unregistered** (on disk for back-compat only): `stage-runner`, `pr-reviewer` (run-the-day), `basic-checks-runner`, `aggregating-test-reviewer`, `ci-cd-guardrails`, `frontend/visual-reviewer` (sell-slice). They no longer appear in the typeahead.
+
+### Fixed
+
+- **`close-shop` dispatched a nonexistent file** (`agents/close-shop-reviewer.md`); now dispatches `bytheslice:retrospective-reviewer`, which is what the file actually is.
+- **The npm tarball shipped a README linking to files it did not contain.** 5.0.1 added `docs/architecture.md` and linked it from the README in five places, but never added `docs` to `package.json`'s `files` array, so every link 404'd for anyone installing from npm. `docs/architecture.md` and `docs/agents.md` now ship with the package.
+- **The library preview gate is live after being dormant since v4.2.** `library-gate-guard.sh` read `library-approvals.json` but nothing ever wrote it (the planned v4.2.2 approval-writer never shipped), so the hook could not fire. Phase 4.5 now arms and records via `record-library-approval.sh`, and `hooks/test.sh` proves end-to-end that the gate warns on production-route writes after `arm` and passes them after `approve` (27 new end-to-end assertions).
+- **The Prep gate now counts the canonical dashless checkboxes.** `bts_prep_counts` matched only legacy dashed `- [ ]` lines, while `/cook-pizzas` emits dashless `[ ]` (the documented v5 "Checkbox format rule"), so a template-conformant `## Prep` section read as 0/0: precheck's "Prep section incomplete" warning could never fire and the shop-status header showed "Prep: 0/0". Both forms are counted now, with dashless, dashed, and mixed fixtures in `hooks/test.sh`.
+- **`shop-status.sh` no longer dies on BSD awk.** Both of its awk blocks used the gawk-only 3-argument `match()`, a fatal parse error for macOS awk, so every SessionStart header printed zeroed stage counts plus stderr noise. Rewritten POSIX-portable; nested v5 checklists now report pie and slice counts through the dual-read lib helpers (`bts_unit_counts` / `bts_slice_counts`) plus the first open pie, and the `Status:` table scan stays as the flat-v4 fallback.
+
+---
+
+## [5.0.1] — 2026-06-07
+
+**Docs polish.** No functional changes — the plugin is byte-identical to 5.0.0. The README sheds ~47% (36 KB → 19 KB) by folding the duplicated skill tables into one set of follow-along command tables, and the deep reference moves into a new `docs/architecture.md`. Ships the previously-missing MIT `LICENSE`.
+
+### Added
+
+- **`LICENSE`** (MIT) — referenced by the README and `package.json`'s `files` array since 5.0.0 but never committed, so the 5.0.0 tarball shipped without it. Now present.
+- **`docs/architecture.md`** — the under-the-hood reference (Pies & Slices, the verify-once model, the mode-detection matrix, delivery/git, orchestration principles, hook enforcement, legacy/migration, Cursor fallback), lifted out of the README and linked from it.
+
+### Changed
+
+- **README slimmed ~47%** (481 → 362 lines). The duplicate *"Menu — full skill reference"* is folded into the three *"How it works"* command tables (each command now links to its `SKILL.md`); the 15-bullet *"Conventions"* wall becomes a short teaser linking into `docs/architecture.md`; repeated concepts (selling/boxing decoupling, flat-v4 dual-read, verify-once) are stated once instead of 4–10×. The workflow diagram is color-coded by phase and validated.
+
+### Fixed
+
+- **`.gitignore` ignored all of `docs/`** — narrowed to `docs/plans/` (the generated per-project plans) so authored docs like `docs/architecture.md` actually commit and render on GitHub. The stale v2 PR/QA docs move to `docs/archive/`.
+
+---
+
 ## [5.0.0] — 2026-06-05
 
 **The Pie release.** The flat 20–30 "stages" become a two-level **Pie / Slice** hierarchy: a **Pie** is a coherent chapter (3–8 slices) and the unit of `/loop` autonomy, HITL checkpoint, PR, context-refresh, and worktree; a **Slice** is yesterday's "stage" — one vertical deliverable. A new forefront command **`/sell-pie`** bakes one Pie autonomously with **context-separated dispatch** (the builder emits a build manifest; an independent `slice-tester` verifies behavior from the manifest + Exit criteria only, never the builder's reasoning; a `slice-verifier` runs every static gate exactly once plus a diff-derived under-declaration backstop). `/sell-slice` stays the high-touch single-slice tool, `/run-the-day` demotes to a thin pie chainer, `/box-it-up` re-scopes to pie-level git dynamics (per-slice commit+push, one PR + CI + merge at the pie boundary), and `/cook-pizzas` decomposes into Pies. Dual-read keeps every flat v4 `## Stage N` checklist working; `/sell-pie` refuses flat and `/cook-pizzas --repie` converts on explicit opt-in.

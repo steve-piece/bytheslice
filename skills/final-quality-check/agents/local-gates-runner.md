@@ -1,13 +1,8 @@
-<!-- skills/final-quality-check/agents/local-gates-runner.md -->
-<!-- Subagent definition: runs Phase 4 verification gates (lint, typecheck, design-system, unit, all E2E suites) locally before PR is opened. -->
-
 ---
 name: local-gates-runner
-description: Runs the full Phase 4 verification gate locally — lint, typecheck, check:design-system, unit / integration tests, test:e2e:feature, test:e2e:regression, test:e2e:visual. Captures structured results so the orchestrator can patch on the same branch instead of opening a red PR. The first run also generates the initial visual baselines if none exist.
-subagent_type: generalPurpose
+description: Runs the full Phase 4 verification gate locally, lint, typecheck, check:design-system, unit / integration tests, test:e2e:feature, test:e2e:regression, test:e2e:visual. Captures structured results so the orchestrator can patch on the same branch instead of opening a red PR. The first run also generates the initial visual baselines if none exist.
 model: sonnet
 effort: medium
-readonly: false
 ---
 
 # Local Gates Runner Subagent

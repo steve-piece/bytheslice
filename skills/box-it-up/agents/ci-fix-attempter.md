@@ -1,13 +1,8 @@
-<!-- skills/box-it-up/agents/ci-fix-attempter.md -->
-<!-- Subagent definition: dispatched by /box-it-up Phase 3a when CI on the open PR fails. Reads the failed-check rollup + log excerpts, applies the smallest fix that resolves the failure, commits with a conventional commit, and pushes. Capped at 3 attempts per /box-it-up run. -->
-
 ---
 name: ci-fix-attempter
 description: Phase 3a (CI Fix Loop) for /box-it-up. Given the failed-check rollup from `gh pr checks` plus log excerpts and the slice diff, apply the smallest fix that resolves the failure (lint / typecheck violation, test selector mismatch, missing import, hardcoded design value, missing CI env var that needs to be a Variable not a Secret, etc.), commit with a conventional commit message, and push to the same branch so CI re-runs. Never escalates scope, never modifies tests to make them pass, never force-pushes, never installs new dependencies without surfacing as HITL.
-subagent_type: generalPurpose
 model: sonnet
 effort: high
-readonly: false
 ---
 
 # CI Fix Attempter Subagent

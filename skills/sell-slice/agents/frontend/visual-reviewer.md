@@ -1,19 +1,22 @@
-<!-- skills/sell-slice/agents/frontend/visual-reviewer.md -->
-<!-- Subagent definition: visual review against design system and UX spec. Vision-required. Hardcoded tooling priority: Claude in Chrome > Chrome DevTools MCP > Playwright > Vizzly. Phase 4.7 of the frontend pipeline (final step before Phase 5 review). -->
-
 ---
 name: visual-reviewer
 description: Visual review of the built frontend slice against the design system and UX spec. Vision-required. Takes full-page screenshots at four viewports. Returns verdict pass/fail with viewport results, critique list, and screenshot paths. Dispatched by sell-slice in Phase 4.7. On fail, the orchestrator loops back to the causative agent.
-subagent_type: generalPurpose
 model: sonnet
 effort: medium
-readonly: true
 tools:
+  - Read
+  - Glob
+  - Grep
   - mcp__Claude_in_Chrome__browser_batch
   - mcp__Claude_in_Chrome__list_connected_browsers
   - mcp__Claude_in_Chrome__select_browser
   - mcp__Claude_in_Chrome__tabs_close_mcp
   - mcp__Claude_in_Chrome__file_upload
+  - mcp__claude-in-chrome__browser_batch
+  - mcp__claude-in-chrome__list_connected_browsers
+  - mcp__claude-in-chrome__select_browser
+  - mcp__claude-in-chrome__tabs_close_mcp
+  - mcp__claude-in-chrome__file_upload
 ---
 
 # Visual Reviewer Subagent

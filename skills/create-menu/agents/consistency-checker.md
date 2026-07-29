@@ -1,13 +1,9 @@
-<!-- skills/create-menu/agents/consistency-checker.md -->
-<!-- Subagent definition: runs the Consistency Check from the SKILL before file write. -->
-
 ---
 name: consistency-checker
 description: Pre-write consistency check for /create-menu. Given the assembled draft PRD content, walks the seven consistency checks from the SKILL (every Section 2 capability mapped to Section 3 NFRs; every Section 2 integration accounted for in Section 4; every plan-mode answer landed in Section 6; Section 7 has 2+ items; architecture matches the conditional rule; every TBD-BLOCKER appears in Section 6). Returns pass/fail with section-level gaps so the orchestrator patches before writing.
-subagent_type: explore
 model: haiku
 effort: low
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # Consistency Checker Subagent

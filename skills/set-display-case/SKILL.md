@@ -86,10 +86,10 @@ No bundle provided. Skill generates the token system from a brand brief.
 
 **Flow:**
 1. Collect brand brief from user if not already in context (via `ask_user_input_v0`)
-2. Dispatch `agents/token-expander.md` (opus, high effort) to generate a complete token system
+2. Dispatch `bytheslice:token-expander` (opus, high effort, enforced by registration) to generate a complete token system
 3. Surface the generated token system to the user for approval via `ask_user_input_v0`
 4. If user requests changes: apply them and re-surface (cap at 2 rounds; third round → HITL `creative_direction`)
-5. Dispatch `agents/compliance-pre-check.md` to verify completeness on the approved tokens
+5. Dispatch `bytheslice:compliance-pre-check` to verify completeness on the approved tokens
 6. Write output artifacts from approved token set
 7. Capture project-specific code patterns (Step 4 below)
 8. Append rules block to project rules file
@@ -112,7 +112,7 @@ Collect:
 
 ## Step 2: Token Validation Gate
 
-Dispatch `agents/compliance-pre-check.md` after collecting or generating tokens.
+Dispatch `bytheslice:compliance-pre-check` after collecting or generating tokens.
 
 The gate **refuses to complete** until every required token category from `references/token-checklist.md` is satisfied. No partial passes.
 

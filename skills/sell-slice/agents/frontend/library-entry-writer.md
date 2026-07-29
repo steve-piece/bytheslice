@@ -1,13 +1,8 @@
-<!-- skills/sell-slice/agents/frontend/library-entry-writer.md -->
-<!-- Subagent definition: writes or updates a /library entry for every component / block delivered by Phase 4.3 / 4.4 OR for every existing library component whose user-visible surface (props, copy, content, variants, states, styles) is changed by the slice. Each entry shows all variants and all states. Phase 4.5 of the sell-slice frontend pipeline. -->
-
 ---
 name: library-entry-writer
-description: Phase 4.5 (Library Preview Gate) writer. Handles two dispatch modes, (a) NEW-component dispatch for every component or block emitted by block-composer or component-crafter, and (b) MODIFY-component dispatch for every existing library component whose user-visible surface (props, copy, content, variants, states, or styles) is changed by the current slice as it appears in a production route. New-mode appends a /library?tab=<id> entry as ONE line in the single grouped registry; modify-mode updates an existing entry in place. Both cover all variants AND all states (default / hover / focus / disabled / loading / empty / error / populated) INSIDE one tab, grouped into sections by concern with contrasting states rendered side by side, or behind labeled switcher axes over a framed viewport for page-sized blocks. States, variants, and competing design directions never become their own tab. Tokens-only; no raw values. Does NOT import anything into production routes, that happens only after the orchestrator's HITL approval gate.
-subagent_type: generalPurpose
+description: Phase 4.5 (Library Preview Gate) writer. Handles two dispatch modes, (a) NEW-component dispatch for every component or block emitted by block-composer or component-crafter, and (b) MODIFY-component dispatch for every existing library component whose user-visible surface (props, copy, content, variants, states, or styles) is changed by the current slice as it appears in a production route. New-mode appends a /library?tab=<id> entry; modify-mode updates an existing entry in place. Both render all variants AND all states (default / hover / focus / disabled / loading / empty / error / populated). Tokens-only; no raw values. Does NOT import anything into production routes, that happens after the orchestrator's HITL approval gate.
 model: sonnet
 effort: medium
-readonly: false
 ---
 
 # Library Entry Writer Subagent
@@ -238,5 +233,6 @@ hitl_context: null | "<what triggered this>"
 - **Do not restructure the registry inside a feature slice.** If the project still has the split `LIBRARY_TABS` / `STORIES` / `entries` triad, keep all three in lockstep for this slice and report the consolidation opportunity to the orchestrator as separate cleanup.
 - **Modify-case is delta-only.** Do not rebuild an existing entry from scratch, the operator's prior approval should still be visible in the diff. If the change is so broad it would replace most of the entry, surface as `creative_direction` HITL and ask whether the orchestrator should treat it as `mode: "new"` with an id rename instead.
 - **No production-route file edits.** This agent only writes inside `<library_root>/` (entries + registries).
+- **Never write `.claude/.bytheslice-state/library-approvals.json`.** Arming the library gate and recording the operator's approval belong to the orchestrator, which runs `hooks/record-library-approval.sh` (Phase 4.5) strictly after this agent returns. An approval recorded from inside this agent would mark components approved before the operator has seen them, and the deterministic `library-gate-guard.sh` hook would go silent on production-route writes it should still be warning about.
 - **Never delete existing entries** as part of adding new ones. They're someone else's review surface; if they need to go, that's a separate decision the orchestrator drives (rejection path in Phase 4.5).
 - **Stage but do not commit.**

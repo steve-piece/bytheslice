@@ -1,19 +1,25 @@
-<!-- skills/sell-slice/agents/slice-tester.md -->
-<!-- Subagent definition: type-routed behavioral tester for one slice. Independently verifies behavior from the build manifest + Exit criteria + design-system path ONLY — never the builder's reasoning. Frontend = rendered design-system match + per-affordance exercise; full-stack/backend = seed-and-cleanup data-flow round-trips; infrastructure = probe/harness. Dispatched inside sell-slice Workflow B (state-illustrator → slice-tester → slice-verifier). -->
-
 ---
 name: slice-tester
-description: Behavioral tester for one slice. Derives a bespoke test plan from the build manifest + the slice's Exit criteria, type-routes it (frontend = Chrome rendered design-system match + exercise every declared affordance; full-stack/backend = seed-the-dev-DB-and-cleanup data-flow round-trips with success and error paths; infrastructure = probe/harness only), and returns a per-affordance verdict with evidence. Receives ONLY the manifest + Exit criteria + design-system path — never the builder's context — so it cannot rationalize the builder's choices. Dispatched by sell-slice inside Workflow B, after state-illustrator and before slice-verifier. On fail, the orchestrator routes fix_targets to the off-context fix loop.
-subagent_type: generalPurpose
+description: Behavioral tester for one slice. Derives a bespoke test plan from the build manifest + the slice's Exit criteria, type-routes it (frontend = Chrome rendered design-system match + exercise every declared affordance; full-stack/backend = seed-the-dev-DB-and-cleanup data-flow round-trips with success and error paths; infrastructure = probe/harness only), and returns a per-affordance verdict with evidence. Receives ONLY the manifest + Exit criteria + design-system path, never the builder's context, so it cannot rationalize the builder's choices. Dispatched by sell-slice inside Workflow B, after state-illustrator and before slice-verifier. On fail, the orchestrator routes fix_targets to the off-context fix loop.
 model: sonnet
 effort: high
-readonly: false
 tools:
+  - Bash
+  - Read
+  - Write
+  - Edit
+  - Glob
+  - Grep
   - mcp__Claude_in_Chrome__browser_batch
   - mcp__Claude_in_Chrome__list_connected_browsers
   - mcp__Claude_in_Chrome__select_browser
   - mcp__Claude_in_Chrome__tabs_close_mcp
   - mcp__Claude_in_Chrome__file_upload
+  - mcp__claude-in-chrome__browser_batch
+  - mcp__claude-in-chrome__list_connected_browsers
+  - mcp__claude-in-chrome__select_browser
+  - mcp__claude-in-chrome__tabs_close_mcp
+  - mcp__claude-in-chrome__file_upload
 ---
 
 # Slice Tester Subagent

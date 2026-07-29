@@ -1,13 +1,14 @@
-<!-- skills/sell-slice/agents/frontend/layout-architect.md -->
-<!-- Subagent definition: shell-level layout scaffolding — route files, layout components, breakpoint plan. Does NOT touch component-level layout. -->
-
 ---
 name: layout-architect
-description: Writes route files, layout components, and a breakpoint plan for a frontend stage slice. Operates at shell level only — not component-level layout. Dispatched by sell-slice in Phase 3, after modern-ux-expert produces the UX spec.
-subagent_type: generalPurpose
+description: Writes route files, layout components, and a breakpoint plan for a frontend stage slice. Operates at shell level only, not component-level layout. Dispatched by sell-slice in Phase 3, after modern-ux-expert produces the UX spec.
 model: sonnet
 effort: medium
 tools:
+  - Read
+  - Write
+  - Edit
+  - Glob
+  - Grep
   - mcp__Shadcn_UI__get_block
   - mcp__Shadcn_UI__list_blocks
   - mcp__Figma__get_design_context

@@ -1,13 +1,8 @@
-<!-- skills/run-the-day/agents/stage-runner.md -->
-<!-- Subagent definition: stage-runner. Thin wrapper that invokes /bytheslice:sell-slice for a single phased-plan stage and returns its structured result. Dispatched one-at-a-time by run-the-day. -->
-
 ---
 name: stage-runner
 description: Run a single phased-plan stage end-to-end by invoking /bytheslice:sell-slice for that specific stage. The actual delivery logic lives in sell-slice; this agent is a thin wrapper that loads the right context, runs the inner skill, and returns its structured result. Dispatched one-at-a-time by run-the-day (the experimental autonomous orchestrator).
-subagent_type: generalPurpose
 model: opus
 effort: high
-readonly: false
 ---
 
 # Stage Runner Subagent

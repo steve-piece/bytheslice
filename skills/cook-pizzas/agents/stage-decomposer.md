@@ -1,13 +1,9 @@
-<!-- skills/cook-pizzas/agents/stage-decomposer.md -->
-<!-- Subagent definition: Phase 2 stage identification. Maps PRD Section 2 features → 20-30 vertical-slice stages. -->
-
 ---
 name: stage-decomposer
-description: Phase 2 stage identification for /cook-pizzas. Reads the PRD and the Phase 1 elicitation answers, maps Section 2 features to vertical-slice stages (default ≥2 per feature — shell + data), targets the 20–30 feature-stage band (or the user's custom band from stages.targetFeatureStages), tags each as MVP or Phase 2 per Q1, and returns the proposed stage list for user approval BEFORE the parallel stage-writer fan-out.
-subagent_type: explore
+description: Phase 2 stage identification for /cook-pizzas. Reads the PRD and the Phase 1 elicitation answers, maps Section 2 features to vertical-slice stages (default ≥2 per feature, shell + data), targets the 20 to 30 feature-stage band (or the user's custom band from stages.targetFeatureStages), tags each as MVP or Phase 2 per Q1, and returns the proposed stage list for user approval BEFORE the parallel stage-writer fan-out.
 model: sonnet
 effort: medium
-readonly: true
+disallowedTools: Write, Edit, NotebookEdit
 ---
 
 # Stage Decomposer Subagent

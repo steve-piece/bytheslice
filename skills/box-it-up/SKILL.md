@@ -110,7 +110,7 @@ Loop counter starts at 1. Cap at **3 attempts**.
 2. For each failed check, retrieve logs:
    - `gh run view <run-id> --log-failed` for workflow runs, OR
    - `gh pr view "$PR_NUMBER" --comments` for non-Actions checks (e.g. external services posting back).
-3. Read [agents/ci-fix-attempter.md](agents/ci-fix-attempter.md) and dispatch it. Pass:
+3. Dispatch `bytheslice:ci-fix-attempter` ([definition](agents/ci-fix-attempter.md); fallback on hosts without plugin agents: Read the file and pass its body as the prompt). Pass:
    - `PR_NUMBER`, `PR_URL`, `BRANCH`
    - The failed-check rollup
    - Truncated log excerpts (last 200 lines per failed job) — let the agent ask for more on demand

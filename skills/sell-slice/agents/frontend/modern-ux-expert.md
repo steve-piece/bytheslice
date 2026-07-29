@@ -1,20 +1,20 @@
-<!-- skills/sell-slice/agents/frontend/modern-ux-expert.md -->
-<!-- Subagent definition: UX pattern selection and reference research for a frontend stage slice. Outputs docs/ux-spec-<slice>.md. -->
-
 ---
 name: modern-ux-expert
-description: Researches and selects UX patterns for a frontend stage slice. Outputs docs/ux-spec-<slice>.md with chosen patterns, rationale, and 2–3 best-in-class visual references. Dispatched by sell-slice in Phase 2, after discovery.
-subagent_type: generalPurpose
+description: Researches and selects UX patterns for a frontend stage slice. Outputs docs/ux-spec-<slice>.md with chosen patterns, rationale, and 2 to 3 best-in-class visual references. Dispatched by sell-slice in Phase 2, after discovery.
 model: sonnet
 effort: medium
 tools:
+  - Read
+  - Write
+  - Glob
+  - Grep
+  - WebSearch
+  - WebFetch
   - mcp__magic__21st_magic_component_builder
   - mcp__magic__21st_magic_component_inspiration
   - mcp__Shadcn_UI__list_blocks
   - mcp__Shadcn_UI__list_components
   - mcp__Shadcn_UI__get_block
-  - web_search
-  - image_search
 ---
 
 # Modern UX Expert Subagent

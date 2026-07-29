@@ -20,6 +20,7 @@ COMMIT_GUARD="$HERE/pre-commit-guard.sh"
 STAGE_PLAN_GUARD="$HERE/stage-plan-guard.sh"
 LIBRARY_GATE="$HERE/library-gate-guard.sh"
 COMPACT_SNAPSHOT="$HERE/compact-snapshot.sh"
+RECORDER="$HERE/record-library-approval.sh"
 
 PASS=0
 FAIL=0
@@ -104,6 +105,43 @@ assert_not_contains() {
   esac
 }
 
+# Run the approval recorder with CLI args (not a stdin envelope).
+# Sets globals: LAST_EXIT, LAST_OUT.
+run_recorder() {
+  LAST_OUT=$(bash "$RECORDER" "$@" 2>&1)
+  LAST_EXIT=$?
+}
+
+# Assert a file exists. Args: name, path.
+assert_file_exists() {
+  local name="$1" path="$2"
+  if [ -f "$path" ]; then
+    PASS=$((PASS+1))
+    printf '  ✓ %s (file exists)\n' "$name"
+  else
+    FAIL=$((FAIL+1))
+    FAILED_NAMES+=("$name (missing file: $path)")
+    printf '  ✗ %s missing file %s\n' "$name" "$path"
+  fi
+}
+
+# Assert a file's content holds a substring. Args: name, path, needle.
+assert_file_contains() {
+  local name="$1" path="$2" needle="$3" content
+  content=$(cat "$path" 2>/dev/null)
+  case "$content" in
+    *"$needle"*)
+      PASS=$((PASS+1))
+      printf '  ✓ %s contains %q\n' "$name" "$needle"
+      ;;
+    *)
+      FAIL=$((FAIL+1))
+      FAILED_NAMES+=("$name (file missing: $needle)")
+      printf '  ✗ %s missing %q in %s\n    content: %s\n' "$name" "$needle" "$path" "$content"
+      ;;
+  esac
+}
+
 # Write a last-precheck.json state file into a fixture.
 # Args: fixture-dir, session_id, skill, [timestamp].
 write_state() {
@@ -160,6 +198,57 @@ EOF
 CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/sell-slice","session_id":"s3"}'
 assert_exit "sell-slice incomplete Prep" 0
 assert_contains "sell-slice Prep warning" "Prep section incomplete"
+rm -rf "$FIX"
+
+# /sell-slice with complete dashless Prep (canonical v5 format) → PASS
+FIX=$(mk_fixture)
+mkdir -p "$FIX/docs/plans"
+cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
+# Master
+
+## Prep
+
+[x] First
+[x] Second
+EOF
+( cd "$FIX" && git add . && git commit -q -m "checklist" )
+CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/sell-slice","session_id":"s3a"}'
+assert_exit "sell-slice dashless Prep complete" 0
+assert_empty "sell-slice dashless Prep complete silent"
+rm -rf "$FIX"
+
+# /sell-slice with incomplete dashless Prep → WARN with correct counts
+FIX=$(mk_fixture)
+mkdir -p "$FIX/docs/plans"
+cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
+# Master
+
+## Prep
+
+[x] First
+[ ] Second
+EOF
+( cd "$FIX" && git add . && git commit -q -m "checklist" )
+CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/sell-slice","session_id":"s3b"}'
+assert_exit "sell-slice dashless Prep incomplete" 0
+assert_contains "sell-slice dashless Prep warning" "Prep section incomplete: 1/2"
+rm -rf "$FIX"
+
+# /sell-slice with mixed dashed + dashless Prep boxes → both forms counted
+FIX=$(mk_fixture)
+mkdir -p "$FIX/docs/plans"
+cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
+# Master
+
+## Prep
+
+- [x] Legacy dashed box
+[ ] Canonical dashless box
+EOF
+( cd "$FIX" && git add . && git commit -q -m "checklist" )
+CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/sell-slice","session_id":"s3c"}'
+assert_exit "sell-slice mixed Prep formats" 0
+assert_contains "sell-slice mixed Prep counts both forms" "Prep section incomplete: 1/2"
 rm -rf "$FIX"
 
 # /box-it-up on main → BLOCK
@@ -270,6 +359,61 @@ EOF
 CLAUDE_PROJECT_DIR=$FIX run_hook "$SHOP_STATUS" '{}'
 assert_exit "shop-status with checklist" 0
 assert_contains "shop-status emits header" "bytheslice shop status"
+rm -rf "$FIX"
+
+# Flat v4 table checklist → stage counts + next not-started row, POSIX awk only
+FIX=$(mk_fixture)
+mkdir -p "$FIX/docs/plans"
+cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
+# Master
+
+## Stages
+
+| Stage | Name | Status |
+|---|---|---|
+| 1 | foo | Status: Not Started |
+| 2 | bar | Status: Completed |
+| 3 | baz | Status: In Progress |
+EOF
+CLAUDE_PROJECT_DIR=$FIX run_hook "$SHOP_STATUS" '{}'
+assert_exit "shop-status flat exit 0" 0
+assert_contains "shop-status flat stage counts" "stages: 3 total, 1 completed / 1 in-progress / 1 not started"
+assert_contains "shop-status flat next row" "next not-started: 1 | foo"
+assert_not_contains "shop-status flat no awk noise" "syntax error"
+rm -rf "$FIX"
+
+# Nested v5 checklist → pie/slice counts from lib helpers + next open pie;
+# Prep uses the canonical dashless boxes.
+FIX=$(mk_fixture)
+mkdir -p "$FIX/docs/plans"
+cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
+# Master
+
+## Prep - Pie 1: Foundations
+
+[x] Slice 1.1 - Display case built
+[x] Slice 1.2 - Quality line installed
+[ ] Slice 1.3 - Shop open
+
+## Pie 2 - Blog Editor [x]    <!-- review: boundary -->
+
+### Slice 2.1 - Editor shell [x]
+
+### Slice 2.2 - Server actions [x]
+
+## Pie 3 - Publish Flow    <!-- review: boundary -->
+
+### Slice 3.1 - Publish button [x]
+
+### Slice 3.2 - Scheduling
+EOF
+CLAUDE_PROJECT_DIR=$FIX run_hook "$SHOP_STATUS" '{}'
+assert_exit "shop-status nested exit 0" 0
+assert_contains "shop-status nested dashless Prep counts" "Prep: 2/3 boxes checked"
+assert_contains "shop-status nested pie counts" "pies: 2 total, 1 completed / 1 open"
+assert_contains "shop-status nested slice counts" "slices: 4 total, 3 completed / 1 open"
+assert_contains "shop-status nested next open pie" "next open pie: Pie 3 - Publish Flow"
+assert_not_contains "shop-status nested no awk noise" "syntax error"
 rm -rf "$FIX"
 
 # BTS_HOOKS_DISABLED → PASS silent
@@ -443,6 +587,100 @@ BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
   '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
 assert_exit "library-gate disabled" 0
 assert_empty "library-gate disabled silent"
+rm -rf "$FIX"
+
+####################################################################
+# record-library-approval.sh (library gate end-to-end)
+####################################################################
+
+echo
+echo "## record-library-approval.sh"
+
+# arm writes the state file (session, slice, zero approvals) and wakes the
+# gate: the very next watched-path write WARNs.
+FIX=$(mk_fixture)
+write_state "$FIX" "current" "sell-slice"
+CLAUDE_PROJECT_DIR=$FIX run_recorder arm --slice 3.2
+assert_exit "recorder arm exits 0" 0
+AF="$FIX/.claude/.bytheslice-state/library-approvals.json"
+assert_file_exists "recorder arm writes approvals file" "$AF"
+assert_file_contains "recorder arm records session from last-precheck" "$AF" '"session_id":"current"'
+assert_file_contains "recorder arm records slice" "$AF" '"slice":"3.2"'
+assert_file_contains "recorder arm starts with zero approvals" "$AF" '"approvals":[]'
+assert_file_contains "recorder arm writes default watched paths" "$AF" '"watched_paths":["app/**"'
+assert_file_contains "recorder arm stamps armed_at" "$AF" '"armed_at":"20'
+CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
+  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
+assert_exit "gate fires once armed" 0
+assert_contains "gate warns after arm, before approval" "no library approval is recorded"
+rm -rf "$FIX"
+
+# approve appends one approved entry per component; the gate then passes the
+# same watched-path write silently.
+FIX=$(mk_fixture)
+write_state "$FIX" "current" "sell-slice"
+CLAUDE_PROJECT_DIR=$FIX run_recorder arm --slice 3.2
+CLAUDE_PROJECT_DIR=$FIX run_recorder approve --slice 3.2 --components "order-table,stat-card"
+assert_exit "recorder approve exits 0" 0
+AF="$FIX/.claude/.bytheslice-state/library-approvals.json"
+assert_file_contains "approve records first component" "$AF" '"component_id":"order-table"'
+assert_file_contains "approve records second component" "$AF" '"component_id":"stat-card"'
+assert_file_contains "approve records approved status with timestamp" "$AF" '"status":"approved","at":"20'
+assert_file_contains "approve entries carry session and slice" "$AF" '"session_id":"current","slice":"3.2"}'
+CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
+  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
+assert_exit "gate passes after approval recorded" 0
+assert_empty "gate silent after approval recorded"
+rm -rf "$FIX"
+
+# approve without a prior arm auto-initializes the file; gate passes.
+FIX=$(mk_fixture)
+write_state "$FIX" "current" "sell-slice"
+CLAUDE_PROJECT_DIR=$FIX run_recorder approve --slice 1.1 --components "buttons"
+assert_exit "recorder approve without arm exits 0" 0
+CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
+  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
+assert_exit "gate passes after no-arm approval" 0
+assert_empty "gate silent after no-arm approval"
+rm -rf "$FIX"
+
+# Re-arming for the next slice resets approvals: the gate warns again.
+FIX=$(mk_fixture)
+write_state "$FIX" "current" "sell-slice"
+CLAUDE_PROJECT_DIR=$FIX run_recorder arm --slice 3.2
+CLAUDE_PROJECT_DIR=$FIX run_recorder approve --slice 3.2 --components "buttons"
+CLAUDE_PROJECT_DIR=$FIX run_recorder arm --slice 3.3
+AF="$FIX/.claude/.bytheslice-state/library-approvals.json"
+assert_file_contains "re-arm updates the slice" "$AF" '"slice":"3.3"'
+assert_file_contains "re-arm resets approvals" "$AF" '"approvals":[]'
+CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
+  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
+assert_exit "gate re-armed for next slice" 0
+assert_contains "gate warns again after re-arm" "no library approval is recorded"
+rm -rf "$FIX"
+
+# approve without --components → usage error, nothing written.
+FIX=$(mk_fixture)
+write_state "$FIX" "current" "sell-slice"
+CLAUDE_PROJECT_DIR=$FIX run_recorder approve --slice 3.2
+assert_exit "recorder approve without components exits 2" 2
+if [ -f "$FIX/.claude/.bytheslice-state/library-approvals.json" ]; then
+  FAIL=$((FAIL+1)); FAILED_NAMES+=("recorder usage error writes nothing"); printf '  ✗ recorder wrote a file on usage error\n'
+else
+  PASS=$((PASS+1)); printf '  ✓ recorder usage error writes nothing\n'
+fi
+rm -rf "$FIX"
+
+# BTS_HOOKS_DISABLED → no-op, nothing written.
+FIX=$(mk_fixture)
+write_state "$FIX" "current" "sell-slice"
+BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_recorder arm --slice 3.2
+assert_exit "recorder disabled exits 0" 0
+if [ -f "$FIX/.claude/.bytheslice-state/library-approvals.json" ]; then
+  FAIL=$((FAIL+1)); FAILED_NAMES+=("recorder disabled writes nothing"); printf '  ✗ recorder wrote despite disable\n'
+else
+  PASS=$((PASS+1)); printf '  ✓ recorder disabled writes nothing\n'
+fi
 rm -rf "$FIX"
 
 ####################################################################

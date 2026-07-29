@@ -1,9 +1,6 @@
-<!-- skills/special-order/agents/complexity-assessor.md -->
-<!-- Subagent: assess feature complexity for special-order. Reads the user's feature list + recent stage context + project rules + (optional) PRD, returns a per-feature recommendation: single-stage or multi-stage with proposed stage breakdown, types, slices, dependencies, and estimated tasks. Read-only — does not write any files. -->
-
 ---
 name: complexity-assessor
-description: Read-only assessor that judges whether each requested feature should ship as a single stage or split into multiple stages. Returns a per-feature breakdown with proposed stage names, types (frontend/backend/full-stack), slice (vertical/horizontal), `depends_on`, and estimated task count. Dispatched by /bytheslice:special-order in Phase 2. Does not write stage files — phased-plan-writer handles that in Phase 4.
+description: Read-only assessor that judges whether each requested feature should ship as a single stage or split into multiple stages. Returns a per-feature breakdown with proposed stage names, types (frontend/backend/full-stack), slice (vertical/horizontal), `depends_on`, and estimated task count. Dispatched by /bytheslice:special-order in Phase 2. Does not write stage files, phased-plan-writer handles that in Phase 4.
 model: sonnet
 effort: medium
 tools: [Read, Glob, Grep]

@@ -1,13 +1,8 @@
-<!-- skills/final-quality-check/agents/husky-installer.md -->
-<!-- Subagent definition: installs husky and writes .husky/pre-push from canonical template. -->
-
 ---
 name: husky-installer
 description: Installs husky and writes .husky/pre-push using the canonical template. Ensures the executable bit is set. Skips installation if husky is already a devDependency; only ensures the pre-push hook exists with the canonical gate chain (check:design-system, lint, typecheck, test, test:e2e:feature, test:e2e:regression).
-subagent_type: generalPurpose
 model: haiku
 effort: low
-readonly: false
 ---
 
 # Husky Installer Subagent

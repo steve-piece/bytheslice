@@ -107,7 +107,7 @@ When parsing the project brief, extract these signals and route them to the righ
    - When inferring, mark inline: `[Inferred: reasoning]`.
 7. Run the **Consistency Check** (see below) before writing the file.
 8. Write the complete PRD as a single markdown file to `docs/prd-[project-slug].md`.
-9. Dispatch `agents/prd-reviewer.md` as the final step — pass the draft PRD plus all source materials.
+9. Dispatch `bytheslice:prd-reviewer` as the final step: pass the draft PRD plus all source materials.
 10. If reviewer returns `verdict: revise`, apply suggestions and re-run the reviewer. Cap at 2 iterations.
 11. If still `revise` after 2 iterations, return `needs_human: true` with `hitl_category: prd_ambiguity`.
 12. End the response with a generation summary (see format below).
@@ -167,7 +167,7 @@ If any check fails, fix the gap before writing the file or explicitly flag it wi
 
 ## prd-reviewer Integration
 
-After writing the PRD, dispatch `agents/prd-reviewer.md` with:
+After writing the PRD, dispatch `bytheslice:prd-reviewer` ([definition](agents/prd-reviewer.md)) with:
 
 - The draft PRD file path
 - All source materials: brief, uploaded specs, brand assets, API docs, visual references

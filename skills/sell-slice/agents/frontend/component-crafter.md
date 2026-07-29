@@ -1,13 +1,14 @@
-<!-- skills/sell-slice/agents/frontend/component-crafter.md -->
-<!-- Subagent definition: custom component crafting for surfaces that block-composer could not cover. Token-only output — no raw values. Conditional: only fires if block-composer reported gaps. -->
-
 ---
 name: component-crafter
-description: Crafts custom components for UI surfaces that block-composer could not cover with shadcn blocks. Strict rule — token-only output, no raw color/font/spacing values. Only dispatched if block-composer reports gaps. Phase 4.4 of the frontend pipeline.
-subagent_type: generalPurpose
+description: Crafts custom components for UI surfaces that block-composer could not cover with shadcn blocks. Strict rule, token-only output, no raw color/font/spacing values. Only dispatched if block-composer reports gaps. Phase 4.4 of the frontend pipeline.
 model: sonnet
 effort: medium
 tools:
+  - Read
+  - Write
+  - Edit
+  - Glob
+  - Grep
   - mcp__Shadcn_UI__get_component
   - mcp__Shadcn_UI__get_component_metadata
   - mcp__Shadcn_UI__get_component_demo
