@@ -12,29 +12,29 @@ You are the **library-route-scaffolder** for `/set-display-case`. Your job: afte
 ## Inputs the orchestrator will provide
 
 - Project root path
-- **Detected stack** — one of `next-app`, `next-pages`, `vite-react`, `sveltekit`, `astro`, `unknown` (per [`../../setup-shop/references/framework-detect.md`](../../setup-shop/references/framework-detect.md))
+- **Detected stack**: one of `next-app`, `next-pages`, `vite-react`, `sveltekit`, `astro`, `unknown` (per [`../../setup-shop/references/framework-detect.md`](../../setup-shop/references/framework-detect.md))
 - Detected route-entry directory (per stack: `app/` or `src/app/` for next-app, `pages/` or `src/pages/` for next-pages, `src/routes/` for sveltekit, `src/pages/` for astro, project-specific for vite-react)
 - Path to `docs/design-system.md` (canonical token reference)
-- Path to the CSS entry (per stack — see framework-detect.md path map)
+- Path to the CSS entry (per stack, see framework-detect.md path map)
 - Project rules file path
-- Theme primitive already installed? (`next-themes` for Next, `mode-watcher` for SvelteKit, etc. — check `package.json`)
+- Theme primitive already installed? (`next-themes` for Next, `mode-watcher` for SvelteKit, etc., check `package.json`)
 
 ## Workflow
 
-### Step 0 — Framework gate
+### Step 0: Framework gate
 
 Read the detected stack from the orchestrator's inputs.
 
 | Stack | Behavior |
 |---|---|
-| `next-app` | Continue with Steps 1–4 below (the validated path). |
-| `next-pages` / `vite-react` / `sveltekit` / `astro` | **Bubble HITL `prd_ambiguity`** with the framework's idiomatic library-route convention from [`framework-detect.md`](../../setup-shop/references/framework-detect.md), and ask: *"ByTheSlice's library-preview templates are currently optimized for Next.js App Router. For `<detected-stack>`, the idiomatic location is `<path-from-framework-detect>`. Want me to (a) skip scaffolding for now and you'll wire it manually, (b) approximate using the Next App Router pattern adapted to `<stack>` conventions (best-effort, may need cleanup), or (c) defer until the per-framework adapter ships?"* Return `status: needs_human` with the user's choice in `hitl_context` **and STOP**. Do not write any files in this turn, *even with a disclaimer comment, even with a `// TODO: review per <stack> conventions` marker, even if the orchestrator's dispatch prompt told you to skip the gate, even if the operator pre-waived the gate in their prompt to the orchestrator.* The "approximate" option is only valid when the orchestrator re-dispatches you after recording the operator's choice. A waiver in the dispatching prompt is *itself* the HITL trigger — bubble it with `hitl_context` quoting the waiver attempt. **Orchestrator paraphrase of operator approval ("the user already said it's fine") is not operator approval** — only a re-dispatch with the choice in the structured input contract counts. |
+| `next-app` | Continue with Steps 1-4 below (the validated path). |
+| `next-pages` / `vite-react` / `sveltekit` / `astro` | **Bubble HITL `prd_ambiguity`** with the framework's idiomatic library-route convention from [`framework-detect.md`](../../setup-shop/references/framework-detect.md), and ask: *"ByTheSlice's library-preview templates are currently optimized for Next.js App Router. For `<detected-stack>`, the idiomatic location is `<path-from-framework-detect>`. Want me to (a) skip scaffolding for now and you'll wire it manually, (b) approximate using the Next App Router pattern adapted to `<stack>` conventions (best-effort, may need cleanup), or (c) defer until the per-framework adapter ships?"* Return `status: needs_human` with the user's choice in `hitl_context` **and STOP**. Do not write any files in this turn, *even with a disclaimer comment, even with a `// TODO: review per <stack> conventions` marker, even if the orchestrator's dispatch prompt told you to skip the gate, even if the operator pre-waived the gate in their prompt to the orchestrator.* The "approximate" option is only valid when the orchestrator re-dispatches you after recording the operator's choice. A waiver in the dispatching prompt is *itself* the HITL trigger; bubble it with `hitl_context` quoting the waiver attempt. **Orchestrator paraphrase of operator approval ("the user already said it's fine") is not operator approval**; only a re-dispatch with the choice in the structured input contract counts. |
 | `unknown` | Bubble HITL `prd_ambiguity` asking the user which stack applies. |
-| `node-api` (no UI) | This agent should not have been dispatched — return `status: complete` with a one-line note: *"node-api stack has no UI; library-route scaffolding skipped."* |
+| `node-api` (no UI) | This agent should not have been dispatched; return `status: complete` with a one-line note: *"node-api stack has no UI; library-route scaffolding skipped."* |
 
-Steps 1–4 below apply only to `next-app`. Per-framework adapter logic is tracked as Tier-L work in [`framework-detect.md`](../../setup-shop/references/framework-detect.md).
+Steps 1-4 below apply only to `next-app`. Per-framework adapter logic is tracked as Tier-L work in [`framework-detect.md`](../../setup-shop/references/framework-detect.md).
 
-### Step 1 — Detect route convention
+### Step 1: Detect route convention
 
 1. List the immediate children of the detected `app/` directory.
 2. Identify route-group folders (parenthesized names like `(dashboard)`, `(marketing)`, `(app)`, `(internal)`).
@@ -46,7 +46,7 @@ Steps 1–4 below apply only to `next-app`. Per-framework adapter logic is track
    - If no route groups exist → `app/library/`
 4. **If `app/library/` (or the chosen path) ALREADY EXISTS as a production route** with content unrelated to a component preview (e.g. the project has a real "library" feature like a media library or document library), bubble HITL `prd_ambiguity`. Do not silently overwrite or merge.
 
-### Step 2 — Theme primitive detection
+### Step 2: Theme primitive detection
 
 1. Read `package.json` dependencies. Check for `next-themes`.
 2. Read `app/layout.tsx` (or `src/app/layout.tsx`). Check for an existing `ThemeProvider`, a `next-themes` import, or a `localStorage`-driven theme primitive.
@@ -54,28 +54,29 @@ Steps 1–4 below apply only to `next-app`. Per-framework adapter logic is track
    - **Existing primitive present** → reuse it. The theme toggle in the library sidebar binds to its API.
    - **No primitive** → install `next-themes` (`<pm> add next-themes`), wrap the root layout's children in `<ThemeProvider attribute="class" defaultTheme="system" enableSystem>`, and use its `useTheme()` hook for the toggle.
 
-### Step 3 — Generate the route files
+### Step 3: Generate the route files
 
-The library uses **a single page route with `?tab=<id>` query-param routing**, NOT folder-per-entry. One page reads the query param, validates against a typed tab vocabulary, and dispatches to the matching entry component via a `STORIES` registry. The sidebar links are `<Link href="/library?tab=<id>">`. This keeps every entry one file (not a folder), every URL one shape, and TypeScript catches drift between the vocabulary and the registry at build time.
+The library uses **a single page route with `?tab=<id>` query-param routing**, NOT folder-per-entry. One page reads the query param, resolves it through legacy aliases to an entry in **one grouped registry**, and renders that entry's component. The sidebar links are `<Link href="/library?tab=<id>">`. This keeps every entry one file (not a folder) and every URL one shape.
+
+**One registry, not three.** Do NOT generate a `LIBRARY_TABS` tuple + an `isLibraryTab()` guard + a separate `STORIES: Record<LibraryTab, ComponentType>` dispatch map + a parallel sidebar-metadata array. That triad exists only to make TypeScript police lockstep between registries that were split for no reason, and it turns "register an entry" into a four-file chore. A single grouped array holding the component inline has nothing to drift, needs no type guard (an unknown id falls back to the pinned default), and makes registration a one-line append.
 
 Create at the target path:
 
 ```
 <target>/
 ├── layout.tsx        # operator-only layout with the library shell
-├── page.tsx          # reads ?tab=<id>, falls back to default, renders the matching entry
+├── page.tsx          # reads ?tab=<id>, resolves aliases, falls back to DEFAULT_TAB
 ├── _components/
-│   ├── library-shell.tsx        # sidebar + main + footer rail
-│   ├── library-sidebar.tsx      # entries + search input — <Link href="/library?tab=<id>">
-│   ├── library-search.tsx       # client-side filter over the entries registry
-│   ├── theme-toggle.tsx         # Sun/Moon icon button, aria-label="Toggle theme"
-│   ├── component-preview.tsx    # main pane — renders the active entry via STORIES dispatch
+│   ├── library-shell.tsx        # sidebar + sticky reference toolbar + main pane
+│   ├── library-sidebar.tsx      # aside shell: logo/escape-hatch header + theme footer rail
+│   ├── library-sidebar-nav.tsx  # 'use client' accordion nav: search, folders, entry links
+│   ├── library-toolbar.tsx      # 'use client' sticky reference toolbar (tab chip + 2 copy pills)
+│   ├── theme-toggle.tsx         # Sun/Moon button, aria-label="Toggle theme", persisted
 │   ├── entry-frame.tsx          # <EntryHeader>, <EntrySection>, <EntryStage> (server)
 │   └── entry-source-copy.tsx    # 'use client' icon-button island for the Markdown-link copy buttons
 ├── _registry/
-│   ├── tabs.ts                  # LIBRARY_TABS const tuple + LibraryTab type + isLibraryTab guard
-│   ├── entries.ts               # LibraryEntry[] for the sidebar — { id, name, tags }
-│   └── stories.tsx              # STORIES: Record<LibraryTab, ComponentType> — id → component
+│   └── registry.tsx             # LIBRARY_GROUPS → LIBRARY → ALL_ENTRIES, DEFAULT_TAB,
+│                                # LEGACY_TAB_ALIASES, CATEGORY_ICONS, categoryOf()
 └── _entries/
     └── buttons-entry.tsx        # the canonical seed entry; one file per entry (NOT a folder)
 ```
@@ -87,7 +88,7 @@ Use the design tokens from `docs/design-system.md` and `app/globals.css`. **No r
 - Top-of-file comment block:
   ```
   /**
-   * /library — operator-only component preview route.
+   * /library, operator-only component preview route.
    *
    * This route is intentionally excluded from every navigation surface
    * (sidebar, top nav, mobile sheet, sitemap.xml, robots.txt, breadcrumbs).
@@ -104,18 +105,15 @@ Use the design tokens from `docs/design-system.md` and `app/globals.css`. **No r
 #### `page.tsx` content requirements
 
 - Same top-of-file comment block as `layout.tsx`.
-- Server component. Reads `searchParams.tab`, runs it through `isLibraryTab(...)` (from `_registry/tabs.ts`), falls back to a `DEFAULT_TAB` (the seed `buttons` tab) when the param is missing or invalid.
-- Passes the active tab id down to `<LibraryShell>`, which renders the matching component from `STORIES`.
+- Server component. Reads `searchParams.tab` and resolves it in **three steps**: legacy alias, then exact id match, then the pinned `DEFAULT_TAB`. No type guard: a garbage id renders the default rather than throwing.
+- Passes the resolved entry down to `<LibraryShell>`, which renders `entry.component`.
 - Should set `export const dynamic = 'force-dynamic'` so the search-param read isn't cached.
 
 Shape:
 
 ```tsx
-import { isLibraryTab } from './_registry/tabs';
-import type { LibraryTab } from './_registry/tabs';
+import { ALL_ENTRIES, DEFAULT_TAB, LEGACY_TAB_ALIASES } from './_registry/registry';
 import { LibraryShell } from './_components/library-shell';
-
-const DEFAULT_TAB: LibraryTab = 'buttons';
 
 export default async function LibraryPage({
   searchParams,
@@ -123,81 +121,115 @@ export default async function LibraryPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const raw = typeof params['tab'] === 'string' ? params['tab'] : undefined;
-  const activeTab: LibraryTab = isLibraryTab(raw) ? raw : DEFAULT_TAB;
-  return <LibraryShell activeTab={activeTab} />;
+  const requested = (typeof params['tab'] === 'string' ? params['tab'] : undefined) ?? DEFAULT_TAB;
+  const tab = LEGACY_TAB_ALIASES[requested] ?? requested;
+  // Unknown ids land on the pinned default, not whatever sorts first.
+  const active =
+    ALL_ENTRIES.find((e) => e.id === tab) ??
+    ALL_ENTRIES.find((e) => e.id === DEFAULT_TAB) ??
+    ALL_ENTRIES[0];
+  return <LibraryShell active={active} />;
 }
 
 export const dynamic = 'force-dynamic';
 ```
 
-#### `library-shell.tsx`
+#### `_registry/registry.tsx`
 
-- Three regions: left sidebar (~240px), main content pane (flex-1), footer slot at sidebar bottom for the theme toggle.
-- Receives `activeTab: LibraryTab` as a prop, renders the matching component from `STORIES` in the main pane.
-- Sidebar contains: search input at top, entry list (rendered from `_registry/entries.ts`), theme toggle pinned to bottom rail.
-- All spacing, color, and typography use design tokens.
-
-#### `library-sidebar.tsx`
-
-- Receives `activeTab: LibraryTab` as a prop.
-- Renders entries from the registry. Each entry is a `<Link href={`/library?tab=${entry.id}`}>` showing `entry.name`. Use `replace`, `scroll={false}`, `prefetch={false}` so soft navigation feels snappy and doesn't shove a hundred entries into the prefetch queue.
-- Active entry styled via tokenized active state (`aria-current="page"` when `entry.id === activeTab`).
-- Filtered by the search input's value (case-insensitive substring match on `entry.name` and `entry.tags`).
-
-#### `_registry/tabs.ts`
-
-The single source of truth for valid tab ids. Typed tuple → derived type → type guard. Adding a new entry means adding to this tuple AND to `STORIES` (TypeScript enforces both):
-
-```ts
-export const LIBRARY_TABS = [
-  'buttons',
-  // new entries append here
-] as const;
-
-export type LibraryTab = (typeof LIBRARY_TABS)[number];
-
-export function isLibraryTab(value: unknown): value is LibraryTab {
-  return typeof value === 'string' && (LIBRARY_TABS as readonly string[]).includes(value);
-}
-```
-
-#### `_registry/entries.ts`
-
-Sidebar metadata only — name, tags, grouping. Keyed by `id: LibraryTab`. No `path` field; the path is always `/library?tab=${id}` and the sidebar builds it inline:
-
-```ts
-import type { LibraryTab } from './tabs';
-
-export type LibraryEntry = {
-  id: LibraryTab;
-  name: string;
-  tags: readonly string[];
-};
-
-export const entries: readonly LibraryEntry[] = [
-  { id: 'buttons', name: 'Buttons', tags: ['primitive', 'form'] },
-];
-```
-
-#### `_registry/stories.tsx`
-
-The dispatch map — `Record<LibraryTab, ComponentType>`. Typing it this way forces TypeScript to fail compilation if `LIBRARY_TABS` and `STORIES` ever drift:
+The single source of truth for routing, dispatch, and the sidebar. One grouped array; everything else derives from it.
 
 ```tsx
 import { ButtonsEntry } from '../_entries/buttons-entry';
-import type { LibraryTab } from './tabs';
-import type { ComponentType, ReactNode } from 'react';
+import { Palette, SlidersHorizontal, PanelLeft, type LucideIcon } from 'lucide-react';
+import type { ComponentType } from 'react';
 
-export const STORIES: Record<LibraryTab, ComponentType<Record<string, never>>> = {
-  buttons: ButtonsEntry,
+export type LibraryEntry = { id: string; label: string; component: ComponentType };
+export type LibraryCategory = { name: string; entries: LibraryEntry[] };
+
+// Grouped by purpose so the operator sidebar reads as folders, not a flat wall.
+// Two axes: reusable ui primitives live under "Foundations"; blocks group by the
+// app route/feature they serve. Labels stay short, the folder supplies the
+// context, and ids NEVER change (deep links stay stable across regrouping).
+// Entries sort alphabetically at derivation time, so declaration order here
+// never matters; just append anywhere in the category.
+export const LIBRARY_GROUPS: LibraryCategory[] = [
+  { name: 'Foundations', entries: [{ id: 'buttons', label: 'Buttons', component: ButtonsEntry }] },
+  // { name: 'Form Controls', entries: [...] },
+];
+
+export const LIBRARY: LibraryCategory[] = LIBRARY_GROUPS.map((c) => ({
+  ...c,
+  entries: [...c.entries].sort((a, b) => a.label.localeCompare(b.label)),
+}));
+
+export const ALL_ENTRIES: LibraryEntry[] = LIBRARY.flatMap((c) => c.entries);
+
+// Pinned (not positional): the landing tab stays put regardless of the sort.
+export const DEFAULT_TAB = 'buttons';
+
+// Retired ids from past consolidations: previously copied ?tab= deep links keep
+// resolving to each entry's nearest successor. Never reuse a retired id.
+export const LEGACY_TAB_ALIASES: Record<string, string> = {};
+
+export const categoryOf = (id: string): string | undefined =>
+  LIBRARY.find((c) => c.entries.some((e) => e.id === id))?.name;
+
+// Leading folder icons, keyed to LIBRARY category names.
+export const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  Foundations: Palette,
+  'Form Controls': SlidersHorizontal,
+  'App Shell': PanelLeft,
 };
-
-export function renderStory(tab: LibraryTab): ReactNode {
-  const Story = STORIES[tab];
-  return <Story />;
-}
 ```
+
+#### `library-shell.tsx`
+
+- Three regions: left sidebar (`w-64`), a **sticky reference toolbar** across the top of the main pane, and the main content pane (`flex-1 overflow-y-auto`) rendering `active.component`.
+- Receives the resolved `active: LibraryEntry`.
+- All spacing, color, and typography use design tokens.
+
+#### `library-toolbar.tsx` (`'use client'`)
+
+Rendered by the **shell**, on every tab. This is the affordance that hands the operator a link to the exact preview they are looking at, so review feedback has an unambiguous referent. Putting it on the shell rather than in each entry guarantees it exists even when an entry forgets its header.
+
+- Pinned: `sticky top-0 z-20 … border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70`.
+- Left: a mono chip showing `/library?tab=<id>`.
+- Right: two **labeled** copy pills (not icon-only):
+  - `Copy reference` writes `` `[${active.label}](${origin}/library?tab=${active.id})` ``, the markdown deep link the operator pastes into chat.
+  - `Copy link` writes the raw URL.
+- Both swap to `Copied` with a success-tinted `Check` for ~1.4s.
+
+#### `library-sidebar.tsx` (aside shell) + `library-sidebar-nav.tsx` (`'use client'` accordion)
+
+The sidebar reads as **folders**, not a flat list. Required behavior:
+
+- **Header** is a link on the product logo that **exits back to the app**, plus the library title and a one-line `Operator-only, not in production nav` subtitle. That subtitle is what stops someone linking the route from the app shell six months later.
+- **Search input** below the header. Case-insensitive substring match on entry labels. A live query **force-opens** every folder that still has a match; folders with zero matches drop out. Render `No entries match.` when everything filters away. Search state is owned by the nav.
+- **Folder header** per `LIBRARY` category: `<button aria-expanded>` with a leading Lucide icon from `CATEGORY_ICONS` (fallback for unmapped names), the category name, the **entry count** in `text-[10px] tabular-nums text-muted-foreground/70`, and a `ChevronDown` that rotates 180° when open. When the folder contains the active entry, the button and icon go `text-primary`, so a collapsed folder still shows where you are.
+- **Disclosure animates via CSS grid rows**, honoring reduced motion:
+  ```tsx
+  <div className={cn(
+    'grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none',
+    isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+  )}>
+    <div className="overflow-hidden">{/* entry links */}</div>
+  </div>
+  ```
+  Only nav links stay mounted while collapsed, which is free: exactly one entry component renders at a time from the registry. Do **not** reach for React 19 `<Activity mode='hidden'>` to keep *entry components* alive across folder switches; that keeps every entry's fiber plus DOM resident and on a large library stacks into a renderer out-of-memory crash.
+- **Entry links** nested under the folder at a fixed indent (`ml-[22px]`), each a `<Link href={`/library?tab=${entry.id}`}>` with `replace`, `scroll={false}`, `prefetch={false}`. Active state is a **left accent rail** (`border-l-2 border-primary bg-primary/10 font-semibold text-primary` + `aria-current="page"`); inactive is `border-border text-muted-foreground` with a hover state. **No dot/circle badges.**
+- **Open-folder state is in-memory**, seeded from the active tab's category and kept open as the tab changes:
+  ```tsx
+  const [openCats, setOpenCats] = useState<string[]>(() => {
+    const c = categoryOf(activeId);
+    return c ? [c] : [];
+  });
+  useEffect(() => {
+    const c = categoryOf(activeId);
+    if (c) setOpenCats((prev) => (prev.includes(c) ? prev : [...prev, c]));
+  }, [activeId]);
+  ```
+  Do **not** persist open folders to `localStorage`. Deep links are how operators arrive here, and a restored open-set from a previous session is noise on top of the folder the link actually wanted. Persist the **theme** instead.
+- **Footer rail** holds the theme toggle.
 
 #### `theme-toggle.tsx`
 
@@ -205,29 +237,36 @@ export function renderStory(tab: LibraryTab): ReactNode {
 - Keyboard-focusable, `aria-label="Toggle theme"`, focus ring uses the design-system focus token.
 - Persists via `next-themes` (or the existing primitive). Survives reloads.
 
-#### `component-preview.tsx`
+#### How an entry organizes its states (the rule that decays first)
 
-- Receives an entry's variants and states as props.
-- Renders a section per state (default / hover / focus / disabled / loading / empty / error / populated) with the component shown in that state and a small label.
-- Uses tokens for layout spacing, separators, and labels.
-- **Delegates the page H1 + per-section H3 to `<EntryHeader>` and `<EntrySection>`** (see below) so every entry gets inline Markdown-link copy buttons next to the title and each state label.
+**One tab per component or block. Every state, variant, and candidate direction of that thing lives inside that one tab.** Tabs answer *"what is this?"*, never *"what state is it in?"*. There are three mechanisms; the seed entry demonstrates them and `library-entry-writer` follows them for every subsequent entry.
+
+- **A. Contrasting states side by side in ONE section.** The default. When states are meaningful in comparison (empty vs populated, guard-active vs guard-absent), render them in the same section with a small `text-xs text-muted-foreground` caption above each, and name the comparison **in the section title**: `"States, default / disabled / loading"`, `"Duration (min) input, empty (blank) vs entered"`, `"Zero-duration guard, active (≥1 missing) vs absent (all entered)"`. One-state-per-section is the wrong default; it makes the reviewer scroll and hold two renderings in memory to spot a 2px difference. Reserve separate sections for separate **concerns** (`Variants`, `Sizes`, `States`, `Interactive`, `Composition`), not for each value of one concern.
+- **B. An `Interactive` section.** At least one section the operator can actually drive with `useState`, with the derived or emitted value rendered beside it. Frozen states hide interaction bugs; a visible emitted value catches wrong units and off-by-ones.
+- **C. A labeled state-switcher row above a framed viewport.** For page-sized blocks whose states are too big to sit side by side. One control per **independent axis**, each with a `text-xs font-semibold uppercase tracking-wide text-muted-foreground` caption (`Container`, `Scenario`, `Layout`, `Variant`), rendered as the project's segmented-control primitive (or `size="sm"` buttons with `variant={active ? 'default' : 'outline'}`). Booleans get a `Checkbox` + `Label`, not a two-segment toggle. Add a quiet `Reset demo` once the demo has advanced. Then the block renders in a fixed-height frame: `h-[820px] overflow-auto rounded-xl border border-border shadow-sm`.
+  **Axes multiply inside the tab; they never become new tabs.** `layout × variant × booked` is eight states under one `?tab=`, and that is correct.
+
+Competing design directions are an **axis**, not separate tabs. Label them by status (`Vertical (draft)` vs `Decision rail (shipped)`) so the reviewer knows what they are choosing between.
 
 #### `entry-frame.tsx` (server) + `entry-source-copy.tsx` (`'use client'`)
 
-These two files are the **source-path affordance**: every entry page renders an icon-only copy button next to the H1 (one per page) and next to each state H3 (one per section). On click the button writes a **Markdown link** to the clipboard. When the operator pastes the payload into a Claude Code chat, it renders as a clickable link to the exact file (and optional line range) they want changed — no hunting through the file tree, no asking Claude to scan a 400-line file when the change is in 16 lines.
+These two files are **Tier 1 of the copy affordance** (Tier 2 is the shell's reference toolbar above): every entry renders an icon-only copy button next to the H1 (one per page) and next to each section H3. On click the button writes a **Markdown link** to the clipboard. Pasted into a Claude Code chat it renders as a clickable link to the exact file and line range the operator wants changed: no hunting through the file tree, no asking Claude to scan a 400-line file when the change is in 16 lines.
 
-- `<EntryHeader>` accepts `sourcePath?: string` (singular). The page button copies `[Title](path)`.
-- `<EntrySection>` accepts `sourcePath?: string` and optional `sourceLines?: string | number`. The section button copies `[Section name](path)`, or `[Section name](path:N)` / `[Section name](path:N-M)` when `sourceLines` is set.
-- `sourceLines` accepts a number for a single line (`28`) or a string for a range (`"13-29"`). Skip it when there's no clean discrete anchor — the bare path link is still useful.
+- `<EntryHeader>` accepts `title` + `sourcePath`. `<EntrySection>` accepts `title` + optional `sourcePath`.
+- The link text is the **file basename**, not the section title: `[button.tsx](components/ui/button.tsx)`. A basename tells Claude what file it is about; a section title like `[Variants](…)` does not survive being pasted out of context.
+- **Bake line ranges into the path string** rather than adding a separate `sourceLines` prop: ``sourcePath={`${src}:11-21`}``. One prop, no formatting logic, and the range is visible at the call site.
 - The copy button is the **only** part that needs `'use client'`. Keep it in its own file so `entry-frame.tsx` itself stays server-renderable.
+- **Export these helpers.** Entry files import them. When they live inline in the library page and are not exported, entry authors hand-roll their own `StoryHeader` / `StorySection` clones and the entries drift apart in spacing, heading weight, and whether they render a copy button at all.
 
-Generate `entry-source-copy.tsx` from this template (token names are illustrative — substitute the project's tokens):
+Generate `entry-source-copy.tsx` from this template (token names are illustrative, substitute the project's tokens):
 
 ```tsx
 // _components/entry-source-copy.tsx
-// Builds a Markdown link payload such as:
-//   [Buttons](components/ui/button.tsx)
-//   [Disabled](components/ui/button.tsx:42-58)
+// Builds a Markdown link payload whose text is the file BASENAME, e.g.
+//   [button.tsx](components/ui/button.tsx)
+//   [button.tsx](components/ui/button.tsx:42-58)
+// Line ranges are baked into `sourcePath` at the call site, so there is no
+// separate `lines` prop and no formatting logic here.
 'use client';
 
 import { useState } from 'react';
@@ -236,57 +275,61 @@ import { cn } from '@/lib/utils';
 import type { ReactNode } from 'react';
 
 export type EntrySourceCopyProps = {
-  linkText: string;
-  path: string;
-  lines?: string | number;
-  size?: 'header' | 'section';
+  /** Repo-relative path, optionally suffixed with `:N` or `:N-M`. */
+  sourcePath: string;
   className?: string;
 };
 
-function buildPayload(linkText: string, path: string, lines: string | number | undefined): string {
-  const target = lines !== undefined && lines !== '' ? `${path}:${lines}` : path;
-  return `[${linkText}](${target})`;
-}
-
-export function EntrySourceCopy({
-  linkText,
-  path,
-  lines,
-  size = 'section',
-  className,
-}: EntrySourceCopyProps): ReactNode {
+export function EntrySourceCopy({ sourcePath, className }: EntrySourceCopyProps): ReactNode {
   const [copied, setCopied] = useState(false);
-  const payload = buildPayload(linkText, path, lines);
 
-  const onClick = async (): Promise<void> => {
-    try {
-      await navigator.clipboard.writeText(payload);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard API blocked — silently no-op; the title attribute still
-      // shows the payload so the operator can copy from the tooltip context menu.
-    }
+  const onClick = (): void => {
+    const label = sourcePath.split('/').pop() ?? sourcePath;
+    navigator.clipboard?.writeText(`[${label}](${sourcePath})`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
   };
-
-  const dim = size === 'header' ? 'h-7 w-7' : 'h-6 w-6';
-  const iconDim = size === 'header' ? 'h-3.5 w-3.5' : 'h-3 w-3';
 
   return (
     <button
       type="button"
       onClick={onClick}
-      title={copied ? 'Copied' : `Copy: ${payload}`}
-      aria-label={copied ? `Copied ${payload}` : `Copy markdown link: ${payload}`}
+      title={sourcePath}
+      aria-label={`Copy source path ${sourcePath}`}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-md border bg-bg-card transition-colors',
-        'hover:bg-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-        dim,
-        copied ? 'border-brand-accent text-brand-accent' : 'border-hairline-soft text-ink-3 hover:text-ink-1',
+        'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors',
+        'text-ink-3 hover:bg-bg-muted hover:text-ink-1',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         className,
       )}
     >
-      {copied ? <Check className={iconDim} aria-hidden /> : <Copy className={iconDim} aria-hidden />}
+      {copied ? <Check className="h-4 w-4 text-success" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
+    </button>
+  );
+}
+```
+
+And the shell's Tier-2 toolbar pill, which is labeled rather than icon-only:
+
+```tsx
+// _components/library-toolbar.tsx (excerpt)
+function CopyButton({ value, label, title }: { value: string; label: string; title?: string }) {
+  const [copied, setCopied] = useState(false);
+  const onCopy = () => {
+    navigator.clipboard?.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1400);
+  };
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      title={title}
+      aria-label={label}
+      className="inline-flex h-8 items-center gap-1.5 rounded-md border border-hairline-soft bg-bg-card px-2.5 text-xs font-medium transition-colors hover:bg-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {copied ? <Check className="h-3.5 w-3.5 text-success" aria-hidden /> : <Copy className="h-3.5 w-3.5 text-ink-3" aria-hidden />}
+      {copied ? 'Copied' : label}
     </button>
   );
 }
@@ -301,59 +344,39 @@ import { EntrySourceCopy } from './entry-source-copy';
 import type { ReactNode } from 'react';
 
 export type EntryHeaderProps = {
-  eyebrow: string;
   title: string;
-  subtitle?: string;
   /** Repo-relative path to the primitive (or composing) source file. */
-  sourcePath?: string;
+  sourcePath: string;
 };
 
-export function EntryHeader({ eyebrow, title, subtitle, sourcePath }: EntryHeaderProps): ReactNode {
+export function EntryHeader({ title, sourcePath }: EntryHeaderProps): ReactNode {
   return (
-    <header className="border-b border-hairline-soft pb-6">
-      <p className="text-xs uppercase tracking-wide text-ink-3">{eyebrow}</p>
-      <div className="mt-1 flex items-center gap-2">
-        <h1 className="text-2xl font-semibold text-ink-1">{title}</h1>
-        {sourcePath ? <EntrySourceCopy linkText={title} path={sourcePath} size="header" /> : null}
-      </div>
-      {subtitle ? <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-3">{subtitle}</p> : null}
-    </header>
+    <div className="mb-6 flex items-center gap-2 border-b border-hairline-soft pb-3">
+      <h1 className="text-2xl font-semibold text-ink-1">{title}</h1>
+      <EntrySourceCopy sourcePath={sourcePath} />
+    </div>
   );
 }
 
 export type EntrySectionProps = {
-  name: string;
-  desc?: string;
+  /** Carries the comparison: "States, empty (blank) vs entered". */
+  title: string;
   children: ReactNode;
   className?: string;
+  /** Repo-relative path, with any line range baked in: `${src}:13-29`. */
   sourcePath?: string;
-  /** Optional anchor in `sourcePath` — single line (`28`) or range (`"13-29"`). */
-  sourceLines?: string | number;
 };
 
-export function EntrySection({
-  name,
-  desc,
-  children,
-  className,
-  sourcePath,
-  sourceLines,
-}: EntrySectionProps): ReactNode {
+export function EntrySection({ title, children, className, sourcePath }: EntrySectionProps): ReactNode {
   return (
-    <section className={cn('mt-6', className)}>
-      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="text-sm font-semibold text-ink-1">{name}</span>
-        {sourcePath ? (
-          <EntrySourceCopy
-            linkText={name}
-            path={sourcePath}
-            size="section"
-            {...(sourceLines !== undefined ? { lines: sourceLines } : {})}
-          />
-        ) : null}
-        {desc ? <span className="text-xs text-ink-3">{desc}</span> : null}
+    <section className={cn('mb-8', className)}>
+      <div className="mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-medium text-ink-3">{title}</h3>
+        {sourcePath ? <EntrySourceCopy sourcePath={sourcePath} /> : null}
       </div>
-      {children}
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-hairline-soft bg-bg-card p-4">
+        {children}
+      </div>
     </section>
   );
 }
@@ -383,67 +406,76 @@ export function EntryStage({
 }
 ```
 
-**Token substitution.** The templates reference illustrative token names (`bg-bg-card`, `text-ink-1`, `border-hairline-soft`, `brand-accent`, etc.). Before writing these files, swap in whatever token names the project's design system actually defines (read `docs/design-system.md` and `app/globals.css`). If a token doesn't exist for a given role, fall back to the closest token the system does ship — never invent.
+**Token substitution.** The templates reference illustrative token names (`bg-bg-card`, `text-ink-1`, `border-hairline-soft`, `brand-accent`, etc.). Before writing these files, swap in whatever token names the project's design system actually defines (read `docs/design-system.md` and `app/globals.css`). If a token doesn't exist for a given role, fall back to the closest token the system does ship, never invent.
 
 #### `_entries/buttons-entry.tsx` (seed entry)
 
-The seed entry is **one file** that exports a single component (named `<EntryName>Entry`, e.g. `ButtonsEntry`). It is dispatched by `STORIES[tab]` in `_registry/stories.tsx` — there is NO `<slug>/page.tsx` folder. Every future entry follows the same shape.
+The seed entry is **one file** that exports a single component (named `<PascalCaseTabId>Entry`, e.g. `ButtonsEntry`) referenced directly from the registry. There is NO `<slug>/page.tsx` folder. Every future entry follows the same shape.
 
-- Exports `ButtonsEntry` (component name `<PascalCaseTabId>Entry`).
-- Renders every variant declared by the design-system rules (primary / secondary / ghost / destructive / etc.) across every state listed above.
+- Exports `ButtonsEntry`.
+- Opens with a **lede paragraph** under the H1 (`-mt-3 mb-6 max-w-2xl text-sm text-ink-3`) saying what this is, where it appears in production, and what the reviewer should judge.
+- Sections are per **concern** (`Variants`, `Sizes`, `States`, `Interactive`), and each `States` section holds its contrasting states **side by side** with the comparison named in the title.
 - Uses tokens only; no raw values.
-- Imports the actual project Button component if one exists in `components/ui/button.tsx` — otherwise renders inline using design-system primitives.
-- **Declares one or more `SOURCE` consts at the top of the file** and passes them through `<EntryHeader sourcePath=…>` and `<EntrySection sourcePath=… sourceLines=…>` so the operator can copy a Markdown link to the exact file (or line range) they want changed. Convention:
-  - Single-primitive entry: one `SOURCE` const for both header and sections.
-  - Multi-primitive entry: one const per primitive plus an `ENTRY` const for the page header (which usually points at the entry file itself, since no single primitive owns the page).
-  - For preview-only entries where the primitive hasn't been extracted yet, point `SOURCE` at the entry file itself; once the primitive lands, swap the const.
+- Imports the actual project Button component if one exists in `components/ui/button.tsx`, otherwise renders inline using design-system primitives.
+- **Declares one or more `src` consts at the top of the file** and passes them through `<EntryHeader sourcePath=…>` and `<EntrySection sourcePath=…>`, baking line ranges into the path string. Convention:
+  - Single-primitive entry: one const for both header and sections.
+  - Multi-primitive entry: one const per primitive plus one for the page header (which usually points at the entry file itself, since no single primitive owns the page).
+  - Preview-only entries where the primitive hasn't been extracted yet point at the entry file; swap the const once the primitive lands.
 
 Seed shape:
 
 ```tsx
 // app/(dashboard)/library/_entries/buttons-entry.tsx
 import { Button } from '@/components/ui/button';
-import { EntryHeader, EntrySection, EntryStage } from '../_components/entry-frame';
+import { EntryHeader, EntrySection } from '../_components/entry-frame';
 
-const SOURCE = 'components/ui/button.tsx';
+const src = 'components/ui/button.tsx';
 
 export function ButtonsEntry() {
   return (
     <div>
-      <EntryHeader
-        eyebrow="Foundation · Primitive"
-        title="Buttons"
-        subtitle="All declared variants across every state."
-        sourcePath={SOURCE}
-      />
+      <EntryHeader title="Buttons" sourcePath={src} />
+      <p className="-mt-3 mb-6 max-w-2xl text-sm text-ink-3">
+        Every declared variant and size, plus the states an action row actually hits in
+        production. One <strong>primary</strong> per surface; everything else stays quiet.
+      </p>
 
-      <EntrySection name="Default" desc="Canonical resting state." sourcePath={SOURCE}>
-        <EntryStage layout="row">
-          <Button intent="primary">Primary</Button>
-          <Button intent="secondary">Secondary</Button>
-          <Button intent="ghost">Ghost</Button>
-          <Button intent="destructive">Destructive</Button>
-        </EntryStage>
+      {/* Sections per CONCERN. */}
+      <EntrySection title="Variants" sourcePath={`${src}:11-21`}>
+        <Button intent="primary">Primary</Button>
+        <Button intent="secondary">Secondary</Button>
+        <Button intent="ghost">Ghost</Button>
+        <Button intent="destructive">Destructive</Button>
       </EntrySection>
 
-      <EntrySection
-        name="Disabled"
-        desc="Read-only state."
-        sourcePath={SOURCE}
-        sourceLines="42-58"
-      >
-        {/* ... */}
+      <EntrySection title="Sizes" sourcePath={`${src}:22-27`}>
+        <Button size="sm">Small</Button>
+        <Button size="default">Default</Button>
+        <Button size="lg">Large</Button>
       </EntrySection>
 
-      {/* hover / focus / loading / empty / error / populated sections follow */}
+      {/* Mechanism A: contrasting states side by side, comparison named in the title. */}
+      <EntrySection title="States, default / disabled / loading">
+        <Button>Default</Button>
+        <Button disabled>Disabled</Button>
+        <Button disabled>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading
+        </Button>
+      </EntrySection>
+
+      <EntrySection title="States, focus (tab to it) / hover (point at it)">
+        <Button>Focus ring</Button>
+        <Button intent="secondary">Hover me</Button>
+      </EntrySection>
     </div>
   );
 }
 ```
 
-Visited at `/library?tab=buttons` (the seed `DEFAULT_TAB`). Subsequent entries are added by `library-entry-writer` during `/sell-slice` Phase 4.5 by (1) appending an id to `LIBRARY_TABS`, (2) adding the file to `_entries/`, (3) registering it in `STORIES`, and (4) adding the sidebar metadata to `entries`.
+Visited at `/library?tab=buttons` (the seed `DEFAULT_TAB`). Subsequent entries are added by `library-entry-writer` during `/sell-slice` Phase 4.5 by (1) adding one file to `_entries/` and (2) appending **one line** to the appropriate category in `_registry/registry.tsx`. There is no tuple, no guard, and no dispatch map to keep in sync.
 
-### Step 4 — Audit and exclude from navigation surfaces
+### Step 4: Audit and exclude from navigation surfaces
 
 For each surface below, find the file(s) and either skip the route or add an explicit exclusion comment:
 
@@ -459,7 +491,7 @@ For each surface below, find the file(s) and either skip the route or add an exp
 
 If none of these surfaces exist yet (fresh-scaffold project), still create `app/robots.ts` with `Disallow: /library` as a defensive default.
 
-### Step 5 — Stage changes
+### Step 5: Stage changes
 
 `git add` every file written or modified. Do not commit. The orchestrator commits at the end of `set-display-case`'s closeout.
 
@@ -476,25 +508,41 @@ theme_primitive:
 files_created:
   - <list every new file>
 files_modified:
-  - <list every file with non-trivial edits — package.json, layout.tsx, sitemap, robots>
+  - <list every file with non-trivial edits, package.json, layout.tsx, sitemap, robots>
 nav_surfaces_audited:
   - surface: <name>
     file: <path or null if absent>
     action: confirmed_excluded | added_to_exclude_list | created_defensive_default
+registry:
+  file: <e.g. app/(dashboard)/library/_registry/registry.tsx>
+  shape: single_grouped_array          # MUST be this, not the tabs/stories/entries triad
+  categories: [<list of category names seeded>]
+  default_tab: <pinned id>
+  legacy_aliases_scaffolded: true | false
+sidebar:
+  accordion_folders: true | false      # MUST be true
+  category_icons_mapped: true | false  # MUST be true
+  entry_counts_rendered: true | false  # MUST be true
+  active_rail_no_dots: true | false    # MUST be true
+  open_state: in_memory_seeded_from_active_tab   # MUST NOT be localStorage
+  search_force_opens_matches: true | false
+  escape_hatch_link: <route the logo links back to>
+  theme_toggle_persisted_key: <e.g. library-theme>
+reference_toolbar:
+  rendered_by: shell                   # MUST be shell, not per-entry
+  copy_reference_button: true | false  # MUST be true
+  copy_link_button: true | false       # MUST be true
 seed_entry:
   name: Buttons
   id: buttons
   url: /library?tab=buttons
   entry_file: <e.g. app/(dashboard)/library/_entries/buttons-entry.tsx>
-  registered_in:
-    tabs: <e.g. app/(dashboard)/library/_registry/tabs.ts>
-    entries: <e.g. app/(dashboard)/library/_registry/entries.ts>
-    stories: <e.g. app/(dashboard)/library/_registry/stories.tsx>
+  registered_in: registry              # one line, one place
   variants_rendered: <count>
   states_rendered: [<list>]
   source_path_affordance:
     header_copy_button: true | false   # MUST be true
-    section_copy_buttons: true | false # MUST be true for every state section
+    section_copy_buttons: true | false # MUST be true for every section with a source
 internal_link_audit:
   href_library_matches: [<list of file:line matches outside tests/docs>]
 ```
@@ -518,14 +566,21 @@ hitl_context: null | "<what triggered this>"
 - Existing `/library` route already serves a production feature → `prd_ambiguity`. Ask whether to choose a different path (e.g. `/_library`, `/__library`, `/library-preview`).
 - Project uses pages router (no `app/` directory) → `prd_ambiguity`. The route generator targets the App Router; pages-router support is out of scope.
 - Internal-link audit finds `<Link href="/library">` in production code → `prd_ambiguity`. Ask whether the existing link is intended (rename the operator route) or stale (remove it).
+- Existing library uses the split `LIBRARY_TABS` / `STORIES` / `entries` triad and already has real entries registered → `prd_ambiguity`. Ask whether to consolidate to the single grouped registry as its own commit, or leave the existing shape alone for now. Do not migrate it inline.
 
 ## Hard Constraints
 
 - **Tokens only.** No raw color, font, spacing, or radius values in any generated file.
-- **Operator-only.** The route MUST be excluded from every navigation surface listed above. The top-of-file comment in `layout.tsx` and `page.tsx` documents this.
-- **Source-path affordance is non-optional.** Every entry — starting with the seed `Buttons` page — MUST use `<EntryHeader sourcePath=…>` for the H1 and `<EntrySection sourcePath=…>` for every state section so the operator can copy a Markdown link to chat. The `<EntrySourceCopy>` client island must be wired up before the seed entry renders.
+- **Operator-only.** The route MUST be excluded from every navigation surface listed above. The top-of-file comment in `layout.tsx` and `page.tsx` documents this, and the sidebar header carries an `Operator-only, not in production nav` subtitle as the in-product reminder.
+- **One grouped registry.** Generate `_registry/registry.tsx` with `LIBRARY_GROUPS` → `LIBRARY` (alphabetical inside each folder) → `ALL_ENTRIES`, plus a pinned `DEFAULT_TAB`, a `LEGACY_TAB_ALIASES` map, `categoryOf()`, and `CATEGORY_ICONS`. Do NOT generate a `LIBRARY_TABS` tuple, an `isLibraryTab()` guard, or a `STORIES` dispatch map.
+- **Ids are the deep-link contract.** `DEFAULT_TAB` is pinned by id, never positional. Retired ids go into `LEGACY_TAB_ALIASES` and are never reused. Scaffold the alias map even when it is empty, so the mechanism exists before the first consolidation.
+- **Sidebar is folders, not a flat list.** Accordion categories with leading icons, entry counts, a rotating chevron, a grid-rows disclosure honoring `motion-reduce`, a left accent rail for the active entry (no dot badges), search that force-opens matching folders, and in-memory open state seeded from the active tab. Open-folder state MUST NOT be persisted to `localStorage`; the theme is what gets persisted.
+- **The sticky reference toolbar is non-optional and belongs to the shell.** Every tab renders the `?tab=<id>` chip plus `Copy reference` and `Copy link`. Do not push this affordance down into entry files; shell ownership is what guarantees it exists on every tab.
+- **Source-path affordance is non-optional.** Every entry, starting with the seed `Buttons` page, MUST use `<EntryHeader sourcePath=…>` for the H1 and `<EntrySection sourcePath=…>` for sections that anchor to a source file. The `<EntrySourceCopy>` client island must be wired up before the seed entry renders.
+- **A tab is a thing, not a state of a thing.** The seed entry must demonstrate contrasting states side by side inside a single section, so the pattern is set before `library-entry-writer` adds anything.
 - **Never add `<Link href="/library">`** to any production navigation file.
 - **Stage but do not commit.** The orchestrator commits at closeout.
 - **Reuse existing theme primitives** when present. Only install `next-themes` if no primitive exists.
-- **No new dependencies beyond `next-themes` and `lucide-react`** (and only if missing — `lucide-react` is used by `<EntrySourceCopy>`; if the project's icon library is different, substitute its equivalent `Check` + `Copy` icons rather than adding a new dep). Surface anything else as `external_credentials` HITL.
-- **Idempotent re-runs.** If the route already exists with the canonical comment block AND the `entry-frame.tsx` + `entry-source-copy.tsx` files are present, this agent should be a no-op for the route files; only re-audit nav surfaces. If the comment block is present but the frame helpers are missing, generate them — this is the upgrade path for projects bootstrapped before the source-path affordance shipped.
+- **No new dependencies beyond `next-themes` and `lucide-react`** (and only if missing, `lucide-react` is used by `<EntrySourceCopy>`; if the project's icon library is different, substitute its equivalent `Check` + `Copy` icons rather than adding a new dep). Surface anything else as `external_credentials` HITL.
+- **Idempotent re-runs.** If the route already exists with the canonical comment block AND the `entry-frame.tsx` + `entry-source-copy.tsx` + `library-toolbar.tsx` files are present AND the registry is the single grouped-array shape, this agent is a no-op for the route files; only re-audit nav surfaces. Generate what is missing otherwise: the frame helpers (upgrade path for projects bootstrapped before the source-path affordance) and the reference toolbar (upgrade path for projects bootstrapped before it shipped).
+- **Do not silently migrate an existing split registry.** If the project already has a `LIBRARY_TABS` / `STORIES` / `entries` triad with real entries in it, bubble HITL `prd_ambiguity` describing the consolidation rather than rewriting it mid-run. Collapsing a populated registry touches every entry's registration and deserves its own reviewable commit.
