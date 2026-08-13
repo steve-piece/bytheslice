@@ -18,8 +18,9 @@ The skill bootstraps the CI/CD and E2E baseline that every later feature slice d
 3. Writes GitHub Actions workflows: `ci.yml`, `e2e.yml`, `e2e-coverage.yml`, `design-system-compliance.yml`, and (conditional) `db-schema-drift.yml`.
 4. Configures Husky pre-push hooks and a PR template.
 5. Writes ESLint + Stylelint config additions for design-system enforcement.
-6. Provides a branch-protection setup script.
-7. Opens a PR to `main` and verifies all checks pass before returning.
+6. Runs a scoped, non-blocking shadscan accessibility discovery pass and reports its findings as unverified leads. Never a gate, never auto-fixed.
+7. Provides a branch-protection setup script.
+8. Opens a PR to `main` and verifies all checks pass before returning.
 
 ## Preconditions
 

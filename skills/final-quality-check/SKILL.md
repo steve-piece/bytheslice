@@ -5,11 +5,11 @@ user-invocable: true
 triggers: ["/bytheslice:final-quality-check", "/final-quality-check", "install the quality line", "wire the inspection station", "/bytheslice:scaffold-ci-cd", "/scaffold-ci-cd", "scaffold ci/cd", "set up ci", "bootstrap quality gates", "ci-cd stage"]
 ---
 <!-- skills/final-quality-check/SKILL.md -->
-<!-- Daily-prep skill (run before /sell-slice). Pizza-shop framing: install the quality line every pie crosses before landing on the display tray. Orchestrator-only: dispatches eight specialized agents to bootstrap the production-grade CI/CD + E2E + design-system-compliance + visual-regression baseline on a dedicated chore branch. Mode-detected (standalone vs sequential). -->
+<!-- Daily-prep skill (run before /sell-slice). Pizza-shop framing: install the quality line every pie crosses before landing on the display tray. Orchestrator-only: dispatches nine specialized agents to bootstrap the production-grade CI/CD + E2E + design-system-compliance + visual-regression baseline on a dedicated chore branch. Mode-detected (standalone vs sequential). -->
 
 # Final Quality Check — CI/CD + Verification Baseline
 
-This skill is the orchestrator for the CI/CD baseline. It does not write workflows itself — it **dispatches eight specialized agents** that each own one slice of the scaffold work. The orchestrator's job is detection, sequencing, user-input gating, and walking the completion checklist.
+This skill is the orchestrator for the CI/CD baseline. It does not write workflows itself — it **dispatches nine specialized agents** that each own one slice of the scaffold work. The orchestrator's job is detection, sequencing, user-input gating, and walking the completion checklist.
 
 ## Mode detection
 
@@ -25,7 +25,7 @@ Honor an explicit `--standalone` or `--sequential` flag if passed; otherwise aut
 | File | Purpose |
 | --- | --- |
 | [references/scaffold-artifact-templates.md](references/scaffold-artifact-templates.md) | Verbatim file templates for every CI/CD artifact (workflows, husky hook, PR template, regex sweep script, etc.). Every implementer agent reads this before writing. |
-| [references/prd-ci-cd-checklist.md](references/prd-ci-cd-checklist.md) | **Project-wide runtime guardrails**, not scaffold-time setup. Master-checklist updates, CI gate alignment, deterministic pipelines, slice-per-PR rule, failure-artifact upload — these apply to every agent on every PR. Sub-block G of Phase 3 appends this content into the project rules file (CLAUDE.md / AGENTS.md) so every later stage skill picks it up automatically. |
+| [references/prd-ci-cd-checklist.md](references/prd-ci-cd-checklist.md) | **Project-wide runtime guardrails**, not scaffold-time setup. Master-checklist updates, CI gate alignment, deterministic pipelines, slice-per-PR rule, failure-artifact upload — these apply to every agent on every PR. Sub-block H of Phase 3 appends this content into the project rules file (CLAUDE.md / AGENTS.md) so every later stage skill picks it up automatically. |
 
 ## Subagent Roster
 
@@ -39,7 +39,8 @@ Each agent is a **registered plugin agent**: dispatch by type `bytheslice:<name>
 | 3B | [agents/workflow-writer.md](agents/workflow-writer.md) | sonnet | medium | write |
 | 3C | [agents/husky-installer.md](agents/husky-installer.md) | haiku | low | write |
 | 3E | [agents/lint-config-writer.md](agents/lint-config-writer.md) | haiku | low | write |
-| 3F | [agents/branch-protection-writer.md](agents/branch-protection-writer.md) | haiku | low | write |
+| 3F | [agents/a11y-discovery-runner.md](agents/a11y-discovery-runner.md) | sonnet | medium | readonly |
+| 3G | [agents/branch-protection-writer.md](agents/branch-protection-writer.md) | haiku | low | write |
 | 4 | [agents/local-gates-runner.md](agents/local-gates-runner.md) | sonnet | medium | write |
 
 The PR template (Phase 3D) is small enough that the orchestrator writes it directly from the templates file — no agent is needed.
@@ -90,7 +91,7 @@ Wait for answers before continuing.
 - Never scaffold CI directly on `main` / `master`.
 - Keep this PR minimal: baseline quality + smoke E2E only. No product features.
 
-### Phase 3 — Implementation (sub-blocks A–F, sequential)
+### Phase 3 — Implementation (sub-blocks A through H, sequential)
 
 Each sub-block dispatches its agent, waits for the structured return, and commits before moving to the next.
 
@@ -101,12 +102,43 @@ Each sub-block dispatches its agent, waits for the structured return, and commit
 | C | `husky-installer` | `.husky/pre-push` with the canonical gate chain |
 | D | (orchestrator direct) | `.github/pull_request_template.md` from the templates file |
 | E | `lint-config-writer` | eslint-plugin-tailwindcss config additions, `.stylelintrc.json`, `.gitignore` updates |
-| F | `branch-protection-writer` | `scripts/setup-branch-protection.sh` (executable) |
-| G | (orchestrator direct) | Project rules file (CLAUDE.md / AGENTS.md) "CI/CD Operational Rules" section populated from `references/prd-ci-cd-checklist.md` |
+| F | `a11y-discovery-runner` | Scoped shadscan accessibility findings, written into the stage report as UNVERIFIED LEADS. Writes no project files. Non-blocking. |
+| G | `branch-protection-writer` | `scripts/setup-branch-protection.sh` (executable) |
+| H | (orchestrator direct) | Project rules file (CLAUDE.md / AGENTS.md) "CI/CD Operational Rules" section populated from `references/prd-ci-cd-checklist.md` |
 
-After each sub-block A–F, run a spec-compliance + code-quality review pass (reuse `sell-slice/agents/spec-reviewer.md` and `sell-slice/agents/quality-reviewer.md`). Fix findings before moving to the next sub-block. Sub-block G is a deterministic file write and does not need a review pass.
+**Sub-block lettering is strictly sequential, and stays that way.** Blocks are labeled in execution order with no gaps, no suffixes, and no insertions like `E2` or `F-bis`. Inserting a block in the middle means relettering every block after it and updating every reference (this roster, the Subagent Roster table's `3<letter>` phase column, the review-pass rule, the Final Output Format, and the Completion Checklist). That renaming cost is deliberate: it keeps "which block runs when" readable straight off the letter.
 
-#### Sub-block G — Append CI/CD operational rules to the project rules file
+**Past Z, the sequence continues `A2` through `Z2`, then `A3` through `Z3`, and so on.** The digit is a generation counter, never an insertion marker: `A2` means the twenty-seventh block, not "a second block wedged next to A". Never reach for a numbered suffix before Z is actually used.
+
+After each sub-block that writes project files (A through E, and G), run a spec-compliance + code-quality review pass (reuse `sell-slice/agents/spec-reviewer.md` and `sell-slice/agents/quality-reviewer.md`). Fix findings before moving to the next sub-block. Sub-blocks F and H are exempt: F writes no project files, and H is a deterministic file write.
+
+#### Sub-block F: Accessibility discovery pass (shadscan)
+
+Runs immediately after the design-system compliance block (E), before G. Dispatch `a11y-discovery-runner`.
+
+**This is discovery, not a gate.** It produces no score threshold, no CI check, no pre-push step, and no commit. Its entire output is a section in the stage report labeled UNVERIFIED LEADS. If it returns `status: skipped` or `failed`, log the reason and continue to G. It can never block the quality line.
+
+The agent runs exactly two scoped commands (package-manager `dlx` equivalent substituted):
+
+```bash
+pnpm dlx @shadscan/cli --category accessibility --no-interactive --no-roast
+```
+
+```bash
+pnpm dlx @shadscan/cli --category foundation --no-interactive --no-roast
+```
+
+**Only these two categories.** On the codebase this pass was calibrated against, `accessibility` and `foundation` carried nearly all the true signal: four genuine bugs that lint, typecheck, test, build, and E2E all missed. `states` scored 0 percent with every failure a false positive, `interaction` was about half product-opinion, and `forms` was mixed. Do not widen the scope.
+
+**Library showcase route filtering is mandatory.** shadscan has no ignore, exclude, or rule-waiver mechanism; its `setup` subcommand only writes pre-commit hooks and does not configure scope. So the operator-only `/library` route scaffolded by `/set-display-case` gets scanned and scored as production code even though every entry there is a mockup by design. On the calibration run, 5 of 21 evidence rows pointed at `/library` entries. The agent discards every finding whose file path contains the library showcase route segment before reporting, and reports the discarded count so the drop is visible rather than silent. Pass the detected library route path to the agent as an input.
+
+**Never run `--apply`.** It launches a coding agent against unfiltered findings, which at roughly a one-in-three false-positive rate would produce wrong changes. Never run `--fail-under`, and never run `shadscan setup`.
+
+The reported score is recorded as context only. It is heavily penalized by deliberate architecture choices (not using shadcn, dark-theme-only with no theme toggle, no command menu) on top of the false-positive rate, so it is not a quality signal and must never become one. The permanent version of that rule lands in the project rules file via sub-block H.
+
+*Future interface note:* shadscan ships an `mcp` subcommand exposing read-only `scan`, `list_projects`, and `explain_rule` tools over stdio. If a later slice wants an agent consuming findings directly instead of parsing CLI output, that is the better interface. Do not wire it here.
+
+#### Sub-block H — Append CI/CD operational rules to the project rules file
 
 The orchestrator (no subagent dispatch — this is a small, deterministic write similar to sub-block D's PR template):
 
@@ -124,6 +156,7 @@ The orchestrator (no subagent dispatch — this is a small, deterministic write 
    ```
 4. **Idempotent re-runs.** If the section markers already exist, replace the body in place; never duplicate the section. User-edited content between the markers should be surfaced as a conflict via HITL `destructive_operation` rather than overwritten silently.
 5. If neither `CLAUDE.md` nor `AGENTS.md` exists at the project root, create `CLAUDE.md` with just this section plus a one-line precedence header. Surface to the user that a fuller rules file should ideally be assembled by `/cook-pizzas`.
+6. The reference file carries the **shadscan triage rules** (never gate on the score, treat every finding as a lead, the three confirmed false-positive classes, discard library-showcase paths). They travel into the project rules automatically as part of the verbatim copy, which is what makes them apply to every later slice and not just to this run.
 
 ### Phase 4 — Local Verification Gates
 
@@ -158,6 +191,7 @@ After Phase 6, report:
 5. PR URL and merged commit SHA.
 6. Recommended next E2E flows to add (handed to `sell-slice`).
 7. Reminder: run `scripts/setup-branch-protection.sh` once to enable required status checks on `main`.
+8. **Accessibility discovery pass (shadscan): UNVERIFIED LEADS.** A dedicated section carrying the sub-block F return verbatim: each lead's rule, file, line, shadscan's own evidence text, and its `known_fp_class` tag; the count of library-showcase findings discarded; and the reported score marked informational. Head the section with the standing caveat that nothing in it is verified and roughly one in three shadscan failures is a false positive or product-opinion. If the pass was skipped, say so and why. This section never affects whether the run is considered done.
 
 ## Hard Constraints
 
@@ -165,6 +199,8 @@ After Phase 6, report:
 - **Never weaken or remove existing workflows.** This skill adds; it does not subtract. If existing workflows conflict, surface to the user and stop.
 - **Completion checklist is mandatory.** The scaffold is not "done" until every box is `[x]`.
 - **Sub-skill contract.** When invoked as a `type: ci-cd` stage by `sell-slice`, this skill is the entire stage. After completion, mark the stage `Completed` in `docs/plans/00_master_checklist.md`.
+- **shadscan is never a gate.** Never wire `--fail-under` into `.husky/pre-push` or any CI workflow, never run `shadscan setup` (it writes pre-commit hooks), and never add a shadscan step to `ci.yml`, `design-system-compliance.yml`, or the branch-protection required checks. The score is heavily penalized by deliberate architecture choices and by false positives; gating on it would block correct work.
+- **Never run shadscan `--apply`.** It launches a coding agent against unfiltered findings, which at this false-positive rate would produce wrong changes.
 - **Subagent prompts live in `./agents/*.md`.** This SKILL.md is workflow only — never inline subagent prompts here.
 - **No platform-specific rule references.** Do not write "cursor rules" or "claude rules" — use "rules file (cursor or claude)" if the distinction matters, or simply "project rules file".
 
@@ -198,6 +234,8 @@ Run this checklist at the end of every run. Do **not** consider the scaffold "do
 [ ] `.stylelintrc.json` exists with CSS-file token checks.
 [ ] `.gitignore` excludes `playwright-report/`, `test-results/`, `.playwright/`, and Vizzly diff artifacts.
 [ ] Project rules file (`CLAUDE.md` or `AGENTS.md`) has a "CI/CD Operational Rules" section populated verbatim from `references/prd-ci-cd-checklist.md`, delimited by the `<!-- bytheslice: ci-cd-operational-rules-{start,end} -->` markers, so every later stage skill picks up the runtime guardrails automatically.
+[ ] That same section carries the shadscan triage rules (score is never a gate, every finding is a lead, the three false-positive classes, discard library-showcase paths).
+[ ] No `--fail-under`, no `shadscan` step, and no `shadscan setup` hook appears anywhere in `.husky/pre-push`, `.github/workflows/*`, or `scripts/setup-branch-protection.sh`. Grep to confirm.
 
 ### 2. Test Suites and Scripts Present
 
@@ -219,6 +257,18 @@ Run this checklist at the end of every run. Do **not** consider the scaffold "do
 [ ] `pnpm test:e2e:regression` passes locally.
 [ ] `pnpm test:e2e:visual` passes locally (baselines generated or confirmed up-to-date).
 [ ] Husky `pre-push` hook fires on push (verify with a dry-run or trial push).
+
+### 3.5 Accessibility Discovery Pass (non-blocking)
+
+Every box here is about the pass having *run and been reported honestly*. None of them is about the pass having *passed*, because there is nothing to pass.
+
+[ ] `a11y-discovery-runner` was dispatched after sub-block E, or its `skipped` status and reason are recorded.
+[ ] Exactly two scoped commands were run: `--category accessibility` and `--category foundation`. No unscoped run, no `states` / `interaction` / `forms`.
+[ ] `--apply` was never run. `--fail-under` was never run. `shadscan setup` was never run.
+[ ] Findings whose path contains the library showcase route were discarded, and the discarded count is stated in the report.
+[ ] The stage report has an "Accessibility discovery pass (shadscan): UNVERIFIED LEADS" section, with each lead carrying shadscan's own evidence text and a `known_fp_class` tag.
+[ ] The reported score appears only as informational context, never compared against a threshold.
+[ ] No shadscan finding was auto-fixed, and no shadscan finding blocked the run.
 
 ### 4. PR Created and Submitted
 
@@ -252,7 +302,7 @@ Only after CI is fully green and the PR is merged.
 
 The scaffold is delivered **only** when:
 
-1. All six sections above are fully checked.
+1. All seven sections above are fully checked.
 2. The orchestrator is back on `main` with a clean working tree.
 3. All scaffold artifacts are present and committed on `main`.
 4. CI passed on the merged PR head SHA.

@@ -31,6 +31,7 @@ Bold rows mark the skill each group of agents belongs to. The six agents at the 
 | `e2e-installer` | Installs the end-to-end test framework, adds the standard test scripts, and writes the first starter tests so the suite is never empty. |
 | `workflow-writer` | Writes the GitHub Actions workflow files (CI, E2E, design-system compliance, and schema drift when you have a database), skipping any that already exist. |
 | `lint-config-writer` | Adds the lint rules that catch hardcoded colors and spacing (anything that bypasses your design tokens), and tidies `.gitignore` for test artifacts. |
+| `a11y-discovery-runner` | Runs a scoped shadscan accessibility scan to surface issues no other gate catches, throws out anything pointing at your `/library` mockups, and hands back the rest as leads to check by hand. It never blocks, never scores you, and never fixes anything. |
 | `husky-installer` | Sets up the git pre-push hook so the full check suite runs on your machine before code can leave it. |
 | `branch-protection-writer` | Generates a one-time script you run to lock the main branch on GitHub so nothing merges without green checks. |
 | `local-gates-runner` | Runs the entire gate suite locally (lint, types, tests, E2E, visual) before the first push, so problems get fixed on the branch instead of in a red PR. |
