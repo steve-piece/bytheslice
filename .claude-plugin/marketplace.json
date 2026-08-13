@@ -8,7 +8,7 @@
     {
       "name": "bytheslice",
       "source": "./",
-      "description": "ByTheSlice runs your project like a grab-and-go pizza shop. v5 delivers in Pies (3 to 8 slice chapters, one PR each). Everyday loop: /sell-pie bakes a whole Pie autonomously (context-separated build/test/verify/fix per slice), then /box-it-up opens the PR, watches CI, and merges. /sell-slice is the high-touch single-slice variant. One-time prep: /setup-shop, /create-menu, /cook-pizzas, /set-display-case, /final-quality-check, /open-the-shop. All 48 live subagents natively registered with enforced model tiers, tool allowlists, and effort levels.",
+      "description": "ByTheSlice runs your project like a grab-and-go pizza shop. v5 delivers in Pies (3 to 8 slice chapters, one PR each). Everyday loop: /sell-pie bakes a whole Pie autonomously (context-separated build/test/verify/fix per slice), then /box-it-up opens the PR, watches CI, and merges. /sell-slice is the high-touch single-slice variant. One-time prep: /setup-shop, /create-menu, /cook-pizzas, /set-display-case, /final-quality-check, /open-the-shop. All 49 live subagents natively registered with enforced model tiers, tool allowlists, and effort levels.",
       "version": "5.1.0",
       "keywords": [
         "prd",

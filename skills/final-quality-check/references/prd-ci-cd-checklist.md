@@ -21,3 +21,21 @@ These rules govern how master-checklist updates, CI gates, and PR shape interact
 [ ] Keep one scoped checklist slice per PR whenever possible; avoid bundling unrelated stage tasks in one delivery.
 
 [ ] If stage file instructions conflict with checklist status, stop and clarify scope before implementation.
+
+[ ] Never wire shadscan into a gate: no `--fail-under` in `.husky/pre-push`, no shadscan step in any CI workflow, no shadscan check in branch protection, and never run `shadscan setup` (its only effect is writing pre-commit hooks). The score is heavily penalized by deliberate architecture choices (not using shadcn, dark-theme-only with no theme toggle, no command menu) and by a false-positive rate around one in three, so gating on it would block correct work.
+
+[ ] Never run shadscan `--apply`. It launches a coding agent against unfiltered findings, which at this false-positive rate would produce wrong changes.
+
+[ ] Treat every shadscan finding as a lead to verify against source, never as fact. Discard any finding whose file path is inside the operator-only `/library` showcase route before acting on it: those entries are mockups by design, and shadscan has no ignore, exclude, or rule-waiver mechanism, so it scans and scores them as production code.
+
+## shadscan false-positive classes (confirmed)
+
+Three failure modes are confirmed and reproducible. When a finding matches one of these, the burden of proof is on the finding, not on the code.
+
+**Dependency sniffing.** The rule's real pass condition is a `package.json` lookup. It fails "toast provider present" when `sonner` or Radix Toast is absent from dependencies, even with a working hand-rolled provider mounted in the app shell. Its own evidence admitted the provider was mounted, then failed the rule anyway.
+
+**Named-helper indirection.** It cannot follow a guard extracted into a named function. It reported a missing typing-target guard on a global hotkey when that exact guard existed as an `isTypingTarget()` helper called one line above.
+
+**Unresolved components.** When it cannot resolve a custom component it gives up and reports failure. It failed "async action pending state" on a component using `useTransition` and `disabled={pending}`, with evidence literally reading "could not be resolved".
+
+Evidence that contradicts its own verdict is the strongest tell. Read the cited file before changing anything.

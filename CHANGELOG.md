@@ -7,6 +7,26 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Accessibility discovery pass in `/final-quality-check` (sub-block F)**, running right after the design-system compliance block. New `a11y-discovery-runner` agent (sonnet, readonly, registered as the 49th live subagent) runs `@shadscan/cli` scoped to `--category accessibility` and `--category foundation` only, discards every finding whose path is inside the operator-only `/library` showcase route, tags each survivor against three confirmed false-positive classes, and returns the lot as UNVERIFIED LEADS in a dedicated stage-report section.
+- **shadscan guardrails in `references/prd-ci-cd-checklist.md`**, so sub-block H copies them verbatim into the project rules file and they bind every later slice: never wire `--fail-under` into `.husky/pre-push` or any CI workflow, never run `--apply` or `shadscan setup`, treat every finding as a lead to verify against source, and discard library-showcase paths. The three documented false-positive classes are dependency sniffing (fails "toast provider present" on a `package.json` lookup despite a mounted hand-rolled provider), named-helper indirection (cannot follow a guard extracted into `isTypingTarget()`), and unresolved components (fails "async action pending state" with evidence reading "could not be resolved").
+- **Completion-checklist section 3.5**, covering the discovery pass as run-and-reported rather than passed, plus a grep confirming no shadscan step leaked into the pre-push hook, the workflows, or branch protection.
+
+### Changed
+
+- **Phase 3 sub-blocks relettered to stay strictly sequential** now that a block was inserted mid-sequence: branch protection moved `F` to `G`, and the project-rules append moved `G` to `H`. The rule is now written down in the skill: no gaps, no suffixes, no `E2`-style insertions, and inserting a block means relettering everything after it. Past `Z` the sequence continues `A2` through `Z2`, then `A3` through `Z3`, with the digit as a generation counter rather than an insertion marker.
+
+### Notes
+
+- **This is discovery, not a gate, deliberately.** On the Next.js 16 App Router codebase it was calibrated against, shadscan found 4 real bugs that lint, typecheck, test, build, and E2E all missed, but roughly a third of its failures were false positives or product-opinion, and its score is heavily penalized by deliberate architecture choices (not using shadcn, dark-theme-only with no theme toggle, no command menu). `states` scored 0 percent with every failure a false positive, `interaction` was about half product-opinion, `forms` was mixed, which is why only `accessibility` and `foundation` are in scope.
+- **shadscan has no ignore, exclude, or rule-waiver mechanism** (its `setup` subcommand only writes pre-commit hooks), so path filtering happens after the fact in the agent. 5 of 21 evidence rows on the calibration run pointed at `/library` mockups.
+- **A future slice could consume findings over shadscan's `mcp` subcommand** (read-only `scan`, `list_projects`, `explain_rule` over stdio) instead of parsing CLI output. Noted, not wired.
+
+---
+
 ## [5.1.0] - 2026-07-22
 
 **Native agent registration.** The 54 markdown subagent definitions stop being read-and-paste prompt templates: 48 live agents are now declared in `plugin.json`'s `agents` array, so the platform itself enforces every `model`, `effort`, and tool allowlist that was previously advisory frontmatter. Skills dispatch by type (`bytheslice:<name>`), passing only task inputs as the prompt; read-and-paste survives as the documented fallback for Cursor and hosts without plugin-agent support.
