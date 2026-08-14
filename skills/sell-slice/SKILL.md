@@ -355,9 +355,13 @@ It runs each atomic check once: lint · typecheck · build · unit/integration �
 
 If `slice-tester.overall == fail` OR `slice-verifier.overall == fail`, route the union of their `fix_targets` to the fixer **off-context** (the fixer gets the failing verdict + evidence, not the tester's or builder's full chat):
 
-- 1st fail → `fix-attempter` with the failing verdict(s) + evidence → re-run **only the failed half** (re-dispatch `slice-tester` if a behavioral check failed; re-dispatch `slice-verifier` for the static checks the patch could plausibly have changed — `slice-verifier` carries already-green checks forward and re-runs only what changed, C5).
+- 1st fail → `fix-attempter` with the failing verdict(s) + evidence → re-run **only the failed half** (re-dispatch `slice-tester` if a behavioral check failed; re-dispatch `slice-verifier` for the static checks whose declared input sets intersect the patch — `slice-verifier` carries already-green checks forward, C5).
 - 2nd fail → `debug-instrumenter` adds targeted `// INSTRUMENT` logging → re-run the failed verifier/tester → `fix-attempter` again with the richer evidence → re-run.
 - Cap 3 total loops. On 3rd persistent failure → bubble HITL with full evidence (the goal stays active so the loop resumes if the user resolves it).
+
+**Thread the error signature through every fix dispatch.** `fix-attempter` returns a `signature` on every attempt, including a bail. Pass the prior attempt's value as `previous_signature` on the next dispatch. On a match the fixer returns `bail_reason: repeated_signature` **without patching**, and the loop stops there rather than spending its remaining budget: bubble HITL immediately. Three identical-cause failures burn the same three expensive loops as three different ones (each re-dispatching the tester, re-booting the browser, re-screenshotting), and the plugin already asserts in prose that identical repeats signal a structural problem. This is that assertion made mechanical, and it is a **net latency saving**.
+
+**Detect regressions and pass them down.** After each re-verification, diff the new verdict against the previous one: any check that was `pass` before the patch and is `fail` after is a regression. Pass those in `regressed_checks`, and the fixer reverts its own last patch rather than stacking a second fix on top of it. A fix that breaks a passing gate is not a fix.
 
 After green, if `debug-instrumenter` ran, strip `// INSTRUMENT` lines and commit a "remove debug instrumentation" sweep.
 
