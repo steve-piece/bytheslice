@@ -349,7 +349,7 @@ The tester type-routes (frontend = rendered design-system match + per-affordance
 
 Dispatch [`slice-verifier`](agents/slice-verifier.md) with the **slice diff** (branch + base SHA), the **build manifest**, the resolved **`verification.e2e.*`** thresholds (C10), the package manager + script names, the workflow inventory, the slice type, and the list of **already-green checks** (e.g. lint/type/build the builder already passed) so they are **not re-run** (C5).
 
-It runs each atomic check once: lint · typecheck · build · unit/integration · e2e by tag (threshold-gated per `verification.e2e` — **C10**) · design-system **static grep** (raw values / non-token — the static check only; the rendered match is the tester's) · CI-integrity (no existing gate weakened) · and the **manifest under-declaration backstop** (§1.4 — independently greps the diff for `action(` / `use server` / `onClick` / `<form` / route-file additions and **fails** if the manifest under-counts). It returns the Appendix-C verdict.
+It runs each atomic check once: lint · typecheck · build · unit/integration · e2e by tag (threshold-gated per `verification.e2e` — **C10**) · design-system **static grep** (raw values / non-token, plus the bundled `verify-frontend-statics.sh` sub-check for token existence, `var()` fallbacks, motion literals and two a11y source patterns, all one check key, so nothing runs twice; the static check only, the rendered match is the tester's) · CI-integrity (no existing gate weakened) · and the **manifest under-declaration backstop** (§1.4 — independently greps the diff for `action(` / `use server` / `onClick` / `<form` / route-file additions and **fails** if the manifest under-counts). It returns the Appendix-C verdict.
 
 #### 5.4 — Off-context fix loop
 
