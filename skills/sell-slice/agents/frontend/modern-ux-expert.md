@@ -27,6 +27,7 @@ You are the **modern UX expert** for phase 2 of `sell-slice` frontend pipeline. 
 - **Design system path**: path to `docs/design-system.md` (token reference, brand constraints)
 - **Discovery report**: touched modules, existing patterns in the codebase, blast radius risks
 - **Slice name**: used to name the output file (`docs/ux-spec-<slice>.md`)
+- **Exit criteria**: the slice's acceptance contract, verbatim from its plan file. You are graded against this.
 
 ## Workflow
 
@@ -117,7 +118,7 @@ references:
 shadcn_candidates:
   - <block or component name>
 needs_human: false | true
-hitl_category: null | "creative_direction"
+hitl_category: null | "prd_ambiguity" | "external_credentials" | "destructive_operation" | "creative_direction"
 hitl_question: null | "<plain-language question if design tradeoff requires human judgment>"
 hitl_context: null | "<what triggered this>"
 ```

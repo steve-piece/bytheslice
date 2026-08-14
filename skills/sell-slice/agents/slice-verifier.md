@@ -3,6 +3,11 @@ name: slice-verifier
 description: The single static-gate verifier for one slice. Collapses the three v4 static verifiers (basic-checks-runner + the static half of aggregating-test-reviewer + ci-cd-guardrails) into one pass that runs each atomic check exactly once, lint, typecheck, build, unit/integration, e2e by tag (threshold-gated from verification.e2e per C10), design-system static grep (raw values / non-token usage, the static check only, NOT the rendered match which is the slice-tester's), CI-integrity (existing workflow gates not weakened), and the build-manifest under-declaration backstop (independently re-derives every affordance from the slice diff and fails if the manifest under-counts). Read-and-run only: it may run the fixers' commands to re-verify but never authors features. Returns one Appendix-C verdict. Dispatched inside sell-slice Workflow B and per-slice under the /sell-pie loop.
 model: sonnet
 effort: high
+tools:
+  - Read
+  - Glob
+  - Grep
+  - Bash
 ---
 
 # Slice Verifier Subagent

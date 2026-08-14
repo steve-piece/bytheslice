@@ -10,10 +10,10 @@ Deterministic guards that replace repetitive prose in CLAUDE.md and SKILL.md fil
 | `shop-status.sh` | `SessionStart` | Reads `docs/plans/00_master_checklist.md` if present and injects a compact summary: Prep progress, plus pie/slice counts and the first open pie (nested v5) or stage counts and the next not-started row (flat v4). |
 | `pre-commit-guard.sh` | `PreToolUse` (Bash matcher) | BLOCKs `git commit` on main/master. Otherwise WARN-injects a short staged-files summary. |
 | `stage-plan-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects (exit 0) on `Write`/`Edit` to `docs/plans/stage_*.md` while `/sell-slice` is the current session's active skill — plans are normally static during delivery. Never blocks (downgraded from BLOCK in v5). Session-id guarded; fails open if state is missing or cross-session. |
-| `library-gate-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects when a `/sell-slice` run writes to a watched production route (`app/**`, `src/app/**`, `components/**`, `src/components/**`) without a recorded library-preview approval. Never blocks. Dormant until `record-library-approval.sh arm` writes `library-approvals.json` (Phase 4.5 arms the gate when the approval window opens). |
+| `library-gate-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects when a `/sell-slice` **or `/sell-pie`** run writes to a watched production route (`app/**`, `src/app/**`, `components/**`, `src/components/**`) without a recorded library-preview approval. Never blocks. Dormant until `record-library-approval.sh arm` writes `library-approvals.json` (Phase 4.5 arms the gate when the approval window opens). |
 | `compact-snapshot.sh` | `PreCompact` | Never blocks compaction (always exit 0). Writes `compact-snapshot.json` capturing session/skill/branch, last commit sha + subject, and the next up-to-3 unfinished checklist lines so the post-compaction turn can re-orient. |
 
-One script in this directory is not wired to an event: `record-library-approval.sh` is the state writer `/sell-slice` Phase 4.5 runs directly. `arm --slice <n.m>` opens the approval window (creates `library-approvals.json` with zero approvals, which wakes `library-gate-guard.sh`); `approve --slice <n.m> --components "<id>,<id>"` records the operator's approval (the gate then passes). It honors `BTS_HOOKS_DISABLED=1` and tolerates missing `jq` like the rest of the directory.
+One script in this directory is not wired to an event: `record-library-approval.sh` is the state writer `/sell-slice` Phase 4.5 (and `/sell-pie`'s per-slice Library Preview gate) runs directly. `arm --slice <n.m>` opens the approval window (creates `library-approvals.json` with zero approvals, which wakes `library-gate-guard.sh`); `approve --slice <n.m> --components "<id>,<id>"` records the operator's approval (the gate then passes). It honors `BTS_HOOKS_DISABLED=1` and tolerates missing `jq` like the rest of the directory.
 
 ## The scenario contract
 
@@ -77,7 +77,7 @@ Run it locally before committing changes to anything under `hooks/`. No CI workf
 }
 ```
 
-`.claude/.bytheslice-state/library-approvals.json` is written by `record-library-approval.sh` and read by `library-gate-guard.sh`. `/sell-slice` Phase 4.5 invokes the writer twice per frontend slice: `arm --slice <n.m>` when the approval window opens (zero approvals, the gate starts warning) and `approve --slice <n.m> --components "<id>,<id>"` the moment the operator approves (one entry per component, the gate goes silent). Re-arming resets the approvals list so the next slice starts unapproved. Schema:
+`.claude/.bytheslice-state/library-approvals.json` is written by `record-library-approval.sh` and read by `library-gate-guard.sh`. `/sell-slice` Phase 4.5 and `/sell-pie`'s per-slice Library Preview gate invoke the writer twice per frontend slice: `arm --slice <n.m>` when the approval window opens (zero approvals, the gate starts warning) and `approve --slice <n.m> --components "<id>,<id>"` the moment the operator approves (one entry per component, the gate goes silent). Re-arming resets the approvals list so the next slice starts unapproved. Schema:
 
 ```json
 {

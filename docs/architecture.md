@@ -112,6 +112,7 @@ Every frontend slice through `/sell-slice` passes through Phase 4.5's **Library 
 - **Subagent-driven everything.** Skill files are orchestrators — context, scenarios, gates, agent rosters. Heavy work lives in `skills/*/agents/*.md`. The orchestrator dispatches, reviews structured outputs, and loops to green; it does not write production code itself.
 - **Exit-criteria contract.** Every slice's plan file carries a transcript-verifiable, binary `**Exit criteria:**` block. `/sell-slice` lifts it verbatim into a session-scoped `/goal` condition, and `slice-tester` derives its test plan from it. Vague lines like "tests pass" break the goal evaluator — `phased-plan-writer` enforces specificity (write `pnpm test --filter @repo/auth exits 0`, not "tests pass").
 - **HITL bubbling.** Sub-agents never prompt the user directly and never call `ask_user_input_v0` — they return `needs_human: true` with one of four categories: `prd_ambiguity`, `external_credentials`, `destructive_operation`, `creative_direction`. Only top-level orchestrators surface the prompt; under `/sell-pie`, any of the four **halts the `/loop`**.
+- **No agent may name a verifier that is not in the live dispatch table.** An agent that closes a hard constraint with "X will catch it" is relaxing its own first-pass care against a promise. If `X` is deprecated, unregistered, or not yet built, that promise is phantom enforcement and the constraint is weaker than it reads. Name only a verifier that is in `agents[]` and in the routing table today, or state plainly that nothing downstream catches it.
 - **Always recommend a default in elicitation.** Every clarifying-questions phase across the plugin includes a recommended option in each choice set.
 - **Model tiers.** Three aliases (`haiku`, `sonnet`, `opus`); heavier tiers go to producing/verifying agents (`implementer` = `opus, xhigh`; `quality-reviewer` = `opus, high`; `slice-tester` and `slice-verifier` = `sonnet, high`). Full per-agent table at [`model-tier-guide.md`](../skills/setup-shop/references/model-tier-guide.md).
 
@@ -126,7 +127,7 @@ Preconditions and gates that used to live in prose are enforced by plugin hooks 
 - Editing a stage plan mid-delivery draws a WARN.
 - A `PreCompact` snapshot lets a post-compaction session re-orient.
 
-Hooks dual-read flat `## Stage N` and nested `## Pie N` / `### Slice N.M` checklists. Every hook is session-id-scoped and fails open; a 107-test regression suite lives at `hooks/test.sh`. Disable per-session with `BTS_HOOKS_DISABLED=1`. See [`hooks/README.md`](../hooks/README.md).
+Hooks dual-read flat `## Stage N` and nested `## Pie N` / `### Slice N.M` checklists. Every hook is session-id-scoped and fails open; a 111-test regression suite lives at `hooks/test.sh`. Disable per-session with `BTS_HOOKS_DISABLED=1`. See [`hooks/README.md`](../hooks/README.md).
 
 > **v5 note:** the `Stop`-gate and `commit-checklist-correlator` hooks were deleted — `/loop` + the pie-completion `/goal` own loop continuation natively.
 

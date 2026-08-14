@@ -71,7 +71,9 @@ This file is the **canonical source of truth** for hook behavior. Every row is o
 | `app/dashboard/page.tsx` (watched) | approvals file present, no approval entry, current-session `skill == "sell-slice"` | **WARN** — "no library approval is recorded" |
 | `app/dashboard/page.tsx` (watched) | approvals file present, an approval recorded, `skill == "sell-slice"` | **PASS** |
 | `lib/util.ts` (not watched) | approvals file present, no approval, `skill == "sell-slice"` | **PASS** — path not under a watched glob |
-| `app/dashboard/page.tsx` (watched) | approvals present, no approval, `skill != "sell-slice"` | **PASS** |
+| `app/dashboard/page.tsx` (watched) | approvals file present, no approval entry, current-session `skill == "sell-pie"` | **WARN**, the gate is armed in the unattended mode too |
+| `app/dashboard/page.tsx` (watched) | approvals file present, an approval recorded, `skill == "sell-pie"` | **PASS** |
+| `app/dashboard/page.tsx` (watched) | approvals present, no approval, skill is neither `sell-slice` nor `sell-pie` | **PASS** |
 | `app/dashboard/page.tsx` (watched) | approvals present, state from a *different* `session_id` | **PASS** — stale state never warns |
 | any watched path | `BTS_HOOKS_DISABLED=1` | **PASS** |
 
