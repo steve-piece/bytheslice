@@ -23,6 +23,7 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 - **This is discovery, not a gate, deliberately.** On the Next.js 16 App Router codebase it was calibrated against, shadscan found 4 real bugs that lint, typecheck, test, build, and E2E all missed, but roughly a third of its failures were false positives or product-opinion, and its score is heavily penalized by deliberate architecture choices (not using shadcn, dark-theme-only with no theme toggle, no command menu). `states` scored 0 percent with every failure a false positive, `interaction` was about half product-opinion, `forms` was mixed, which is why only `accessibility` and `foundation` are in scope.
 - **shadscan has no ignore, exclude, or rule-waiver mechanism** (its `setup` subcommand only writes pre-commit hooks), so path filtering happens after the fact in the agent. 5 of 21 evidence rows on the calibration run pointed at `/library` mockups.
+- **shadscan caps evidence at 5 rows per rule**, so fixing every location a rule lists often leaves it still failing with a fresh set that was hidden behind the ones just fixed. On the calibration run, a rule came back with five new locations after its three listed unlabeled inputs were fixed. The agent now calls out a full five-row list in its report so a still-failing rule is not misread as a fix that did not work.
 - **A future slice could consume findings over shadscan's `mcp` subcommand** (read-only `scan`, `list_projects`, `explain_rule` over stdio) instead of parsing CLI output. Noted, not wired.
 
 ---

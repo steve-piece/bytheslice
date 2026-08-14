@@ -90,6 +90,7 @@ hitl_context: null | "<what triggered this>"
 ## Known limitations to carry into your report
 
 - **No ignore, exclude, or rule-waiver mechanism exists.** The `setup` subcommand only writes pre-commit hooks; it does not configure scope. Path filtering is therefore your job, done after the fact, per step 4.
+- **Evidence is capped at 5 rows per rule.** A rule lists only its first few instances, so fixing every location it names will not necessarily flip that rule to pass; it commonly returns still failing with a fresh set of locations that were hidden behind the ones just fixed. On the calibration run, a rule was re-run after its three listed unlabeled inputs were fixed and came back with five new locations. Whenever a rule carries a full five-row evidence list, say so in your report, so a still-failing rule is not misread as a fix that did not work.
 - **The score is not a quality signal** on any project that made deliberate architecture choices the tool does not recognize.
 - **An `mcp` subcommand exists** exposing read-only `scan`, `list_projects`, and `explain_rule` tools over stdio. If a future slice wants an agent consuming findings directly instead of parsing CLI output, that is the better interface. Note it, do not wire it here.
 
