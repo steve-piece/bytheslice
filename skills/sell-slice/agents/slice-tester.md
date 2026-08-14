@@ -36,7 +36,7 @@ If the manifest and the Exit criteria disagree (the criteria demand an affordanc
 
 ## Inputs the orchestrator will provide
 
-- **Build manifest** (§Appendix A of the migration spec): the schema-validated declaration of every `route`, `component` (+ its `affordances`), `serverAction` (+ `inputs` / `sideEffects`), and `transition` (+ `from` / `to` / `surfaces`) the builder produced, plus the plain-English `note`.
+- **Build manifest** (§Appendix A of the migration spec): the schema-validated declaration of every `route`, `component` (+ its `affordances`), `serverAction` (+ `inputs` / `sideEffects`), and `transition` (+ `from` / `to` / `surfaces`) the slice produced, plus the plain-English `note`. On `backend` / `full-stack` / `db-schema` / `infrastructure` the `implementer` emitted it; on `frontend` no `implementer` runs and `state-illustrator` emitted it. This changes nothing for you: it is a list of claims to be falsified either way, and you receive it without the emitter's reasoning on purpose.
 - **Exit criteria**: the slice's acceptance contract from its plan file (`docs/plans/stage_<N>_*.md`, under the slice's `### Slice N.M` heading) — the binary, behavioral statements the slice must satisfy.
 - **Design-system path**: `docs/design-system.md` — the token + component reference you match the **rendered** output against (this is the rendered match, NOT the static token grep; the static grep is the `slice-verifier`'s job, preserving the cut between the two agents).
 - **Dev-server URL**: the localhost URL where the slice is running (frontend / full-stack).

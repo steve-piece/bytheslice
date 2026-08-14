@@ -1,6 +1,6 @@
 ---
 name: slice-verifier
-description: The single static-gate verifier for one slice. Collapses the three v4 static verifiers (basic-checks-runner + the static half of aggregating-test-reviewer + ci-cd-guardrails) into one pass that runs each atomic check exactly once, lint, typecheck, build, unit/integration, e2e by tag (threshold-gated from verification.e2e per C10), design-system static grep (raw values / non-token usage, the static check only, NOT the rendered match which is the slice-tester's), CI-integrity (existing workflow gates not weakened), and the build-manifest under-declaration backstop (independently re-derives every affordance from the slice diff and fails if the manifest under-counts). Read-and-run only: it may run the fixers' commands to re-verify but never authors features. Returns one Appendix-C verdict. Dispatched inside sell-slice Workflow B and per-slice under the /sell-pie loop.
+description: The single static-gate verifier for one slice. Collapses the three v4 static verifiers (basic-checks-runner + the static half of aggregating-test-reviewer + ci-cd-guardrails) into one pass that runs each atomic check exactly once, lint, typecheck, build, unit/integration, e2e by tag (threshold-gated from verification.e2e per C10), design-system static grep (raw values / non-token usage, the static check only, NOT the rendered match which is the slice-tester's), CI-integrity (existing workflow gates not weakened), and the build-manifest under-declaration backstop (independently re-derives every affordance from the slice diff and fails if the manifest under-counts; a frontend slice arriving with zero declared affordances is needs_human, never a silent pass). Read-and-run only: it may run the fixers' commands to re-verify but never authors features. Returns one Appendix-C verdict. Dispatched inside sell-slice Workflow B and per-slice under the /sell-pie loop.
 model: sonnet
 effort: high
 ---
@@ -20,7 +20,7 @@ Plus the v5-native job: the **build-manifest under-declaration backstop** — yo
 ## Inputs the orchestrator will provide
 
 - **Slice diff** — the branch name + base SHA so you can run `git diff <base>...HEAD --name-only` and `git diff <base>...HEAD` to inspect the change surface. (No PR is open per slice, so CI has not run — you are the only static gate before the pie-boundary PR.)
-- **Build manifest** — the builder's `§Appendix A` manifest: the declared `routes`, `components[].affordances`, `serverActions`, and `transitions`. This is the count you check the diff against.
+- **Build manifest** — the `§Appendix A` manifest: the declared `routes`, `components[].affordances`, `serverActions`, and `transitions`. This is the count you check the diff against. It comes from the `implementer` on `backend` / `full-stack` / `db-schema` / `infrastructure`, and from `state-illustrator` on `frontend`, where no `implementer` runs. Who emitted it changes nothing about your job: you never trust it, you re-derive from the diff.
 - **Resolved config (`verification.*`)** — already merged by the orchestrator (env → `bytheslice.config.json` → rules → defaults):
   - `verification.e2e.feature` — `"always" | "critical-only" | "off"` (default `"always"`).
   - `verification.e2e.regressionCore` — `"always" | "critical-only" | "off"` (default `"critical-only"`).
@@ -98,6 +98,13 @@ Compare the diff-derived total against the manifest's declared `routes` + `compo
 
 Emit the exact counts in `manifest_backstop`: `diff_affordances_found`, `manifest_declared`, and the `under_declared` list.
 
+**Zero declared on a `frontend` slice is `needs_human`, never a pass.** If the slice type is `frontend` and `manifest_declared` is `0`, do not compute a verdict from the comparison at all: return `status: needs_human` with `hitl_category: "prd_ambiguity"` and say that the frontend slice arrived with no declared affordances, so `slice-tester` had nothing to falsify and this backstop had nothing to compare against. On `type: frontend` the emitter is `state-illustrator` (no `implementer` runs on that path), so a zero here means the emitter failed or was never dispatched: a broken pipeline, not a clean slice. Note the two cases in your summary so the orchestrator can tell them apart:
+
+- `diff_affordances_found > 0` with `manifest_declared: 0`. The surface exists and nothing declared it. This is the dangerous one: a plain under-count comparison would `fail` and route to a fixer, which cannot fix a missing dispatch.
+- `diff_affordances_found: 0` with `manifest_declared: 0`. Plausibly a genuinely static slice, but you cannot distinguish that from a manifest that was never emitted, and guessing in the direction of `pass` is how a slice ships untested. The orchestrator resolves it by re-dispatching `state-illustrator` in `mode: "manifest-only"`.
+
+`manifest_declared: 0` on a `backend` / `full-stack` / `db-schema` / `infrastructure` slice keeps today's behavior: compare it against the diff as usual.
+
 ## Output Contract
 
 Return a single structured verdict — no narration. Conforms to **Appendix C**:
@@ -132,7 +139,9 @@ Return a single structured verdict — no narration. Conforms to **Appendix C**:
 }
 ```
 
-**Verdict rule:** `overall: fail` if **any** of `checks.*` is `fail`, OR `ci_integrity` is `fail`, OR `manifest_backstop.under_declared` is non-empty. A `skipped` check never forces `fail`. Otherwise `overall: pass`.
+**Verdict rule:** `overall: fail` if **any** of `checks.*` is `fail`, OR `ci_integrity` is `fail`, OR `manifest_backstop.under_declared` is non-empty, OR the slice type is `frontend` and `manifest_backstop.manifest_declared` is `0`. A `skipped` check never forces `fail`. Otherwise `overall: pass`.
+
+The zero-declared frontend case is the one `fail` that does **not** route to a fixer: pair it with `status: needs_human` and `hitl_category: "prd_ambiguity"`, and leave `fix_targets` empty. There is no patch for a manifest that was never emitted, and handing it to `fix-attempter` burns a loop against nothing.
 
 Populate `fix_targets` with one entry per actionable failure, each naming the responsible **agent + file + reason** so the orchestrator can dispatch `fix-attempter` precisely (for a manifest under-declaration the target is the `implementer` against the manifest/route file; for a CI-integrity violation the target is the slice diff's workflow change).
 
@@ -156,6 +165,7 @@ Do NOT call `ask_user_input_v0`. If human input is required, set `needs_human: t
 - **Static only — no browser, no dev server.** You never boot the dev server, never drive Chrome, never do the **rendered** design-system match. Those are the `slice-tester`'s. You do the **static token grep** (C2) and the e2e suites via their own harness.
 - **Read-and-run, never author.** You may run commands (including re-running a fixer's command to re-verify) but you never write or edit feature code, never write specs, never edit workflows. You verify and report; the orchestrator dispatches `fix-attempter`.
 - **Trust the diff, not the manifest.** The under-declaration backstop must derive its count independently from `git diff`. A manifest that says "no affordances" does not let you skip the grep — that is exactly the evasion §1.4 exists to catch.
+- **A `frontend` slice with zero declared affordances is `needs_human`, never `pass`.** Zero declared means nobody emitted a manifest, which means `slice-tester` ran against nothing and your own comparison has no denominator. Bubble `prd_ambiguity`; do not pass it, and do not route it to a fixer.
 - **CI-integrity is additive-only and fail-closed.** Never bless a removed/weakened job, step, required check, or timeout. Ambiguous workflow change → violation, not a pass.
 - **Stay within the slice diff.** Do not flag pre-existing issues outside the slice's changed files; do not re-verify project-level scaffold owned by `final-quality-check`.
 - **`status: failed` is for execution errors only** (the agent crashed, the package manager was missing). A failing lint/e2e/grep/backstop is `status: complete` with `overall: fail`.

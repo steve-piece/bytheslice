@@ -58,7 +58,7 @@ Each subagent is a **registered plugin agent**; its definition file under `./age
 | Compose (always) | [agents/frontend/block-composer.md](agents/frontend/block-composer.md) | sonnet | write |
 | Craft (conditional on gaps) | [agents/frontend/component-crafter.md](agents/frontend/component-crafter.md) | sonnet | write |
 | Library Preview Gate | [agents/frontend/library-entry-writer.md](agents/frontend/library-entry-writer.md) | sonnet | write |
-| State coverage (Workflow B entry) | [agents/frontend/state-illustrator.md](agents/frontend/state-illustrator.md) | sonnet | write |
+| State coverage + **build manifest** on `frontend` (Workflow B entry) | [agents/frontend/state-illustrator.md](agents/frontend/state-illustrator.md) | sonnet | write |
 
 > **Behavioral + rendered review is `slice-tester`'s job; static gates are `slice-verifier`'s.** The v4 frontend `visual-reviewer` is **deprecated** — its rendered design-system match folded into `slice-tester` and its console/network checks are part of the same behavioral pass.
 
@@ -120,7 +120,7 @@ Workflow A routes the work based on the active slice's `type:` frontmatter:
 | `design-system` | Dispatch the `set-display-case` sub-skill (legacy v3 only). Skip the internal builder. |
 | `ci-cd` | Dispatch the `final-quality-check` sub-skill (legacy v3 only). Skip the internal builder. |
 | `env-setup` | Dispatch the `open-the-shop` sub-skill (legacy v3 only). Skip the internal builder. |
-| `frontend` | Run the internal frontend pipeline (`modern-ux-expert ‖ layout-architect` → block-composer → component-crafter → library gate). |
+| `frontend` | Run the internal frontend pipeline (`modern-ux-expert ‖ layout-architect` → block-composer → component-crafter → library gate → `state-illustrator`). **No `implementer` runs on this path, so `state-illustrator` is the build-manifest emitter** (Phase 5.1). |
 | `backend` | Dispatch the internal `implementer` (builder). |
 | `full-stack` | Dispatch the internal `implementer` (covers both UI and API code). |
 | `db-schema` | Dispatch the internal `implementer` with DB context flag. Schema updated FIRST in `db/schema.sql` (or detected equivalent). |
@@ -148,7 +148,7 @@ The skill is an **interactive spine** (Phases 0–3) wrapping two Workflows and 
 - **Spine:** prep gate (Phase 0) · recon (Phase 1) · build-plan auth (Phase 2, auto under loop / `flow.autoApproveBuildPlan`) · `/goal` (Phase 2.5) · branch (Phase 3).
 - **Workflow A — produce** (Phase 4): build the slice + its unit tests; the builder emits the **build manifest**. Backend items pipeline / parallelize; frontend runs `modern-ux-expert ‖ layout-architect`.
 - **Library gate** (Phase 4.5, human): net-new-component preview-first approval.
-- **Workflow B — verify-once** (Phase 5): `state-illustrator → slice-tester → slice-verifier`, each static check exactly once, with an **off-context fix loop**.
+- **Workflow B — verify-once** (Phase 5): `state-illustrator → slice-tester → slice-verifier`, each static check exactly once, with an **off-context fix loop**. On `frontend`, `state-illustrator` also emits the **build manifest** the other two consume.
 - **Closeout** (Phase 6).
 
 ### Phase 0 — Orientation (interactive spine)
@@ -238,6 +238,8 @@ Invoke `/goal <full condition string>`. Log: `Slice-completion goal set for slic
 
 Per the routing table above. **The builder writes the slice + its unit tests and emits the build manifest** (§Appendix A); it does **not** behaviorally review its own work and does **not** run the e2e ladder.
 
+> **Who emits the manifest, by slice type.** On `backend` / `full-stack` / `db-schema` / `infrastructure` the `implementer` emits it here in Phase 4. On `frontend` no `implementer` is dispatched at all, so the emitter is **`state-illustrator`** at Phase 5.1, which runs last and has already read every implemented file in full. Either way exactly one agent emits, and it derives the manifest from the files on disk.
+
 #### `design-system` / `ci-cd` / `env-setup` — Legacy sub-skill dispatch (v3 projects only)
 
 > **Note:** In v4/v5, foundation stages (design-system / ci-cd / env-setup) are no longer scaffolded as plan files by `/cook-pizzas`. New projects run `/set-display-case`, `/final-quality-check`, and `/open-the-shop` directly from the master checklist's Prep section — they don't pass through `/sell-slice`.
@@ -255,7 +257,7 @@ Run as a `Workflow`; if `Workflow` is unavailable, fall back per `loop-workflow-
 3. **`component-crafter`** (only if `block-composer` reports gaps) → token-only custom components.
 4. **Library Preview Gate (Phase 4.5)** — see below.
 
-The frontend producers do not write the four UI states or behaviorally verify — `state-illustrator` (Workflow B entry) fills the states and `slice-tester` does the rendered + affordance review.
+The frontend producers do not write the four UI states or behaviorally verify — `state-illustrator` (Workflow B entry) fills the states and `slice-tester` does the rendered + affordance review. **None of them emits the build manifest either**: `state-illustrator` does, at Phase 5.1, because it runs last and reads every implemented file in full.
 
 #### `backend` / `full-stack` / `db-schema` / `infrastructure` — Internal builder
 
@@ -333,9 +335,15 @@ The pipeline is **`state-illustrator → slice-tester → slice-verifier`**, wit
 
 Dispatch `state-illustrator` to ensure every interactive production surface has loading / empty / error / success states. Skip for `backend` / `db-schema` / `infrastructure` with zero UI delta. (On a pure-backend slice, Workflow B starts at 5.2.)
 
+**On `type: frontend`, this dispatch also emits the build manifest.** Pass the slice id, the slice type, and the implemented-files list, and take `build_manifest` off its return as **the** slice manifest for 5.2 and 5.3. This is not a second opinion on the surface: `state-illustrator` derives it from the files on disk, and `slice-verifier` re-derives its own count from the diff at 5.3, independently.
+
+- **Fallback, `mode: "manifest-only"`.** A `frontend` slice with zero interactive surfaces (a static route, a display-only page) has no states to fill, but it still needs a manifest or 5.2 and 5.3 have nothing to work from. Dispatch `state-illustrator` with `mode: "manifest-only"`; it skips the state audit and returns `build_manifest` alone.
+- **On `full-stack`, the `implementer` already emitted the manifest** in Phase 4. `state-illustrator` fills states only. Merge any affordance it adds (retry buttons, empty-state CTAs, dismiss controls) into that manifest before 5.2, or the backstop at 5.3 counts them in the diff and reports an under-declaration the builder never caused.
+- **A `frontend` slice must not reach 5.2 without a manifest.** If `state-illustrator` returns `needs_human`, or returns `complete` with an empty `build_manifest`, bubble it as a `prd_ambiguity` HITL rather than running the tester against nothing.
+
 #### 5.2 — `slice-tester` (behavioral verification)
 
-Boot the dev server (frontend / full-stack) and dispatch [`slice-tester`](agents/slice-tester.md). **Context-separation rule (absolute):** pass the tester **only** the build manifest + the slice's Exit criteria + the design-system path (`docs/design-system.md`) + the dev-server URL + the slice type + the DB target. **Never pass the builder's context, reasoning, or chat** — the tester must falsify the manifest's claims, not trust the builder's narrative.
+Boot the dev server (frontend / full-stack) and dispatch [`slice-tester`](agents/slice-tester.md). **Context-separation rule (absolute):** pass the tester **only** the build manifest (on `frontend`, the one `state-illustrator` returned at 5.1; otherwise the `implementer`'s) + the slice's Exit criteria + the design-system path (`docs/design-system.md`) + the dev-server URL + the slice type + the DB target. **Never pass the builder's context, reasoning, or chat** — the tester must falsify the manifest's claims, not trust the builder's narrative.
 
 Pass through the config:
 - **`verification.viewports`** *(C7)* — the widths the tester renders/screenshots `frontend` slices at. Do not hardcode a viewport list; use the resolved config (default `[375, 1280]`).
@@ -347,7 +355,7 @@ The tester type-routes (frontend = rendered design-system match + per-affordance
 
 #### 5.3 — `slice-verifier` (static gates, each exactly once)
 
-Dispatch [`slice-verifier`](agents/slice-verifier.md) with the **slice diff** (branch + base SHA), the **build manifest**, the resolved **`verification.e2e.*`** thresholds (C10), the package manager + script names, the workflow inventory, the slice type, and the list of **already-green checks** (e.g. lint/type/build the builder already passed) so they are **not re-run** (C5).
+Dispatch [`slice-verifier`](agents/slice-verifier.md) with the **slice diff** (branch + base SHA), the **build manifest** (on `frontend`, `state-illustrator`'s), the resolved **`verification.e2e.*`** thresholds (C10), the package manager + script names, the workflow inventory, the slice type, and the list of **already-green checks** (e.g. lint/type/build the builder already passed) so they are **not re-run** (C5).
 
 It runs each atomic check once: lint · typecheck · build · unit/integration · e2e by tag (threshold-gated per `verification.e2e` — **C10**) · design-system **static grep** (raw values / non-token — the static check only; the rendered match is the tester's) · CI-integrity (no existing gate weakened) · and the **manifest under-declaration backstop** (§1.4 — independently greps the diff for `action(` / `use server` / `onClick` / `<form` / route-file additions and **fails** if the manifest under-counts). It returns the Appendix-C verdict.
 
@@ -438,7 +446,7 @@ Run at the end of every slice. Do not report the slice "ready to ship" until eve
 
 [ ] Every in-scope checklist item from the active `docs/plans/stage_<n>_*.md` is implemented.
 [ ] Both `spec-reviewer` and `quality-reviewer` returned `verdict: pass` for each item.
-[ ] The builder emitted a complete **build manifest** (§Appendix A) covering every route / affordance / serverAction / transition.
+[ ] The manifest emitter for this slice type produced a complete **build manifest** (§Appendix A) covering every route / affordance / serverAction / transition: the `implementer` on `backend` / `full-stack` / `db-schema` / `infrastructure`, `state-illustrator` on `frontend`. A `frontend` slice with an empty manifest is a `prd_ambiguity` HITL, never a pass.
 [ ] `slice-verifier` returned `overall: pass` — lint, typecheck, build, unit/integration, e2e (per `verification.e2e`), design-system static grep, CI-integrity, and the manifest under-declaration backstop all clear.
 [ ] `slice-tester` returned `overall: pass` — every declared affordance exercised, every transition confirmed **both directions on every surface**, and (for data-flow slices) the seed cleaned up with zero residue.
 [ ] No `[ ]` items remain in the active slice (deferred items moved out-of-scope with a note).
