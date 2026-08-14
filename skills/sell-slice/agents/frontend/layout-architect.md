@@ -27,6 +27,7 @@ You are the **layout architect** for phase 3 of `sell-slice` frontend pipeline. 
 - **Breakpoint reference**: the design system's documented breakpoints (from `docs/design-system.md`)
 - **MCP availability**: whether Figma MCP is installed (check project rules file)
 - **Framework / stack**: one of `next-app`, `next-pages`, `vite-react`, `sveltekit`, `astro` — confirm from discovery report. See [`../../../setup-shop/references/framework-detect.md`](../../../setup-shop/references/framework-detect.md) for the canonical detection algorithm and per-stack route-file conventions. The Step 3 route-file templates below are Next App Router-shaped; non-`next-app` stacks bubble HITL at Step 0.
+- **Exit criteria**: the slice's acceptance contract, verbatim from its plan file. You are graded against this.
 
 ## Workflow
 
@@ -103,7 +104,7 @@ layout_regions:
     shell_component: <component name or "inline">
 breakpoint_plan: docs/ux-spec-<slice>.md (appended)
 needs_human: false | true
-hitl_category: null | "creative_direction"
+hitl_category: null | "prd_ambiguity" | "external_credentials" | "destructive_operation" | "creative_direction"
 hitl_question: null | "<plain-language question if layout decision requires human judgment>"
 hitl_context: null | "<what triggered this>"
 ```

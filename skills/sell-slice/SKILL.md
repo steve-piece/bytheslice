@@ -255,6 +255,8 @@ Run as a `Workflow`; if `Workflow` is unavailable, fall back per `loop-workflow-
 3. **`component-crafter`** (only if `block-composer` reports gaps) → token-only custom components.
 4. **Library Preview Gate (Phase 4.5)** — see below.
 
+**Pass the slice's Exit criteria verbatim in every frontend producer's input contract.** Withholding the builder's reasoning from the tester is the point of context separation; withholding the shared standard from the builder was never part of it.
+
 The frontend producers do not write the four UI states or behaviorally verify — `state-illustrator` (Workflow B entry) fills the states and `slice-tester` does the rendered + affordance review.
 
 #### `backend` / `full-stack` / `db-schema` / `infrastructure` — Internal builder

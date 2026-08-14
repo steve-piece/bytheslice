@@ -35,7 +35,7 @@ STATE_DIR=$(bts_state_dir)
 APPROVALS_FILE="$STATE_DIR/library-approvals.json"
 [ ! -f "$APPROVALS_FILE" ] && exit 0
 
-# Only relevant during a /sell-slice run in the current session.
+# Only relevant during a /sell-slice or /sell-pie run in the current session.
 STATE_FILE="$STATE_DIR/last-precheck.json"
 [ ! -f "$STATE_FILE" ] && exit 0
 
@@ -56,7 +56,7 @@ fi
 [ -z "$CURRENT_SESSION" ] && exit 0
 [ -z "$STATE_SESSION" ] && exit 0
 [ "$STATE_SESSION" != "$CURRENT_SESSION" ] && exit 0
-[ "$STATE_SKILL" != "sell-slice" ] && exit 0
+case "$STATE_SKILL" in sell-slice|sell-pie) ;; *) exit 0 ;; esac
 
 # Read watched_paths globs from the approvals file. Default to the standard set.
 WATCHED=""

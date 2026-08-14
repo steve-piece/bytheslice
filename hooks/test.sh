@@ -553,7 +553,7 @@ assert_exit "library-gate non-watched passes" 0
 assert_empty "library-gate non-watched silent"
 rm -rf "$FIX"
 
-# watched path, approvals present, no approval, non-sell-slice → PASS
+# watched path, approvals present, no approval, unrelated skill → PASS
 FIX=$(mk_fixture)
 write_state "$FIX" "current" "cook-pizzas"
 cat > "$FIX/.claude/.bytheslice-state/library-approvals.json" <<'EOF'
@@ -561,8 +561,34 @@ cat > "$FIX/.claude/.bytheslice-state/library-approvals.json" <<'EOF'
 EOF
 CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
   '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
-assert_exit "library-gate non-sell-slice passes" 0
-assert_empty "library-gate non-sell-slice silent"
+assert_exit "library-gate unrelated skill passes" 0
+assert_empty "library-gate unrelated skill silent"
+rm -rf "$FIX"
+
+# watched path, approvals present, NO approval, sell-pie → WARN
+# The guard used to exit early on any skill but sell-slice, leaving it dormant in
+# the unattended mode where autonomy makes it matter most.
+FIX=$(mk_fixture)
+write_state "$FIX" "current" "sell-pie"
+cat > "$FIX/.claude/.bytheslice-state/library-approvals.json" <<'EOF'
+{"approvals":[],"watched_paths":["app/**","src/app/**","components/**","src/components/**"]}
+EOF
+CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
+  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
+assert_exit "library-gate warns under sell-pie" 0
+assert_contains "library-gate sell-pie warn message" "no library approval is recorded"
+rm -rf "$FIX"
+
+# watched path, approval recorded, sell-pie → PASS
+FIX=$(mk_fixture)
+write_state "$FIX" "current" "sell-pie"
+cat > "$FIX/.claude/.bytheslice-state/library-approvals.json" <<'EOF'
+{"approvals":[{"component_id":"dashboard","status":"approved","at":"2026-05-20T00:00:00Z"}],"watched_paths":["app/**"]}
+EOF
+CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
+  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
+assert_exit "library-gate approved passes under sell-pie" 0
+assert_empty "library-gate approved silent under sell-pie"
 rm -rf "$FIX"
 
 # watched path, approvals present, stale session → PASS
