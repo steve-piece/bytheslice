@@ -116,10 +116,13 @@ Loop counter starts at 1. Cap at **3 attempts**.
    - Truncated log excerpts (last 200 lines per failed job) — let the agent ask for more on demand
    - The pie diff (`git diff origin/main...HEAD`)
    - The attempt number
+   - `previous_signature`: the signature the last attempt returned, or `null` on attempt 1
 4. The agent stages + commits + pushes a targeted fix on the pie branch. Do not call `--watch` from inside the dispatch — the skill returns to Phase 3 (top) after the agent's commit lands and re-invokes `gh pr checks --watch` against the new head SHA.
 5. Increment the counter. If it would exceed 3, STOP. Surface as `creative_direction` HITL with the full failure history so the user can decide whether to debug manually, retry CI, or close the PR.
 
 The 3-attempt cap is a hard rule. Three identical-cause failures in a row signal a structural problem (flaky test, missing secret, infra outage) that needs human judgment.
+
+**Bail on a repeated signature rather than counting to three.** The agent computes `signature = sha1(normalize(first_error_line) + '|' + file + '|' + check_id)`, where `normalize` strips line and column numbers, absolute path prefixes and timestamps, and returns it on every attempt. If it equals `previous_signature`, it patches nothing and returns `bail_reason: repeated_signature`: **stop the loop there** and surface the `creative_direction` HITL immediately, without burning the remaining attempts. A plain counter spends three full CI rounds on three identical failures exactly as it would on three different ones, and CI rounds are the most expensive loop in the plugin. This is the paragraph above made mechanical, by string equality rather than judgment.
 
 ### Phase 4 — Merge Authorization Gate *(pie-completion / universal — the kept pie-boundary HITL)*
 
