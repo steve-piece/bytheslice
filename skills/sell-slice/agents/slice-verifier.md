@@ -1,6 +1,6 @@
 ---
 name: slice-verifier
-description: The single static-gate verifier for one slice. Collapses the three v4 static verifiers (basic-checks-runner + the static half of aggregating-test-reviewer + ci-cd-guardrails) into one pass that runs each atomic check exactly once, lint, typecheck, build, unit/integration, e2e by tag (threshold-gated from verification.e2e per C10), design-system static grep (raw values / non-token usage, the static check only, NOT the rendered match which is the slice-tester's), CI-integrity (existing workflow gates not weakened), and the build-manifest under-declaration backstop (independently re-derives every affordance from the slice diff and fails if the manifest under-counts). Read-and-run only: it may run the fixers' commands to re-verify but never authors features. Returns one Appendix-C verdict. Dispatched inside sell-slice Workflow B and per-slice under the /sell-pie loop.
+description: The single static-gate verifier for one slice. Collapses the three v4 static verifiers (basic-checks-runner + the static half of aggregating-test-reviewer + ci-cd-guardrails) into one pass that runs each atomic check exactly once, lint, typecheck, build, unit/integration, e2e by tag (threshold-gated from verification.e2e per C10), design-system static grep (raw values / non-token usage, plus a bundled verify-frontend-statics.sh sub-check that resolves token references against the project's own catalog, folded into the same check key so nothing runs twice, the static check only, NOT the rendered match which is the slice-tester's), CI-integrity (existing workflow gates not weakened), and the build-manifest under-declaration backstop (independently re-derives every affordance from the slice diff and fails if the manifest under-counts). Read-and-run only: it may run the fixers' commands to re-verify but never authors features. Returns one Appendix-C verdict. Dispatched inside sell-slice Workflow B and per-slice under the /sell-pie loop.
 model: sonnet
 effort: high
 ---
@@ -69,6 +69,31 @@ Only when the slice diff touches frontend code (`.tsx` / `.jsx` / `.css` / styli
 
 - Run the project's `<pm> check:design-system` if it exists; otherwise grep the slice's changed frontend files for raw values that should bind to a token: hex colors (`#[0-9a-fA-F]{3,8}`), raw `rgb(`/`hsl(` literals, raw px in spacing/typography positions, and other non-token usage the design system forbids.
 - Record each offender as `file:line` → raw value → expected token in the `fix_targets` rationale. Any non-token raw value in changed frontend files is a `fail`.
+
+**Sub-check: bundled static verification.** Run it as part of this same check. It is **not** a new atomic check key: it folds into `design_system`, so verify-once (C5) holds by construction and nothing can now run twice.
+
+```bash
+bash "<plugin-root>/skills/sell-slice/scripts/verify-frontend-statics.sh" --base <base-sha>
+```
+
+`<plugin-root>` is the bytheslice plugin directory, the same convention `sell-slice/SKILL.md` documents for `hooks/record-library-approval.sh`. The script resolves the project root from `git rev-parse --show-toplevel`, so your working directory does not matter.
+
+It closes the gap your raw-value grep above structurally cannot see: the grep hunts raw **values**, and never checks that a token **reference** resolves. `bg-[var(--brand-primary-500)]` against a design system that only defines `--primary` contains no hex, no `rgb(`, no raw px. It passes the grep clean, compiles under Tailwind, passes lint/typecheck/build, and renders unstyled.
+
+| Class | Catches |
+|---|---|
+| `E1 UNKNOWN_TOKEN` | `var(--x)` whose name is in no resolvable catalog. Reports the nearest real token by edit distance. |
+| `E2 VAR_FALLBACK` | `var(--x, ...)`. Banned outright: the fallback renders a plausible value and makes a fabricated token invisible. The hex grep catches `var(--x, #333)` incidentally but never `var(--fake, var(--real))`. |
+| `E3 UNKNOWN_MOTION` | duration / easing literals absent from the design system's Duration Scale and Easing Curves. Skipped, with a printed note, when neither table holds concrete values. |
+| `E4 IMG_NO_ALT` | `<img>` with no `alt=`. Explicit `alt=""` passes, since that is a decorative declaration. |
+| `E5 INPUT_NO_LABEL` | `input` / `select` / `textarea` with no bound `<label htmlFor>`, `aria-label`, or `aria-labelledby`. |
+
+Exit codes: **0** clean, **1** offenders found, **2** inputs unresolvable. Treat each as follows:
+
+- **Exit 1** → `design_system: fail`. Copy each offender line into `fix_targets` verbatim; every one carries `file:line` already.
+- **Exit 2** → the token catalog did not resolve from `docs/design-system.md`, the project's CSS `:root` / `.dark` / `@theme` blocks, or `tailwind.config.*`. This is **not** a pass and **not** a fail: return `needs_human: true` with `hitl_category: "prd_ambiguity"`. A design-system gate with no catalog behind it can only ever emit a false green.
+
+Two scope notes so you do not over-read the result. **E1 checks `var(--x)` references only, never bare utility class names**: separating a Tailwind built-in (`bg-slate-500`, `text-sm`) from a fabricated token would mean embedding Tailwind's whole palette, and raw utilities are already the grep above. **E4 and E5 are the only a11y patterns here**, deliberately, and they are source patterns, not a rendered pass; they do not make this agent an accessibility gate.
 
 ### 5 — CI-integrity (from `ci-cd-guardrails` — no gate weakened)
 
