@@ -9,6 +9,12 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ## [Unreleased]
 
+---
+
+## [5.1.3] - 2026-09-11
+
+**The plugin loads again, and slice plans carry contracts.** Two releases of hook and manifest fixes (5.1.1, 5.1.2) went out without a changelog entry of their own and are folded in here, alongside the plan-format change and the accessibility discovery pass. Anyone on 5.1.0 or earlier should update: 5.1.1 and 5.1.2 were both published at versions that never carried release notes, and the plan-format work sat on `main` at an unbumped 5.1.2 where `claude plugin update` could not see it.
+
 ### Added
 
 - **Accessibility discovery pass in `/final-quality-check` (sub-block F)**, running right after the design-system compliance block. New `a11y-discovery-runner` agent (sonnet, readonly, registered as the 49th live subagent) runs `@shadscan/cli` scoped to `--category accessibility` and `--category foundation` only, discards every finding whose path is inside the operator-only `/library` showcase route, tags each survivor against three confirmed false-positive classes, and returns the lot as UNVERIFIED LEADS in a dedicated stage-report section.
@@ -24,6 +30,7 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ### Fixed
 
+- **`.cursor-plugin/plugin.json` was stranded at 5.1.0** while the Claude manifests moved to 5.1.1 and 5.1.2, so Cursor installs reported a version two releases behind the files they shipped. All four manifests (`plugin.json`, `marketplace.json`, `package.json`, `.cursor-plugin/plugin.json`) now move together.
 - **`master-checklist-synthesizer` rewritten for the v5 nested shape.** The agent prompt still described the v4 flat layout (`## Stage N`, four universal checks, frontmatter re-read from disk) while `cook-pizzas` Phase 4 and `references/templates.md` described the nested `## Pie N` / `### Slice N.M` layout fed from the writers' structured returns. Generated checklists followed the template, so output was correct, but the two contradicted each other. The agent now carries the nested structure, the per-slice Exit-criteria block, the `review:` annotation, and the return-envelope input the skill actually sends it.
 - **`phased-plan-writer` output contract now carries `pie`, `slice`, `review`, `completion_criteria`, and `exit_criteria`**, the fields the synthesizer needs to build a slice row without re-reading the file. The old contract returned `slice: vertical | horizontal`, a v4 meaning that collided with the v5 dotted slice id. The title rule and the `db-schema-stage-writer` frontmatter rule are aligned to the v5 template for the same reason.
 - **Dropped the explicit `"hooks": "./hooks/hooks.json"` pointer from `plugin.json`.** Claude Code 2.1.263 loads `hooks/hooks.json` automatically and treats the manifest pointer to the same file as a duplicate, which failed the plugin load a second time right after the shape fix in 5.1.1. The manifest `hooks` field is only for additional hook files. Shipped as 5.1.2.
