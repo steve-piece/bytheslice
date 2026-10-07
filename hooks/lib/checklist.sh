@@ -113,19 +113,86 @@ bts_slice_counts() {
 }
 
 # Current git branch. Empty if not in a repo.
+# Optional arg: directory to read HEAD from (defaults to bts_root).
 bts_branch() {
-  git -C "$(bts_root)" rev-parse --abbrev-ref HEAD 2>/dev/null
+  git -C "${1:-$(bts_root)}" rev-parse --abbrev-ref HEAD 2>/dev/null
 }
 
 # Returns "main" if current branch is main/master, otherwise "feature".
+# Optional arg: directory to read HEAD from (defaults to bts_root).
 bts_branch_class() {
   local b
-  b=$(bts_branch)
+  b=$(bts_branch "${1:-}")
   case "$b" in
     main|master) printf 'main' ;;
     "") printf 'unknown' ;;
     *) printf 'feature' ;;
   esac
+}
+
+# Resolve one `cd` / `git -C` path argument against a base directory.
+# Strips one layer of matching quotes, expands a leading `~`, and anchors
+# relative paths at the base. Prints the resolved path only if it exists.
+_bts_resolve_dir() {
+  local arg="$1" base="$2"
+  case "$arg" in
+    \"*\") arg=${arg#\"}; arg=${arg%\"} ;;
+    \'*\') arg=${arg#\'}; arg=${arg%\'} ;;
+  esac
+  case "$arg" in
+    "~") arg=$HOME ;;
+    "~/"*) arg="$HOME/${arg#\~/}" ;;
+  esac
+  case "$arg" in
+    /*) ;;
+    *) arg="$base/$arg" ;;
+  esac
+  [ -d "$arg" ] && (cd "$arg" 2>/dev/null && pwd -P)
+}
+
+# Resolve the git toplevel a Bash command's `git commit` will run in.
+# Args: command string, base dir (the hook input's .cwd; falls back to pwd).
+# Returns 1 with no output when the command contains no `git commit`.
+#
+# Resolution order, so a commit inside a worktree reads the worktree's HEAD
+# instead of the primary checkout's (CLAUDE_PROJECT_DIR):
+#   1. `cd <dir>` steps that precede the commit, applied in order
+#   2. `git -C <dir>` options on the commit invocation itself
+#   3. the base dir (hook cwd) when it sits inside a git repo
+#   4. bts_root as the last resort
+bts_commit_dir() {
+  local cmd="$1" base="${2:-}" dir next match prefix opts rest
+  local q="'"
+  local arg="(\"[^\"]*\"|${q}[^${q}]*${q}|[^[:space:];&|()\"${q}]+)"
+  local opt="([[:space:]]+-C[[:space:]]+${arg}|[[:space:]]+-c[[:space:]]+${arg}|[[:space:]]+--?[[:alnum:]][[:alnum:]-]*(=[^[:space:];&|]*)?)"
+  local git_re="(^|[[:space:];&|(])git(${opt}*)[[:space:]]+commit([[:space:];&|)]|$)"
+  local cd_re="(^|[[:space:];&|(])cd[[:space:]]+${arg}"
+  local c_re="-C[[:space:]]+${arg}"
+
+  [[ $cmd =~ $git_re ]] || return 1
+  match=${BASH_REMATCH[0]}
+  opts=${BASH_REMATCH[2]}
+  prefix=${cmd%%"$match"*}
+
+  if [ -n "$base" ] && [ -d "$base" ]; then
+    dir=$(cd "$base" 2>/dev/null && pwd -P)
+  else
+    dir=$(pwd -P)
+  fi
+
+  rest=$prefix
+  while [[ $rest =~ $cd_re ]]; do
+    next=$(_bts_resolve_dir "${BASH_REMATCH[2]}" "$dir") && dir=$next
+    rest=${rest#*"${BASH_REMATCH[0]}"}
+  done
+
+  rest=$opts
+  while [[ $rest =~ $c_re ]]; do
+    next=$(_bts_resolve_dir "${BASH_REMATCH[1]}" "$dir") && dir=$next
+    rest=${rest#*"${BASH_REMATCH[0]}"}
+  done
+
+  git -C "$dir" rev-parse --show-toplevel 2>/dev/null || bts_root
 }
 
 # "clean" or "dirty" based on git working tree state.

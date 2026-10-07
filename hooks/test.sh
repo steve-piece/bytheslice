@@ -47,6 +47,25 @@ run_hook() {
   LAST_EXIT=$?
 }
 
+# Run a hook from a given working directory (the hook's process cwd).
+# Args: dir, hook-path, json-stdin. Sets globals: LAST_EXIT, LAST_OUT.
+run_hook_in() {
+  local dir="$1" hook="$2" payload="$3"
+  LAST_OUT=$(cd "$dir" && printf '%s' "$payload" | bash "$hook" 2>&1)
+  LAST_EXIT=$?
+}
+
+# Make a primary checkout on main with two linked worktrees on feature
+# branches under .claude/worktrees/ (one path contains a space, to exercise
+# quoting). Mirrors the layout Claude Code creates. Echoes the primary path.
+mk_worktree_fixture() {
+  local d
+  d=$(mk_fixture)
+  git -C "$d" worktree add -q -b feat/wt "$d/.claude/worktrees/wt"
+  git -C "$d" worktree add -q -b feat/wt-space "$d/.claude/worktrees/wt space"
+  printf '%s' "$d"
+}
+
 # Assert exit code. Args: name, expected-exit.
 assert_exit() {
   local name="$1" want="$2"
@@ -300,29 +319,114 @@ echo "## pre-commit-guard.sh"
 
 # git commit on main → BLOCK
 FIX=$(mk_fixture)
-CLAUDE_PROJECT_DIR=$FIX run_hook "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
 assert_exit "commit on main blocked" 2
 assert_contains "commit-on-main message" "refusing git commit on main"
+rm -rf "$FIX"
+
+# git commit on master → BLOCK
+FIX=$(mk_fixture)
+git -C "$FIX" branch -q -m master
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
+assert_exit "commit on master blocked" 2
+assert_contains "commit-on-master message" "refusing git commit on master"
 rm -rf "$FIX"
 
 # git commit on feature branch → PASS (with possible WARN if staged files)
 FIX=$(mk_fixture)
 git -C "$FIX" checkout -q -b feat/x
-CLAUDE_PROJECT_DIR=$FIX run_hook "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
 assert_exit "commit on feature branch" 0
 rm -rf "$FIX"
 
+# hook cwd outside any repo → falls back to CLAUDE_PROJECT_DIR (on main) → BLOCK
+FIX=$(mk_fixture)
+NOREPO=$(mktemp -d)
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$NOREPO" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
+assert_exit "commit falls back to CLAUDE_PROJECT_DIR" 2
+rm -rf "$FIX" "$NOREPO"
+
 # non-git-commit → PASS
 FIX=$(mk_fixture)
-CLAUDE_PROJECT_DIR=$FIX run_hook "$COMMIT_GUARD" '{"tool_input":{"command":"npm test"}}'
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"npm test"}}'
 assert_exit "non-commit pass" 0
 assert_empty "non-commit silent"
 rm -rf "$FIX"
 
+# git commit-tree / git -C <dir> status are not commits → PASS
+FIX=$(mk_fixture)
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit-tree HEAD^{tree} -m x"}}'
+assert_exit "commit-tree is not a commit" 0
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git -C $FIX status\"}}"
+assert_exit "git -C status is not a commit" 0
+assert_empty "git -C status silent"
+rm -rf "$FIX"
+
 # BTS_HOOKS_DISABLED → PASS
 FIX=$(mk_fixture)
-BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_hook "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
+BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
 assert_exit "commit-guard disabled" 0
+rm -rf "$FIX"
+
+# Worktree regression (2026-10-05): CLAUDE_PROJECT_DIR is the primary checkout
+# on main, but the commit runs inside a linked worktree on a feature branch.
+# The guard must read the worktree's HEAD, not the primary's.
+FIX=$(mk_worktree_fixture)
+WT="$FIX/.claude/worktrees/wt"
+WTS="$FIX/.claude/worktrees/wt space"
+
+# git -C <worktree> commit → PASS
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git -C $WT commit -m test\"},\"cwd\":\"$FIX\"}"
+assert_exit "worktree: git -C <wt> commit allowed" 0
+
+# cd <worktree> && git commit → PASS
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd $WT && git add -A && git commit -m test\"},\"cwd\":\"$FIX\"}"
+assert_exit "worktree: cd <wt> && git commit allowed" 0
+
+# relative cd from the primary checkout → PASS
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd .claude/worktrees/wt; git commit -m test\"},\"cwd\":\"$FIX\"}"
+assert_exit "worktree: relative cd allowed" 0
+
+# quoted path with a space, via both cd and git -C → PASS
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd \\\"$WTS\\\" && git commit -m test\"},\"cwd\":\"$FIX\"}"
+assert_exit "worktree: quoted cd with space allowed" 0
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git -C '$WTS' commit -m test\"},\"cwd\":\"$FIX\"}"
+assert_exit "worktree: single-quoted git -C with space allowed" 0
+
+# ~-relative cd → PASS
+HOME=$FIX CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd ~/.claude/worktrees/wt && git commit -m test\"},\"cwd\":\"$FIX\"}"
+assert_exit "worktree: tilde cd allowed" 0
+
+# hook cwd inside the worktree, plain git commit → PASS
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$WT" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
+assert_exit "worktree: hook process cwd in wt allowed" 0
+
+# input .cwd is the worktree even though the process cwd is the primary → PASS
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git commit -m test\"},\"cwd\":\"$WT\"}"
+assert_exit "worktree: input cwd in wt allowed" 0
+
+# Still blocks real main commits: from inside the worktree, target the primary
+CLAUDE_PROJECT_DIR=$WT run_hook_in "$WT" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git -C $FIX commit -m test\"},\"cwd\":\"$WT\"}"
+assert_exit "worktree: git -C <primary on main> commit blocked" 2
+assert_contains "worktree: git -C primary message" "refusing git commit on main"
+CLAUDE_PROJECT_DIR=$WT run_hook_in "$WT" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd $FIX && git commit -m test\"},\"cwd\":\"$WT\"}"
+assert_exit "worktree: cd <primary on main> && git commit blocked" 2
+CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git commit -m test\"},\"cwd\":\"$FIX\"}"
+assert_exit "worktree: plain commit in primary on main blocked" 2
+
+# jq-less fallback parses escaped quotes and cwd the same way
+mkdir -p "$FIX/nojq-bin"
+for b in bash git sed cat head dirname mktemp pwd printf; do
+  p=$(command -v "$b") && ln -sf "$p" "$FIX/nojq-bin/$b"
+done
+LAST_OUT=$(cd "$FIX" && printf '%s' "{\"tool_input\":{\"command\":\"cd \\\"$WTS\\\" && git commit -m test\"},\"cwd\":\"$FIX\"}" \
+  | PATH="$FIX/nojq-bin" CLAUDE_PROJECT_DIR=$FIX "$FIX/nojq-bin/bash" "$COMMIT_GUARD" 2>&1)
+LAST_EXIT=$?
+assert_exit "worktree: jq-less quoted cd allowed" 0
+LAST_OUT=$(cd "$FIX" && printf '%s' "{\"tool_input\":{\"command\":\"git commit -m \\\"msg\\\"\"},\"cwd\":\"$FIX\"}" \
+  | PATH="$FIX/nojq-bin" CLAUDE_PROJECT_DIR=$FIX "$FIX/nojq-bin/bash" "$COMMIT_GUARD" 2>&1)
+LAST_EXIT=$?
+assert_exit "worktree: jq-less commit on main blocked" 2
 rm -rf "$FIX"
 
 ####################################################################
