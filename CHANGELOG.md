@@ -11,7 +11,7 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
-## [5.1.4] - 2026-10-05
+## [5.1.4] - 2026-10-14
 
 **Commits inside a git worktree are judged by the worktree's branch.** The commit guard no longer refuses a feature-branch commit just because the primary checkout sits on `main`.
 
@@ -21,6 +21,7 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 - **`git -C <dir> commit` on `main` slipped past the guard entirely.** Detection was a substring match on `git commit`, so any `-C` (or other global option) between `git` and `commit` hid the commit, as did `--git-dir`/`--work-tree` and `GIT_DIR=`. Detection now parses git's global options (including the space-separated `--git-dir <dir>` form), still catches `/usr/bin/git commit`, backtick, and `bash -c '...'` forms, and stops treating `git commit-tree` as a commit.
 - **The jq-less fallback truncated commands at the first escaped quote**, so `cd \"<dir>\" && git commit` lost its target. It now reads JSON string values with escapes intact and decodes `\\`, `\"`, `\n`, and `\t`.
 - `bts_branch` and `bts_branch_class` accept an optional directory; callers that pass none keep the old `bts_root` behavior.
+- `.cursor-plugin/marketplace.json` had drifted at 5.1.0 through the 5.1.1 to 5.1.3 releases. It now matches the other manifests.
 
 ### Tests
 
