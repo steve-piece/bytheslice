@@ -130,69 +130,204 @@ bts_branch_class() {
   esac
 }
 
-# Resolve one `cd` / `git -C` path argument against a base directory.
-# Strips one layer of matching quotes, expands a leading `~`, and anchors
-# relative paths at the base. Prints the resolved path only if it exists.
-_bts_resolve_dir() {
-  local arg="$1" base="$2"
-  case "$arg" in
-    \"*\") arg=${arg#\"}; arg=${arg%\"} ;;
-    \'*\') arg=${arg#\'}; arg=${arg%\'} ;;
+# Expand one shell word the way bash would for a path argument: remove
+# quotes and backslash escapes, expand a leading `~` or `~/`. Returns 1 for
+# a word that needs expansion this parser does not model ($VAR, `cmd`,
+# globs, ~user), so the caller can fail closed.
+_bts_shell_word() {
+  local w="$1" out="" c q="" i=0
+  case "$w" in
+    "~") out=$HOME; w="" ;;
+    "~/"*) out=$HOME; w=${w#\~} ;;
+    "~"*) return 1 ;;
   esac
-  case "$arg" in
-    "~") arg=$HOME ;;
-    "~/"*) arg="$HOME/${arg#\~/}" ;;
-  esac
-  case "$arg" in
-    /*) ;;
-    *) arg="$base/$arg" ;;
-  esac
-  [ -d "$arg" ] && (cd "$arg" 2>/dev/null && pwd -P)
+  while [ "$i" -lt "${#w}" ]; do
+    c=${w:$i:1}
+    if [ "$q" = "'" ]; then
+      if [ "$c" = "'" ]; then q=""; else out+=$c; fi
+    elif [ "$q" = '"' ]; then
+      case "$c" in
+        '"') q="" ;;
+        '$'|'`') return 1 ;;
+        '\')
+          i=$((i + 1)); c=${w:$i:1}
+          case "$c" in
+            '$'|'`'|'"'|'\') out+=$c ;;
+            *) out+="\\$c" ;;
+          esac ;;
+        *) out+=$c ;;
+      esac
+    else
+      case "$c" in
+        "'"|'"') q=$c ;;
+        '\') i=$((i + 1)); out+=${w:$i:1} ;;
+        '$'|'`'|'*'|'?'|'[') return 1 ;;
+        *) out+=$c ;;
+      esac
+    fi
+    i=$((i + 1))
+  done
+  printf '%s' "$out"
 }
 
-# Resolve the git toplevel a Bash command's `git commit` will run in.
-# Args: command string, base dir (the hook input's .cwd; falls back to pwd).
-# Returns 1 with no output when the command contains no `git commit`.
-#
-# Resolution order, so a commit inside a worktree reads the worktree's HEAD
-# instead of the primary checkout's (CLAUDE_PROJECT_DIR):
-#   1. `cd <dir>` steps that precede the commit, applied in order
-#   2. `git -C <dir>` options on the commit invocation itself
-#   3. the base dir (hook cwd) when it sits inside a git repo
-#   4. bts_root as the last resort
-bts_commit_dir() {
-  local cmd="$1" base="${2:-}" dir next match prefix opts rest
-  local q="'"
-  local arg="(\"[^\"]*\"|${q}[^${q}]*${q}|[^[:space:];&|()\"${q}]+)"
-  local opt="([[:space:]]+-C[[:space:]]+${arg}|[[:space:]]+-c[[:space:]]+${arg}|[[:space:]]+--?[[:alnum:]][[:alnum:]-]*(=[^[:space:];&|]*)?)"
-  local git_re="(^|[[:space:];&|(])git(${opt}*)[[:space:]]+commit([[:space:];&|)]|$)"
-  local cd_re="(^|[[:space:];&|(])cd[[:space:]]+${arg}"
-  local c_re="-C[[:space:]]+${arg}"
+# Resolve one `cd` / `git -C` / `--git-dir` path argument against a base
+# directory. Prints the physical path and returns 0 when it exists, returns 1
+# when it does not, and returns 2 when the word cannot be expanded here.
+_bts_resolve_dir() {
+  local p
+  p=$(_bts_shell_word "$1") || return 2
+  case "$p" in
+    /*) ;;
+    *) p="$2/$p" ;;
+  esac
+  [ -d "$p" ] || return 1
+  (cd "$p" 2>/dev/null && pwd -P)
+}
 
-  [[ $cmd =~ $git_re ]] || return 1
-  match=${BASH_REMATCH[0]}
-  opts=${BASH_REMATCH[2]}
-  prefix=${cmd%%"$match"*}
+# Every directory whose branch decides whether a Bash command's `git commit`
+# lands on main. Args: command string, base dir (the hook input's .cwd;
+# falls back to pwd). Prints one directory per line (a git toplevel, or a
+# git dir for `--git-dir` / `GIT_DIR`). Returns 1 with no output when the
+# command contains no `git commit`. The guard blocks if any line is on main.
+#
+# Each `git commit` in the command is judged on its own, so a later commit
+# cannot hide behind an earlier worktree commit. For each one:
+#   1. `cd` / `pushd` steps before it, applied in order (`cd -` included)
+#   2. `git -C <dir>` and `--git-dir` on the commit invocation itself
+#   3. the base dir (hook cwd) when it sits inside a git repo
+#   4. bts_root when none of the above is inside a repo
+# The parser fails closed: when a step cannot be modeled (a cd inside a
+# subshell or quoted child shell that ends before the commit, `popd`, a
+# `$VAR` path, `GIT_DIR=`), every directory the command visits is printed,
+# plus bts_root for an unexpandable path, so a main checkout among them
+# still blocks.
+bts_commit_dirs() {
+  local cmd="$1" base="${2:-}"
+  local start rest consumed match opts r a rc next flag verb between t
+  local dir prev amb unres seen gitdir top out="" uniq="" line found=1
+  local nl='
+'
+  local q="'"
+  local word="(\"[^\"]*\"|${q}[^${q}]*${q}|\\\\.|[^[:space:];&|()<>\"${q}\\\\])+"
+  local opt="([[:space:]]+(-C|-c|--git-dir|--work-tree|--namespace|--super-prefix|--config-env)[[:space:]]+${word}|[[:space:]]+--?[[:alnum:]][[:alnum:]-]*(=${word})?)"
+  local git_re="(^|[[:space:];&|(){}!\`\"${q}/\\\\])git(${opt}*)[[:space:]]+commit([[:space:];&|)}\`\"${q}]|$)"
+  local cd_re="(^|[[:space:];&|(){!\`\"${q}])(cd|pushd|popd)(([[:space:]]+(-[LPe@]+|--))*)([[:space:]]+${word})?([[:space:];&|)}<>\`\"${q}]|$)"
+  local c_re="(^|[[:space:]])(-C|--git-dir)(=|[[:space:]]+)(${word})"
+  local gd_re="(^|[[:space:];&|(){!\`\"${q}])(export[[:space:]]+)?GIT_DIR=(${word})"
 
   if [ -n "$base" ] && [ -d "$base" ]; then
-    dir=$(cd "$base" 2>/dev/null && pwd -P)
+    start=$(cd "$base" 2>/dev/null && pwd -P)
   else
-    dir=$(pwd -P)
+    start=$(pwd -P)
   fi
 
-  rest=$prefix
-  while [[ $rest =~ $cd_re ]]; do
-    next=$(_bts_resolve_dir "${BASH_REMATCH[2]}" "$dir") && dir=$next
-    rest=${rest#*"${BASH_REMATCH[0]}"}
-  done
+  rest=$cmd
+  consumed=""
+  while [[ $rest =~ $git_re ]]; do
+    found=0
+    match=${BASH_REMATCH[0]}
+    opts=${BASH_REMATCH[2]}
+    consumed="$consumed${rest%%"$match"*}"
+    rest=${rest#*"$match"}
 
-  rest=$opts
-  while [[ $rest =~ $c_re ]]; do
-    next=$(_bts_resolve_dir "${BASH_REMATCH[1]}" "$dir") && dir=$next
-    rest=${rest#*"${BASH_REMATCH[0]}"}
-  done
+    dir=$start prev="" amb=0 unres=0 seen=$start gitdir=""
 
-  git -C "$dir" rev-parse --show-toplevel 2>/dev/null || bts_root
+    # 1. cd / pushd / popd steps before this commit
+    r=$consumed
+    while [[ $r =~ $cd_re ]]; do
+      verb=${BASH_REMATCH[2]}
+      a=${BASH_REMATCH[6]}
+      a=${a#"${a%%[![:space:]]*}"}
+      r=${r#*"${BASH_REMATCH[0]}"}
+      # A cd inside a subshell, backticks, or a quoted `bash -c` that closes
+      # before the commit does not move it. Detect the close and fail closed.
+      between=$r
+      t=${between//[^(]/}; next=${#t}
+      t=${between//[^)]/}
+      [ "${#t}" -gt "$next" ] && amb=1
+      for flag in '`' '"' "'"; do
+        t=${between//[^$flag]/}
+        [ $(( ${#t} % 2 )) = 1 ] && amb=1
+      done
+      case "$verb" in
+        popd) amb=1; continue ;;
+        pushd) case "$a" in ""|[+-][0-9]*) amb=1; continue ;; esac ;;
+      esac
+      if [ "$a" = "-" ]; then
+        if [ -n "$prev" ]; then
+          next=$prev; prev=$dir; dir=$next
+        else
+          amb=1
+        fi
+        continue
+      fi
+      [ -n "$a" ] || a='~'
+      next=$(_bts_resolve_dir "$a" "$dir"); rc=$?
+      if [ "$rc" = 0 ]; then
+        prev=$dir; dir=$next; seen="$seen$nl$dir"
+      elif [ "$rc" = 2 ]; then
+        amb=1; unres=1
+      fi
+    done
+
+    # 2. git -C <dir> and --git-dir on the commit itself
+    r=$opts
+    while [[ $r =~ $c_re ]]; do
+      flag=${BASH_REMATCH[2]}
+      a=${BASH_REMATCH[4]}
+      r=${r#*"${BASH_REMATCH[0]}"}
+      next=$(_bts_resolve_dir "$a" "$dir"); rc=$?
+      if [ "$rc" = 0 ]; then
+        if [ "$flag" = "-C" ]; then dir=$next; else gitdir=$next; fi
+      elif [ "$rc" = 2 ]; then
+        amb=1; unres=1
+      fi
+    done
+
+    # GIT_DIR=<dir> anywhere before the commit is checked as well
+    r=$consumed
+    while [[ $r =~ $gd_re ]]; do
+      a=${BASH_REMATCH[3]}
+      r=${r#*"${BASH_REMATCH[0]}"}
+      next=$(_bts_resolve_dir "$a" "$start"); rc=$?
+      if [ "$rc" = 0 ]; then
+        out="$out$next$nl"
+      elif [ "$rc" = 2 ]; then
+        amb=1; unres=1
+      fi
+    done
+
+    # 3 and 4. the modeled directory, else bts_root
+    if [ -n "$gitdir" ]; then
+      out="$out$gitdir$nl"
+    else
+      top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || top=$(bts_root)
+      out="$out$top$nl"
+    fi
+
+    if [ "$amb" = 1 ]; then
+      while IFS= read -r line; do
+        top=$(git -C "$line" rev-parse --show-toplevel 2>/dev/null) && out="$out$top$nl"
+      done <<EOF
+$seen
+$dir
+EOF
+      [ "$unres" = 1 ] && out="$out$(bts_root)$nl"
+    fi
+    consumed="$consumed$match"
+  done
+  [ "$found" = 0 ] || return 1
+
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    case "$nl$uniq" in
+      *"$nl$line$nl"*) continue ;;
+    esac
+    uniq="$uniq$line$nl"
+  done <<EOF
+$out
+EOF
+  printf '%s' "$uniq"
 }
 
 # "clean" or "dirty" based on git working tree state.

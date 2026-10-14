@@ -55,6 +55,24 @@ run_hook_in() {
   LAST_EXIT=$?
 }
 
+# Encode a string as a JSON string literal (quotes, backslashes, newlines).
+json_str() {
+  local s="$1"
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\n'/\\n}
+  printf '"%s"' "$s"
+}
+
+# Run pre-commit-guard on a raw Bash command, so tests need no hand-escaped
+# JSON. Args: cwd (process cwd and input .cwd), project dir, command.
+# Sets globals: LAST_EXIT, LAST_OUT.
+run_guard() {
+  local cwd="$1" proj="$2" cmd="$3"
+  CLAUDE_PROJECT_DIR=$proj run_hook_in "$cwd" "$COMMIT_GUARD" \
+    "{\"tool_input\":{\"command\":$(json_str "$cmd")},\"cwd\":$(json_str "$cwd")}"
+}
+
 # Make a primary checkout on main with two linked worktrees on feature
 # branches under .claude/worktrees/ (one path contains a space, to exercise
 # quoting). Mirrors the layout Claude Code creates. Echoes the primary path.
@@ -427,6 +445,54 @@ LAST_OUT=$(cd "$FIX" && printf '%s' "{\"tool_input\":{\"command\":\"git commit -
   | PATH="$FIX/nojq-bin" CLAUDE_PROJECT_DIR=$FIX "$FIX/nojq-bin/bash" "$COMMIT_GUARD" 2>&1)
 LAST_EXIT=$?
 assert_exit "worktree: jq-less commit on main blocked" 2
+LAST_OUT=$(cd "$WT" && printf '%s' "{\"tool_input\":{\"command\":\"git -C ../wt\\\\ space/../../.. commit -m x\"},\"cwd\":\"$WT\"}" \
+  | PATH="$FIX/nojq-bin" CLAUDE_PROJECT_DIR=$WT "$FIX/nojq-bin/bash" "$COMMIT_GUARD" 2>&1)
+LAST_EXIT=$?
+assert_exit "worktree: jq-less backslash-escaped -C path to main blocked" 2
+
+# Shell forms that must not let a main commit through. Each one fooled the
+# first cut of the resolver, which modeled only the first commit in the
+# command and only a plain `cd <dir>` sequence before it.
+run_guard "$FIX" "$FIX" "git -C $WT commit -m a && git -C $FIX commit -m b"
+assert_exit "worktree: second commit on main blocked" 2
+run_guard "$FIX" "$FIX" "cd $WT && git commit -m a && cd $FIX && git commit -m b"
+assert_exit "worktree: cd back to main for a second commit blocked" 2
+run_guard "$FIX" "$FIX" "(cd $WT && make) && git commit -m x"
+assert_exit "worktree: subshell cd does not move the commit" 2
+run_guard "$FIX" "$FIX" "cd $WT && cd - && git commit -m x"
+assert_exit "worktree: cd - back to main blocked" 2
+run_guard "$WT" "$WT" "pushd $FIX && git commit -m x"
+assert_exit "worktree: pushd to main blocked" 2
+run_guard "$WT" "$WT" "cd -P $FIX && git commit -m x"
+assert_exit "worktree: cd -P to main blocked" 2
+run_guard "$WT" "$WT" "git --git-dir=$FIX/.git --work-tree=$FIX commit -m x"
+assert_exit "worktree: --git-dir=<main> blocked" 2
+run_guard "$WT" "$WT" "git --git-dir $FIX/.git --work-tree $FIX commit -m x"
+assert_exit "worktree: --git-dir <main> (space form) blocked" 2
+run_guard "$WT" "$WT" "GIT_DIR=$FIX/.git git commit -m x"
+assert_exit "worktree: GIT_DIR=<main> blocked" 2
+run_guard "$WT" "$FIX" "cd \"\$MAIN\" && git commit -m x"
+assert_exit "worktree: unresolvable cd also checks the project dir" 2
+run_guard "$FIX" "$FIX" "/usr/bin/git commit -m x"
+assert_exit "worktree: path-qualified git on main blocked" 2
+run_guard "$FIX" "$FIX" "echo \`git commit -m x\`"
+assert_exit "worktree: backtick commit on main blocked" 2
+run_guard "$WT" "$WT" "bash -c 'cd $FIX && git commit -m x'"
+assert_exit "worktree: bash -c cd to main blocked" 2
+run_guard "$WT" "$WT" "git -C ../wt\\ space/../../.. commit -m x"
+assert_exit "worktree: backslash-escaped -C path to main blocked" 2
+
+# ...without blocking the ordinary worktree forms next to them
+run_guard "$FIX" "$FIX" "pushd $WT && git commit -m x"
+assert_exit "worktree: pushd to wt allowed" 0
+run_guard "$FIX" "$FIX" "cd .claude/worktrees/wt\\ space && git commit -m x"
+assert_exit "worktree: backslash-escaped cd to wt allowed" 0
+run_guard "$FIX" "$FIX" "git --git-dir=$FIX/.git/worktrees/wt --work-tree=$WT commit -m x"
+assert_exit "worktree: --git-dir=<wt gitdir> allowed" 0
+run_guard "$FIX" "$FIX" "(cd $WT && git commit -m x)"
+assert_exit "worktree: commit inside a subshell cd allowed" 0
+run_guard "$FIX" "$FIX" "cd $WT && git commit -m \"\$(printf 'a\\nb')\" && git log -1"
+assert_exit "worktree: \$(...) message after the commit allowed" 0
 rm -rf "$FIX"
 
 ####################################################################

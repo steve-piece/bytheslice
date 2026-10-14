@@ -33,7 +33,7 @@ This file is the **canonical source of truth** for hook behavior. Every row is o
 
 ## PreToolUse on Bash: `pre-commit-guard.sh`
 
-The branch is read from the directory the commit runs in, resolved in this order: `cd <dir>` steps before the commit, `git -C <dir>` on the commit itself, the hook input's `.cwd` (or the process cwd) when inside a repo, then `$CLAUDE_PROJECT_DIR`. A primary checkout on `main` with the commit running in a linked worktree on a feature branch is therefore a feature-branch commit.
+The branch is read from the directory the commit runs in, resolved in this order: `cd` / `pushd` steps before the commit (`cd -` included), `git -C <dir>` or `--git-dir` on the commit itself, the hook input's `.cwd` (or the process cwd) when inside a repo, then `$CLAUDE_PROJECT_DIR`. A primary checkout on `main` with the commit running in a linked worktree on a feature branch is therefore a feature-branch commit. Every `git commit` in a command is checked, and the guard blocks if any of them lands on `main`. When a step cannot be modeled (a `cd` inside a subshell or `bash -c` that ends before the commit, `popd`, a `$VAR` or `$(...)` path, `GIT_DIR=`), the guard fails closed: it checks every directory the command visits, plus `$CLAUDE_PROJECT_DIR` for an unexpandable path.
 
 | Bash command | Branch | Expected |
 |---|---|---|
@@ -43,6 +43,10 @@ The branch is read from the directory the commit runs in, resolved in this order
 | `git commit` with hook cwd (or input `.cwd`) inside a worktree | primary on `main`, worktree on feature branch | **WARN** (not blocked) |
 | `git -C <primary> commit`, `cd <primary> && git commit` | primary on `main`, run from a worktree | **BLOCK** |
 | `git commit` with hook cwd outside any repo | `$CLAUDE_PROJECT_DIR` on `main` | **BLOCK** (falls back to the project dir) |
+| `git -C <worktree> commit && git -C <primary> commit`, `cd <wt> && git commit && cd <primary> && git commit` | primary on `main` | **BLOCK** (every commit is checked) |
+| `(cd <worktree> && make) && git commit`, `cd <wt> && cd - && git commit` | cwd is the primary on `main` | **BLOCK** |
+| `pushd <primary>`, `cd -P <primary>`, `--git-dir <primary>/.git`, `GIT_DIR=<primary>/.git`, `/usr/bin/git commit`, `` `git commit` ``, `bash -c 'cd <primary> && git commit'`, backslash-escaped paths | primary on `main`, run from a worktree | **BLOCK** |
+| `cd "$VAR" && git commit`, `git -C "$(...)" commit` | `$CLAUDE_PROJECT_DIR` on `main` | **BLOCK** (unexpandable path fails closed, even when it would have named a worktree) |
 | `git status`, `git -C <dir> status`, `git commit-tree` | any | **PASS** (not a git commit) |
 | `npm test` | any | **PASS** |
 | any command | `BTS_HOOKS_DISABLED=1` | **PASS** |

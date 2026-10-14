@@ -25,23 +25,40 @@ if command -v jq >/dev/null 2>&1; then
   CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
   HOOK_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
 fi
-# jq-less fallback. Tolerates escaped quotes inside the JSON string values,
-# so `git -C \"<dir>\" commit` is not truncated at the first quote.
+# jq-less fallback. Reads JSON string values with their escapes intact, so
+# `git -C \"<dir>\" commit` is not truncated at the first quote, then decodes
+# the escapes a shell command carries (\\, \", \n, \t).
+json_unescape() {
+  local s="$1"
+  s=${s//\\\\/$'\001'}
+  s=${s//\\\"/\"}
+  s=${s//\\n/$'\n'}
+  s=${s//\\t/$'\t'}
+  printf '%s' "${s//$'\001'/\\}"
+}
 if [ -z "$CMD" ]; then
-  CMD=$(printf '%s' "$INPUT" | sed -nE 's/.*"command"[[:space:]]*:[[:space:]]*"(([^"\\]|\\.)*)".*/\1/p' | sed 's/\\"/"/g')
+  CMD=$(json_unescape "$(printf '%s' "$INPUT" | sed -nE 's/.*"command"[[:space:]]*:[[:space:]]*"(([^"\\]|\\.)*)".*/\1/p')")
 fi
 if [ -z "$HOOK_CWD" ]; then
-  HOOK_CWD=$(printf '%s' "$INPUT" | sed -nE 's/.*"cwd"[[:space:]]*:[[:space:]]*"(([^"\\]|\\.)*)".*/\1/p')
+  HOOK_CWD=$(json_unescape "$(printf '%s' "$INPUT" | sed -nE 's/.*"cwd"[[:space:]]*:[[:space:]]*"(([^"\\]|\\.)*)".*/\1/p')")
 fi
 
 # Only act on `git commit` invocations (including `git -C <dir> commit`).
-# Anything else passes silently.
-COMMIT_DIR=$(bts_commit_dir "$CMD" "$HOOK_CWD") || exit 0
+# Anything else passes silently. Every commit in the command is checked, and
+# the first directory listed is the one the staged summary reads.
+COMMIT_DIRS=$(bts_commit_dirs "$CMD" "$HOOK_CWD") || exit 0
 
-if [ "$(bts_branch_class "$COMMIT_DIR")" = "main" ]; then
-  printf '[bytheslice] refusing git commit on %s (%s). Switch to a feature branch.\n' "$(bts_branch "$COMMIT_DIR")" "$COMMIT_DIR" >&2
-  exit 2
-fi
+COMMIT_DIR=""
+while IFS= read -r d; do
+  [ -n "$d" ] || continue
+  [ -n "$COMMIT_DIR" ] || COMMIT_DIR=$d
+  if [ "$(bts_branch_class "$d")" = "main" ]; then
+    printf '[bytheslice] refusing git commit on %s (%s). Switch to a feature branch.\n' "$(bts_branch "$d")" "$d" >&2
+    exit 2
+  fi
+done <<EOF
+$COMMIT_DIRS
+EOF
 
 STAGED=$(git -C "$COMMIT_DIR" diff --cached --name-only 2>/dev/null | head -10)
 if [ -n "$STAGED" ]; then
