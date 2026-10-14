@@ -8,7 +8,7 @@ Deterministic guards that replace repetitive prose in CLAUDE.md and SKILL.md fil
 |---|---|---|
 | `precheck-skill.sh` | `UserPromptSubmit` | Detects a /bytheslice slash command in the prompt and runs per-skill preconditions. BLOCKs `/sell-slice` when the master checklist is missing; BLOCKs `/box-it-up` on main; WARN-injects dirty-tree / missing-gh / Prep-incomplete. |
 | `shop-status.sh` | `SessionStart` | Reads `docs/plans/00_master_checklist.md` if present and injects a compact summary: Prep progress, plus pie/slice counts and the first open pie (nested v5) or stage counts and the next not-started row (flat v4). |
-| `pre-commit-guard.sh` | `PreToolUse` (Bash matcher) | BLOCKs `git commit` on main/master. Otherwise WARN-injects a short staged-files summary. |
+| `pre-commit-guard.sh` | `PreToolUse` (Bash matcher) | BLOCKs `git commit` on main/master, reading the branch of the directory each commit in the command runs in (parsed `cd`/`pushd`, `git -C`, `--git-dir`, `GIT_DIR=`, else the hook cwd), so worktree commits are judged by the worktree's branch. Shell forms it cannot model (subshell `cd`, `popd`, `$VAR` paths) fail closed. Otherwise WARN-injects a short staged-files summary. |
 | `stage-plan-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects (exit 0) on `Write`/`Edit` to `docs/plans/stage_*.md` while `/sell-slice` is the current session's active skill — plans are normally static during delivery. Never blocks (downgraded from BLOCK in v5). Session-id guarded; fails open if state is missing or cross-session. |
 | `library-gate-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects when a `/sell-slice` run writes to a watched production route (`app/**`, `src/app/**`, `components/**`, `src/components/**`) without a recorded library-preview approval. Never blocks. Dormant until `record-library-approval.sh arm` writes `library-approvals.json` (Phase 4.5 arms the gate when the approval window opens). |
 | `compact-snapshot.sh` | `PreCompact` | Never blocks compaction (always exit 0). Writes `compact-snapshot.json` capturing session/skill/branch, last commit sha + subject, and the next up-to-3 unfinished checklist lines so the post-compaction turn can re-orient. |
@@ -38,7 +38,8 @@ Run it locally before committing changes to anything under `hooks/`. No CI workf
 | `bts_root` | absolute path of the active project (uses `$CLAUDE_PROJECT_DIR` then git toplevel then pwd) |
 | `bts_checklist_path` | path to `docs/plans/00_master_checklist.md` or empty |
 | `bts_prep_counts` | `"<done> <total>"` of Prep checkboxes, empty if no `## Prep` section |
-| `bts_branch` / `bts_branch_class` | current branch + `"main"` / `"feature"` / `"unknown"` classification |
+| `bts_branch [dir]` / `bts_branch_class [dir]` | current branch + `"main"` / `"feature"` / `"unknown"` classification, read from `dir` (default `bts_root`) |
+| `bts_commit_dirs <cmd> [cwd]` | one directory per line whose branch decides each `git commit` in a Bash command (`cd`/`pushd` steps, then `git -C`/`--git-dir`, then `cwd`, then `bts_root`; fails closed by listing every visited dir when a step cannot be modeled); returns 1 when the command has no `git commit` |
 | `bts_tree_state` | `"clean"` or `"dirty"` |
 | `bts_state_dir` | ensures `.claude/.bytheslice-state/` exists, echoes path |
 | `bts_session_id <json>` | extracts `session_id` from a hook input envelope |
