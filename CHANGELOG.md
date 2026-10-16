@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/brand/logo.png" alt="ByTheSlice" width="300"></p>
+
 # Changelog
 
 All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project sticks to [semver](https://semver.org/).
@@ -8,6 +10,22 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 ---
 
 ## [Unreleased]
+
+---
+
+## [5.1.5] - 2026-10-16
+
+**ByTheSlice has a logo.** The red script wordmark now heads the README, the docs and this changelog, and both plugin manifests point at it so marketplaces can show it.
+
+### Added
+
+- `assets/brand/`: `logo.png` (transparent wordmark, for docs and READMEs), `logo-square.png` (512 by 512 on cream, for marketplace and directory tiles) and `logo-source.webp` (the original artwork, kept for re-exports).
+- `.claude-plugin/plugin.json` sets `icon` to the square logo, which Anthropic's plugin directory reads for the listing. `.cursor-plugin/plugin.json` and the Cursor marketplace entry set `logo` to the same file.
+- `package.json` ships `assets/brand` so the paths the manifests name exist in the npm package.
+
+### Changed
+
+- README, `docs/architecture.md` and `docs/agents.md` open with the wordmark.
 
 ---
 

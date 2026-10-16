@@ -1,9 +1,9 @@
 <!-- README.md -->
-<!-- ByTheSlice — npm + GitHub README. Pizza-themed, two-tier: simple-at-top + technical-below. -->
+<!-- ByTheSlice: npm + GitHub README. Pizza-themed, two-tier: simple-at-top + technical-below. -->
 
 <div align="center">
 
-# 🍕 ByTheSlice
+<h1><img src="assets/brand/logo.png" alt="ByTheSlice" width="460"></h1>
 
 **A grab-and-go pizza shop for shipping software.**
 

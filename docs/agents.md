@@ -1,3 +1,5 @@
+<p align="center"><img src="../assets/brand/logo.png" alt="ByTheSlice" width="260"></p>
+
 # 🍕 Agent Roster
 
 Every ByTheSlice subagent in one table, in plain English. The 48 live agents are registered plugin agents: type `@bytheslice:<name>` in any Claude Code session to aim one at something directly, or just run the skills and let them dispatch. Registration means each agent's model tier, effort level, and tool allowlist are enforced by the platform, not just suggested.
