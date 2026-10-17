@@ -1,5 +1,7 @@
 <!-- docs/architecture.md -->
-# 🍕 ByTheSlice — Architecture & Conventions
+<p align="center"><img src="../assets/brand/logo.png" alt="ByTheSlice" width="260"></p>
+
+# 🍕 ByTheSlice: Architecture & Conventions
 
 The under-the-hood reference for ByTheSlice. The [README](../README.md) covers the day-to-day motion; this doc covers *why the kitchen works the way it does* — the rules the plugin enforces, the verification model, and how legacy projects migrate.
 
