@@ -810,9 +810,8 @@ const caseStart = root.children.length;
 capturePiece('case', caseStart);
 function miniPie() { const g = G(0, 0, 0); P(cyl(.22, .22, .02, 24), PZ.sauce, 0, .012, 0, g); P(cyl(.19, .19, .02, 24), PZ.cheese, 0, .022, 0, g); P(tor(.21, .028), PZ.crust, 0, .025, 0, g).rotation.x = Math.PI / 2; for (let k = 0; k < 5; k++) { const a = k * 1.3 + .4, r = k === 4 ? 0 : .11; const d = P(sph(.036, 12, 6), PZ.pep, Math.cos(a) * r, .036, Math.sin(a) * r, g); d.scale.set(1, .2, 1); } return g; }
 function addServed() {
-  if (sceneMode === 'live') return;
   const k = shelfPies.length % 4; if (shelfPies.length >= 4) { const old = shelfPies.shift(); root.remove(old); shelfPies.forEach((p, i) => p.position.x = DX - .78 + i * .52); }
-  const p = miniPie(); p.position.set(DX - .78 + Math.min(shelfPies.length, 3) * .52, .89, DZ); shelfPies.push(p);
+  const p = miniPie(); p.userData.orderSource = sceneMode; p.position.set(DX - .78 + Math.min(shelfPies.length, 3) * .52, .89, DZ); shelfPies.push(p);
 }
 for (let i = 0; i < 3; i++) addServed();
 // Small fittings use the same walnut, iron and brass palette as the approved room.
@@ -2836,8 +2835,7 @@ function tagFor(a, text) { const el = document.createElement('div'); el.classNam
 
 // ---------- pizza ----------
 function makePizza(n, single = false) {
-  if (sceneMode === 'live') return { g: new THREE.Group(), wedges: [] };
-  const g = G(PIZ.x, PIZ.y, PIZ.z, root, 'pizza');
+  const g = G(PIZ.x, PIZ.y, PIZ.z, root, 'pizza'); g.userData.orderSource = sceneMode;
   if (single) return makeSlice(g);
   P(cyl(.47, .47, .025, 40), M.walnutL, 0, -.012, 0, g);
   P(cyl(.4, .41, .03, 40), M.dough, 0, .015, 0, g);
@@ -2922,13 +2920,13 @@ function renderOrder() {
   $('#tkTitle').textContent = `${nm(cur.o)} · ${cur.o.title}`;
   $('#tkSteps').innerHTML = STEP.map((st, i) => `<i class="${i < cur.stage ? 'done' : i === cur.stage ? 'now' : ''}" title="${st}"></i>`).join('');
   $('#tkNow').textContent = cur.stage >= STEP.length ? 'Served' : STEP[cur.stage];
-  $('#tkSlices').innerHTML = cur.slices.map(sl => `<i class="d-${sl.status}" title="${sl.id} ${sl.name}: ${sliceLabel(sl)}"></i>`).join('');
+  $('#tkSlices').innerHTML = cur.slices.map(sl => `<i class="d-${sl.status}" title="${escapeCard(sl.id)} ${escapeCard(sl.name)}: ${sliceLabel(sl)}"></i>`).join('');
   $('#tracker').setAttribute('aria-label', `${nm(cur.o)}, ${cur.o.title}: ${cur.stage >= STEP.length ? 'served' : STEP[cur.stage]}. Open the order.`);
   if (!sheet.hidden && sheet.dataset.kind === 'orders') renderOrdersSheet();
 }
 function renderStats() {
   const pies = served.filter(s => !s.slice); $('#stCost').textContent = sceneMode === 'live' ? 'n/a' : '$' + cost.toFixed(2); $('#stServed').textContent = pies.length;
-  $('#stGate').textContent = pies.length ? Math.round(pies.filter(s => s.first).length / pies.length * 100) + '%' : 'n/a';
+  $('#stGate').textContent = sceneMode === 'live' ? 'n/a' : pies.length ? Math.round(pies.filter(s => s.first).length / pies.length * 100) + '%' : 'n/a';
 }
 const feedEl = $('#feed'), LOG = [];
 function feed(text) {
@@ -2956,15 +2954,14 @@ function setTickets() {
 // the line: first customer at the window, then along the storefronts to the end of Main Street, leaving doors and shop windows clear
 const custQueue = [], QGAP = [[-9.9, -8.3], [-16.8, -14.3], [-21.0, -18.5], [-24.15, -21.65], [-28.2, -25.7]], QSLOT = [[-3.1, 4.8], [-4.4, 4.95]], QLANE = 5.72;
 for (let x = -5.55; x > -41; x -= 1.1) { const g = QGAP.find(([lo, hi]) => x > lo - .3 && x < hi + .3); if (g) x = g[0] - .3; QSLOT.push([x, 4.95]); }
-const qslot = i => QSLOT[Math.min(i, QSLOT.length - 1)];
+const qslot = i => QSLOT[i] || [QSLOT.at(-1)[0] - (i - QSLOT.length + 1) * 1.1, 4.95];
 const custLooks = [{ hair: 'bob', hairC: 0x3b2a22, top: 0x7e9db5 }, { hair: 'beanie', hairC: 0x2a1d17, hatC: 0xc98f86, top: 0xd8a23c }, { hair: 'puffs', hairC: 0x1f1813, top: 0xc98f86 }, { hair: 'quiff', hairC: 0x8a5a3a, top: 0x6c8a52 }];
 let custN = 0;
 function spawnCustomer(order, slot, walkIn = true, added = false) {
-  if (sceneMode === 'live') return;
   const look = custLooks[custN++ % custLooks.length], q = qslot(slot);
-  const a = new Actor('customer' + custN, { ...look, skin: skins[custN % skins.length], pants: 0x4f5e69 }, walkIn ? -44 : q[0], walkIn ? QLANE : q[1], F.E, true);
-  a.order = order; a.speed = 1.5; a.task = `Waiting for ${nm(order)}`; a.newUntil = added ? simT + 22 : 0;
-  tagFor(a, nm(order));
+  const a = new Actor('customer' + custN, { ...look, skin: skins[custN % skins.length], pants: 0x4f5e69 }, walkIn ? Math.min(-44, q[0] - 3) : q[0], walkIn ? QLANE : q[1], F.E, true);
+  a.liveOrder = sceneMode === 'live'; a.order = order; a.speed = 1.5; a.task = `Waiting for ${nm(order)}`; a.newUntil = added ? simT + 22 : 0;
+  a.added = added; tagFor(a, added && a.liveOrder ? `Added to the plan: ${nm(order)}` : nm(order));
   custQueue.push(a);
   if (walkIn) a.walk([[q[0], QLANE], q], slot === 0 ? F.N : F.E);
   else a.face(slot === 0 ? F.N : F.E);
@@ -2973,8 +2970,8 @@ function spawnCustomer(order, slot, walkIn = true, added = false) {
 function advanceQueue() { custQueue.forEach((c, i) => c.walk([qslot(i)], i === 0 ? F.N : F.E)); }
 // a new pie or slice added to the plan: a new customer walks up Main Street and joins the back of the line
 function addPlanned(o) {
-  if (sceneMode !== 'demo') return;
   spawnCustomer(o, custQueue.length, true, true); setTickets();
+  if (sceneMode === 'live') return;
   callout(`Added to the plan: ${nm(o)}`, 'plus'); feed(`/special-order added ${nm(o)}, ${o.title}. A new customer joins the back of the line`);
 }
 // the customer whose order is cooking stands in a gold ring with a gold tag; everyone else in line is planned work
@@ -2988,9 +2985,152 @@ function lineUpdate() {
   const front = custQueue[0], live = !!(cur && front && cur.o === front.order && !front.hidden && !closed && cur.stage < 6);
   activeRing.visible = live; if (live) { activeRing.position.set(front.pos.x, .075, front.pos.z); const k = 1 + Math.sin(simT * 4) * .06; activeRing.scale.set(k, 1, k); }
   for (const c of custQueue) {
-    if (!c.tagEl) continue; const cls = c === front && live ? 'tag active' : c.newUntil > simT ? 'tag new' : 'tag';
-    if (c.tagEl.className !== cls) { c.tagEl.className = cls; c.tagEl.textContent = cls === 'tag active' ? `${nm(c.order)} · Now baking` : cls === 'tag new' ? `New · ${nm(c.order)}` : nm(c.order); }
+    if (!c.tagEl) continue; const cls = c === front && live ? 'tag active' : !c.liveOrder && c.newUntil > simT ? 'tag new' : 'tag';
+    if (c.tagEl.className !== cls) { c.tagEl.className = cls; c.tagEl.textContent = cls === 'tag active' ? `${nm(c.order)} · Now baking` : cls === 'tag new' ? `New · ${nm(c.order)}` : c.liveOrder && c.added ? `Added to the plan: ${nm(c.order)}` : nm(c.order); }
   }
+}
+
+// Snapshot order data is normalized separately so malformed polls cannot clear a known line.
+function snapshotOrders(snapshot) {
+  if (!Array.isArray(snapshot.pies)) return null;
+  const ids = new Set(), orders = [];
+  for (const pie of snapshot.pies) {
+    if (!pie || typeof pie.id !== 'string' || !pie.id || ids.has(pie.id) ||
+        !Number.isSafeInteger(pie.pie) || pie.pie < 1 || !['open', 'active', 'done'].includes(pie.status) ||
+        !Array.isArray(pie.slices) || pie.slices.some(slice => !slice || typeof slice.number !== 'string' ||
+          !/^\d+(?:\.\d+)?$/.test(slice.number) || !['open', 'active', 'done'].includes(slice.status))) return null;
+    ids.add(pie.id);
+    const single = pie.single === true || pie.slices.length === 1;
+    orders.push({ key: pie.id, n: pie.pie, sid: pie.slices[0]?.number || `${pie.pie}.1`, slice: single,
+      title: String(pie.title || ''), desc: String(pie.title || ''), status: pie.status,
+      slices: pie.slices.map((slice, i) => [String(slice.title || ''), i % COOKS.length]),
+      sliceRows: pie.slices.map(slice => ({ ...slice })) });
+  }
+  const open = orders.filter(order => order.status !== 'done');
+  const matches = row => open.find(order => row.slice && order.sliceRows.some(slice => slice.number === row.slice)) ||
+    open.find(order => order.n === row.pie && !order.slice) || open.find(order => order.n === row.pie);
+  const active = [...(Array.isArray(snapshot.active) ? snapshot.active : [])].sort((a, b) => b.startedAt - a.startedAt)
+    .map(matches).find(Boolean) || matches(snapshot.session || {}) || open.find(order => order.status === 'active');
+  return { orders, open, active: active?.key || null };
+}
+let liveLineRoot = null, liveLineReady = false, liveLineSignature = '', liveShelfSignature = '';
+let liveAllServed = null;
+const liveAnnounced = new Set(), orderEvents = [];
+let orderAudio = null;
+function orderChime(key) {
+  orderEvents.push({ type: 'chime', key });
+  // Browser autoplay policy may suspend audio until the user interacts with the kitchen.
+  try {
+    const Audio = window.AudioContext || window.webkitAudioContext;
+    if (!Audio) return;
+    orderAudio ||= new Audio();
+    const audio = orderAudio, at = audio.currentTime;
+    for (const [i, frequency] of [660, 880].entries()) {
+      const tone = audio.createOscillator(), gain = audio.createGain();
+      tone.frequency.value = frequency; gain.gain.setValueAtTime(.0001, at + i * .12);
+      gain.gain.exponentialRampToValueAtTime(.08, at + i * .12 + .015);
+      gain.gain.exponentialRampToValueAtTime(.0001, at + i * .12 + .3);
+      tone.connect(gain); gain.connect(audio.destination); tone.start(at + i * .12); tone.stop(at + i * .12 + .31);
+    }
+  } catch { /* The visual order callout still works without audio hardware. */ }
+}
+window.addEventListener('pointerdown', () => { if (orderAudio?.state === 'suspended') orderAudio.resume().catch(() => {}); });
+function removeOrderCustomer(customer) {
+  cancelActor(customer); customer.show(false); root.remove(customer.g);
+  if (customer.tagO) { customer.tagO.el.remove(); const index = OV.indexOf(customer.tagO); if (index >= 0) OV.splice(index, 1); }
+  const index = actors.indexOf(customer); if (index >= 0) actors.splice(index, 1);
+}
+function clearLiveLine() {
+  liveLineRoot = null; liveLineReady = false; liveLineSignature = ''; liveShelfSignature = '';
+  liveAnnounced.clear(); orderEvents.length = 0;
+  liveAllServed?.remove(); liveAllServed = null;
+  if (orderAudio) { orderAudio.close().catch(() => {}); orderAudio = null; }
+}
+function syncOrderLine(snapshot) {
+  if (sceneMode !== 'live') return;
+  if (liveLineRoot !== snapshot.project.root) { clearLiveLine(); liveLineRoot = snapshot.project.root; }
+  const data = snapshotOrders(snapshot);
+  if (!data) return;
+  const first = !liveLineReady; liveLineReady = true;
+  const desired = new Set(data.open.map(order => order.key));
+  for (const customer of [...custQueue]) if (!desired.has(customer.order.key)) {
+    custQueue.splice(custQueue.indexOf(customer), 1); removeOrderCustomer(customer);
+  }
+  const existing = new Map(custQueue.map(customer => [customer.order.key, customer]));
+  for (const order of data.open) {
+    const customer = existing.get(order.key);
+    if (customer) customer.order = order;
+    else if (first) spawnCustomer(order, custQueue.length, false);
+    else addPlanned(order);
+  }
+  // Preserve existing waiting positions; newly planned tickets always join the back.
+  const active = custQueue.find(customer => customer.order.key === data.active);
+  const rushed = active && active !== custQueue[0];
+  if (rushed) {
+    const front = custQueue[0], index = custQueue.indexOf(active);
+    custQueue[index] = front; custQueue[0] = active;
+    orderEvents.push({ type: 'swap', key: active.order.key, with: front.order.key });
+  }
+  const signature = JSON.stringify(custQueue.map(customer => customer.order.key));
+  if (signature !== liveLineSignature) {
+    custQueue.forEach((customer, index) => {
+      // Re-path from the current position. No completion callback can revive an obsolete order.
+      customer.res = null;
+      const target = qslot(index);
+      const route = customer === active && rushed
+        ? [[customer.pos.x, QLANE], [target[0] - .4, QLANE], target] : [target];
+      customer.walk(route, index === 0 ? F.N : F.E);
+    });
+    liveLineSignature = signature;
+  }
+  const previous = cur?.o.key;
+  cur = active ? { o: active.order, stage: 1, failed: false,
+    slices: active.order.sliceRows.map((slice, index) => ({ id: slice.number, name: slice.title,
+      st: index % COOKS.length, status: slice.status === 'done' ? 'passed' : slice.status === 'active' ? 'cooking' : 'waiting', pct: 0 })) } : null;
+  if (previous !== cur?.o.key || (pizza && pizza.wedges.length !== cur?.slices.length)) {
+    if (pizza) root.remove(pizza.g); pizza = null;
+    if (cur && cur.o.slices.length) pizza = makePizza(cur.o.slices.length, cur.o.slice);
+  }
+  if (pizza && cur) cur.slices.forEach((slice, index) => setWedge(pizza, index, slice.status === 'waiting' ? 'off' : 'ok'));
+  if (active && !liveAnnounced.has(active.order.key)) {
+    liveAnnounced.add(active.order.key);
+    orderEvents.push({ type: 'new-order', key: active.order.key });
+    callout(`New order: ${nm(active.order)}`, 'ticket'); orderChime(active.order.key);
+  }
+  served = data.orders.filter(order => order.status === 'done').map(order => ({ ...order, first: null }));
+  const shelfSignature = JSON.stringify(served.filter(order => !order.slice).map(order => order.key));
+  if (shelfSignature !== liveShelfSignature) {
+    while (shelfPies.length) root.remove(shelfPies.pop());
+    served.filter(order => !order.slice).forEach(() => addServed());
+    liveShelfSignature = shelfSignature;
+  }
+  if (!data.open.length) {
+    $('#tkTitle').textContent = 'All orders served'; $('#tkNow').textContent = '';
+    $('#tkSteps').replaceChildren(); $('#tkSlices').replaceChildren();
+    $('#tracker').setAttribute('aria-label', 'All orders served. Open orders.');
+    if (!liveAllServed?.isConnected) {
+      liveAllServed = document.createElement('div'); liveAllServed.className = 'co note'; liveAllServed.setAttribute('role', 'status');
+      liveAllServed.textContent = 'All orders served. Close this window, or run `/special-order` to add a pie or a slice.';
+      coBox.append(liveAllServed);
+    }
+    phaseActor(A.ezra, [-3.25, -.82, F.W], 'Waiting for the next ticket');
+    phaseActor(A.pia, [-1.9, -.62, F.S], 'Waiting for the next order');
+  } else {
+    liveAllServed?.remove(); liveAllServed = null;
+    for (const actor of [A.ezra, A.pia]) {
+      const entry = phaseActors.get(actor.meta.id);
+      if (entry?.task.startsWith('Waiting for the next')) { phaseActors.delete(actor.meta.id); cancelActor(actor); actor.show(false); }
+    }
+    if (cur) renderOrder();
+    else {
+      $('#tkTitle').textContent = `${data.open.length} orders in line`; $('#tkNow').textContent = 'Waiting for live work';
+      $('#tkSteps').replaceChildren(); $('#tkSlices').replaceChildren();
+      $('#tracker').setAttribute('aria-label', `${data.open.length} orders in line. Open orders.`);
+    }
+  }
+  setTickets(); renderStats(); lineUpdate();
+  // Polling updates both the rail and an already open Orders sheet, including the empty state.
+  if (!sheet.hidden && sheet.dataset.kind === 'orders') renderOrdersSheet();
 }
 
 // ---------- the service: one order, start to finish ----------
@@ -3202,7 +3342,7 @@ function homeCard(e) {
 }
 HOMES.forEach(e => tapTarget(e.h != null ? HS(e.h).g : STORES.find(q => q.kind === e.store).g, () => homeCard(e)));
 function tapTarget(obj, fn) { obj.traverse(o => { if (o.isMesh) o.userData.card = fn; }); clickables.push(obj); }
-stationObjs.forEach((g, i) => tapTarget(g, () => { const s = cur && cur.slices.find(s => s.st === i); return `<h5>${STATION[i].name} station</h5><div class="sub">One aspect of every pie</div><dl><dt>Cook</dt><dd>${COOKS[i].meta.name} · <code>${COOKS[i].meta.id.replace('#2', '')}</code></dd><dt>Slice</dt><dd>${s ? s.id + ' ' + s.name : 'Nothing firing'}</dd><dt>Status</dt><dd>${s ? (s.status === 'cooking' ? Math.round(s.pct * 100) + '% cooked' : CHIP[s.status][1]) : 'Idle'}</dd></dl>`; }));
+stationObjs.forEach((g, i) => tapTarget(g, () => { const s = cur && cur.slices.find(s => s.st === i); return `<h5>${STATION[i].name} station</h5><div class="sub">One aspect of every pie</div><dl><dt>Cook</dt><dd>${COOKS[i].meta.name} · <code>${COOKS[i].meta.id.replace('#2', '')}</code></dd><dt>Slice</dt><dd>${s ? escapeCard(s.id + ' ' + s.name) : 'Nothing firing'}</dd><dt>Status</dt><dd>${s ? (s.status === 'cooking' ? Math.round(s.pct * 100) + '% cooked' : CHIP[s.status][1]) : 'Idle'}</dd></dl>`; }));
 { const o = root.getObjectByName('board86'); o.userData.card = () => `<h5>Shop status</h5><div class="sub">The same status your session prints when it starts</div><dl>${liveShopStatus ? `<dt>Prep</dt><dd>${liveShopStatus.prep.done}/${liveShopStatus.prep.total} boxes checked</dd><dt>Pies</dt><dd>${liveShopStatus.pies.total} total, ${liveShopStatus.pies.done} completed / ${liveShopStatus.pies.open} open</dd><dt>Slices</dt><dd>${liveShopStatus.slices.total} total, ${liveShopStatus.slices.done} completed / ${liveShopStatus.slices.open} open</dd>` : `<dt>Prep</dt><dd>${STATUS.prep} done</dd><dt>Served</dt><dd>${STATUS.served} pies</dd><dt>In line</dt><dd>${STATUS.line} orders</dd>${parked.map(p => `<dt>86'd</dt><dd>Pie ${p.n}, ${p.title}: ${p.why}</dd>`).join('')}`}</dl>`; clickables.push(o); }
 { const o = root.getObjectByName('scooter'); tapTarget(o, () => `<h5>Dex's scooter</h5><div class="sub"><code>ci-fix-attempter</code> · off shift</div><dl><dt>Job</dt><dd>Rides out when CI goes red after the window and fixes it on the way.</dd></dl>`); }
 function actorCard(a) {
@@ -3217,7 +3357,7 @@ function actorCard(a) {
     const o = a.order; if (!o) return `<h5>Customer</h5><div class="sub">Browsing the display case</div>`;
     const ahead = custQueue.indexOf(a), baking = cur && cur.o === o;
     const status = a.carry ? 'Served. Heading home' : baking ? `Being baked · ${STEP[Math.min(cur.stage, 5)]}` : ahead > 0 ? `Planned, ${ahead} ahead in line` : 'Up next';
-    return `<h5>${nm(o)} · ${o.title}</h5><div class="sub">${o.slice ? 'Single slice order' : 'Customer order'}</div><dl><dt>Details</dt><dd>${o.desc}</dd><dt>${o.slice ? 'Slice' : 'Slices'}</dt><dd>${o.slices.map(x => x[0]).join(', ')}</dd><dt>Status</dt><dd>${status}</dd></dl>`;
+    return `<h5>${nm(o)} · ${escapeCard(o.title)}</h5><div class="sub">${o.slice ? 'Single slice order' : 'Customer order'}</div><dl><dt>Details</dt><dd>${escapeCard(o.desc)}</dd><dt>${o.slice ? 'Slice' : 'Slices'}</dt><dd>${o.slices.map(x => escapeCard(x[0])).join(', ')}</dd><dt>Status</dt><dd>${status}</dd></dl>`;
   }
   const mt = a.meta, el = Math.max(0, simT - a.since);
   return `<h5>${escapeCard(mt.name)}</h5><div class="sub"><code>${escapeCard(mt.type || mt.id.replace('#2', ''))}</code> · ${crewName(mt.crew)}</div><dl><dt>Model</dt><dd><span class="tier t-${mt.tier}">${TIER[mt.tier]}</span></dd><dt>Now</dt><dd>${escapeCard(a.task)}</dd><dt>For</dt><dd>${el.toFixed(0)}s</dd><dt>Tokens</dt><dd>${sceneMode === 'live' ? 'n/a' : (a.tokens / 1000).toFixed(1) + 'k'}</dd><dt>Role</dt><dd>${escapeCard(mt.role)}</dd></dl>`;
@@ -3253,12 +3393,12 @@ function openSheet(kind) {
 function renderOrdersSheet() {
   {
     $('#shTitle').textContent = 'Orders';
-    const row = (pn, t, sub, chip) => `<div class="orow"><span class="pn">${pn}</span><div><b>${t}</b><small>${sub}</small></div>${chip}</div>`;
+    const row = (pn, t, sub, chip) => `<div class="orow"><span class="pn">${escapeCard(pn)}</span><div><b>${escapeCard(t)}</b><small>${escapeCard(sub)}</small></div>${chip}</div>`;
     $('#shBody').innerHTML =
-      (cur ? `<div class="sh-now"><div class="eyebrow">Now baking · ${STEP[Math.min(cur.stage, 5)]}</div><h4>${nm(cur.o)} · ${cur.o.title}</h4><ul class="slices">${cur.slices.map(sl => `<li><span class="sid">${sl.id}</span><span class="sname">${sl.name}</span><span class="chip ${CHIP[sl.status][0]}">${sliceLabel(sl)}</span></li>`).join('')}</ul><p class="sh-meta">${Math.max(0, custQueue.length - 1)} more in line · ${parked.length} parked on the status board</p></div>` : '') +
+      (cur ? `<div class="sh-now"><div class="eyebrow">Now baking · ${STEP[Math.min(cur.stage, 5)]}</div><h4>${nm(cur.o)} · ${escapeCard(cur.o.title)}</h4><ul class="slices">${cur.slices.map(sl => `<li><span class="sid">${sl.id}</span><span class="sname">${escapeCard(sl.name)}</span><span class="chip ${CHIP[sl.status][0]}">${sliceLabel(sl)}</span></li>`).join('')}</ul><p class="sh-meta">${Math.max(0, custQueue.length - 1)} more in line · ${parked.length} parked on the status board</p></div>` : '') +
       custQueue.filter(c => c.order && (!cur || c.order !== cur.o)).map(c => row(nm(c.order), c.order.title, c.order.slice ? 'One slice, no split' : `${c.order.slices.length} slices`, '<span class="chip c-wait">Planned</span>')).join('') +
       parked.map(p => row('Pie ' + p.n, p.title, p.why, '<span class="chip c-sent">86\'d</span>')).join('') +
-      [...served].reverse().map(s => row(s.slice ? 'Slice ' + s.sid : 'Pie ' + s.n, s.title, s.slice ? 'Committed and pushed' : s.first ? 'Passed on the first inspection' : 'Sent back once, then passed', '<span class="chip c-pass">Served</span>')).join('');
+      [...served].reverse().map(s => row(s.slice ? 'Slice ' + s.sid : 'Pie ' + s.n, s.title, sceneMode === 'live' ? 'Completed in the plan' : s.slice ? 'Committed and pushed' : s.first ? 'Passed on the first inspection' : 'Sent back once, then passed', '<span class="chip c-pass">Served</span>')).join('');
   }
 }
 $('#bLog').onclick = () => openSheet('log'); $('#bCrew').onclick = () => openSheet('crew'); $('#bOrders').onclick = () => openSheet('orders'); $('#tracker').onclick = () => openSheet('orders');
@@ -3442,14 +3582,14 @@ function clearAssignments() {
   liveAssignments.clear(); liveSkills.clear();
 }
 function clearDemo() {
+  clearLiveLine();
   // Suspend every scripted service continuation before a real actor can reuse a character.
   shopGen++; chefGen++; swaits.length = 0;
   for (const tw of tweens) root.remove(tw.obj);
   tweens.length = 0;
   for (const a of castActors.values()) { cancelActor(a); a.show(false); }
   for (const a of [...actors]) if (a.isCustomer && a.order) {
-    cancelActor(a); a.show(false); root.remove(a.g); if (a.tagO) a.tagO.on = false;
-    actors.splice(actors.indexOf(a), 1);
+    removeOrderCustomer(a);
   }
   custQueue.length = 0;
   for (const object of [...root.children]) if (['pizza', 'box', 'token'].includes(object.name)) root.remove(object);
@@ -3703,7 +3843,7 @@ function liveDriver(snapshot) {
   for (const [id, entry] of phaseActors) if ((snapshot.active || []).some(row => row.type === `bytheslice:${id}`)) {
     phaseActors.delete(id); cancelActor(entry.actor);
   }
-  castDriver.apply(castSnapshot); syncBuildCrews(snapshot); syncLivePhase(snapshot);
+  castDriver.apply(castSnapshot); syncBuildCrews(snapshot); syncLivePhase(snapshot); syncOrderLine(snapshot);
 }
 window.liveDriver = liveDriver;
 Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
@@ -3730,8 +3870,19 @@ Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
     active: entry.active, offDuty: entry.offDuty, hidden: !!entry.actor.hidden, mode: entry.actor.mode,
     position: [entry.actor.pos.x, entry.actor.pos.z], renderedPosition: [entry.actor.g.position.x, entry.actor.g.position.z], station: [...entry.station] })); },
   get chef() { return { name: A.chef.meta.name, task: A.chef.task, hidden: !!A.chef.hidden, mode: A.chef.mode, position: [A.chef.pos.x, A.chef.pos.z] }; },
-  get demoCustomers() { return actors.filter(a => a.isCustomer && a.order && !a.hidden).length; },
-  get demoPies() { return shelfPies.length + root.children.filter(object => ['pizza', 'box', 'token'].includes(object.name)).length; },
+  get orders() { return { ready: liveLineReady, queue: custQueue.map((customer, index) => ({ key: customer.order.key || nm(customer.order),
+    label: nm(customer.order), title: customer.order.title, single: !!customer.order.slice, added: !!customer.added,
+    tag: customer.tagEl?.textContent, tagClass: customer.tagEl?.className, hidden: !!customer.hidden, mode: customer.mode,
+    position: [customer.pos.x, customer.pos.z], renderedPosition: [customer.g.position.x, customer.g.position.z],
+    target: [...qslot(index)], path: customer.path.map(point => [point.x, point.z]) })),
+    active: cur?.o.key || null, ring: { visible: activeRing.visible, position: activeRing.position.toArray() },
+    tickets: tickets.map(ticket => ({ ...ticket, slices: [...ticket.slices] })),
+    served: served.map(order => ({ key: order.key, label: nm(order), single: !!order.slice })),
+    servedCount: Number($('#stServed').textContent), shelfCount: shelfPies.length,
+    pizza: pizza ? { single: !!cur?.o.slice, wedges: pizza.wedges.length, visible: pizza.g.visible, meshes: pizza.g.children.length } : null,
+    allServedNote: liveAllServed?.isConnected ? liveAllServed.textContent : null, events: orderEvents.map(event => ({ ...event })) }; },
+  get demoCustomers() { return actors.filter(a => a.isCustomer && a.order && !a.liveOrder && !a.hidden).length; },
+  get demoPies() { return shelfPies.filter(object => object.userData.orderSource !== 'live').length + root.children.filter(object => ['pizza', 'box', 'token'].includes(object.name) && object.userData.orderSource !== 'live').length; },
   get events() { return castEvents.map(event => ({ ...event })); },
 }) });
 
