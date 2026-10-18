@@ -28,6 +28,12 @@
   ],
   "skills": "./skills",
   "commands": "./commands",
+  "mcpServers": {
+    "kitchen": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/kitchen-server.js"]
+    }
+  },
   "agents": [
     "./skills/box-it-up/agents/ci-fix-attempter.md",
     "./skills/close-shop/agents/proposal-drafter.md",
