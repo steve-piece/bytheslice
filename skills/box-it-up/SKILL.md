@@ -144,7 +144,9 @@ Never force-merge a PR with non-required failing checks unless the user explicit
 
 Only runs after the PR is merged (by this skill in Phase 4 option 1, or by the user manually before `/box-it-up --resume`).
 
-1. `gh pr view "$PR_NUMBER" --json state` — confirm state is `MERGED`. If not, STOP. Don't pull or delete branches on a falsely-assumed merge.
+1. `gh pr view "$PR_NUMBER" --json state,number,mergedAt` - confirm state is `MERGED`. If not, STOP. Don't pull or delete branches on a falsely-assumed merge.
+   - **Pie-completion mode only, before cleanup:** record the confirmed merge for the local kitchen. Pipe a fresh successful `gh pr view "$PR_NUMBER" --json state,number,mergedAt` response to `node "<this-skill-directory>/record-kitchen-merge.js" --mode pie --pie "<active-pie-number>" --project "${CLAUDE_PROJECT_DIR:-$PWD}"`. The helper validates `MERGED`, a PR number and a merge timestamp, then atomically replaces the single bounded `.claude/.bytheslice-state/kitchen/merged-pie.json` record with only version, pie, PR number and merge time. Use this skill's installed absolute directory for the helper path. If the read or write fails, report missing kitchen evidence; do not invent success.
+   - Never run this writer in `--slice` or universal mode, before merge confirmation, or from skill/Stop log events. A skill finish cannot prove a PR merged. The kitchen reader makes no network calls and ignores malformed, stale, future or wrong-pie records.
 2. `git checkout main` — if local uncommitted changes would be overwritten, STOP and surface as `destructive_operation` HITL. Never auto-stash.
 3. `git pull --ff-only origin main` — fast-forward only. If this fails (history diverged), STOP and surface as `destructive_operation` HITL.
 4. Confirm the PR's merge result is now in local main: `git log --oneline | grep -q "$PR_NUMBER\|<merge sha>"` (for a rebase-merge, confirm the slice commits landed). If absent, STOP and surface — something's odd.

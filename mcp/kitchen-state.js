@@ -138,9 +138,37 @@ function parseChecklist(markdown) {
   return { pies, prepComplete: prepStatus === 'done' || (prepChecks.length > 0 && prepChecks.every(Boolean)), prepPieceExemptions };
 }
 
-function foldActivity(inputRows, now = Date.now()) {
+// Mirror the SessionStart hook's heading-based counts before activity overlays statuses.
+function shopStatus(markdown) {
+  const lines = (markdown || '').split(/\r?\n/);
+  const pieLayout = lines.some(line => /^## +Pie\s+[0-9]/.test(line));
+  const done = line => /\[[xX]\]|~~|[Ss]tatus:\s*(Completed|Done)/.test(line);
+  const count = pattern => {
+    const matches = lines.filter(line => pattern.test(line));
+    const completed = matches.filter(done).length;
+    return { done: completed, total: matches.length, open: matches.length - completed };
+  };
+  let inPrep = false, prepDone = 0, prepTotal = 0;
+  for (const line of lines) {
+    if (/^## +Prep(?:\s|$)/.test(line)) { inPrep = true; continue; }
+    if (/^## /.test(line)) inPrep = false;
+    if (inPrep && /^\s*(?:-\s*)?\[[ xX]\]/.test(line)) { prepTotal++; if (/\[[xX]\]/.test(line)) prepDone++; }
+  }
+  return { prep: { done: prepDone, total: prepTotal },
+    pies: count(pieLayout ? /^## +Pie\s+[0-9]/ : /^## +Stage\s+[0-9]/),
+    slices: count(/^### +Slice\s+[0-9]+\.[0-9]/) };
+}
+
+function mergeEvidence(value) {
+  if (!object(value) || value.v !== 1 || !integer(value.pie) || value.pie === 0 ||
+      !integer(value.pr) || value.pr === 0 || !integer(value.mergedAt)) return null;
+  return { v: 1, pie: value.pie, pr: value.pr, mergedAt: value.mergedAt };
+}
+
+function foldActivity(inputRows, now = Date.now(), { mergedPie = null, activePie = null } = {}) {
   const rows = inputRows.map(sanitizeRow).filter(Boolean);
-  let active = new Map(), dispatches = [], session = null, opened = false, lastStop = null;
+  let active = new Map(), dispatches = [], session = null, sessionStartedAt = null, opened = false, lastStop = null;
+  let currentPie = activePie;
   const runningSkills = new Map(), finishedSkills = [];
   const skillKey = row => row.sid || '';
   const finishSkill = (key, time) => {
@@ -151,7 +179,7 @@ function foldActivity(inputRows, now = Date.now()) {
     const sid = row.sid || '';
     if (row.ev === 'SessionStart') {
       for (const key of runningSkills.keys()) finishSkill(key, row.t);
-      active = new Map(); dispatches = []; session = sid; opened = false; lastStop = null;
+      active = new Map(); dispatches = []; session = sid; sessionStartedAt = row.t; opened = false; lastStop = null; currentPie = activePie;
     }
     if (row.skill && (row.ev === 'PreToolUse' || row.ev === 'UserPromptExpansion')) {
       finishSkill(skillKey(row), row.t);
@@ -160,12 +188,13 @@ function foldActivity(inputRows, now = Date.now()) {
     if (row.ev === 'Stop') finishSkill(skillKey(row), row.t);
     // Only the newest session contributes live actors. History remains in recent and skills.
     if (session !== null && sid !== session) continue;
+    if (integer(row.pie) && row.pie > 0) currentPie = row.pie;
     if (row.ev === 'PreToolUse' && row.agent) dispatches.push({ ...row });
     if (row.ev === 'SubagentStart' && row.aid) {
       const dispatch = dispatches.find(item => item.agent === row.agent && !item.provisionalAid && !item.confirmedAid);
       if (dispatch) dispatch.provisionalAid = row.aid;
       active.set(row.aid, { ...row });
-      if (/(?:^|:)(?:implementer|fix-attempter|slice-tester|slice-verifier|block-composer|component-crafter|layout-architect)$/.test(row.agent || '')) opened = true;
+      if (/(?:^|:)(?:implementer|fix-attempter|slice-tester|slice-verifier|block-composer|component-crafter|layout-architect|plater|debug-instrumenter|state-illustrator)$/.test(row.agent || '')) opened = true;
     }
     if (row.ev === 'PostToolUse' && row.aid) {
       const dispatch = dispatches.find(item => !item.confirmedAid && item.agent === row.agent && item.label === row.label);
@@ -186,11 +215,15 @@ function foldActivity(inputRows, now = Date.now()) {
       pie: dispatch?.pie ?? row.pie ?? null, slice: dispatch?.slice ?? row.slice ?? null,
       startedAt: row.t, sid: row.sid || '' };
   });
+  const merged = mergeEvidence(mergedPie);
+  const confirmedMerge = merged && sessionStartedAt !== null && merged.mergedAt >= sessionStartedAt &&
+    merged.mergedAt <= now && merged.pie === currentPie;
   return {
+    session: { id: session, startedAt: sessionStartedAt, pie: currentPie },
     active: actors,
     skills: [...runningSkills.values(), ...finishedSkills.slice(-20)],
     recent: rows.slice(-50),
-    phase: lastStop !== null && now - lastStop > 600000 && actors.length === 0 && runningSkills.size === 0
+    phase: confirmedMerge || (lastStop !== null && now - lastStop > 600000 && actors.length === 0 && runningSkills.size === 0)
       ? 'after-hours' : opened ? 'open' : 'dawn',
   };
 }
@@ -198,9 +231,9 @@ function foldActivity(inputRows, now = Date.now()) {
 const PIECE_MARKERS = { walls: 'config', menu: 'prd', tickets: 'checklist', case: 'designSystem',
   safe: 'envCheck', oven: 'workflows', alarm: 'prePush', locks: 'branchProtection' };
 
-function buildSnapshot({ root, checklist = '', markers = {}, rows = [], cursor = 0, port = null, now }) {
+function buildSnapshot({ root, checklist = '', markers = {}, rows = [], cursor = 0, port = null, now, mergedPie = null }) {
   const parsed = parseChecklist(checklist);
-  const activity = foldActivity(rows, now);
+  const activity = foldActivity(rows, now, { mergedPie, activePie: parsed.pies.find(pie => pie.status === 'active')?.pie ?? null });
   for (const pie of parsed.pies) {
     for (const slice of pie.slices) {
       if (slice.status !== 'done' && activity.active.some(agent => agent.slice === slice.number)) slice.status = 'active';
@@ -218,7 +251,7 @@ function buildSnapshot({ root, checklist = '', markers = {}, rows = [], cursor =
   }));
   const built = parsed.prepComplete || Object.values(pieces).every(piece => piece.present);
   return { project: { root, name: path.basename(root), setup: built ? 'built' : Object.values(pieces).some(piece => piece.present) ? 'partial' : 'none', pieces },
-    pies: parsed.pies, ...activity, cursor, port };
+    pies: parsed.pies, shopStatus: shopStatus(checklist), ...activity, cursor, port };
 }
 
 async function readFileOrEmpty(file) {
@@ -255,23 +288,33 @@ async function hasLibraryRoute(root) {
   return false;
 }
 
+// Metadata is a tiny allowlisted local record, never a PR lookup or activity-log inference.
+async function readMergeEvidence(file) {
+  try {
+    const stat = await fs.lstat(file);
+    if (!stat.isFile() || stat.size > 512) return null;
+    return mergeEvidence(JSON.parse(await fs.readFile(file, 'utf8')));
+  } catch { return null; }
+}
+
 async function readKitchenState(root, { since, port = null, now = Date.now() } = {}) {
   if (since !== undefined && !integer(since)) throw new TypeError('since must be a nonnegative integer');
   root = path.resolve(root);
   const dir = path.join(root, '.claude/.bytheslice-state/kitchen');
   const checklistPath = path.join(root, 'docs/plans/00_master_checklist.md');
-  const [rotation, current, checklist, config, checklistExists, designSystem, workflows, prePush, docs, envCheck, branchProtection, library] = await Promise.all([
+  const [rotation, current, checklist, config, checklistExists, designSystem, workflows, prePush, docs, envCheck, branchProtection, library, mergedPie] = await Promise.all([
     readFileOrEmpty(path.join(dir, 'activity.1.jsonl')), readFileOrEmpty(path.join(dir, 'activity.jsonl')),
     readFileOrEmpty(checklistPath), exists(path.join(root, 'bytheslice.config.json')), exists(checklistPath),
     exists(path.join(root, 'docs/design-system.md')), exists(path.join(root, '.github/workflows')),
     exists(path.join(root, '.husky/pre-push')), fs.readdir(path.join(root, 'docs'), { withFileTypes: true }).catch(() => []),
     exists(path.join(root, '.claude/.bytheslice-state/env-check-passed')),
     exists(path.join(root, 'scripts/setup-branch-protection.sh')), hasLibraryRoute(root),
+    readMergeEvidence(path.join(dir, 'merged-pie.json')),
   ]);
   const previous = parseActivity(rotation), latest = parseActivity(current);
   return buildSnapshot({ root, checklist: checklist.toString('utf8'),
     markers: { config, checklist: checklistExists, designSystem, workflows, prePush, envCheck, branchProtection, library, prd: docs.some(entry => entry.isFile() && /^prd-.*\.md$/.test(entry.name)) },
-    rows: [...previous.rows, ...latest.rows], cursor: latest.cursor, port, now });
+    rows: [...previous.rows, ...latest.rows], cursor: latest.cursor, port, now, mergedPie });
 }
 
-module.exports = { sanitizeRow, parseActivity, parseChecklist, foldActivity, buildSnapshot, readKitchenState };
+module.exports = { shopStatus, mergeEvidence, sanitizeRow, parseActivity, parseChecklist, foldActivity, buildSnapshot, readKitchenState };

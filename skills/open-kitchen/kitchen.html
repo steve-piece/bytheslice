@@ -768,12 +768,16 @@ capturePiece('tickets', ticketsStart);
 // shop status board on the left wall: the same status a session prints when it starts, plus pies parked on the customer
 let parked = [];
 const STATUS = { prep: '3/3', served: 3, line: 0 };
+let liveShopStatus = null;
 const chalkTex = canvasTex(512, 360, (x, w, h) => {
   x.fillStyle = '#2f3b35'; x.fillRect(0, 0, w, h);
   x.fillStyle = 'rgba(255,255,255,.04)'; for (let i = 0; i < 40; i++) x.fillRect(rnd() * w, rnd() * h, 60, 2);
   x.fillStyle = '#f6efe2'; x.font = '600 46px Fredoka, sans-serif'; x.fillText('Shop status', 28, 64);
   x.strokeStyle = '#f3cf72'; x.lineWidth = 3; x.beginPath(); x.moveTo(28, 84); x.lineTo(484, 84); x.stroke();
-  [['Prep', STATUS.prep], ['Pies served', STATUS.served], ['In line', STATUS.line], ["86'd", parked.length]].forEach(([k, v], i) => {
+  (liveShopStatus ? [['Prep', `${liveShopStatus.prep.done}/${liveShopStatus.prep.total}`],
+    ['Pies done / open', `${liveShopStatus.pies.done} / ${liveShopStatus.pies.open}`],
+    ['Slices done / open', `${liveShopStatus.slices.done} / ${liveShopStatus.slices.open}`]] :
+    [['Prep', STATUS.prep], ['Pies served', STATUS.served], ['In line', STATUS.line], ["86'd", parked.length]]).forEach(([k, v], i) => {
     x.fillStyle = '#c9d6d4'; x.font = '500 25px Fredoka, sans-serif'; x.fillText(k, 28, 124 + i * 36);
     x.fillStyle = '#f6efe2'; x.font = '600 27px Fredoka, sans-serif'; x.fillText(String(v), 250, 124 + i * 36);
   });
@@ -3199,7 +3203,7 @@ function homeCard(e) {
 HOMES.forEach(e => tapTarget(e.h != null ? HS(e.h).g : STORES.find(q => q.kind === e.store).g, () => homeCard(e)));
 function tapTarget(obj, fn) { obj.traverse(o => { if (o.isMesh) o.userData.card = fn; }); clickables.push(obj); }
 stationObjs.forEach((g, i) => tapTarget(g, () => { const s = cur && cur.slices.find(s => s.st === i); return `<h5>${STATION[i].name} station</h5><div class="sub">One aspect of every pie</div><dl><dt>Cook</dt><dd>${COOKS[i].meta.name} · <code>${COOKS[i].meta.id.replace('#2', '')}</code></dd><dt>Slice</dt><dd>${s ? s.id + ' ' + s.name : 'Nothing firing'}</dd><dt>Status</dt><dd>${s ? (s.status === 'cooking' ? Math.round(s.pct * 100) + '% cooked' : CHIP[s.status][1]) : 'Idle'}</dd></dl>`; }));
-{ const o = root.getObjectByName('board86'); o.userData.card = () => `<h5>Shop status</h5><div class="sub">The same status your session prints when it starts</div><dl><dt>Prep</dt><dd>${STATUS.prep} done</dd><dt>Served</dt><dd>${STATUS.served} pies</dd><dt>In line</dt><dd>${STATUS.line} orders</dd>${parked.map(p => `<dt>86'd</dt><dd>Pie ${p.n}, ${p.title}: ${p.why}</dd>`).join('')}</dl>`; clickables.push(o); }
+{ const o = root.getObjectByName('board86'); o.userData.card = () => `<h5>Shop status</h5><div class="sub">The same status your session prints when it starts</div><dl>${liveShopStatus ? `<dt>Prep</dt><dd>${liveShopStatus.prep.done}/${liveShopStatus.prep.total} boxes checked</dd><dt>Pies</dt><dd>${liveShopStatus.pies.total} total, ${liveShopStatus.pies.done} completed / ${liveShopStatus.pies.open} open</dd><dt>Slices</dt><dd>${liveShopStatus.slices.total} total, ${liveShopStatus.slices.done} completed / ${liveShopStatus.slices.open} open</dd>` : `<dt>Prep</dt><dd>${STATUS.prep} done</dd><dt>Served</dt><dd>${STATUS.served} pies</dd><dt>In line</dt><dd>${STATUS.line} orders</dd>${parked.map(p => `<dt>86'd</dt><dd>Pie ${p.n}, ${p.title}: ${p.why}</dd>`).join('')}`}</dl>`; clickables.push(o); }
 { const o = root.getObjectByName('scooter'); tapTarget(o, () => `<h5>Dex's scooter</h5><div class="sub"><code>ci-fix-attempter</code> · off shift</div><dl><dt>Job</dt><dd>Rides out when CI goes red after the window and fixes it on the way.</dd></dl>`); }
 function actorCard(a) {
   if (a.kid) return kidCard(a.kid);
@@ -3285,6 +3289,7 @@ let shopGen = 0;
 const PREP = () => [A.ezra, A.bea, A.pip];
 const stashFor = (a, route) => ({ pos: a.pos.clone(), goal: a.goalYaw, path: a.path, res: a.res, mode: a.mode, carry: a.carry, task: a.task, route });
 function closeShop() {
+  if (sceneMode === 'live') { shopGen++; closed = true; setSign(false); ledger.visible = false; callout('After hours', 'late'); return; }
   const gen = ++shopGen; closed = true; setSign(false);
   callout('After hours: the review board', 'late'); feed('Closing time. The crew heads home; Chef Nico and the review board stay to review the day');
   const out = [...CREW_OUT(), ...custQueue].sort((p, q) => Math.hypot(p.pos.x - DOOR[0], p.pos.z - DOOR[1]) - Math.hypot(q.pos.x - DOOR[0], q.pos.z - DOOR[1]));
@@ -3304,6 +3309,7 @@ function closeShop() {
 }
 // before opening: lights on and the sign still off; the prep crew readies the kitchen while everyone else is on the way in
 function prepShop() {
+  if (sceneMode === 'live') { shopGen++; closed = true; setSign(false); ledger.visible = false; callout('Before opening: morning prep', 'dawn'); return; }
   const gen = ++shopGen; closed = true; setSign(false); ledger.visible = false;
   callout('Before opening: morning prep', 'dawn'); feed('Early morning. Lights on, sign off: the prep crew gets the kitchen ready');
   BOARD.forEach((b, i) => { if (!b.hidden) b.walk([...BOARD_IN[i]].reverse().slice(1).concat([DOOR])).then(() => { if (shopGen === gen) { b.show(false); b.task = 'Off until close'; } }); });
@@ -3344,6 +3350,7 @@ function backPath(a, st) {
   return a === A.pip && a.pos.z > -2.3 ? [[1.75, Math.max(a.pos.z, -2.6)], [1.75, -2.6], [1.35, -2.75], P0] : [P0];
 }
 async function openShop() {
+  if (sceneMode === 'live') { shopGen++; closed = false; ledger.visible = false; setSign(true); callout('Doors open', 'sun'); return; }
   const gen = ++shopGen; ledger.visible = false; setSign(true);
   callout('Doors open', 'sun'); feed('Doors open. The sign is on and the crew is on the line');
   custQueue.forEach(c => { if (!c.stash) c.task = `Waiting for ${nm(c.order)}`; });
@@ -3381,7 +3388,8 @@ async function boardMeeting(gen) {
   }
 }
 let night = 0, nightGoal = 0, dawnK = 0, dawnGoal = 0;
-function setTod(mode) {
+function setTod(mode, fromSnapshot = false) {
+  if (sceneMode === 'live' && !fromSnapshot) return;
   if (mode === tod) return; const was = tod; tod = mode; nightGoal = { dawn: 0, day: 0, night: 1, late: 1.35 }[mode]; dawnGoal = mode === 'dawn' ? 1 : 0;
   if (sceneMode === 'demo') {
     if (mode === 'late') closeShop(); else if (mode === 'dawn') prepShop(); else if (was === 'late' || was === 'dawn') openShop();
@@ -3393,6 +3401,7 @@ function setTod(mode) {
 $('#bDawn').onclick = () => setTod('dawn'); $('#bDay').onclick = () => setTod('day'); $('#bNight').onclick = () => setTod('night'); $('#bLate').onclick = () => setTod('late');
 // the day starts before opening: neighbors are still at home except the early risers, and the prep crew is in
 function startAtDawn() {
+  if (sceneMode === 'live') { setTod('dawn', true); prepShop(); return; }
   tod = 'dawn'; nightGoal = 0; dawnGoal = dawnK = 1;
   for (const a of townies) { if (a.townie.brain?.early || (a.townie.member && TOWNIES.find(q => q.name === a.townie.member)?.brain?.early)) continue; release(a); a.place = null; a.pose = null; a.mode = 'idle'; a.show(false); a.atHome = true; if (a.townie.brain) a.node = a.home.via; }
   bikes.forEach(b => { b.mode = 'away'; b.g.visible = false; b.seen = b.gen; });
@@ -3404,10 +3413,12 @@ function startAtDawn() {
 const castHomes = new Map([...Object.values(A), ...BOARD].map(a => [a, { pos: a.pos.clone(), goal: a.goalYaw, hidden: !!a.hidden }]));
 const castActors = new Map([...castHomes.keys()].map(a => [a.meta.id, a]));
 const liveAssignments = new Map(), liveSkills = new Map(), castEvents = [];
+let livePhase = null, liveSessionKey = null, reviewActive = false, phaseActorGen = 0;
+const phaseActors = new Map();
 const constructionWorkers = new Map();
 const shopper = { active: false, actor: null, station: null, taps: [], index: 0, wait: 0, arrived: false, version: 0 };
 function sceneOwnsActor(actor) {
-  return constructionWorkers.has(actor.meta.id) || (shopper.active && shopper.actor === actor);
+  return phaseActors.has(actor.meta.id) || constructionWorkers.has(actor.meta.id) || (shopper.active && shopper.actor === actor);
 }
 const CREW_SPOTS = {
   line: [-2.05, -2.45, F.S], pass: [2.2, -.75, F.W], menu: [-8.0, -.6, F.S],
@@ -3422,6 +3433,7 @@ function cancelActor(a) {
   a.doing('Off duty', 'idle');
 }
 function clearAssignments() {
+  phaseActorGen++; phaseActors.clear(); reviewActive = false; livePhase = null; liveSessionKey = null;
   for (const entry of constructionWorkers.values()) { cancelActor(entry.actor); entry.actor.show(false); }
   constructionWorkers.clear();
   if (shopper.actor) { cancelActor(shopper.actor); shopper.actor.show(false); }
@@ -3449,13 +3461,14 @@ function clearDemo() {
   $('#tkTitle').textContent = 'Waiting for live work'; $('#tkNow').textContent = '';
   $('#tkSteps').replaceChildren(); $('#tkSlices').replaceChildren();
   $('#tracker').setAttribute('aria-label', 'Waiting for live work. Open orders.');
-  STATUS.prep = 'n/a'; setTickets(); renderStats();
+  liveShopStatus = null; STATUS.prep = 'n/a'; setTickets(); renderStats();
   if (!sheet.hidden) { sheet.hidden = true; ['#bCrew', '#bOrders', '#bLog'].forEach(id => $(id).classList.remove('on')); }
   tip.hidden = true; tipFor = null;
 }
 function demoDriver() {
   if (sceneMode === 'demo') return;
   clearAssignments(); clearDemo(); sceneMode = 'demo';
+  ['bDawn', 'bDay', 'bNight', 'bLate'].forEach(id => { $('#' + id).disabled = false; });
   for (const [a, home] of castHomes) { a.pos.copy(home.pos); a.goalYaw = home.goal; a.show(!home.hidden); a.sync(); }
   served = [...SERVED0]; parked = [{ n: 6, title: 'Stripe webhooks', why: 'Needs STRIPE_WEBHOOK_SECRET in .env' }];
   for (let i = 0; i < 3; i++) addServed();
@@ -3465,6 +3478,7 @@ function demoDriver() {
 }
 function startLive() {
   sceneMode = 'live'; clearAssignments(); clearDemo();
+  ['bDawn', 'bDay', 'bNight', 'bLate'].forEach(id => { $('#' + id).disabled = true; $('#' + id).title = 'Lighting follows the live kitchen phase'; });
   A.chef.pos.set(1.2, .06, 1.6); A.chef.show(true); A.chef.sync(); A.chef.doing('Leading the session', 'idle');
 }
 function castActor(character) {
@@ -3482,7 +3496,7 @@ function castActor(character) {
 function stationFor(character, a) {
   if (character.id === 'implementer') return [SX[1], -2.45, F.S];
   if (character.id === 'implementer#2') return [SX[0], -2.45, F.S];
-  if (character.id === 'discovery') return [-3.25, -.82, F.W];
+  if (character.type === 'discovery' || character.id === 'discovery') return [-3.25, -.82, F.W];
   if (castHomes.has(a) && character.crew === 'line') { const home = castHomes.get(a); return [home.pos.x, home.pos.z, home.goal]; }
   if (character.id === 'retrospective-reviewer') return [-1.6, 1.0, F.N];
   if (character.id === 'proposal-drafter') return [.6, 1.0, F.N];
@@ -3514,6 +3528,7 @@ function agentOn(event) {
   const version = entry.version;
   let path = [[station[0], station[1]]];
   if (event.character.crew === 'line') path = [[-4.2, -2.75], [station[0], station[1]]];
+  if (event.character.type === 'discovery') path = [[1.35, -2.75], [1.75, -2.6], [1.75, -.82], [-3.25, -.82]];
   if (event.character.crew === 'menu') path = [[-4.2, -.85], [-5.3, -.6], [station[0], station[1]]];
   actor.walk(path, station[2]).then(() => {
     if (sceneMode === 'live' && entry.active && entry.version === version && !sceneOwnsActor(actor)) actor.doing(entry.row.label || event.character.type, 'work');
@@ -3542,8 +3557,8 @@ function castEvent(type, event) {
   if (castEvents.length > 100) castEvents.shift();
   if (type === 'agentOn') agentOn(event);
   if (type === 'agentOff') agentOff(event);
-  if (type === 'skillOn') { liveSkills.set(event.key, event.row); A.chef.doing(event.row.name, 'inspect'); }
-  if (type === 'skillOff') { liveSkills.delete(event.key); A.chef.doing([...liveSkills.values()].at(-1)?.name || 'Leading the session', liveSkills.size ? 'inspect' : 'idle'); }
+  if (type === 'skillOn') { liveSkills.set(event.key, event.row); if (livePhase !== 'dawn') A.chef.doing(event.row.name, 'inspect'); }
+  if (type === 'skillOff') { liveSkills.delete(event.key); if (livePhase !== 'dawn') A.chef.doing([...liveSkills.values()].at(-1)?.name || 'Leading the session', liveSkills.size ? 'inspect' : 'idle'); }
   window.dispatchEvent(new CustomEvent(`kitchen:${type}`, { detail: { key: event.key, row: { ...event.row }, ok: event.ok } }));
 }
 // Setup skill casts keep the existing named roster and work beside the actual piece.
@@ -3635,16 +3650,69 @@ function updateConstruction(dt) {
     if (shopper.wait <= 0) { shopper.index = (shopper.index + 1) % PUBLIC_ROUTE.length; walkShopper(); }
   }
 }
+// Phase callbacks own only Nico and optional review stand-ins, never actual live assignments.
+function phaseActor(actor, station, task) {
+  const existing = [...liveAssignments.values()].find(entry => entry.active && entry.actor === actor);
+  if (existing || constructionWorkers.has(actor.meta.id) || (shopper.active && shopper.actor === actor)) return;
+  const previous = phaseActors.get(actor.meta.id);
+  if (previous?.task === task) return;
+  cancelActor(actor); actor.show(true); actor.sync();
+  const entry = { actor, task, gen: phaseActorGen }; phaseActors.set(actor.meta.id, entry);
+  actor.task = task;
+  actor.walk([[station[0], station[1]]], station[2]).then(() => {
+    if (sceneMode === 'live' && entry.gen === phaseActorGen && phaseActors.get(actor.meta.id) === entry)
+      actor.doing(task, 'inspect');
+  });
+}
+function syncLivePhase(snapshot) {
+  if (sceneMode !== 'live') return;
+  const session = snapshot.session ? JSON.stringify([snapshot.project.root, snapshot.session.id, snapshot.session.startedAt]) : snapshot.project.root;
+  const next = ['dawn', 'open', 'after-hours'].includes(snapshot.phase) ? snapshot.phase :
+    livePhase || ((snapshot.active || []).some(row => /:(implementer|fix-attempter|plater)$/.test(row.type)) ? 'open' : 'dawn');
+  const reviewing = (snapshot.skills || []).some(row => row.status === 'active' && shortSkill(row.name || '') === 'close-shop');
+  const changed = next !== livePhase || session !== liveSessionKey || reviewing !== reviewActive;
+  if (changed) {
+    phaseActorGen++; chefGen++;
+    for (const { actor } of phaseActors.values()) { cancelActor(actor); if (actor !== A.chef) actor.show(false); }
+    phaseActors.clear(); livePhase = next; liveSessionKey = session; reviewActive = reviewing;
+    if (next === 'dawn') startAtDawn();
+    else if (next === 'open') { setTod('day', true); openShop(); setSign(true); }
+    else { closeShop(); setTod('night', true); setSign(false); }
+  }
+  // The board never invents a retrospective when the parent merely goes idle.
+  ledger.visible = reviewing;
+  if (reviewing) {
+    phaseActor(A.chef, [-.5, 1.1, F.N], 'Leading the close-shop review');
+    phaseActor(rhea, [-1.6, 1.0, F.N], 'Reviewing the day during close-shop');
+    phaseActor(paz, [.6, 1.0, F.N], 'Preparing proposals during close-shop');
+  } else if (next === 'dawn') phaseActor(A.chef, [-4.25, 2.75, F.W], 'Reading the shop status before opening');
+  else if (changed) phaseActor(A.chef, [1.2, 1.6, F.N], next === 'open' ? 'Leading the session' : 'Kitchen closed for the night');
+  // Never derive these from actor overlays: the SessionStart hook counts checklist headings.
+  const status = snapshot.shopStatus;
+  if (status && ['prep', 'pies', 'slices'].every(name => status[name] &&
+      ['done', 'total', ...(name === 'prep' ? [] : ['open'])].every(key => Number.isSafeInteger(status[name][key]) && status[name][key] >= 0))) {
+    liveShopStatus = JSON.parse(JSON.stringify(status)); chalkTex.redraw();
+  }
+}
 const castDriver = window.createKitchenCastDriver({ roster: { ...byId, 'box-it-up': byId.lead }, emit: castEvent, demo: demoDriver, live: startLive });
 function liveDriver(snapshot) {
   buildDriver.apply(snapshot);
   const castSnapshot = snapshot.project.setup === 'none' && setupWork(snapshot)
     ? { ...snapshot, project: { ...snapshot.project, setup: 'partial' } } : snapshot;
-  castDriver.apply(castSnapshot); syncBuildCrews(snapshot);
+  // Release old phase stand-ins before cast events acquire those same real characters.
+  for (const [id, entry] of phaseActors) if ((snapshot.active || []).some(row => row.type === `bytheslice:${id}`)) {
+    phaseActors.delete(id); cancelActor(entry.actor);
+  }
+  castDriver.apply(castSnapshot); syncBuildCrews(snapshot); syncLivePhase(snapshot);
 }
 window.liveDriver = liveDriver;
 Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
   get mode() { return sceneMode; },
+  get phase() { return livePhase; },
+  get sign() { return { on: signOn, glow: LED.emissiveIntensity, lights: LEDS.map(light => light.intensity), flicker: signFlick, level: signK }; },
+  get lighting() { return { time: tod, night, nightGoal, dawn: dawnK, dawnGoal, sun: sun.intensity, ambient: amb.intensity }; },
+  get statusBoard() { return { counts: liveShopStatus ? JSON.parse(JSON.stringify(liveShopStatus)) : null, card: root.getObjectByName('board86').userData.card() }; },
+  get review() { return { active: reviewActive, ledgerVisible: ledger.visible, members: BOARD.map(actor => ({ character: actor.meta.id, hidden: !!actor.hidden, task: actor.task })) }; },
   get pieces() { return [...buildPieces.values()].map(piece => {
     const meshes = group => { let count = 0; group.traverseVisible(object => { if (object.isMesh) count++; }); return count; };
     return { name: piece.name, state: piece.install ? 'installing' : piece.state, installs: piece.installs,
@@ -3661,7 +3729,7 @@ Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
     character: entry.character.id, name: entry.actor.meta.name, crew: entry.actor.meta.crew, task: entry.actor.task,
     active: entry.active, offDuty: entry.offDuty, hidden: !!entry.actor.hidden, mode: entry.actor.mode,
     position: [entry.actor.pos.x, entry.actor.pos.z], renderedPosition: [entry.actor.g.position.x, entry.actor.g.position.z], station: [...entry.station] })); },
-  get chef() { return { name: A.chef.meta.name, task: A.chef.task, hidden: !!A.chef.hidden }; },
+  get chef() { return { name: A.chef.meta.name, task: A.chef.task, hidden: !!A.chef.hidden, mode: A.chef.mode, position: [A.chef.pos.x, A.chef.pos.z] }; },
   get demoCustomers() { return actors.filter(a => a.isCustomer && a.order && !a.hidden).length; },
   get demoPies() { return shelfPies.length + root.children.filter(object => ['pizza', 'box', 'token'].includes(object.name)).length; },
   get events() { return castEvents.map(event => ({ ...event })); },
