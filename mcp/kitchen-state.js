@@ -62,9 +62,17 @@ function parseChecklist(markdown) {
   let current = null, slice = null, prep = false, fenced = false;
   const prepChecks = [];
   let prepStatus = 'open';
+  const prepPieceExemptions = {};
   for (const raw of (markdown || '').split(/\r?\n/)) {
     if (/^\s*(```|~~~)/.test(raw)) { fenced = !fenced; continue; }
     if (fenced) continue;
+    const exemption = /<!--\s*kitchen-piece-exemption:\s*([a-z, ]+)\s*\|\s*(.+?)\s*-->/.exec(raw);
+    if (exemption) {
+      const evidence = text(exemption[2], 240);
+      for (const piece of exemption[1].split(',').map(value => value.trim())) {
+        if (Object.hasOwn(PIECE_MARKERS, piece) && evidence) prepPieceExemptions[piece] = evidence;
+      }
+    }
     const line = raw.replace(/<!--.*?-->/g, '').trimEnd();
     if (/^##\s+Prep\b/i.test(line)) {
       prep = true; slice = null;
@@ -92,6 +100,12 @@ function parseChecklist(markdown) {
       pies.push(current); continue;
     }
     if (/^##\s/.test(line)) { current = null; slice = null; prep = false; continue; }
+    if (prep && /\bn\/a\b|not applicable/i.test(line) && (/\[[xX]\]/.test(line) || prepStatus === 'done')) {
+      // Match the named Prep item, never an unrelated exception in its explanation.
+      const label = line.split(':')[0];
+      if (/\bdisplay[ -]case\b|\bset-display-case\b/i.test(label)) prepPieceExemptions.case = text(line, 240);
+      if (/\bshop open\b|\bopen-the-shop\b/i.test(label)) prepPieceExemptions.safe = text(line, 240);
+    }
     if (prep && /^\s*(?:-\s*)?\[[ xX]\]/.test(line)) {
       prepChecks.push(/\[[xX]\]|\bn\/?a\b|not applicable/i.test(line));
     }
@@ -121,7 +135,7 @@ function parseChecklist(markdown) {
     else if (pie.slices.length && pie.slices.every(item => item.status === 'done')) pie.status = 'done';
     else if (pie.slices.some(item => item.status === 'active')) pie.status = 'active';
   }
-  return { pies, prepComplete: prepStatus === 'done' || (prepChecks.length > 0 && prepChecks.every(Boolean)) };
+  return { pies, prepComplete: prepStatus === 'done' || (prepChecks.length > 0 && prepChecks.every(Boolean)), prepPieceExemptions };
 }
 
 function foldActivity(inputRows, now = Date.now()) {
@@ -181,6 +195,9 @@ function foldActivity(inputRows, now = Date.now()) {
   };
 }
 
+const PIECE_MARKERS = { walls: 'config', menu: 'prd', tickets: 'checklist', case: 'designSystem',
+  safe: 'envCheck', oven: 'workflows', alarm: 'prePush', locks: 'branchProtection' };
+
 function buildSnapshot({ root, checklist = '', markers = {}, rows = [], cursor = 0, port = null, now }) {
   const parsed = parseChecklist(checklist);
   const activity = foldActivity(rows, now);
@@ -191,9 +208,16 @@ function buildSnapshot({ root, checklist = '', markers = {}, rows = [], cursor =
     if (pie.status !== 'done' && (pie.slices.some(slice => slice.status === 'active') ||
         activity.active.some(agent => agent.pie === pie.pie))) pie.status = 'active';
   }
-  const markerNames = ['config', 'prd', 'checklist', 'designSystem', 'workflows', 'prePush'];
-  const built = parsed.prepComplete || markerNames.every(key => markers[key]);
-  return { project: { root, name: path.basename(root), setup: built ? 'built' : markerNames.some(key => markers[key]) ? 'partial' : 'none' },
+  // Completed Prep applies only the named exceptions; these never claim file presence.
+  const pieces = Object.fromEntries(Object.entries(PIECE_MARKERS).map(([piece, marker]) => {
+    const present = Boolean(markers[marker] || (piece === 'case' && markers.library));
+    const evidence = parsed.prepComplete ? parsed.prepPieceExemptions[piece] : null;
+    const applicable = present || !evidence;
+    return [piece, { present, applicable, source: present ? marker === 'designSystem' && !markers[marker] ? 'library' : marker
+      : applicable ? 'missing' : 'completed-prep', ...(!applicable ? { evidence } : {}) }];
+  }));
+  const built = parsed.prepComplete || Object.values(pieces).every(piece => piece.present);
+  return { project: { root, name: path.basename(root), setup: built ? 'built' : Object.values(pieces).some(piece => piece.present) ? 'partial' : 'none', pieces },
     pies: parsed.pies, ...activity, cursor, port };
 }
 
@@ -208,20 +232,45 @@ async function exists(file) {
   try { await fs.access(file); return true; } catch { return false; }
 }
 
+// Inspect route filenames only. Do not read application source, env files, or follow symlinks.
+async function hasLibraryRoute(root) {
+  const queue = ['app', 'pages', 'src', 'apps'].map(name => ({ dir: path.join(root, name), parts: [name] }));
+  let visited = 0;
+  while (queue.length && visited < 4000) {
+    const { dir, parts } = queue.shift();
+    const directory = await fs.lstat(dir).catch(() => null);
+    if (!directory?.isDirectory()) continue;
+    const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (++visited > 4000) break;
+      if (entry.name.startsWith('.') || ['node_modules', 'dist', 'build', 'vendor'].includes(entry.name)) continue;
+      const route = [...parts, entry.name];
+      if (entry.isFile() && ((parts.includes('pages') && (/^library\.(?:[cm]?[jt]sx?|vue)$/.test(entry.name) ||
+          (parts.includes('library') && /^index\.(?:[cm]?[jt]sx?|vue)$/.test(entry.name)))) ||
+          (parts.includes('app') && parts.includes('library') && /^page\.[cm]?[jt]sx?$/.test(entry.name)) ||
+          (parts.includes('routes') && parts.includes('library') && /^\+page\.svelte$/.test(entry.name)))) return true;
+      if (entry.isDirectory() && route.length < 9) queue.push({ dir: path.join(dir, entry.name), parts: route });
+    }
+  }
+  return false;
+}
+
 async function readKitchenState(root, { since, port = null, now = Date.now() } = {}) {
   if (since !== undefined && !integer(since)) throw new TypeError('since must be a nonnegative integer');
   root = path.resolve(root);
   const dir = path.join(root, '.claude/.bytheslice-state/kitchen');
   const checklistPath = path.join(root, 'docs/plans/00_master_checklist.md');
-  const [rotation, current, checklist, config, checklistExists, designSystem, workflows, prePush, docs] = await Promise.all([
+  const [rotation, current, checklist, config, checklistExists, designSystem, workflows, prePush, docs, envCheck, branchProtection, library] = await Promise.all([
     readFileOrEmpty(path.join(dir, 'activity.1.jsonl')), readFileOrEmpty(path.join(dir, 'activity.jsonl')),
     readFileOrEmpty(checklistPath), exists(path.join(root, 'bytheslice.config.json')), exists(checklistPath),
     exists(path.join(root, 'docs/design-system.md')), exists(path.join(root, '.github/workflows')),
-    exists(path.join(root, '.husky/pre-push')), fs.readdir(path.join(root, 'docs')).catch(() => []),
+    exists(path.join(root, '.husky/pre-push')), fs.readdir(path.join(root, 'docs'), { withFileTypes: true }).catch(() => []),
+    exists(path.join(root, '.claude/.bytheslice-state/env-check-passed')),
+    exists(path.join(root, 'scripts/setup-branch-protection.sh')), hasLibraryRoute(root),
   ]);
   const previous = parseActivity(rotation), latest = parseActivity(current);
   return buildSnapshot({ root, checklist: checklist.toString('utf8'),
-    markers: { config, checklist: checklistExists, designSystem, workflows, prePush, prd: docs.some(name => /^prd-.*\.md$/.test(name)) },
+    markers: { config, checklist: checklistExists, designSystem, workflows, prePush, envCheck, branchProtection, library, prd: docs.some(entry => entry.isFile() && /^prd-.*\.md$/.test(entry.name)) },
     rows: [...previous.rows, ...latest.rows], cursor: latest.cursor, port, now });
 }
 

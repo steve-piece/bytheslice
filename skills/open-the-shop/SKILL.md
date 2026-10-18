@@ -94,11 +94,11 @@ Dispatch `env-verifier`. The verifier:
 
 **If verification passes (`status: pass`):** proceed to Phase 6 — stage complete.
 
-**If verification fails (`status: fail`):** display a targeted report (missing files, missing keys, placeholder values per file). Then return to Phase 4 and wait for the user to fix and re-confirm. Loop until `status: pass`.
+**If verification fails (`status: fail`):** remove `.claude/.bytheslice-state/env-check-passed` if it exists, then display a targeted report (missing files, missing keys, placeholder values per file). Then return to Phase 4 and wait for the user to fix and re-confirm. Loop until `status: pass`.
 
 ### Phase 6 — Closeout
 
-1. Record confirmation that all `.env.local` files pass verification.
+1. After `env-verifier` returns `status: pass`, write the literal `pass\n` to `.claude/.bytheslice-state/env-check-passed` (create the state directory if needed). This local marker records only the successful check. Never write environment values, secret names, credentials, or verifier output into it. Remove an existing marker when a later verification fails so the kitchen does not display a stale pass. Record confirmation that all `.env.local` files pass verification.
 2. Record user's verbal confirmation that GitHub secrets are set (if any were listed in Phase 2).
 3. Mark the stage complete in `docs/plans/00_master_checklist.md`.
 4. Walk the [Completion Checklist](#completion-checklist) below and confirm every box is `[x]`.

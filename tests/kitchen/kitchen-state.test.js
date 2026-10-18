@@ -138,7 +138,7 @@ test('folds ordered pies, Prep, standalone slices, status text and legacy stages
 test('uses actual setup evidence and overlays activity only onto unfinished work', () => {
   assert.equal(buildSnapshot({ root: '/fixture/project' }).project.setup, 'none');
   assert.equal(buildSnapshot({ root: '/fixture/project', markers: { config: true } }).project.setup, 'partial');
-  const markers = { config: true, prd: true, checklist: true, designSystem: true, workflows: true, prePush: true };
+  const markers = { config: true, prd: true, checklist: true, designSystem: true, workflows: true, prePush: true, envCheck: true, branchProtection: true };
   assert.equal(buildSnapshot({ root: '/fixture/project', markers }).project.setup, 'built');
   const state = buildSnapshot({ root: '/fixture/project', checklist, rows: activity, port: 4477, now: 3000 });
   assert.equal(state.project.setup, 'built');
