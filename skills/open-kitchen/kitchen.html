@@ -261,7 +261,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 <div id="tip" hidden></div>
 
 <script id="kitchen-live">
-// Snapshot delivery is independent of the scene and leaves demo behavior intact until Slice 4.3.
+// Snapshot delivery stays independent of scene initialization and rendering.
 (() => {
   const interval = 3000;
   const button = document.getElementById('bOpen');
@@ -288,9 +288,11 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
       if (typeof window.liveDriver === 'function') window.liveDriver(next);
       else if (typeof window.liveDriver?.applySnapshot === 'function') window.liveDriver.applySnapshot(next);
     } catch {
-      // A future scene driver cannot stop local snapshot delivery.
+      // Scene failures cannot stop local snapshot delivery.
     }
   }
+
+  window.__kitchenFeed = deliver;
 
   button.addEventListener('click', () => {
     if (validPort(snapshot?.port)) window.open(`http://127.0.0.1:${snapshot.port}/`, '_blank', 'noopener');
@@ -329,8 +331,64 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 })();
 </script>
 
+<script id="kitchen-cast">
+// Diff full snapshots independently of Three.js so replay and repeated polls stay deterministic.
+window.createKitchenCastDriver = function ({ roster, emit, demo, live }) {
+  let mode = null, projectRoot = null;
+  let active = new Map(), skills = new Map();
+  const keyFor = row => JSON.stringify([row.sid || '', row.aid]);
+  const skillKey = row => JSON.stringify([row.sid || '', row.name, row.startedAt]);
+  function assign(row) {
+    const plugin = row.type.startsWith('bytheslice:');
+    const type = plugin ? row.type.slice('bytheslice:'.length) : row.type;
+    const used = new Set([...active.values()].map(item => item.character.id));
+    const known = plugin && roster[type];
+    if (known && !used.has(type)) return { ...known, plugin, type };
+    if (known && roster[type + '#2'] && !used.has(type + '#2')) return { ...roster[type + '#2'], plugin, type };
+    const crew = known ? known.crew : plugin ? 'line' : 'pass';
+    let number = 1;
+    while (used.has(`helper:${crew}:${number}`)) number++;
+    return { id: `helper:${crew}:${number}`, name: plugin ? `${crew} helper ${number}` : `Temp ${number}`,
+      crew, tier: known?.tier || 'sonnet', role: plugin ? `Extra ${type} in the ${crew} division.` : `Temp helper: ${type}.`, plugin, type };
+  }
+  function apply(snapshot) {
+    if (!snapshot || typeof snapshot.project?.setup !== 'string') return;
+    if (snapshot.project.setup === 'none') {
+      active = new Map(); skills = new Map(); projectRoot = null;
+      if (mode !== 'demo') { mode = 'demo'; demo(); }
+      return;
+    }
+    if (mode !== 'live' || projectRoot !== snapshot.project.root) {
+      active = new Map(); skills = new Map(); mode = 'live'; projectRoot = snapshot.project.root;
+      live(snapshot);
+    }
+    const rows = (Array.isArray(snapshot.active) ? snapshot.active : [])
+      .filter(row => typeof row?.aid === 'string' && typeof row.type === 'string');
+    const incoming = new Set(rows.map(keyFor));
+    for (const [key, entry] of active) if (!incoming.has(key)) {
+      const finish = [...(snapshot.recent || [])].reverse().find(row => row.aid === entry.row.aid &&
+        (!row.sid || row.sid === entry.row.sid) && typeof row.ok === 'boolean');
+      emit('agentOff', { ...entry, ok: finish?.ok !== false }); active.delete(key);
+    }
+    for (const row of rows) {
+      const key = keyFor(row), previous = active.get(key);
+      const entry = { key, row: { ...row }, character: previous?.character || assign(row) };
+      active.set(key, entry);
+      if (!previous || previous.row.label !== row.label || previous.row.type !== row.type) emit('agentOn', { ...entry, update: !!previous });
+    }
+    const incomingSkills = new Map((Array.isArray(snapshot.skills) ? snapshot.skills : [])
+      .filter(row => row.status === 'active' && typeof row.name === 'string').map(row => [skillKey(row), row]));
+    for (const [key, row] of skills) if (!incomingSkills.has(key)) emit('skillOff', { key, row });
+    for (const [key, row] of incomingSkills) if (!skills.has(key)) emit('skillOn', { key, row });
+    skills = incomingSkills;
+  }
+  return Object.freeze({ apply, get mode() { return mode; } });
+};
+</script>
+
 <script type="module">
 import * as THREE from 'three';
+let sceneMode = 'pending';
 
 // ---------- icons ----------
 const IC = {
@@ -703,6 +761,7 @@ const DX = 2.7, DZ = 3.0, shelfPies = [];
 }
 function miniPie() { const g = G(0, 0, 0); P(cyl(.22, .22, .02, 24), PZ.sauce, 0, .012, 0, g); P(cyl(.19, .19, .02, 24), PZ.cheese, 0, .022, 0, g); P(tor(.21, .028), PZ.crust, 0, .025, 0, g).rotation.x = Math.PI / 2; for (let k = 0; k < 5; k++) { const a = k * 1.3 + .4, r = k === 4 ? 0 : .11; const d = P(sph(.036, 12, 6), PZ.pep, Math.cos(a) * r, .036, Math.sin(a) * r, g); d.scale.set(1, .2, 1); } return g; }
 function addServed() {
+  if (sceneMode === 'live') return;
   const k = shelfPies.length % 4; if (shelfPies.length >= 4) { const old = shelfPies.shift(); root.remove(old); shelfPies.forEach((p, i) => p.position.x = DX - .78 + i * .52); }
   const p = miniPie(); p.position.set(DX - .78 + Math.min(shelfPies.length, 3) * .52, .89, DZ); shelfPies.push(p);
 }
@@ -1326,11 +1385,13 @@ A.chef.speed = .55; A.chef.task = 'Walking the floor';
 const CHEF_CALLS = ['Two minutes on the line!', "Fire it! Let's go!", 'Clean as you go!', 'Taste it before it leaves!', 'Eyes on your tickets!', 'Behind! Hot pan!'];
 let chefLastCall = -99, chefCi = 0;
 async function chefCall() {
+  if (sceneMode === 'live') return;
   const line = COOKS.filter(c => !c.hidden); if (!line.length || closed) return;
   chefLastCall = simT; A.chef.face(Math.atan2(-.7 - A.chef.pos.x, -2.4 - A.chef.pos.z)); const prev = A.chef.mode; A.chef.mode = 'work';
   say(A.chef, CHEF_CALLS[chefCi++ % CHEF_CALLS.length], 2.4, 'chef'); await wait(1.1);
-  line.forEach((c, k) => setTimeout(() => say(c, 'Yes, Chef!', 1.8, 'reply'), k * 140));
-  await wait(1.6); A.chef.mode = prev === 'walk' ? 'walk' : 'idle';
+  if (sceneMode === 'live') return;
+  line.forEach((c, k) => setTimeout(() => { if (sceneMode === 'demo') say(c, 'Yes, Chef!', 1.8, 'reply'); }, k * 140));
+  await wait(1.6); if (sceneMode !== 'live') A.chef.mode = prev === 'walk' ? 'walk' : 'idle';
 }
 let chefGen = 0;
 async function chefRounds() {
@@ -1345,7 +1406,6 @@ async function chefRounds() {
     if (!alive()) return; A.chef.mode = 'idle';
   }
 }
-chefRounds();
 COOKS.forEach(c => c.show(false));
 const DOOR = [-4.95, -2.9];
 
@@ -2643,6 +2703,7 @@ function tagFor(a, text) { const el = document.createElement('div'); el.classNam
 
 // ---------- pizza ----------
 function makePizza(n, single = false) {
+  if (sceneMode === 'live') return { g: new THREE.Group(), wedges: [] };
   const g = G(PIZ.x, PIZ.y, PIZ.z, root, 'pizza');
   if (single) return makeSlice(g);
   P(cyl(.47, .47, .025, 40), M.walnutL, 0, -.012, 0, g);
@@ -2689,7 +2750,7 @@ function setWedge(p, i, state) {
   wd.w.visible = true; wd.target = 1;
   const b = state === 'burnt'; wd.cheese.material = b ? M.burnt : PZ.cheese; wd.tops.forEach(t => t.visible = !b);
 }
-function makeBox(single = false) { const g = G(PIZ.x, PIZ.y, PIZ.z, root, 'box'), b = G(0, 0, 0, g); b.scale.setScalar(single ? .55 : 1); P(rbox(.92, .1, .92, .02), M.box, 0, .05, 0, b); P(rbox(.94, .03, .94, .015), m('boxlid', 0xeed6b4), 0, .11, 0, b); logoDecal(b, .8, 0, .128, 0); return g; }
+function makeBox(single = false) { if (sceneMode === 'live') return new THREE.Group(); const g = G(PIZ.x, PIZ.y, PIZ.z, root, 'box'), b = G(0, 0, 0, g); b.scale.setScalar(single ? .55 : 1); P(rbox(.92, .1, .92, .02), M.box, 0, .05, 0, b); P(rbox(.94, .03, .94, .015), m('boxlid', 0xeed6b4), 0, .11, 0, b); logoDecal(b, .8, 0, .128, 0); return g; }
 const tweens = [];
 function tween(obj, to, dur) { return new Promise(r => tweens.push({ obj, from: obj.position.clone(), to: new THREE.Vector3(...to), t: 0, dur, r })); }
 
@@ -2733,8 +2794,8 @@ function renderOrder() {
   if (!sheet.hidden && sheet.dataset.kind === 'orders') renderOrdersSheet();
 }
 function renderStats() {
-  const pies = served.filter(s => !s.slice); $('#stCost').textContent = '$' + cost.toFixed(2); $('#stServed').textContent = pies.length;
-  $('#stGate').textContent = Math.round(pies.filter(s => s.first).length / pies.length * 100) + '%';
+  const pies = served.filter(s => !s.slice); $('#stCost').textContent = sceneMode === 'live' ? 'n/a' : '$' + cost.toFixed(2); $('#stServed').textContent = pies.length;
+  $('#stGate').textContent = pies.length ? Math.round(pies.filter(s => s.first).length / pies.length * 100) + '%' : 'n/a';
 }
 const feedEl = $('#feed'), LOG = [];
 function feed(text) {
@@ -2766,6 +2827,7 @@ const qslot = i => QSLOT[Math.min(i, QSLOT.length - 1)];
 const custLooks = [{ hair: 'bob', hairC: 0x3b2a22, top: 0x7e9db5 }, { hair: 'beanie', hairC: 0x2a1d17, hatC: 0xc98f86, top: 0xd8a23c }, { hair: 'puffs', hairC: 0x1f1813, top: 0xc98f86 }, { hair: 'quiff', hairC: 0x8a5a3a, top: 0x6c8a52 }];
 let custN = 0;
 function spawnCustomer(order, slot, walkIn = true, added = false) {
+  if (sceneMode === 'live') return;
   const look = custLooks[custN++ % custLooks.length], q = qslot(slot);
   const a = new Actor('customer' + custN, { ...look, skin: skins[custN % skins.length], pants: 0x4f5e69 }, walkIn ? -44 : q[0], walkIn ? QLANE : q[1], F.E, true);
   a.order = order; a.speed = 1.5; a.task = `Waiting for ${nm(order)}`; a.newUntil = added ? simT + 22 : 0;
@@ -2778,6 +2840,7 @@ function spawnCustomer(order, slot, walkIn = true, added = false) {
 function advanceQueue() { custQueue.forEach((c, i) => c.walk([qslot(i)], i === 0 ? F.N : F.E)); }
 // a new pie or slice added to the plan: a new customer walks up Main Street and joins the back of the line
 function addPlanned(o) {
+  if (sceneMode !== 'demo') return;
   spawnCustomer(o, custQueue.length, true, true); setTickets();
   callout(`Added to the plan: ${nm(o)}`, 'plus'); feed(`/special-order added ${nm(o)}, ${o.title}. A new customer joins the back of the line`);
 }
@@ -2943,11 +3006,12 @@ function note(html, icon = 'book') {
   el.innerHTML = `<span class="ci">${svg(icon)}</span><span>${html}</span>`; coBox.append(el); setTimeout(() => el.remove(), 8800);
 }
 async function service() {
-  for (let day = 0; ; day++) {
+  for (let day = 0; sceneMode === 'demo'; day++) {
     if (day) { served = [...SERVED0]; renderStats(); while (shelfPies.length) root.remove(shelfPies.pop()); for (let i = 0; i < 3; i++) addServed(); feed('A new day: the line forms again'); }
     LINE0.forEach((o, i) => spawnCustomer(o, i, day > 0)); setTickets();
     await swait(1.5); note('This is a sample shop. Ask your agent to run <code>/setup-shop</code> to open your own.', 'book'); await swait(7.5);
     for (const o of RUN) {
+      if (sceneMode !== 'demo') return;
       if (o === O.p11 && !custQueue.some(q => q.order === o)) continue;
       if (o === O.p5) swait(14).then(() => addPlanned(O.p11));
       await runOrder(o);
@@ -2965,6 +3029,7 @@ async function service() {
 const tip = $('#tip');
 const TIER = { opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' };
 function crewName(id) { return id === 'front' ? 'Front of house' : (CREWS.find(c => c[0] === id) || [, ''])[1]; }
+function escapeCard(value) { return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]); }
 let tipAnchor = null;
 function showTip(html, anchor) {
   tip.innerHTML = `<button class="sh-close x" aria-label="Close" id="tipX">${svg('close')}</button>` + html; tip.hidden = false;
@@ -3022,7 +3087,7 @@ function actorCard(a) {
     return `<h5>${nm(o)} · ${o.title}</h5><div class="sub">${o.slice ? 'Single slice order' : 'Customer order'}</div><dl><dt>Details</dt><dd>${o.desc}</dd><dt>${o.slice ? 'Slice' : 'Slices'}</dt><dd>${o.slices.map(x => x[0]).join(', ')}</dd><dt>Status</dt><dd>${status}</dd></dl>`;
   }
   const mt = a.meta, el = Math.max(0, simT - a.since);
-  return `<h5>${mt.name}</h5><div class="sub"><code>${mt.id.replace('#2', '')}</code> · ${crewName(mt.crew)}</div><dl><dt>Model</dt><dd><span class="tier t-${mt.tier}">${TIER[mt.tier]}</span></dd><dt>Now</dt><dd>${a.task}</dd><dt>For</dt><dd>${el.toFixed(0)}s</dd><dt>Tokens</dt><dd>${(a.tokens / 1000).toFixed(1)}k</dd><dt>Role</dt><dd>${mt.role}</dd></dl>`;
+  return `<h5>${escapeCard(mt.name)}</h5><div class="sub"><code>${escapeCard(mt.type || mt.id.replace('#2', ''))}</code> · ${crewName(mt.crew)}</div><dl><dt>Model</dt><dd><span class="tier t-${mt.tier}">${TIER[mt.tier]}</span></dd><dt>Now</dt><dd>${escapeCard(a.task)}</dd><dt>For</dt><dd>${el.toFixed(0)}s</dd><dt>Tokens</dt><dd>${sceneMode === 'live' ? 'n/a' : (a.tokens / 1000).toFixed(1) + 'k'}</dd><dt>Role</dt><dd>${escapeCard(mt.role)}</dd></dl>`;
 }
 function tap(x, y) {
   ndc.set(x / W * 2 - 1, -(y / H) * 2 + 1); ray.setFromCamera(ndc, cam);
@@ -3189,8 +3254,10 @@ async function boardMeeting(gen) {
 let night = 0, nightGoal = 0, dawnK = 0, dawnGoal = 0;
 function setTod(mode) {
   if (mode === tod) return; const was = tod; tod = mode; nightGoal = { dawn: 0, day: 0, night: 1, late: 1.35 }[mode]; dawnGoal = mode === 'dawn' ? 1 : 0;
-  if (mode === 'late') closeShop(); else if (mode === 'dawn') prepShop(); else if (was === 'late' || was === 'dawn') openShop();
-  chefRounds();
+  if (sceneMode === 'demo') {
+    if (mode === 'late') closeShop(); else if (mode === 'dawn') prepShop(); else if (was === 'late' || was === 'dawn') openShop();
+    chefRounds();
+  }
   ['bDawn', 'bDay', 'bNight', 'bLate'].forEach(id => $('#' + id).classList.toggle('on', id === { dawn: 'bDawn', day: 'bDay', night: 'bNight', late: 'bLate' }[mode]));
   townies.forEach(startLife); bikes.forEach(b => b.gen++);
 }
@@ -3203,6 +3270,154 @@ function startAtDawn() {
   ['bDawn', 'bDay', 'bNight', 'bLate'].forEach(id => $('#' + id).classList.toggle('on', id === 'bDawn'));
   prepShop(); chefRounds(); townies.forEach(startLife);
 }
+
+// ---------- real cast: snapshot events drive the existing scene ----------
+const castHomes = new Map([...Object.values(A), ...BOARD].map(a => [a, { pos: a.pos.clone(), goal: a.goalYaw, hidden: !!a.hidden }]));
+const castActors = new Map([...castHomes.keys()].map(a => [a.meta.id, a]));
+const liveAssignments = new Map(), liveSkills = new Map(), castEvents = [];
+const CREW_SPOTS = {
+  line: [-2.05, -2.45, F.S], pass: [2.2, -.75, F.W], menu: [-8.0, -.6, F.S],
+  case: [2.7, 2.35, F.S], door: [4.55, -1.55, F.N], setup: [-12.8, -4.6, F.S],
+  board: [-1.6, 1.0, F.N], front: [-3.1, 3.25, F.S],
+};
+const CREW_APRONS = { line: 0xc9643f, pass: 0x9fae8c, menu: 0xd8a23c, case: 0x7e9db5, door: 0x8a5a3a, setup: 0xd8a23c, board: 0x6c4430 };
+function cancelActor(a) {
+  a.res = null; a.path = []; a.gl = null; a.stash = null; a.lookAt = null;
+  if (a.carry) { root.remove(a.carry); a.carry = null; }
+  for (const prop of ['_say', '_bub']) if (a[prop]) { a[prop].el.remove(); const at = OV.indexOf(a[prop]); if (at >= 0) OV.splice(at, 1); a[prop] = null; }
+  a.doing('Off duty', 'idle');
+}
+function clearAssignments() {
+  for (const entry of liveAssignments.values()) { clearTimeout(entry.idleTimer); entry.version++; }
+  liveAssignments.clear(); liveSkills.clear();
+}
+function clearDemo() {
+  // Suspend every scripted service continuation before a real actor can reuse a character.
+  shopGen++; chefGen++; swaits.length = 0;
+  for (const tw of tweens) root.remove(tw.obj);
+  tweens.length = 0;
+  for (const a of castActors.values()) { cancelActor(a); a.show(false); }
+  for (const a of [...actors]) if (a.isCustomer && a.order) {
+    cancelActor(a); a.show(false); root.remove(a.g); if (a.tagO) a.tagO.on = false;
+    actors.splice(actors.indexOf(a), 1);
+  }
+  custQueue.length = 0;
+  for (const object of [...root.children]) if (['pizza', 'box', 'token'].includes(object.name)) root.remove(object);
+  pizza = null; cur = null; served = []; parked = [];
+  while (shelfPies.length) root.remove(shelfPies.pop());
+  stationRings.forEach(ring => ring.on = false); ovenRing.on = false; ovenOn = false; ledger.visible = false;
+  activeRing.visible = false; closed = false;
+  coBox.replaceChildren(); feedEl.replaceChildren(); LOG.length = 0;
+  $('#tkTitle').textContent = 'Waiting for live work'; $('#tkNow').textContent = '';
+  $('#tkSteps').replaceChildren(); $('#tkSlices').replaceChildren();
+  $('#tracker').setAttribute('aria-label', 'Waiting for live work. Open orders.');
+  STATUS.prep = 'n/a'; setTickets(); renderStats();
+  if (!sheet.hidden) { sheet.hidden = true; ['#bCrew', '#bOrders', '#bLog'].forEach(id => $(id).classList.remove('on')); }
+  tip.hidden = true; tipFor = null;
+}
+function demoDriver() {
+  if (sceneMode === 'demo') return;
+  clearAssignments(); clearDemo(); sceneMode = 'demo';
+  for (const [a, home] of castHomes) { a.pos.copy(home.pos); a.goalYaw = home.goal; a.show(!home.hidden); a.sync(); }
+  served = [...SERVED0]; parked = [{ n: 6, title: 'Stripe webhooks', why: 'Needs STRIPE_WEBHOOK_SECRET in .env' }];
+  for (let i = 0; i < 3; i++) addServed();
+  STATUS.prep = '3/3'; renderStats();
+  service(); startAtDawn();
+  note('This is a sample shop. Ask your agent to run <code>/setup-shop</code> to open your own.', 'book');
+}
+function startLive() {
+  sceneMode = 'live'; clearAssignments(); clearDemo();
+  A.chef.pos.set(1.2, .06, 1.6); A.chef.show(true); A.chef.sync(); A.chef.doing('Leading the session', 'idle');
+}
+function castActor(character) {
+  let a = castActors.get(character.id);
+  if (!a) {
+    byId[character.id] = character;
+    const index = castActors.size;
+    a = new Actor(character.id, { skin: skins[index % skins.length], hair: character.plugin ? 'toque' : 'cap',
+      hairC: 0x3b2a22, hatC: 0x7e9db5, apron: CREW_APRONS[character.crew] || 0x7e9db5 }, DOOR[0], DOOR[1], F.E);
+    castActors.set(character.id, a);
+  }
+  a.meta = character;
+  return a;
+}
+function stationFor(character, a) {
+  if (character.id === 'implementer') return [SX[1], -2.45, F.S];
+  if (character.id === 'implementer#2') return [SX[0], -2.45, F.S];
+  if (character.id === 'discovery') return [-3.25, -.82, F.W];
+  if (castHomes.has(a) && character.crew === 'line') { const home = castHomes.get(a); return [home.pos.x, home.pos.z, home.goal]; }
+  if (character.id === 'retrospective-reviewer') return [-1.6, 1.0, F.N];
+  if (character.id === 'proposal-drafter') return [.6, 1.0, F.N];
+  const spot = [...(CREW_SPOTS[character.crew] || CREW_SPOTS.pass)];
+  const peers = [...liveAssignments.values()].filter(entry => entry.active && entry.character.crew === character.crew && entry.actor !== a);
+  // Keep helpers beside their division, with enough room for their work animations.
+  spot[0] += (peers.length % 3) * .8; spot[1] += Math.floor(peers.length / 3) * .8;
+  return spot;
+}
+function agentOn(event) {
+  let entry = liveAssignments.get(event.key);
+  if (entry?.active) {
+    entry.row = event.row;
+    if (entry.actor.mode !== 'walk') entry.actor.doing(event.row.label || event.character.type, 'work');
+    else entry.actor.task = event.row.label || event.character.type;
+    return;
+  }
+  const actor = castActor(event.character);
+  for (const [key, old] of liveAssignments) if (old.actor === actor) { clearTimeout(old.idleTimer); old.version++; liveAssignments.delete(key); }
+  const wasHidden = actor.hidden;
+  cancelActor(actor);
+  entry = { ...event, actor, version: 1, active: true, offDuty: false };
+  const station = stationFor(event.character, actor); entry.station = station;
+  liveAssignments.set(event.key, entry);
+  if (wasHidden) actor.pos.set(DOOR[0], .06, DOOR[1]);
+  actor.show(true); actor.sync(); actor.task = event.row.label || event.character.type;
+  const version = entry.version;
+  let path = [[station[0], station[1]]];
+  if (event.character.crew === 'line') path = [[-4.2, -2.75], [station[0], station[1]]];
+  if (event.character.crew === 'menu') path = [[-4.2, -.85], [-5.3, -.6], [station[0], station[1]]];
+  actor.walk(path, station[2]).then(() => {
+    if (sceneMode === 'live' && entry.active && entry.version === version) actor.doing(entry.row.label || event.character.type, 'work');
+  });
+  feed(`${event.character.name}: ${event.row.label || event.character.type}`);
+}
+function agentOff(event) {
+  const entry = liveAssignments.get(event.key); if (!entry) return;
+  entry.active = false; entry.version++; cancelActor(entry.actor);
+  const line = event.ok ? 'Done' : 'Sent back';
+  entry.actor.doing(line, 'idle'); say(entry.actor, line); feed(`${entry.character.name}: ${line}`);
+  const version = entry.version;
+  entry.idleTimer = setTimeout(() => {
+    if (sceneMode !== 'live' || entry.active || entry.version !== version) return;
+    const actor = entry.actor;
+    actor.stash = stashFor(actor, exitRoute(actor)); actor.task = 'Heading off duty';
+    actor.walk(actor.stash.route).then(() => {
+      if (sceneMode === 'live' && !entry.active && entry.version === version) { actor.show(false); actor.doing('Off duty', 'idle'); entry.offDuty = true; }
+    });
+  }, 90000);
+}
+function castEvent(type, event) {
+  castEvents.push({ type, key: event.key, aid: event.row.aid, name: event.row.name, ok: event.ok });
+  if (castEvents.length > 100) castEvents.shift();
+  if (type === 'agentOn') agentOn(event);
+  if (type === 'agentOff') agentOff(event);
+  if (type === 'skillOn') { liveSkills.set(event.key, event.row); A.chef.doing(event.row.name, 'inspect'); }
+  if (type === 'skillOff') { liveSkills.delete(event.key); A.chef.doing([...liveSkills.values()].at(-1)?.name || 'Leading the session', liveSkills.size ? 'inspect' : 'idle'); }
+  window.dispatchEvent(new CustomEvent(`kitchen:${type}`, { detail: { key: event.key, row: { ...event.row }, ok: event.ok } }));
+}
+const castDriver = window.createKitchenCastDriver({ roster: { ...byId, 'box-it-up': byId.lead }, emit: castEvent, demo: demoDriver, live: startLive });
+function liveDriver(snapshot) { castDriver.apply(snapshot); }
+window.liveDriver = liveDriver;
+Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
+  get mode() { return sceneMode; },
+  get actors() { return [...liveAssignments.values()].map(entry => ({ key: entry.key, aid: entry.row.aid, type: entry.row.type,
+    character: entry.character.id, name: entry.actor.meta.name, crew: entry.actor.meta.crew, task: entry.actor.task,
+    active: entry.active, offDuty: entry.offDuty, hidden: !!entry.actor.hidden, mode: entry.actor.mode,
+    position: [entry.actor.pos.x, entry.actor.pos.z], renderedPosition: [entry.actor.g.position.x, entry.actor.g.position.z], station: [...entry.station] })); },
+  get chef() { return { name: A.chef.meta.name, task: A.chef.task, hidden: !!A.chef.hidden }; },
+  get demoCustomers() { return actors.filter(a => a.isCustomer && a.order && !a.hidden).length; },
+  get demoPies() { return shelfPies.length + root.children.filter(object => ['pizza', 'box', 'token'].includes(object.name)).length; },
+  get events() { return castEvents.map(event => ({ ...event })); },
+}) });
 
 // ---------- frame loop ----------
 let ovenOn = false, last = performance.now();
@@ -3221,7 +3436,7 @@ function frame(now) {
   townUpdate(dt, now); lineUpdate();
   for (const a of actors) {
     a.update(dt);
-    if (!a.isCustomer && !a.hidden && a.mode === 'work') { cost += RATE[a.meta.tier] * dt; a.tokens += TOK[a.meta.tier] * dt * 4; }
+    if (sceneMode === 'demo' && !a.isCustomer && !a.hidden && a.mode === 'work') { cost += RATE[a.meta.tier] * dt; a.tokens += TOK[a.meta.tier] * dt * 4; }
   }
   if (pizza) pizza.wedges.forEach(wd => { const s = wd.w.scale.x, t = wd.target ?? .001; if (Math.abs(s - t) > .001) wd.w.scale.setScalar(lerp(s, t, Math.min(1, dt * 8))); });
   // oven glow + night
@@ -3258,5 +3473,6 @@ document.fonts && document.fonts.ready.then(() => { ticketTex.redraw(); chalkTex
 if (matchMedia('(prefers-reduced-motion: reduce)').matches) speed = .6;
 if (location.hash === '#fast') speed = 5;
 requestAnimationFrame(frame);
-service(); ballgame(); startAtDawn();
+ballgame();
+if (window.kitchenLive.snapshot) liveDriver(window.kitchenLive.snapshot); else demoDriver();
 </script>
