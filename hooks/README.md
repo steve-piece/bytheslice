@@ -9,15 +9,16 @@ Deterministic guards that replace repetitive prose in CLAUDE.md and SKILL.md fil
 | `precheck-skill.sh` | `UserPromptSubmit` | Detects a /bytheslice slash command in the prompt and runs per-skill preconditions. BLOCKs `/sell-slice` when the master checklist is missing; BLOCKs `/box-it-up` on main; WARN-injects dirty-tree / missing-gh / Prep-incomplete. |
 | `shop-status.sh` | `SessionStart` | Reads `docs/plans/00_master_checklist.md` if present and injects a compact summary: Prep progress, plus pie/slice counts and the first open pie (nested v5) or stage counts and the next not-started row (flat v4). |
 | `pre-commit-guard.sh` | `PreToolUse` (Bash matcher) | BLOCKs `git commit` on main/master, reading the branch of the directory each commit in the command runs in (parsed `cd`/`pushd`, `git -C`, `--git-dir`, `GIT_DIR=`, else the hook cwd), so worktree commits are judged by the worktree's branch. Shell forms it cannot model (subshell `cd`, `popd`, `$VAR` paths) fail closed. Otherwise WARN-injects a short staged-files summary. |
-| `stage-plan-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects (exit 0) on `Write`/`Edit` to `docs/plans/stage_*.md` while `/sell-slice` is the current session's active skill — plans are normally static during delivery. Never blocks (downgraded from BLOCK in v5). Session-id guarded; fails open if state is missing or cross-session. |
+| `stage-plan-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects (exit 0) on `Write`/`Edit` to `docs/plans/stage_*.md` while `/sell-slice` is the current session's active skill - plans are normally static during delivery. Never blocks (downgraded from BLOCK in v5). Session-id guarded; fails open if state is missing or cross-session. |
 | `library-gate-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects when a `/sell-slice` run writes to a watched production route (`app/**`, `src/app/**`, `components/**`, `src/components/**`) without a recorded library-preview approval. Never blocks. Dormant until `record-library-approval.sh arm` writes `library-approvals.json` (Phase 4.5 arms the gate when the approval window opens). |
+| `kitchen-log.sh` | `SessionStart`, `SubagentStart`, `SubagentStop`, `PreToolUse` (Agent/Skill), `PostToolUse` (Agent), `UserPromptExpansion`, `Stop` | Synchronous local activity rows with an explicit metadata allowlist, completed before the hook returns including Stop during session shutdown; silent and always exit 0; labels capped at 120 characters; pie/slice attribution from label, branch, then checklist; serialized 2 MiB rotation with one backup. Uses jq or Node and skips logging when neither exists. |
 | `compact-snapshot.sh` | `PreCompact` | Never blocks compaction (always exit 0). Writes `compact-snapshot.json` capturing session/skill/branch, last commit sha + subject, and the next up-to-3 unfinished checklist lines so the post-compaction turn can re-orient. |
 
 One script in this directory is not wired to an event: `record-library-approval.sh` is the state writer `/sell-slice` Phase 4.5 runs directly. `arm --slice <n.m>` opens the approval window (creates `library-approvals.json` with zero approvals, which wakes `library-gate-guard.sh`); `approve --slice <n.m> --components "<id>,<id>"` records the operator's approval (the gate then passes). It honors `BTS_HOOKS_DISABLED=1` and tolerates missing `jq` like the rest of the directory.
 
 ## The scenario contract
 
-[`scenarios.md`](./scenarios.md) is the canonical source of truth: every row is one (skill / state / expected) tuple the hooks must satisfy. It is what `test.sh` verifies and what every SKILL.md `## Preconditions` section indirectly references. **If you edit a hook's behavior, update `scenarios.md` first and add a row to `test.sh`** — otherwise the contract has drifted.
+[`scenarios.md`](./scenarios.md) is the canonical source of truth: every row is one (skill / state / expected) tuple the hooks must satisfy. It is what `test.sh` verifies and what every SKILL.md `## Preconditions` section indirectly references. **If you edit a hook's behavior, update `scenarios.md` first and add a row to `test.sh`** - otherwise the contract has drifted.
 
 ## Tests
 
@@ -25,9 +26,9 @@ One script in this directory is not wired to an event: `record-library-approval.
 bash hooks/test.sh
 ```
 
-Runs 107 isolated-fixture tests covering every row in `scenarios.md`. Pure bash, no deps beyond `git`. Each test sets up a throwaway repo under `$TMPDIR`, runs one hook with a synthetic JSON envelope, and asserts exit code + output substring. Failures print the divergence inline.
+Runs isolated-fixture regression checks covering the scenarios in `scenarios.md`. The kitchen logger cases require Node.js for JSON assertions and exercise both jq (when installed) and the Node fallback, including parser-free execution, synchronous Stop completion, interrupted ownership recovery, and concurrent rotation. Each case sets up a throwaway repo under `$TMPDIR`, runs a hook with synthetic input, and checks exit code, output or local state. Failures print the divergence inline.
 
-Run it locally before committing changes to anything under `hooks/`. No CI workflow is wired — this is intentional given the plugin's "$0 Actions budget" stance; opt in later if you want it on PRs.
+Run it locally before committing changes to anything under `hooks/`. No CI workflow is wired - this is intentional given the plugin's "$0 Actions budget" stance; opt in later if you want it on PRs.
 
 ## Shared helpers
 
@@ -45,7 +46,7 @@ Run it locally before committing changes to anything under `hooks/`. No CI workf
 | `bts_session_id <json>` | extracts `session_id` from a hook input envelope |
 | `bts_detect_skill <prompt>` | first /bytheslice slash command in the prompt (canonical short form; `sell-pie` matched ahead of `sell-slice`) |
 | `bts_checklist_layout` | dual-read layout detection: `"pie"` (any `## Pie N`), `"stage"` (any `## Stage N`, no Pie), or `""` (neither) |
-| `bts_unit_counts` | `"<done> <total>"` of top-level work units — `## Pie N` (v5) or `## Stage N` (v4), Pie layout preferred; empty if neither |
+| `bts_unit_counts` | `"<done> <total>"` of top-level work units - `## Pie N` (v5) or `## Stage N` (v4), Pie layout preferred; empty if neither |
 | `bts_slice_counts` | `"<done> <total>"` of `### Slice N.M` headings; empty on a flat v4 checklist |
 
 ## State
@@ -98,7 +99,7 @@ The state directory is gitignored.
 
 Two supported escape hatches, in order of preference:
 
-1. **Per-session env var** — `export BTS_HOOKS_DISABLED=1` before launching Claude Code. Every hook in this directory short-circuits on exit 0 without running its checks. Use this for one-off experimental flows where the guards are getting in your way. Wired check: see the second non-comment line of every `*.sh` in this dir.
-2. **Global disable via settings** — set `"disableAllHooks": true` in `.claude/settings.local.json`. This is the Claude Code primitive and disables every hook from every plugin, not just ours.
+1. **Per-session env var** - `export BTS_HOOKS_DISABLED=1` before launching Claude Code. Every hook in this directory short-circuits on exit 0 without running its checks. Use this for one-off experimental flows where the guards are getting in your way. Wired check: see the second non-comment line of every `*.sh` in this dir.
+2. **Global disable via settings** - set `"disableAllHooks": true` in `.claude/settings.local.json`. This is the Claude Code primitive and disables every hook from every plugin, not just ours.
 
-Prefer (1) — it only affects bytheslice hooks and reverts the moment your shell session ends.
+Prefer (1) - it only affects bytheslice hooks and reverts the moment your shell session ends.

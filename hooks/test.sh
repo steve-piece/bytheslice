@@ -21,6 +21,7 @@ STAGE_PLAN_GUARD="$HERE/stage-plan-guard.sh"
 LIBRARY_GATE="$HERE/library-gate-guard.sh"
 COMPACT_SNAPSHOT="$HERE/compact-snapshot.sh"
 RECORDER="$HERE/record-library-approval.sh"
+KITCHEN_LOG="$HERE/kitchen-log.sh"
 
 PASS=0
 FAIL=0
@@ -918,6 +919,314 @@ else
   PASS=$((PASS+1)); printf '  ✓ compact-snapshot disabled writes nothing\n'
 fi
 rm -rf "$FIX"
+
+####################################################################
+# kitchen-log.sh
+####################################################################
+
+echo
+echo "## kitchen-log.sh"
+
+# Assertions use an absolute Node path so the logger can have a parser-free PATH.
+KITCHEN_NODE=$(command -v node || true)
+KITCHEN_BASH=$(command -v bash)
+if [ -z "$KITCHEN_NODE" ]; then
+  FAIL=$((FAIL+1)); FAILED_NAMES+=("kitchen tests require Node.js")
+  printf '  ✗ kitchen tests require Node.js\n'
+else
+  kitchen_assert() {
+    local name="$1" expression="$2" out
+    out=$("$KITCHEN_NODE" -e '
+      const fs = require("fs"), dir = process.argv[1], expr = process.argv[2];
+      const log = dir + "/.claude/.bytheslice-state/kitchen/activity.jsonl";
+      const archive = dir + "/.claude/.bytheslice-state/kitchen/activity.1.jsonl";
+      const read = p => fs.existsSync(p) ? fs.readFileSync(p, "utf8") : "";
+      try {
+        const rows = read(log).split("\n").filter(s => s.trim()).map(JSON.parse);
+        const old = read(archive).split("\n").filter(s => s.trim()).map(JSON.parse);
+        if (!eval(expr)) process.exit(1);
+      } catch (e) { console.error(e.message); process.exit(1); }
+    ' "$FIX" "$expression" 2>&1)
+    if [ "$?" = 0 ]; then
+      PASS=$((PASS+1)); printf '  ✓ %s\n' "$name"
+    else
+      FAIL=$((FAIL+1)); FAILED_NAMES+=("$name"); printf '  ✗ %s %s\n' "$name" "$out"
+    fi
+  }
+
+  # Force each available parser through the same event, privacy and attribution cases.
+  KITCHEN_BINS=$(mktemp -d)
+  for utility in bash cat dirname git awk mkdir wc tr mv rmdir sleep mktemp ln readlink rm; do
+    ln -s "$(command -v "$utility")" "$KITCHEN_BINS/$utility"
+  done
+  ln -s "$KITCHEN_NODE" "$KITCHEN_BINS/node"
+  for ENGINE in jq node; do
+    if [ "$ENGINE" = jq ]; then
+      command -v jq >/dev/null 2>&1 || continue
+      KITCHEN_PATH=$PATH
+    else
+      KITCHEN_PATH=$KITCHEN_BINS
+    fi
+    FIX=$(mk_fixture)
+    LOG="$FIX/.claude/.bytheslice-state/kitchen/activity.jsonl"
+    for EVENT in SessionStart SubagentStart SubagentStop PreAgent PostAgent Skill UserPromptExpansion Stop; do
+      case "$EVENT" in
+        PreAgent) EV=PreToolUse; EXTRA='"tool_name":"Agent","tool_input":{"description":"P7 S7.3 build: feed","subagent_type":"bytheslice:implementer","prompt":"PRIVATE_PROMPT"}' ;;
+        PostAgent) EV=PostToolUse; EXTRA='"tool_name":"Agent","tool_input":{"description":"P7 S7.3 build: feed","subagent_type":"bytheslice:implementer","prompt":"PRIVATE_PROMPT"},"tool_response":{"agentId":"worker-1","totalTokens":123.9,"totalDurationMs":456.9,"status":"completed","output":"PRIVATE_OUTPUT"}' ;;
+        Skill) EV=PreToolUse; EXTRA='"tool_name":"Skill","tool_input":{"skill":"bytheslice:sell-pie","args":"PRIVATE_ARGS"}' ;;
+        UserPromptExpansion) EV=$EVENT; EXTRA='"command_name":"bytheslice:sell-pie","command_source":"plugin","command_args":"PRIVATE_ARGS"' ;;
+        *) EV=$EVENT; EXTRA='"agent_type":"bytheslice:implementer","agent_id":"worker-1"' ;;
+      esac
+      rm -f "$LOG"
+      PAYLOAD="{\"session_id\":\"session-1\",\"hook_event_name\":\"$EV\",$EXTRA,\"prompt\":\"PRIVATE_PROMPT\",\"last_assistant_message\":\"PRIVATE_ASSISTANT\",\"contents\":\"PRIVATE_CONTENTS\",\"secret\":\"PRIVATE_SECRET\",\"token\":\"PRIVATE_TOKEN\"}"
+      LAST_OUT=$(printf '%s' "$PAYLOAD" | PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" BTS_TEST_SECRET=PRIVATE_ENV "$KITCHEN_BASH" "$KITCHEN_LOG" 2>&1)
+      LAST_EXIT=$?
+      assert_exit "kitchen $ENGINE $EVENT exits 0" 0
+      assert_empty "kitchen $ENGINE $EVENT silent"
+      kitchen_assert "kitchen $ENGINE $EVENT exactly one matching row" "rows.length === 1 && rows[0].ev === '$EV' && rows[0].sid === 'session-1' && Number.isInteger(rows[0].t)"
+      kitchen_assert "kitchen $ENGINE $EVENT privacy allowlist" 'rows.every(r => Object.keys(r).every(k => ["t","sid","ev","agent","aid","label","skill","tok","ms","ok","pie","slice","src"].includes(k))) && !read(log).includes("PRIVATE_")'
+      case "$EVENT" in
+        Subagent*) kitchen_assert "kitchen $ENGINE $EVENT identity" 'rows[0].agent === "bytheslice:implementer" && rows[0].aid === "worker-1"' ;;
+        PreAgent|PostAgent) kitchen_assert "kitchen $ENGINE $EVENT dispatch fields" 'rows[0].agent === "bytheslice:implementer" && rows[0].label === "P7 S7.3 build: feed" && rows[0].pie === 7 && rows[0].slice === "7.3"' ;;
+        Skill) kitchen_assert "kitchen $ENGINE Skill name" 'rows[0].skill === "bytheslice:sell-pie" && !("label" in rows[0])' ;;
+        UserPromptExpansion) kitchen_assert "kitchen $ENGINE slash command" 'rows[0].skill === "bytheslice:sell-pie" && rows[0].src === "plugin" && !("label" in rows[0])' ;;
+      esac
+      if [ "$EVENT" = PostAgent ]; then
+        kitchen_assert "kitchen $ENGINE Agent result" 'rows[0].aid === "worker-1" && rows[0].tok === 123 && rows[0].ms === 456 && rows[0].ok === true'
+      fi
+    done
+
+    rm -f "$LOG"
+    PAYLOAD=$("$KITCHEN_NODE" -e 'process.stdout.write(JSON.stringify({hook_event_name:"PreToolUse",tool_name:"Agent",tool_input:{description:"P4 S4.1 build: runner\r\nnext\ttab " + "🍕".repeat(130)}}))')
+    PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" "$PAYLOAD"
+    kitchen_assert "kitchen $ENGINE Unicode label cap and newline removal" 'Array.from(rows[0].label).length === 120 && rows[0].label.startsWith("P4 S4.1 build: runner next tab ") && !/[\r\n\t]/.test(rows[0].label)'
+    if [ "$ENGINE" = jq ]; then
+      KITCHEN_PARITY=$("$KITCHEN_NODE" -e 'const fs=require("fs"),r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));delete r.t;process.stdout.write(JSON.stringify(r))' "$LOG")
+    else
+      kitchen_assert "kitchen jq/Node field parity" "JSON.stringify((({t,...r}) => r)(rows[0])) === $(json_str "${KITCHEN_PARITY:-}")"
+    fi
+
+    mkdir -p "$FIX/docs/plans"
+    cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
+## Pie 1 [x]
+### Slice 1.1 [ ]
+## Pie 2 Status: Completed
+### Slice 2.1 [ ]
+## Pie 3 [ ]
+### Slice 3.1 [x]
+### Slice 3.2 ~~Done~~
+### Slice 3.3 Status: Done
+### Slice 3.4 [ ]
+## Pie 4 [ ]
+### Slice 4.1 [x]
+### Slice 4.2 [ ]
+EOF
+    rm -f "$LOG"
+    PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" '{"hook_event_name":"SubagentStart","agent_type":""}'
+    kitchen_assert "kitchen $ENGINE checklist attribution and empty agent" 'rows[0].pie === 3 && rows[0].slice === "3.4" && !("agent" in rows[0]) && !("sid" in rows[0])'
+    for BRANCH in pie-4-live pie/4-live; do
+      git -C "$FIX" checkout -q -b "$BRANCH"
+      rm -f "$LOG"
+      PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" '{"hook_event_name":"SubagentStart"}'
+      kitchen_assert "kitchen $ENGINE $BRANCH overrides checklist" 'rows[0].pie === 4 && rows[0].slice === "4.2"'
+      rm -f "$LOG"
+      PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" '{"hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"description":"P7 S7.3 build: feed"}}'
+      kitchen_assert "kitchen $ENGINE label overrides branch and checklist" 'rows[0].pie === 7 && rows[0].slice === "7.3"'
+    done
+    git -C "$FIX" checkout -q -b pie-8-live
+    rm -f "$LOG"
+    PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" '{"hook_event_name":"Stop"}'
+    kitchen_assert "kitchen $ENGINE branch without matching checklist pie" 'rows[0].pie === 8 && !("slice" in rows[0])'
+    git -C "$FIX" checkout -q main
+    git -C "$FIX" worktree add -q -b pie-4-wt "$FIX/.claude/worktrees/live"
+    rm -f "$LOG"
+    PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" "{\"hook_event_name\":\"SubagentStart\",\"cwd\":$(json_str "$FIX/.claude/worktrees/live")}"
+    kitchen_assert "kitchen $ENGINE worktree cwd attribution" 'rows[0].pie === 4 && rows[0].slice === "4.2"'
+    if [ -e "$FIX/.claude/worktrees/live/.claude/.bytheslice-state" ]; then
+      FAIL=$((FAIL+1)); FAILED_NAMES+=("kitchen log stays at project root")
+    else
+      PASS=$((PASS+1)); printf '  ✓ kitchen %s log stays at project root\n' "$ENGINE"
+    fi
+    rm -f "$FIX/docs/plans/00_master_checklist.md" "$LOG"
+    PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" '{"hook_event_name":"Stop"}'
+    kitchen_assert "kitchen $ENGINE unresolved attribution omitted" '!("pie" in rows[0]) && !("slice" in rows[0])'
+    for STATUS in error async_launched; do
+      rm -f "$LOG"
+      PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" "{\"hook_event_name\":\"PostToolUse\",\"tool_name\":\"Agent\",\"tool_response\":{\"status\":\"$STATUS\"}}"
+      if [ "$STATUS" = error ]; then
+        kitchen_assert "kitchen $ENGINE failed Agent result" 'rows[0].ok === false'
+      else
+        kitchen_assert "kitchen $ENGINE async result has no completion" '!("ok" in rows[0])'
+      fi
+    done
+    for PAYLOAD in '{broken' '[]' 'null' '"string"' '{} {}' '{"hook_event_name":"Stop"} {}' '{"hook_event_name":"PreToolUse","tool_name":"Bash"}' '{"hook_event_name":"PreToolUse","tool_name":"Task"}' '{"hook_event_name":"Unknown"}'; do
+      rm -f "$LOG"
+      LAST_OUT=$(printf '%s' "$PAYLOAD" | PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" "$KITCHEN_BASH" "$KITCHEN_LOG" 2>&1)
+      LAST_EXIT=$?
+      assert_exit "kitchen $ENGINE malformed/unwired exits 0" 0
+      assert_empty "kitchen $ENGINE malformed/unwired silent"
+      kitchen_assert "kitchen $ENGINE malformed/unwired writes nothing" '!fs.existsSync(log)'
+    done
+    rm -rf "$FIX"
+  done
+
+  # A disabled hook and a parser-free invocation create no state directory.
+  FIX=$(mk_fixture)
+  BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" '{"hook_event_name":"Stop"}'
+  assert_exit "kitchen disabled exits 0" 0
+  assert_empty "kitchen disabled silent"
+  kitchen_assert "kitchen disabled no state" '!fs.existsSync(dir + "/.claude/.bytheslice-state")'
+  rm -f "$KITCHEN_BINS/node"
+  LAST_OUT=$(printf '%s' '{"hook_event_name":"Stop"}' | PATH="$KITCHEN_BINS" CLAUDE_PROJECT_DIR="$FIX" "$KITCHEN_BASH" "$KITCHEN_LOG" 2>&1)
+  LAST_EXIT=$?
+  assert_exit "kitchen neither parser exits 0" 0
+  assert_empty "kitchen neither parser silent"
+  kitchen_assert "kitchen neither parser no state" '!fs.existsSync(dir + "/.claude/.bytheslice-state")'
+  rm -rf "$KITCHEN_BINS" "$FIX"
+
+  FIX=$(mk_fixture)
+  LOG="$FIX/.claude/.bytheslice-state/kitchen/activity.jsonl"
+  mkdir -p "$(dirname "$LOG")"
+  "$KITCHEN_NODE" -e 'require("fs").writeFileSync(process.argv[1], " ".repeat(2097151) + "\n")' "$LOG"
+  CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" '{"hook_event_name":"SessionStart"}'
+  kitchen_assert "kitchen exact size cap appends without rotation" 'rows.length === 1 && !fs.existsSync(archive) && fs.statSync(log).size > 2097152'
+  CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" '{"hook_event_name":"Stop"}'
+  kitchen_assert "kitchen oversized log rotates with new row" 'rows.length === 1 && rows[0].ev === "Stop" && old.length === 1 && old[0].ev === "SessionStart"'
+  "$KITCHEN_NODE" -e 'require("fs").writeFileSync(process.argv[1], " ".repeat(2097153) + "\n")' "$LOG"
+  CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" '{"hook_event_name":"SessionStart"}'
+  kitchen_assert "kitchen keeps only one replaced rotation" 'rows.length === 1 && old.length === 0 && fs.readdirSync(require("path").dirname(log)).sort().join(",") === "activity.1.jsonl,activity.jsonl"'
+  "$KITCHEN_NODE" -e 'require("fs").writeFileSync(process.argv[1], " ".repeat(2097153) + "\n")' "$LOG"
+  PIDS=()
+  for N in {1..12}; do
+    (printf '{"hook_event_name":"Stop","session_id":"concurrent-%s"}' "$N" | CLAUDE_PROJECT_DIR="$FIX" "$KITCHEN_BASH" "$KITCHEN_LOG") &
+    PIDS+=("$!")
+  done
+  for PID in "${PIDS[@]}"; do wait "$PID"; done
+  kitchen_assert "kitchen concurrent rotation keeps every unique row" 'rows.length + old.length === 12 && new Set([...rows,...old].map(r => r.sid)).size === 12'
+  rm -rf "$FIX"
+
+  # Hold a real writer inside its critical section, then contend or SIGKILL it.
+  # Only the first size check pauses; recovery writers continue through the shim.
+  KITCHEN_REAL_WC=$(command -v wc)
+  for LOCK_CASE in healthy killed; do
+    FIX=$(mk_fixture)
+    LOG="$FIX/.claude/.bytheslice-state/kitchen/activity.jsonl"
+    GATE="$FIX/gate"
+    mkdir -p "$(dirname "$LOG")" "$GATE/bin"
+    "$KITCHEN_NODE" -e 'const fs=require("fs");fs.writeFileSync(process.argv[1], " ".repeat(2097153)+"\n");fs.writeFileSync(process.argv[2],JSON.stringify({sid:"previous"})+"\n")' "$LOG" "$(dirname "$LOG")/activity.1.jsonl"
+    cat > "$GATE/bin/wc" <<'EOF'
+# hooks/test.sh fixture/wc
+# Pause one size check to test healthy and killed activity lock owners.
+if mkdir "$KITCHEN_TEST_GATE/claimed" 2>/dev/null; then
+  : > "$KITCHEN_TEST_GATE/ready"
+  while [ ! -f "$KITCHEN_TEST_GATE/release" ]; do sleep 0.02; done
+fi
+exec "$KITCHEN_TEST_WC" "$@"
+EOF
+    chmod +x "$GATE/bin/wc"
+    KITCHEN_TEST_GATE="$GATE" KITCHEN_TEST_WC="$KITCHEN_REAL_WC" PATH="$GATE/bin:$PATH" CLAUDE_PROJECT_DIR="$FIX" \
+      "$KITCHEN_BASH" "$KITCHEN_LOG" <<< '{"hook_event_name":"Stop","session_id":"holder"}' > "$GATE/output" 2>&1 &
+    HOLDER=$!
+    for N in {1..200}; do
+      [ ! -f "$GATE/ready" ] || break
+      sleep 0.02
+    done
+    kitchen_assert "kitchen $LOCK_CASE owner reaches locked size check" 'fs.existsSync(dir+"/gate/ready") && fs.lstatSync(require("path").dirname(log)+"/.activity.lock").isSymbolicLink()'
+    if [ "$LOCK_CASE" = killed ]; then
+      kill -KILL "$HOLDER" 2>/dev/null || true
+      { wait "$HOLDER"; } 2>/dev/null || true
+      : > "$GATE/release"
+    fi
+    PIDS=()
+    for N in {1..12}; do
+      (printf '{"hook_event_name":"Stop","session_id":"recovery-%s"}' "$N" | KITCHEN_TEST_GATE="$GATE" KITCHEN_TEST_WC="$KITCHEN_REAL_WC" PATH="$GATE/bin:$PATH" CLAUDE_PROJECT_DIR="$FIX" "$KITCHEN_BASH" "$KITCHEN_LOG") &
+      PIDS+=("$!")
+    done
+    if [ "$LOCK_CASE" = healthy ]; then
+      # At least one initialized contender must exist before checking the owner.
+      for N in {1..100}; do
+        CLAIMS=("$(dirname "$LOG")"/.activity.????????)
+        [ "${#CLAIMS[@]}" -lt 2 ] || break
+        sleep 0.01
+      done
+      kitchen_assert "kitchen healthy owner is not reclaimed under contention" 'fs.readdirSync(require("path").dirname(log)).filter(n=>/^\.activity\.[^.]+$/.test(n)&&n!==".activity.lock").length >= 2 && rows.length===0 && old.length===1 && old[0].sid==="previous" && fs.readFileSync(dir+"/gate/output","utf8")===""'
+      : > "$GATE/release"
+      wait "$HOLDER"
+      EXPECTED=13
+    else
+      EXPECTED=12
+    fi
+    for PID in "${PIDS[@]}"; do wait "$PID"; done
+    kitchen_assert "kitchen $LOCK_CASE contention preserves every completed rotation row" "rows.length+old.length===$EXPECTED && new Set([...rows,...old].map(r=>r.sid)).size===$EXPECTED"
+    kitchen_assert "kitchen $LOCK_CASE contention cleans lock ownership" 'fs.readdirSync(require("path").dirname(log)).sort().join(",")==="activity.1.jsonl,activity.jsonl" && fs.readFileSync(dir+"/gate/output","utf8")===""'
+    rm -rf "$FIX"
+  done
+
+  # Signal after ln publishes ownership but before it returns to the hook shell.
+  FIX=$(mk_fixture)
+  LOG="$FIX/.claude/.bytheslice-state/kitchen/activity.jsonl"
+  GATE="$FIX/gate"
+  mkdir -p "$GATE/bin"
+  KITCHEN_REAL_LN=$(command -v ln)
+  cat > "$GATE/bin/ln" <<'EOF'
+# hooks/test.sh fixture/ln
+# Pause successful lock publication before the logger resumes its shell code.
+"$KITCHEN_TEST_LN" "$@" || exit "$?"
+: > "$KITCHEN_TEST_GATE/ready"
+while [ ! -f "$KITCHEN_TEST_GATE/release" ]; do sleep 0.02; done
+EOF
+  chmod +x "$GATE/bin/ln"
+  KITCHEN_TEST_GATE="$GATE" KITCHEN_TEST_LN="$KITCHEN_REAL_LN" PATH="$GATE/bin:$PATH" CLAUDE_PROJECT_DIR="$FIX" \
+    "$KITCHEN_BASH" "$KITCHEN_LOG" <<< '{"hook_event_name":"Stop","session_id":"interrupted"}' > "$GATE/output" 2>&1 &
+  HOLDER=$!
+  for N in {1..200}; do
+    [ ! -f "$GATE/ready" ] || break
+    sleep 0.02
+  done
+  kitchen_assert "kitchen acquisition window publishes initialized ownership" 'fs.existsSync(dir+"/gate/ready") && fs.existsSync(require("path").dirname(log)+"/.activity.lock")'
+  kill -TERM "$HOLDER" 2>/dev/null || true
+  : > "$GATE/release"
+  { wait "$HOLDER"; LAST_EXIT=$?; } 2>/dev/null
+  assert_exit "kitchen interrupted acquisition exits 0" 0
+  kitchen_assert "kitchen interrupted acquisition removes exact ownership" '!fs.existsSync(log) && fs.readdirSync(require("path").dirname(log)).length===0 && fs.readFileSync(dir+"/gate/output","utf8")===""'
+  CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" '{"hook_event_name":"Stop","session_id":"after-interruption"}'
+  kitchen_assert "kitchen interrupted acquisition permits subsequent writer" 'rows.length===1 && rows[0].sid==="after-interruption" && fs.readdirSync(require("path").dirname(log)).join(",")==="activity.jsonl"'
+  rm -rf "$FIX"
+
+  # Validate the actual hook registration surface, including duplicate entries.
+  FIX=$(mk_fixture)
+  KITCHEN_WIRING=$("$KITCHEN_NODE" -e '
+    const fs=require("fs"), hooks=JSON.parse(fs.readFileSync(process.argv[1],"utf8")).hooks;
+    const actual=[];
+    for(const [ev, groups] of Object.entries(hooks)) for(const group of groups)
+      for(const hook of group.hooks) if(hook.command.includes("/hooks/kitchen-log.sh")) {
+        if(hook.async !== undefined && hook.async !== false) process.exit(1);
+        actual.push(ev + ":" + (group.matcher || ""));
+      }
+    const expected=["SessionStart:","SubagentStart:","SubagentStop:","PreToolUse:Agent","PostToolUse:Agent","PreToolUse:Skill","UserPromptExpansion:","Stop:"];
+    if(JSON.stringify(actual.sort()) !== JSON.stringify(expected.sort())) process.exit(1);
+    process.stdout.write("registered");
+  ' "$HERE/hooks.json")
+  LAST_EXIT=$?
+  assert_exit "kitchen exactly eight synchronous hook registrations" 0
+  LAST_OUT=$("$KITCHEN_NODE" -e '
+    const fs=require("fs"),cp=require("child_process"),path=require("path");
+    const hooks=JSON.parse(fs.readFileSync(process.argv[1],"utf8")).hooks;
+    const stop=hooks.Stop.flatMap(g=>g.hooks).find(h=>h.command.includes("/hooks/kitchen-log.sh"));
+    const result=cp.spawnSync(process.argv[3],["-c",stop.command],{
+      env:{...process.env,CLAUDE_PROJECT_DIR:process.argv[2],CLAUDE_PLUGIN_ROOT:path.dirname(path.dirname(process.argv[1]))},
+      input:JSON.stringify({hook_event_name:"Stop",session_id:"synchronous-stop"}),encoding:"utf8"
+    });
+    if(result.status!==0 || result.stdout!=="" || result.stderr!=="") process.exit(1);
+    const log=path.join(process.argv[2],".claude/.bytheslice-state/kitchen/activity.jsonl");
+    const rows=fs.readFileSync(log,"utf8").trim().split("\n").map(JSON.parse);
+    if(rows.length!==1 || rows[0].ev!=="Stop" || rows[0].sid!=="synchronous-stop") process.exit(1);
+  ' "$HERE/hooks.json" "$FIX" "$KITCHEN_BASH" 2>&1)
+  LAST_EXIT=$?
+  assert_exit "kitchen registered Stop row exists before command returns" 0
+  assert_empty "kitchen registered synchronous Stop stays silent"
+  rm -rf "$FIX"
+fi
 
 ####################################################################
 # Summary
