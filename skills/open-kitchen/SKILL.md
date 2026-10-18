@@ -8,12 +8,12 @@ user-invocable: true
 
 # Open Kitchen
 
-Open the current project's kitchen in Claude's native Browser pane. The host bridge probe returned `server_not_connected` for both `host:plugin_bytheslice_kitchen` and `host:kitchen`, so this slice uses the localhost viewer. Do not publish an artifact or try the artifact host bridge again.
+Open the current project's kitchen in Claude's native Browser pane. The host bridge probe returned `server_not_connected` for both `host:plugin_bytheslice_kitchen` and `host:kitchen`, so the selected integration uses the localhost viewer. Do not publish an artifact or try the artifact host bridge again.
 
 ## Resolve the project and local viewer
 
-1. Use the explicitly requested project root, otherwise `CLAUDE_PROJECT_DIR`, otherwise the current project working directory. Resolve it to an absolute canonical directory. Use the installed plugin's root for the bundled helper, never a similarly named script in the consumer project.
-2. If the registered kitchen MCP tool is available, call its actual discovered `kitchen_state` tool with `{}`. Read `project.root` and the top-level `port` from its snapshot. Do not print the full snapshot. Use the result only when its canonical project root matches the requested project and the port is an integer from 1 through 65535. Do not invent a tool name or assume the server belongs to the current project.
+1. Use the explicitly requested project root, otherwise `CLAUDE_PROJECT_DIR`, otherwise the current project working directory. Resolve it to an absolute directory. Use the installed plugin's root for the bundled helper, never a similarly named script in the consumer project.
+2. If the registered kitchen MCP tool is available, call its actual discovered `kitchen_state` tool with `{}`. Read `project.root` and the top-level `port` from its snapshot. Do not print the full snapshot. Use the result only when its absolute resolved project root matches the requested project and the port is an integer from 1 through 65535. Do not invent a tool name or assume the server belongs to the current project.
 3. When the MCP tool is absent, disconnected, or belongs to another project, run the bundled helper using the actual plugin root and project root as separate, safely quoted arguments:
 
    ```sh
@@ -34,8 +34,12 @@ Open the current project's kitchen in Claude's native Browser pane. The host bri
 
 ## Viewer behavior and completion
 
-The approved scene and demo interactions remain intact in this slice. It polls same-origin `GET /state` every three seconds while visible with caching disabled, retaining the latest valid full snapshot. It emits `kitchen:state` and forwards to `window.liveDriver(snapshot)` or `window.liveDriver.applySnapshot(snapshot)` if a scene driver is present. `window.kitchenLive.snapshot` exposes the latest snapshot for the next slice and verification. Character mapping, build-out, phase changes from live data, and queue mapping arrive in later slices.
+The viewer polls same-origin `GET /state` every three seconds while visible with caching disabled, retaining the latest valid full snapshot. It emits `kitchen:state`, applies snapshots to the live scene driver, and exposes the latest snapshot through the read-only `window.kitchenLive.snapshot` hook for inspection.
+
+Projects without setup evidence show the sample demo shop and its lighting controls. Partial setup shows live construction, with each fixture driven by its own presence and applicability evidence. Completed setup shows live service. Registered agents use their named characters, a second implementer uses Dom, additional plugin instances use division helpers, and non-plugin agents use temporary helpers. Session phase drives the lighting, active work drives the cooking and inspection stations, and checklist pies and slices drive the tickets, customer line and finished-pie shelf. The Orders, Crew and Log panels describe that state. Demo orders and activity remain illustrative rather than evidence about the project.
+
+The page loads Three.js from unpkg and fonts from Google Fonts, so rendering requires those external resources.
 
 The header's accessible browser icon stays disabled until a valid snapshot arrives. A user click opens `http://127.0.0.1:<snapshot.port>/` with `_blank` and `noopener`, using the native pane's external-browser behavior. It never opens another URL automatically. If that host treats `_blank` as another pane tab, describe that limitation truthfully rather than promising an OS-browser launch.
 
-The command completes only after the native Browser pane has opened the correct project's page. Briefly report the opened project and the local link, and distinguish the live state transport from the preserved demo scene. No checklist edits, remote publishing, authentication changes, or user configuration writes are part of this command.
+The command completes only after the native Browser pane has opened the correct project's page and the project/state checks above succeed. Briefly report the opened project, local link and observed mode: demo, live construction or live service. A ready localhost server alone does not complete the native command. Native `/open-kitchen` invocation and production discovery remain unverified until observed in the actual host; local fixtures and direct helper checks do not establish a production `/sell-pie` or `/sell-slice` acceptance run. No checklist edits, remote publishing, authentication changes, or user configuration writes are part of this command.

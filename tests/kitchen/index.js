@@ -8,3 +8,4 @@ require('./kitchen-cast.test.js');
 require('./kitchen-build-out.test.js');
 require('./kitchen-phase.test.js');
 require('./kitchen-order-line.test.js');
+require('./kitchen-installer.test.js');

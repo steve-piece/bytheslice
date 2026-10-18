@@ -1,6 +1,6 @@
 {
   "name": "bytheslice",
-  "version": "5.1.5",
+  "version": "5.2.0",
   "private": false,
   "description": "A grab-and-go pizza shop for shipping software. Daily prep, slice-by-slice service, /goal-driven autonomous mode.",
   "bin": {
@@ -15,6 +15,7 @@
     "commands",
     "skills",
     "hooks",
+    "mcp",
     "scripts/install",
     ".cursor-plugin",
     ".claude-plugin",
