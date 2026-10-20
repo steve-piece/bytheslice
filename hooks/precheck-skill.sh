@@ -29,12 +29,13 @@ if [ -z "$PROMPT" ]; then
 fi
 
 SKILL=$(bts_detect_skill "$PROMPT")
-[ -z "$SKILL" ] && exit 0  # No bytheslice skill mentioned — let the prompt through untouched.
+[ -z "$SKILL" ] && exit 0  # No bytheslice skill mentioned: let the prompt through untouched.
 
 SESSION_ID=$(bts_session_id "$INPUT")
 
 WARNINGS=()
 BLOCKS=()
+NEEDS_SETUP=0
 
 needs_checklist() {
   case "$1" in
@@ -49,7 +50,7 @@ CHECKLIST=$(bts_checklist_path)
 case "$SKILL" in
   sell-slice)
     if [ -z "$CHECKLIST" ]; then
-      BLOCKS+=("/sell-slice requires docs/plans/00_master_checklist.md. Run /cook-pizzas first (new project) or /special-order (add a stage to an existing one).")
+      NEEDS_SETUP=1
     else
       read -r DONE TOTAL <<<"$(bts_prep_counts || true)"
       if [ -n "${TOTAL:-}" ] && [ "${TOTAL:-0}" -gt 0 ] && [ "${DONE:-0}" -lt "${TOTAL:-0}" ]; then
@@ -71,13 +72,34 @@ case "$SKILL" in
     ;;
   cook-pizzas|special-order|run-the-day|close-shop)
     if needs_checklist "$SKILL" && [ -z "$CHECKLIST" ] && [ "$SKILL" != "cook-pizzas" ]; then
-      BLOCKS+=("/$SKILL requires docs/plans/00_master_checklist.md. Run /cook-pizzas first to scaffold one.")
+      NEEDS_SETUP=1
     fi
     ;;
 esac
 
+# A missing master checklist never blocks. It hands the agent context so it
+# can offer to set ByTheSlice up instead of the prompt bouncing.
+if [ "$NEEDS_SETUP" = "1" ]; then
+  printf '[bytheslice precheck for /%s]\n' "$SKILL"
+  printf '  No master checklist is set up in this project (docs/plans/00_master_checklist.md is missing).\n'
+  printf '  Use the AskUserQuestion tool to ask the user whether to set up ByTheSlice in this project, with two options: Accept (run /cook-pizzas for an existing project, /setup-shop for a new one) or Decline (continue without it). If the prompt only mentions /%s, ask once, then carry on with the request either way.\n' "$SKILL"
+fi
+
+# A skill named mid-prompt (a handoff brief, an explanation) is a mention,
+# not an invocation. Only a prompt whose first non-blank line starts with the
+# command can block; a mention downgrades blocks to warnings and skips the
+# state write so the Write/Edit guards do not arm for a skill that never ran.
+FIRST_LINE=$(printf '%s\n' "$PROMPT" | sed -n '/[^[:space:]]/{p;q;}')
+if ! printf '%s\n' "$FIRST_LINE" | grep -qE "^[[:space:]]*/(bytheslice:)?${SKILL}([^[:alnum:]_-]|\$)"; then
+  if [ "${#BLOCKS[@]}" -gt 0 ]; then
+    printf '[bytheslice precheck: /%s mentioned, not invoked]\n' "$SKILL"
+    for b in "${BLOCKS[@]}"; do printf '  ⚠ %s\n' "$b"; done
+  fi
+  exit 0
+fi
+
 # Persist state for the session-id-guarded Write/Edit guards (stage-plan-guard,
-# library-gate-guard) and compact-snapshot. session_id is the dedup key — those
+# library-gate-guard) and compact-snapshot. session_id is the dedup key; those
 # guards ignore any state whose session_id does not match the current session,
 # which prevents stale prechecks from a previous chat from triggering a
 # false-positive warning.
