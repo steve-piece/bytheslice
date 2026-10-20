@@ -36,6 +36,8 @@ Every dispatch description (Agent tool `description`, Workflow `label`) starts w
 
 Each subagent is a **registered plugin agent**; its definition file under `./agents/` carries the role prompt plus the `model` / `effort` / tool allowlist, all enforced by the platform (the roster columns below are contract, not decoration). **Dispatch by type, never by pasting the file**: `Workflow` steps pass `{agentType: "bytheslice:<name>"}` to `agent()`; direct dispatches use the Agent tool with `subagent_type: "bytheslice:<name>"`. The prompt you pass carries ONLY the slice-specific inputs (plans, manifest, Exit criteria, paths); the platform loads the definition itself. **Fallback** (Cursor, or any host without plugin-agent registration): Read the file and pass its body plus the inputs as the prompt, applying `model:` / `effort:` from its frontmatter manually.
 
+**Only the orchestrator writes to git**, on the registered and the fallback path alike, and that includes `git add`. `implementer`, `fix-attempter`, `debug-instrumenter` and `library-entry-writer` never stage, commit or push; they return `files_changed`. At every commit point the orchestrator stage exactly the paths agents returned in `files_changed` (plus the checklist when it changed) with `git add -- <paths>`, never `git add -A` or `git add .`; check `git status --short` shows nothing unexpected (an unexpected file is reported, not swept in); then commit and push.
+
 ### Core (every slice type)
 
 | Stage | Agent file | Model | Effort | Mode |
@@ -271,7 +273,7 @@ Run as a `Workflow` (`pipeline()` per item; independent items may `parallel()`);
 3. Dispatch **`quality-reviewer`** with both prior outputs.
 4. If either reviewer returns `verdict: fail`, send findings back to a fresh builder dispatch and re-review. Repeat until both `pass`.
 5. Apply the curator's checklist diff for this item: flip `[ ]` → `[x]` only after both reviewers pass AND Workflow B is green for the slice.
-6. **Task boundary: commit + push.** Once the item's task clears both reviewers, commit it on the slice branch as `feat(pie-N): N.M task K <task name>` and push, so the tree is clean before the next task starts. A DB-schema change lands first as its own `chore(db): update schema for <item-id>` commit. The orchestrator does not flip checklist rows until verification passes.
+6. **Task boundary: commit + push (orchestrator only).** Once the item's task clears both reviewers, stage the builder's `files_changed` selectively (`git add -- <paths>`, never `-A`), then commit it on the slice branch as `feat(pie-N): N.M task K <task name>` and push, so the tree is clean before the next task starts. A DB-schema change lands first as its own `chore(db): update schema for <item-id>` commit. The orchestrator does not flip checklist rows until verification passes.
 
 **Independent items pipeline / parallelize.** Items with no data dependency on each other may run as `parallel()` builder dispatches; dependent items chain in a `pipeline()`. Merge the per-item manifests into one slice manifest before Workflow B (the slice-level manifest is what `slice-tester` and `slice-verifier` consume).
 
@@ -319,7 +321,7 @@ bash "<plugin-root>/hooks/record-library-approval.sh" approve --slice <N.M> --co
 
 The component list is every `entries_added[].id` and `entries_modified[].id` from `library-entry-writer`'s output contract that was approved (a partial approval records only the approved ids). Each id becomes one `status: "approved"` entry carrying component id, session id, slice, and ISO timestamp; `library-gate-guard.sh` then passes production writes silently for the rest of the slice.
 
-- On **approved** → record the approval (the `approve` command above), then import the component from the library into the production route(s) named by the slice spec (or, in the modify case, land the consumer-route edit). Continue to Workflow B.
+- On **approved** → record the approval (the `approve` command above), then import the component from the library into the production route(s) named by the slice spec (or, in the modify case, land the consumer-route edit). The library entry files from the writer's `files_changed` are staged selectively and committed with their task at its boundary. Continue to Workflow B.
 - On **revision** → re-dispatch `component-crafter` with the user's notes, then re-run 4.5 for the revised component (fresh self-critique). Cap at 2 revision loops; on the 3rd round, surface as `creative_direction` HITL and stop.
 - On **rejected** → remove the entry: delete `_entries/<id>-entry.tsx`, remove the id from `_registry/tabs.ts` (`LIBRARY_TABS`), remove the import + map row from `_registry/stories.tsx` (`STORIES`), and remove the sidebar row from `_registry/entries.ts`. Surface as `creative_direction` HITL. Record no approval: the armed gate keeps warning on production-route writes, which is the correct failsafe.
 - **No production-route imports happen before approval.** `library-entry-writer`'s output contract requires `production_imports_added: 0`.
@@ -364,7 +366,7 @@ If `slice-tester.overall == fail` OR `slice-verifier.overall == fail`, route the
 - 2nd fail → `debug-instrumenter` adds targeted `// INSTRUMENT` logging → re-run the failed verifier/tester → `fix-attempter` again with the richer evidence → re-run.
 - Cap 3 total loops. On 3rd persistent failure → bubble HITL with full evidence (the goal stays active so the loop resumes if the user resolves it).
 
-After green, if `debug-instrumenter` ran, strip `// INSTRUMENT` lines. Fix-loop patches stay uncommitted until the loop is green; they land, instrumentation already stripped, in the slice's final commit (Phase 6), so no instrumentation ever reaches a commit.
+The fixers make no git writes: `fix-attempter` and `debug-instrumenter` return `files_changed`, and the orchestrator keeps the union for the final commit. After green, if `debug-instrumenter` ran, strip `// INSTRUMENT` lines. Fix-loop patches stay uncommitted until the loop is green; they land, instrumentation already stripped, in the slice's final commit (Phase 6), so no instrumentation ever reaches a commit.
 
 **Both verdicts must be `pass`** (or a half legitimately `skipped` for the slice type) before the slice is considered verified. Do not flip the slice's checklist rows or proceed to closeout until then.
 
@@ -372,7 +374,7 @@ After green, if `debug-instrumenter` ran, strip `// INSTRUMENT` lines. Fix-loop 
 
 When every in-scope item is `[x]` and Workflow B is green:
 
-1. Flip slice status `In Progress` → `Completed` in `docs/plans/00_master_checklist.md`, then make the slice's **final commit** on the slice branch, `feat(pie-N): N.M <slice name>` (closing narrative in the body for UI slices), carrying the flip and any fix-loop patches, and push it.
+1. Flip slice status `In Progress` → `Completed` in `docs/plans/00_master_checklist.md`, then make the slice's **final commit** on the slice branch, `feat(pie-N): N.M <slice name>` (closing narrative in the body for UI slices), carrying the flip and any fix-loop patches, and push it. Stage selectively: the checklist plus the fixers' `files_changed`, never `git add -A`.
 2. Confirm the slice branch has every commit it needs and the working tree is clean: `git status --short` empty, with no untracked or modified file the slice created. A leftover file is either committed with the slice (it belongs to it) or reported as a blocker; never leave it behind.
 3. Walk the **Completion Checklist** (below). The slice is not "ready to ship" until every box up through §4 is `[x]`.
 4. Report to the user using the **Progress Report Format**, ending with the **Handoff to `/box-it-up`** message.
@@ -426,6 +428,7 @@ After each item and at slice closeout:
 - **Viewports come from `verification.viewports` (C7); e2e thresholds from `verification.e2e` (C10).** Never hardcode a viewport list or run an e2e suite the config gated `"off"`.
 - **Checklist edits only after green gates.** Do not optimistically mark items done - flip `[ ]` → `[x]` only after both reviewers pass AND Workflow B is green.
 - **Subagent prompts live in `./agents/*.md`.** This SKILL.md is workflow only - never inline subagent prompts here.
+- **Only the orchestrator makes git writes, `git add` included,** on the registered and fallback paths alike. Agents return `files_changed`; the orchestrator stages those paths selectively, commits and pushes.
 - **Never modify other slice plan files** during execution. Plans are static; deviations are noted inline in the checklist.
 - **HITL bubbling is mandatory and orchestrator-only.** Subagents set `needs_human` + `hitl_*`; only the orchestrator calls `ask_user_input_v0`.
 - **Always provide a recommended answer in available options** at every elicitation point.

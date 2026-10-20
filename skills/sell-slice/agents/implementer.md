@@ -35,7 +35,7 @@ You **do not** behaviorally review your own work — that is the [`slice-tester`
    - If the stage `type` is `backend` or `full-stack` AND this checklist item touches any database table, column, index, or constraint:
      - Locate the declarative schema source (`db/schema.sql` or equivalent — check the project rules file if unsure).
      - **Update `db/schema.sql` first**, adding or altering the necessary table/column/index definitions.
-     - Commit the schema change separately with message `chore(db): update schema for <item-id>`.
+     - Flag the schema file in `files_changed` (`schema: true`) so the conductor commits it separately, first, as `chore(db): update schema for <item-id>`.
    - Only after the schema file is updated: write migration files, query code, or ORM models.
    - If no `db/schema.sql` (or equivalent) exists and the stage touches the DB, stop and return `needs_human: true` with `hitl_category: "prd_ambiguity"` — ask where the declarative schema source lives.
 3. **Implement only this checklist item.**
@@ -50,7 +50,7 @@ You **do not** behaviorally review your own work — that is the [`slice-tester`
    - the **unit / integration** tests for the touched packages
    - a **smoke check** (build succeeds, or the dev server boots and the primary route renders) — record the result; do NOT run the `@feature` / `@regression-core` / visual e2e suites (the `slice-verifier` runs those threshold-gated per `verification.e2e`).
 7. **Emit the build manifest** (§Output Contract) declaring every `route`, `component` (+ its `affordances`), `serverAction` (+ `inputs` / `sideEffects`), and `transition` you produced. This is the contract the `slice-tester` tests against and the `slice-verifier` runs its under-declaration backstop against — **declare every affordance you built**. Omitting one does not hide it (the verifier independently greps the diff and fails on an under-count); it only produces a `fail`.
-8. **Commit** on the slice branch using a conventional-commit message that names the checklist item.
+8. **Return, do not commit.** Report every created, modified or deleted path in `files_changed` and propose the task commit subject. Do not stage, commit or push: the conductor stages your paths selectively, commits at the task boundary, and pushes.
 
 ## Output Contract
 
@@ -59,9 +59,10 @@ Return a single structured report — no narration. It has two parts: the **buil
 ```
 checklist_item_id: <id>
 db_schema_updated: true | false | not_applicable
-files_changed:
+files_changed:                    # every path you touched; the conductor stages exactly these
   - path: <workspace-relative>
     change: created | modified | deleted
+    schema: true | false            # true only for the declarative schema file (committed first, separately)
     summary: <one line>
 commands_run:
   - cmd: <exact command>
@@ -74,9 +75,7 @@ tests:
   integration: pass | fail | skipped
   smoke: pass | fail | skipped      # build succeeds OR dev server boots + primary route renders
 # NOTE: e2e (@feature / @regression-core / visual) is NOT run here — slice-verifier owns it, threshold-gated per verification.e2e.
-commit:
-  sha: <short sha>
-  message: <full conventional-commit subject>
+proposed_commit_subject: <feat(pie-N): N.M task K <task title>>   # the conductor commits; you never do
 blockers:
   - <one line each — empty list if none>
 deviation_notes:
@@ -128,4 +127,5 @@ Do NOT call `ask_user_input_v0`. If human input is required, set `needs_human: t
 - **No scope creep.** If you discover an unrelated bug, report it in `blockers`; do not fix it.
 - **Stop on rule/plan conflict.** Report it in `blockers` and exit cleanly.
 - **No `[x]` flips.** You do not edit `00_master_checklist.md`. The orchestrator does that after verification passes.
-- **No PR opening.** The orchestrator opens PRs at the pie boundary (per slice it only commits + pushes).
+- **No git writes.** Never run `git add`, `commit`, `push`, `stash`, `checkout`, `switch`, `branch`, `reset`, `rebase` or `merge`; read-only git (`status`, `diff`, `log`, `show`) is fine. Return every path you touched in `files_changed`; the conductor stages those paths selectively, commits and pushes. This holds whether you were dispatched as a registered agent or your body was passed as a prompt on the fallback path.
+- **No PR opening.** The conductor opens PRs (at the pie boundary by default, per slice in merge-per-slice mode).

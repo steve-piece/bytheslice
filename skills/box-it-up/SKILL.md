@@ -79,7 +79,7 @@ The skill refuses to proceed past Phase 0 if any check fails. The point is to av
 1. `git status --short` - if there are uncommitted changes, surface them and ask:
    - "Stage and commit these changes? (yes / let me write the message / cancel)"
    - **Always provide a recommended answer in the available options.** Default recommendation: yes if the diff looks like the in-scope slice; "let me write" if it includes unexpected files.
-   - On `yes`: stage all changes and derive the commit message **by mode**:
+   - On `yes`: stage selectively, never `git add -A` or `git add .`. Stage only the paths the conductor recorded from agents' `files_changed` and the checklist; anything else is an unexpected file, so recommend "let me write" and list it. Then derive the commit message **by mode**:
      - **Per-slice mode** - the slice's task commits (`feat(pie-N): N.M task K <task name>`) are already pushed. This is the slice's **final commit**, using the v5 slice commit convention: **`feat(pie-N): N.M <slice name>`** (swap `feat` for `fix`/`chore`/`docs` when the diff is purely a fix / infra-config / docs). One-line subject; short body listing touched files grouped by package/app. **If the slice touched UI** and `/sell-slice`/`/sell-pie` produced a closing-narrative paragraph (one paragraph: what was built · why this shape · what was left out · what reviewers should pay attention to), include it verbatim in the commit body before the file list. These task and slice commit messages are what the boundary PR preserves - they become the PR's commit-by-commit story, so keep each one self-describing. After the push, `git status --short` must be empty: the slice may not leave an untracked or modified file it created.
      - **Pie-completion / universal mode** - only reached here when the boundary run finds straggler uncommitted changes (most slices are already committed by the per-slice runs). Derive a conventional type from the diff (`feat:`/`fix:`/`chore:`/`docs:`) with a one-line subject and a file-list body.
    - On `let me write`: prompt for the message.
@@ -120,7 +120,7 @@ Loop counter starts at 1. Cap at **3 attempts**.
    - Truncated log excerpts (last 200 lines per failed job) - let the agent ask for more on demand
    - The pie diff (`git diff origin/main...HEAD`)
    - The attempt number
-4. The agent stages + commits + pushes a targeted fix on the pie branch. Do not call `--watch` from inside the dispatch - the skill returns to Phase 3 (top) after the agent's commit lands and re-invokes `gh pr checks --watch` against the new head SHA.
+4. The agent makes no git writes: it returns `files_changed` and a proposed commit subject and body. **This skill** stages exactly those paths (`git add -- <paths>`), commits with the proposed message, and pushes to `origin "$BRANCH"` (never forced; a rejected push is a `destructive_operation` HITL). Do not call `--watch` from inside the dispatch - the skill returns to Phase 3 (top) after its push lands and re-invokes `gh pr checks --watch` against the new head SHA.
 5. Increment the counter. If it would exceed 3, STOP. Surface as `creative_direction` HITL with the full failure history so the user can decide whether to debug manually, retry CI, or close the PR.
 
 The 3-attempt cap is a hard rule. Three identical-cause failures in a row signal a structural problem (flaky test, missing secret, infra outage) that needs human judgment.
@@ -208,6 +208,7 @@ HITL categories the skill produces:
 - **One worktree per pie (default) or per slice (`slice-merge`); `/box-it-up` only removes it.** The worktree is created upstream by the conductor. This skill removes it after the merge (via `git worktree remove` + `prune`, never `rm -rf`) and never creates one. The merge/cleanup rules here are the standard's - see [`../cook-pizzas/references/git-worktree-standard.md`](../cook-pizzas/references/git-worktree-standard.md) (Phase 3 + Invariants §5).
 - **Never ship from `main` / `master`.** Phase 0 step 2 is a stop-everything check.
 - **Never force-push.** If `git push` is rejected for non-fast-forward, STOP. The user resolves on a fresh branch.
+- **Only the conductor makes git writes, `git add` included.** `ci-fix-attempter` returns `files_changed`; this skill stages those paths selectively, commits and pushes, on the registered and fallback paths alike. Never `git add -A`.
 - **Never auto-merge a PR with failing required checks.** Phase 4 only runs when CI is green on the latest head SHA.
 - **Never box an incomplete pie.** If any slice under the active Pie is still `[ ]`, STOP (`prd_ambiguity`).
 - **Never `git stash` on the user's behalf.** If `git checkout main` would overwrite uncommitted changes, STOP.
