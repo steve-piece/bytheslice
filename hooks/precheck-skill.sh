@@ -29,7 +29,7 @@ if [ -z "$PROMPT" ]; then
 fi
 
 SKILL=$(bts_detect_skill "$PROMPT")
-[ -z "$SKILL" ] && exit 0  # No bytheslice skill mentioned — let the prompt through untouched.
+[ -z "$SKILL" ] && exit 0  # No bytheslice skill mentioned: let the prompt through untouched.
 
 SESSION_ID=$(bts_session_id "$INPUT")
 
@@ -99,7 +99,7 @@ if ! printf '%s\n' "$FIRST_LINE" | grep -qE "^[[:space:]]*/(bytheslice:)?${SKILL
 fi
 
 # Persist state for the session-id-guarded Write/Edit guards (stage-plan-guard,
-# library-gate-guard) and compact-snapshot. session_id is the dedup key — those
+# library-gate-guard) and compact-snapshot. session_id is the dedup key; those
 # guards ignore any state whose session_id does not match the current session,
 # which prevents stale prechecks from a previous chat from triggering a
 # false-positive warning.

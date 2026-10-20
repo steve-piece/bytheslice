@@ -7,8 +7,8 @@
     {
       "name": "bytheslice",
       "source": "./",
-      "description": "ByTheSlice is a Cursor + Claude Code plugin that runs your project like a grab-and-go pizza shop. Daily prep (/setup-shop, /create-menu, /cook-pizzas, /set-display-case, /final-quality-check, /open-the-shop) runs once before service starts. The everyday loop is /sell-slice (cook a slice, run it through the line, commit locally) then /box-it-up (push, PR, CI watch with auto-fix, merge, cleanup). Special orders cooked on the spot via /special-order. Every skill is independently invocable. v4 adds /goal integration in /run-the-day's --auto-* modes.",
-      "version": "5.1.5",
+      "description": "ByTheSlice runs your project like a grab-and-go pizza shop. v5 delivers in Pies (3 to 8 slice chapters, one PR each). /sell-pie bakes one Pie through context-separated build, test, verify and fix steps, committing and pushing each slice; /box-it-up opens the boundary PR, watches CI and merges. /sell-slice handles one slice with hands-on review. /open-kitchen opens the local read-only 3D kitchen. One-time prep: /setup-shop, /create-menu, /cook-pizzas, /set-display-case, /final-quality-check and /open-the-shop.",
+      "version": "5.2.0",
       "logo": "assets/brand/logo-square.png",
       "keywords": [
         "prd",

@@ -1,15 +1,15 @@
 # Hook Scenario Contract
 
-This file is the **canonical source of truth** for hook behavior. Every row is one scenario the hook scripts handle. Both the scripts in this directory and the per-skill `## Preconditions` sections of every SKILL.md reference this table. If a scenario is missing here but enforced in code, that's drift — fix the table or the code, not both independently.
+This file is the **canonical source of truth** for hook behavior. Every row is one scenario the hook scripts handle. Both the scripts in this directory and the per-skill `## Preconditions` sections of every SKILL.md reference this table. If a scenario is missing here but enforced in code, that's drift - fix the table or the code, not both independently.
 
 `hooks/test.sh` reads this file and runs every row against the live hook scripts. A failing test means the implementation and the contract have diverged.
 
 ## Legend
 
-- **BLOCK** — hook exits 2; Claude Code prevents the action and shows the message
-- **WARN** — hook exits 0 and prints to stdout; Claude sees the warning as additional context but proceeds
-- **PASS** — hook exits 0 with no output; nothing surfaces to Claude
-- **CONTEXT** — hook exits 0 and prints to stdout; used for SessionStart context injection
+- **BLOCK** - hook exits 2; Claude Code prevents the action and shows the message
+- **WARN** - hook exits 0 and prints to stdout; Claude sees the warning as additional context but proceeds
+- **PASS** - hook exits 0 with no output; nothing surfaces to Claude
+- **CONTEXT** - hook exits 0 and prints to stdout; used for SessionStart context injection
 
 ## UserPromptSubmit: `precheck-skill.sh`
 
@@ -18,19 +18,19 @@ This file is the **canonical source of truth** for hook behavior. Every row is o
 | `/sell-slice` | no `docs/plans/00_master_checklist.md` | **PASS + context**: agent asks via AskUserQuestion whether to set up ByTheSlice (Accept or Decline) |
 | any skill named mid-prompt (not the first line) | a precondition that would block | **WARN** only, no state written: a mention, not an invocation |
 | `/sell-slice` | checklist exists, all Prep `[x]`, clean tree | **PASS** |
-| `/sell-slice` | checklist exists, some Prep `[ ]` | **WARN** — "Prep section incomplete: N/M boxes checked" |
+| `/sell-slice` | checklist exists, some Prep `[ ]` | **WARN** - "Prep section incomplete: N/M boxes checked" |
 | `/sell-slice` | checklist exists, Prep uses legacy bare `[ ]` boxes (pre-5.1.3 output), all checked | **PASS**: canonical dashed `- [ ]` and legacy bare `[ ]` boxes are both counted |
 | `/sell-slice` | checklist exists, Prep mixes dashed `- [x]` and bare `[ ]` boxes | **WARN** with both forms counted in the N/M totals |
-| `/sell-slice` | checklist exists, dirty git tree | **WARN** — "working tree is dirty" |
-| `/box-it-up` | current branch is `main` or `master` | **BLOCK** — "refuses to run on main/master" |
-| `/box-it-up` | feature branch, no `gh auth` | **WARN** — "gh CLI not authenticated" |
+| `/sell-slice` | checklist exists, dirty git tree | **WARN** - "working tree is dirty" |
+| `/box-it-up` | current branch is `main` or `master` | **BLOCK** - "refuses to run on main/master" |
+| `/box-it-up` | feature branch, no `gh auth` | **WARN** - "gh CLI not authenticated" |
 | `/box-it-up` | feature branch, `gh` authed | **PASS** |
-| `/cook-pizzas` | no checklist | **PASS** — cook-pizzas is allowed to run without one (it produces the checklist) |
+| `/cook-pizzas` | no checklist | **PASS** - cook-pizzas is allowed to run without one (it produces the checklist) |
 | `/special-order` | no checklist | **PASS + context**: AskUserQuestion setup offer |
 | `/run-the-day` | no checklist | **PASS + context**: AskUserQuestion setup offer |
 | `/close-shop` | no checklist | **PASS + context**: AskUserQuestion setup offer |
 | no bytheslice command | any | **PASS** |
-| any bytheslice command | `BTS_HOOKS_DISABLED=1` set | **PASS** — env var short-circuits all hooks |
+| any bytheslice command | `BTS_HOOKS_DISABLED=1` set | **PASS** - env var short-circuits all hooks |
 
 ## PreToolUse on Bash: `pre-commit-guard.sh`
 
@@ -56,22 +56,22 @@ The branch is read from the directory the commit runs in, resolved in this order
 
 | Project state | Expected |
 |---|---|
-| no `docs/plans/00_master_checklist.md` | **PASS** — silent (not a bytheslice project) |
-| checklist present | **CONTEXT** — stage counts, Prep progress, next not-started row |
+| no `docs/plans/00_master_checklist.md` | **PASS** - silent (not a bytheslice project) |
+| checklist present | **CONTEXT** - stage counts, Prep progress, next not-started row |
 | checklist present, nested v5 (`## Pie N` headings) | **CONTEXT**: Prep progress, pie and slice counts via the dual-read lib helpers (`bts_unit_counts` / `bts_slice_counts`), first open pie |
 | checklist present, flat v4 (`Status:` table rows) | **CONTEXT**: Prep progress (if a `## Prep` section exists), stage counts from the `Status:` scan, next not-started row |
-| `BTS_HOOKS_DISABLED=1` | **PASS** — silent |
+| `BTS_HOOKS_DISABLED=1` | **PASS** - silent |
 
 ## PreToolUse on Write/Edit: `stage-plan-guard.sh`
 
 | Tool target | Session state | Expected |
 |---|---|---|
-| `docs/plans/stage_1_foo.md` | current session, `skill == "sell-slice"` | **WARN** — "plans are normally static" (downgraded from BLOCK in v5, C4) |
+| `docs/plans/stage_1_foo.md` | current session, `skill == "sell-slice"` | **WARN** - "plans are normally static" (downgraded from BLOCK in v5, C4) |
 | `docs/plans/stage_1_foo.md` | current session, `skill != "sell-slice"` | **PASS** |
-| `docs/plans/00_master_checklist.md` | current session, `skill == "sell-slice"` | **PASS** — not a `stage_*` plan file |
+| `docs/plans/00_master_checklist.md` | current session, `skill == "sell-slice"` | **PASS** - not a `stage_*` plan file |
 | `src/app/page.tsx` (non-plan path) | current session, `skill == "sell-slice"` | **PASS** |
-| `docs/plans/stage_1_foo.md` | state from a *different* `session_id` | **PASS** — stale state never blocks |
-| `docs/plans/stage_1_foo.md` | no `last-precheck.json` | **PASS** — fail open |
+| `docs/plans/stage_1_foo.md` | state from a *different* `session_id` | **PASS** - stale state never blocks |
+| `docs/plans/stage_1_foo.md` | no `last-precheck.json` | **PASS** - fail open |
 | any stage plan path | `BTS_HOOKS_DISABLED=1` | **PASS** |
 
 ## PreToolUse on Write/Edit: `library-gate-guard.sh`
@@ -79,11 +79,11 @@ The branch is read from the directory the commit runs in, resolved in this order
 | Tool target | State | Expected |
 |---|---|---|
 | `app/dashboard/page.tsx` (watched) | no `library-approvals.json` | **PASS**, gate not armed (Phase 4.5's `arm` step has not run, e.g. a backend slice) |
-| `app/dashboard/page.tsx` (watched) | approvals file present, no approval entry, current-session `skill == "sell-slice"` | **WARN** — "no library approval is recorded" |
+| `app/dashboard/page.tsx` (watched) | approvals file present, no approval entry, current-session `skill == "sell-slice"` | **WARN** - "no library approval is recorded" |
 | `app/dashboard/page.tsx` (watched) | approvals file present, an approval recorded, `skill == "sell-slice"` | **PASS** |
-| `lib/util.ts` (not watched) | approvals file present, no approval, `skill == "sell-slice"` | **PASS** — path not under a watched glob |
+| `lib/util.ts` (not watched) | approvals file present, no approval, `skill == "sell-slice"` | **PASS** - path not under a watched glob |
 | `app/dashboard/page.tsx` (watched) | approvals present, no approval, `skill != "sell-slice"` | **PASS** |
-| `app/dashboard/page.tsx` (watched) | approvals present, state from a *different* `session_id` | **PASS** — stale state never warns |
+| `app/dashboard/page.tsx` (watched) | approvals present, state from a *different* `session_id` | **PASS** - stale state never warns |
 | any watched path | `BTS_HOOKS_DISABLED=1` | **PASS** |
 
 ## State writer: `record-library-approval.sh`
@@ -103,14 +103,45 @@ Not an event hook: `/sell-slice` Phase 4.5 invokes it directly. `arm` opens the 
 
 | State | Expected |
 |---|---|
-| `last-precheck.json` present | **PASS** (exit 0, silent) — writes `compact-snapshot.json` with skill carried over |
-| no `last-precheck.json` | **PASS** (exit 0, silent) — still writes a minimal `compact-snapshot.json` |
+| `last-precheck.json` present | **PASS** (exit 0, silent) - writes `compact-snapshot.json` with skill carried over |
+| no `last-precheck.json` | **PASS** (exit 0, silent) - still writes a minimal `compact-snapshot.json` |
 | checklist present with unfinished lines | snapshot's `master_checklist_summary` holds up to 3 of them |
-| `BTS_HOOKS_DISABLED=1` | **PASS** — no snapshot written |
+| `BTS_HOOKS_DISABLED=1` | **PASS** - no snapshot written |
+
+## Activity events: `kitchen-log.sh`
+
+Every wired logger hook runs synchronously and silently (exit 0), completing its local append before returning so session shutdown does not strand background rows. Each accepted envelope appends exactly one compact JSON row under `.claude/.bytheslice-state/kitchen/activity.jsonl`; event-specific absent fields are omitted.
+
+| Event or condition | Expected |
+|---|---|
+| `SessionStart`, `SubagentStart`, `SubagentStop`, `Stop` | one row with the matching `ev`; subagent identity retained when present |
+| `PreToolUse` Agent, `PostToolUse` Agent | one row; description and agent type from dispatch input; result identity, integer tokens/duration and completion status from Agent response |
+| `PreToolUse` Skill | one row carrying only the skill name, never arguments |
+| `UserPromptExpansion` | one row carrying command name and source, never prompt or arguments |
+| Hook registration | exactly eight synchronous logger registrations (`async` absent or false), with exact Agent / Skill matchers; registered Stop command returns only after its row is readable |
+| Prompt, assistant message, arguments, output, contents, secret/token fields | absent from every row and stdout/stderr, including nested and unknown fields |
+| Dispatch description has CR / LF / tabs and more than 120 Unicode characters | whitespace reduced to one line, label truncated to 120 Unicode characters |
+| Event lacks optional fields or has empty `agent_type` | row still written; absent and empty optional fields omitted |
+| Description starts `P7 S7.3 build:`; branch/checklist disagree | label wins for both pie and slice |
+| Branch matches `pie-4` or `pie/4`; checklist has earlier open pies | branch wins for pie; first open slice under that pie supplies slice |
+| Input cwd is a linked worktree; project root is on main | worktree branch decides attribution; log stays at project root |
+| Branch resolves a pie absent from checklist | branch pie retained; unrelated checklist slice never assigned |
+| No matching branch; checklist includes completed pie/slice headings | first open slice under first open pie; checked/struck/completed headings skipped |
+| No matching branch or checklist | pie and slice omitted |
+| Current log exceeds 2 MiB | rotate to `activity.1.jsonl`, replacing the previous rotation; new row starts current log |
+| Current log is exactly 2 MiB | append without rotation; following event rotates the oversized file |
+| Concurrent events at rotation boundary | serialized rotation and append retain every row across current and one rotation |
+| Healthy writer paused during size check; concurrent contenders | owner remains exclusive; existing log and rotation stay untouched until release; every completed event is retained |
+| TERM after lock symlink publication, before acquisition returns | exact owned symlink and claim directory removed; exit 0 silently; next event writes normally |
+| Writer SIGKILLed while holding activity lock; concurrent recovery | one reclaimer takes abandoned ownership; later writers recover without unlinking healthy ownership or losing sibling rotation rows; ownership artifacts removed |
+| `BTS_HOOKS_DISABLED=1` | no output, no state directory created |
+| `jq` unavailable, Node available | same row fields and sanitation as jq, excluding timestamp |
+| Neither jq nor Node available | exit 0 silently without creating state |
+| Invalid JSON, multiple JSON values, array/scalar envelope or unwired tool/event | exit 0 silently without creating a log |
 
 ## Notes
 
 - Every hook honors `BTS_HOOKS_DISABLED=1` as the first action after `set -u`. That's the supported per-session disable.
-- Every hook tolerates missing `jq` — JSON parsing falls back to `sed`.
+- Every hook tolerates missing `jq`; existing guards use `sed`, while `kitchen-log.sh` uses Node or silently skips logging when neither parser is available.
 - All state lives under `.claude/.bytheslice-state/` (gitignored).
 - All awk in the hooks is POSIX-portable (BSD awk on macOS has no gawk extensions such as the 3-argument `match()`).
