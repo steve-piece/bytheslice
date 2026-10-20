@@ -26,7 +26,7 @@ The under-the-hood reference for ByTheSlice. The [README](../README.md) covers t
 
 `cook-pizzas` produces `docs/plans/00_master_checklist.md` as a **two-level Pie / Slice roadmap**.
 
-- A **Pie** (`## Pie N`, 3-8 slices, carrying a `review: boundary|continuous` property) is the unit of `/loop` autonomy, HITL checkpoint, PR, context-refresh, and worktree.
+- A **Pie** (`## Pie N`, 3-8 slices, carrying a `review: boundary|continuous` property) is the unit of `/loop` autonomy, HITL checkpoint, PR, context-refresh, and worktree (in the default `pie-pr` delivery mode; opt-in merge-per-slice delivery makes the slice the unit of PR and worktree).
 - A **Slice** (`### Slice N.M`) is one vertical deliverable, hard-capped at **6 tasks / ~10-15 files** - completable in one fresh agent session. Override `stages.maxTasksPerStage` in `bytheslice.config.json` if you truly need a bigger slice.
 - **Pie 1 is Foundations** (slices 1.1-1.4: design system, CI/CD, env, DB schema), tracked via the `## Prep` gate. Feature pies are Pie 2+.
 
@@ -95,9 +95,13 @@ The three v4 verifiers (`basic-checks-runner`, `aggregating-test-reviewer`, `ci-
 
 **Selling and boxing are decoupled, at the pie boundary.** Each slice commits + pushes to the pie branch with **no PR and no CI**. `/box-it-up` opens the single `Pie N` PR, runs CI once, and merges - preserving every per-slice commit - only at the pie boundary.
 
-The split exists so you can run a manual visual UAT or local code review between slices, and so CI fires once per pie instead of once per slice. `/box-it-up` is also safe for hand-rolled feature branches that never went through ByTheSlice delivery.
+The split exists so you can run a manual visual UAT or local code review between slices, and so CI fires once per pie instead of once per slice (default `pie-pr` mode). `/box-it-up` is also safe for hand-rolled feature branches that never went through ByTheSlice delivery.
 
-**One Pie per PR.** Default branch naming: `pie-<n>-<scope>`, one worktree per pie (cut from freshly-fetched `origin/main`). Slices land as `feat(pie-N): N.M - <name>` commits on that branch (no per-slice PR); the single PR opens at the pie boundary. The full worktree lifecycle - setup, isolation, the runtime-isolation gap, merge, cleanup - is standardized in [`git-worktree-standard.md`](../skills/cook-pizzas/references/git-worktree-standard.md).
+**One Pie per PR.** Default branch naming: `pie-<n>-<scope>`, one worktree per pie (cut from freshly-fetched `origin/main`). Slices land as `feat(pie-N): N.M - <name>` commits on that branch (no per-slice PR); the single PR opens at the pie boundary.
+
+All of the above is the default `pie-pr` delivery mode. **Merge-per-slice delivery** is opt-in: an explicit autonomous-delivery run instruction, or `delivery.mode: "merge-per-slice"` in `bytheslice.config.json` (the run instruction wins for that run; `review: continuous` pies always stay on the default). Each slice then gets branch `pie-<n>-s<n>.<m>-<scope>` cut from fresh `origin/main` into its own worktree, its own PR `Slice N.M: <name>`, CI per slice with up to 3 fix rounds (still red halts the loop, never skips), and a merge commit on green with no per-slice approval. Cleanup runs from the primary checkout after every merge, and the next slice is cut from the fresh `main`. The operator gets one notice per finished pie. There is never an integration branch.
+
+The full worktree lifecycle - setup, isolation, the runtime-isolation gap, merge, cleanup - is standardized in [`git-worktree-standard.md`](../skills/cook-pizzas/references/git-worktree-standard.md).
 
 ---
 

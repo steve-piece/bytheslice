@@ -90,6 +90,13 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
     "default": "boundary"             // "boundary" = autonomous /sell-pie; "continuous" = forced /sell-slice mode
   },
 
+  // How finished slices reach main, plus the soft per-slice time budget.
+  // Read by sell-pie, sell-slice and box-it-up.
+  "delivery": {
+    "mode": "pie-pr",                 // "pie-pr" (default: one PR per pie via /box-it-up) | "merge-per-slice"
+    "sliceBudgetHours": 3             // soft wall-clock budget per slice; 0 = off
+  },
+
   // Which MCPs the project has installed. Read by sell-slice (frontend pipeline),
   // sell-slice, set-display-case.
   // If the project rules file ALSO declares MCPs, this config wins.
@@ -187,6 +194,17 @@ Governs the v5 HITL collapse. Each key is independent.
 ### `review`
 
 - **`default`** *(string, default `"boundary"`)* — the review sensitivity applied to a pie that omits the `<!-- review: ... -->` annotation in the master checklist. `"boundary"` lets `/sell-pie` run that pie autonomously with one HITL at the pie boundary; `"continuous"` forces `/sell-pie` into `/sell-slice` (high-touch) mode for it. **A pie's own annotation always wins over this default** — this key only fills the gap for unannotated pies. Per-slice `hitl_required` frontmatter still fires inside an autonomous pie either way.
+
+### `delivery`
+
+How a finished slice reaches `main`, and how long a slice may run before the conductor checks in. Each key is independent.
+
+- **`mode`** *(string, default `"pie-pr"`)* - the closeout path:
+  - `"pie-pr"` *(default)* - each slice commits and pushes to the pie branch with no PR; `/box-it-up` opens one `Pie N` PR at the pie boundary, CI runs once, and the operator approves the merge.
+  - `"merge-per-slice"` - each slice gets its own branch (`pie-N-sN.M-<scope>`) cut from fresh `origin/main` into its own worktree, then its own PR `Slice N.M: <name>`. The conductor waits for CI, runs up to 3 `ci-fix-attempter` rounds on red (still red after 3 halts the loop with a HITL; a slice is never skipped), merges on green with a **merge commit** (never squash), syncs `main` `--ff-only` from the primary checkout, deletes the branch locally and remotely, removes the slice worktree, prunes, and cuts the next slice from the fresh `main`. There is no per-slice merge approval; the operator gets one notice when the pie finishes. If the repo disallows merge commits (`gh repo view --json mergeCommitAllowed`), the loop halts and asks. There is never an integration branch.
+  - **A run instruction wins for that run.** When the operator's run instruction explicitly asks for autonomous delivery (for example "merge each slice", "deliver it to main without me"), that run uses `"merge-per-slice"` even if the config says `"pie-pr"`; an instruction asking for one PR per pie likewise overrides a `"merge-per-slice"` config. Invoking `/sell-pie` on its own is not such an instruction.
+  - **`review: continuous` pies always use `"pie-pr"`**, whatever this key or the run instruction says.
+- **`sliceBudgetHours`** *(number, default `3`; `0` = off)* - a soft wall-clock budget per slice, counting CI time and excluding time spent waiting on the operator. The slice's start time lives in the run log (`.claude/.bytheslice-state/run-log.md`). When the budget is hit, the conductor lets the current agent finish, then checks in with a `prd_ambiguity` HITL carrying progress, the blocker, and the options (extend, stop).
 
 ### `mcps`
 

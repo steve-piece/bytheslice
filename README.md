@@ -74,7 +74,7 @@ Where you'll spend most of your time. **`/sell-pie`** is the forefront motion - 
 | [`/sell-slice`](skills/sell-slice/SKILL.md) | Run one slice through the kitchen line by hand. | High-touch single-slice delivery with the library preview gate intact. For sensitive or collaborative work. |
 | [`/box-it-up`](skills/box-it-up/SKILL.md) | Box the pie, ring it up, hand it over. | Opens the `Pie N` PR, watches CI, auto-fixes on red, merges on your approval (never squash), syncs main, cleans up. `--slice` is the per-slice commit+push `/sell-pie` calls. |
 
-A Pie is the unit of autonomy, PR, and context-refresh. **After each Pie merges, start a fresh chat and bake the next one** - until the master checklist is empty.
+A Pie is the unit of autonomy, PR, and context-refresh (by default; opt-in merge-per-slice delivery opens and merges one PR per slice). **After each Pie merges, start a fresh chat and bake the next one** - until the master checklist is empty.
 
 ### ✨ Step 3: Handle the unusual *(side flows)*
 
@@ -91,7 +91,7 @@ On-demand, no particular order:
 > [!IMPORTANT]
 > **Shop rules** the plugin enforces, no exceptions:
 > 1. **Every slice passes the quality line** (lint, type, build + UI test review). A bad pie doesn't go on the display.
-> 2. **Selling and boxing are decoupled.** Slices commit + push to the pie branch with no PR or CI; `/box-it-up` opens the single `Pie N` PR and merges at the **pie boundary** - so CI fires once per pie, and you can taste-test between slices.
+> 2. **Selling and boxing are decoupled.** Slices commit + push to the pie branch with no PR or CI; `/box-it-up` opens the single `Pie N` PR and merges at the **pie boundary** - so CI fires once per pie, and you can taste-test between slices. (That is the default. Opt-in merge-per-slice delivery, via `delivery.mode` or an explicit "merge each slice" instruction, gives every slice its own PR, merged on green CI.)
 > 3. **Every skill is independently invocable.** Drop `/set-display-case` onto any project to bolt on a design system, or `/box-it-up` onto any branch to push it. The full workflow is opt-in.
 
 ---
@@ -250,6 +250,7 @@ Drop a `bytheslice.config.json` at your project root to override defaults:
                     "e2e": { "feature": "always", "regressionCore": "critical-only", "visual": "off" } },
   "flow":         { "autoApproveBuildPlan": false, "libraryGate": "self-critique" },
   "review":       { "default": "boundary" },   // per-pie override via the `<!-- review: -->` annotation
+  "delivery":     { "mode": "pie-pr", "sliceBudgetHours": 3 },  // "merge-per-slice" = one PR per slice, merged on green CI; budget 0 = off
   "mcps":         { "shadcn": true, "magic": false, "figma": false, "chromeDevTools": true },
   "visualReview": { "tools": ["claude-in-chrome", "chrome-devtools-mcp", "playwright"], "vizzly": false },
   "hitl":         { "additionalCategories": [] },

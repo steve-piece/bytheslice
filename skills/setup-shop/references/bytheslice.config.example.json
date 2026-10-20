@@ -39,6 +39,12 @@
     // "default": "boundary"                 // "boundary" | "continuous"
   },
 
+  // How finished slices reach main, plus the soft per-slice time budget.
+  "delivery": {
+    // "mode": "pie-pr",                     // "pie-pr" (one PR per pie) | "merge-per-slice" (one PR per slice, merged on green CI)
+    // "sliceBudgetHours": 3                 // soft per-slice wall-clock budget; 0 = off
+  },
+
   // Declare which MCPs the project has installed.
   // The plugin reads this in addition to the project rules file.
   "mcps": {

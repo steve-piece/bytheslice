@@ -106,6 +106,7 @@ If `bytheslice.config.json` exists at the project root, the `rules-loader` agent
 - `verification.e2e.{feature,regressionCore,visual}` *(each `"always" | "critical-only" | "off"`)* - threshold-gates which e2e suites `slice-verifier` runs by tag (**C10**). Pass the resolved values to `slice-verifier`; it gates before running anything.
 - `flow.autoApproveBuildPlan` *(bool, default `false`)* - when `true`, skip the build-plan authorization stop (**C9** - also **always** auto under the `/sell-pie` loop).
 - `flow.libraryGate` *(`"self-critique" | "human" | "off"`, default `"self-critique"`)* - controls the net-new-component library gate behavior (see Workflow A library gate).
+- `delivery.mode` *(`"pie-pr" | "merge-per-slice"`, default `"pie-pr"`)* - picks the closeout. `"pie-pr"` stops at "slice committed, ready for review" and hands off to `/box-it-up`; `"merge-per-slice"` runs the slice's own PR, CI and green-CI merge itself (Phase 6). An explicit autonomous-delivery run instruction ("merge this slice", "deliver it to main without me") selects merge-per-slice for that run and wins over the config in either direction. A slice in a `review: continuous` pie always uses `"pie-pr"`.
 - `mcps.*` - declarative MCP availability.
 - `visualReview.tools` - ordered tooling priority passed to `slice-tester`.
 
@@ -234,7 +235,8 @@ Invoke `/goal <full condition string>`. Log: `Slice-completion goal set for slic
 
 - Branch naming: `feat/stage-<n>-<scope>` | `fix/stage-<n>-<scope>` | `chore/stage-<n>-<scope>` (on a nested checklist, the slice commits land on the **pie branch** when running under `/sell-pie`; standalone `/sell-slice` uses the per-slice branch above).
 - Prefer a git worktree per active slice/pie, cut from the **freshly-fetched `origin/main`** (never local `main`, which may be stale): `git fetch origin` then `git worktree add -b feat/stage-<n>-<scope> <path> origin/main`. Never implement directly on `main`/`master`. Worktree setup, isolation, merge, and cleanup follow [`../cook-pizzas/references/git-worktree-standard.md`](../cook-pizzas/references/git-worktree-standard.md).
-- One checklist slice per commit; per-slice work does **not** open a PR (that is the pie boundary's job, handled by `/box-it-up`).
+- **Merge-per-slice mode:** the branch is `pie-N-sN.M-<scope>` (on a flat checklist, `feat/stage-<n>-<scope>`), cut from freshly-fetched `origin/main` into its own worktree from the primary checkout (`PRIMARY=$(git worktree list --porcelain | sed -n '1s/^worktree //p')`): `git -C "$PRIMARY" fetch origin`, then `git -C "$PRIMARY" worktree add -b pie-N-sN.M-<scope> <path> origin/main`.
+- One checklist slice per commit; in the default `pie-pr` mode per-slice work does **not** open a PR (that is the pie boundary's job, handled by `/box-it-up`). Merge-per-slice mode opens the slice's own PR at closeout (Phase 6).
 
 ### Phase 4 - Workflow A (produce)
 
@@ -374,7 +376,9 @@ When every in-scope item is `[x]` and Workflow B is green:
 3. Walk the **Completion Checklist** (below). The slice is not "ready to ship" until every box up through §4 is `[x]`.
 4. Report to the user using the **Progress Report Format**, ending with the **Handoff to `/box-it-up`** message.
 
-**This skill stops here - at "slice committed locally, ready for review."** It does NOT push, open a PR, watch CI, merge, or clean up. That's [`/box-it-up`](../box-it-up/SKILL.md)'s job - re-scoped in v5 to the **pie boundary** (per-slice = commit + push only; PR + CI + merge happen once at pie completion). Running standalone, this hand-off is intentionally separated so you can run a manual visual UAT, do a local code review, or rebase against fresh main before deciding to ship.
+**Merge-per-slice mode (opt-in) does not stop here.** After steps 1-3, push the slice branch and run [`/box-it-up`](../box-it-up/SKILL.md)'s **Merge-per-slice closeout** (`--merge-slice`) internally, passing the branch, worktree path, slice id and name: PR `Slice N.M: <name>`, CI, up to 3 `ci-fix-attempter` rounds (still red halts with a HITL; the slice is never skipped or merged red), merge on green with a merge commit, then cleanup from the primary checkout (`pull --ff-only`, `worktree remove`, `branch -d`, remote delete, `worktree prune`). No merge approval is asked; report the merged PR in one notice instead of the handoff below. If this was the pie's last slice, the closeout writes the kitchen merge record once.
+
+**Default `pie-pr` mode: this skill stops here - at "slice committed locally, ready for review."** It does NOT push, open a PR, watch CI, merge, or clean up. That's [`/box-it-up`](../box-it-up/SKILL.md)'s job - re-scoped in v5 to the **pie boundary** (per-slice = commit + push only; PR + CI + merge happen once at pie completion). Running standalone, this hand-off is intentionally separated so you can run a manual visual UAT, do a local code review, or rebase against fresh main before deciding to ship.
 
 #### Handoff to `/box-it-up`
 
@@ -415,7 +419,7 @@ After each item and at slice closeout:
 ## Hard Constraints
 
 - **Build plan must be authorized** before any producer subagent runs - UNLESS running under the `/sell-pie` loop or `flow.autoApproveBuildPlan` is `true` (C9), in which case it is auto-approved and logged, not stopped.
-- **One slice per commit; per-slice work opens no PR.** Never bundle multiple checklist items unless the user explicitly approves it in Phase 2. The PR is opened at the pie boundary by `/box-it-up`.
+- **One slice per commit; per-slice work opens no PR (default `pie-pr` mode).** Never bundle multiple checklist items unless the user explicitly approves it in Phase 2. The PR is opened at the pie boundary by `/box-it-up`. **Exception:** merge-per-slice mode opens, CI-checks and merges the slice's own PR at closeout, with a merge commit and no per-slice merge approval.
 - **Context separation is absolute.** The `slice-tester` receives ONLY the build manifest + Exit criteria + design-system path (+ dev URL / type / DB target). Never pass it the builder's reasoning or chat. The tester falsifies; it does not trust.
 - **Each static gate runs exactly once (C5).** `slice-verifier` carries already-green checks forward; never pay for the same lint/type/build/e2e twice across the slice.
 - **Viewports come from `verification.viewports` (C7); e2e thresholds from `verification.e2e` (C10).** Never hardcode a viewport list or run an e2e suite the config gated `"off"`.
@@ -487,7 +491,7 @@ Skip only if the slice is documentation-only or has zero observable behavior cha
 
 ### Handed off to `/bytheslice:box-it-up` - NOT this skill's responsibility
 
-The following sections live in [`/bytheslice:box-it-up`](../box-it-up/SKILL.md)'s Completion Checklist (now pie-scoped). They are listed here for cross-reference only; this skill does not run them.
+The following sections live in [`/bytheslice:box-it-up`](../box-it-up/SKILL.md)'s Completion Checklist (now pie-scoped). They are listed here for cross-reference only; in the default `pie-pr` mode this skill does not run them. In merge-per-slice mode this skill runs the slice-scoped equivalent itself through `/box-it-up --merge-slice` (box-it-up's "Slice-merge mode" checklist).
 
 #### 5. PR open + CI green (handled by `/box-it-up` at the pie boundary)
 - Pie branch pushed to `origin`; one PR `Pie N` open against `main`; PR URL surfaced.
@@ -498,7 +502,7 @@ The following sections live in [`/bytheslice:box-it-up`](../box-it-up/SKILL.md)'
 - Merge authorized at the user gate; PR state is `MERGED` (per-slice commits preserved - rebase or merge-commit, not squash).
 - Local `main` synced with `--ff-only`.
 - Local + remote pie branch deleted.
-- Worktree removed + pruned (one worktree per pie).
+- Worktree removed + pruned (one worktree per pie; per slice in merge-per-slice mode), from the primary checkout.
 - `git status --short` empty; fully synced with `origin/main`.
 
 ---

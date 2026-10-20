@@ -5,7 +5,7 @@ The everyday delivery loop (v5 Pie/Slice model):
 1. `/sell-pie` (forefront): bake one whole Pie autonomously. Each slice runs the context-separated build, test, verify, fix workflow, then commits and pushes to the pie branch. No per-slice PR, so CI stays quiet.
 2. `/box-it-up` (pie boundary): open the single `Pie N` PR, watch CI once, merge preserving every slice commit, sync main, clean up the branch and worktree.
 
-One PR per Pie, one fresh chat per Pie. Use `/sell-slice` when a single slice needs high-touch care (build-plan and library gates stay live); pies annotated `review: continuous` route through it automatically. `/run-the-day` (experimental) chains `/sell-pie` across the whole roadmap.
+One PR per Pie, one fresh chat per Pie (the default `pie-pr` delivery mode). Opt-in merge-per-slice delivery (an explicit autonomous-delivery run instruction, or `delivery.mode: "merge-per-slice"`) instead gives each slice its own branch, worktree and PR, merged with a merge commit on green CI with no per-slice approval; `review: continuous` pies always use the default. Use `/sell-slice` when a single slice needs high-touch care (build-plan and library gates stay live); pies annotated `review: continuous` route through it automatically. `/run-the-day` (experimental) chains `/sell-pie` across the whole roadmap.
 
 Source of truth for in-flight work: `docs/plans/00_master_checklist.md` (gitignored, generated per project), nested as `## Pie N` / `### Slice N.M` with the `## Prep` gate acting as Pie 1 (Foundations). Per-slice plans live alongside it as `docs/plans/stage_<n>_*.md` (filenames keep the `stage_` prefix for dual-read back-compat).
 
