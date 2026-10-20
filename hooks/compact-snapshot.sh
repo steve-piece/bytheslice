@@ -2,7 +2,7 @@
 # hooks/compact-snapshot.sh
 # PreCompact hook. Persists a small snapshot of the active ByTheSlice state
 # right before context is compacted, so the next turn can re-orient. Never
-# blocks compaction — always exits 0.
+# blocks compaction; always exits 0.
 #
 # Hook contract: reads JSON from stdin (envelope incl. .session_id).
 # Writes .bytheslice-state/compact-snapshot.json. Always exit 0.

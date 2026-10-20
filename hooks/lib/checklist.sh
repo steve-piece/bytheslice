@@ -51,7 +51,7 @@ bts_prep_counts() {
 #   - flat v4 checklists use `## Stage N` headings
 #   - nested v5 checklists use `## Pie N` headings with `### Slice N.M` subheadings
 # Prints one of: "pie" (any `## Pie` heading present), "stage" (any `## Stage`
-# heading and no Pie), or "" (neither — e.g. a table-only checklist).
+# heading and no Pie), or "" (neither, e.g. a table-only checklist).
 bts_checklist_layout() {
   local checklist
   checklist=$(bts_checklist_path)
