@@ -196,11 +196,30 @@ EOF
 echo
 echo "## precheck-skill.sh"
 
-# /sell-slice without checklist → BLOCK
+# /sell-slice without checklist → setup context, never BLOCK
 FIX=$(mk_fixture)
 CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/sell-slice","session_id":"s1"}'
-assert_exit "sell-slice no checklist" 2
-assert_contains "sell-slice no checklist message" "requires docs/plans/00_master_checklist.md"
+assert_exit "sell-slice no checklist" 0
+assert_contains "sell-slice no checklist offers setup" "AskUserQuestion tool to ask the user whether to set up ByTheSlice"
+rm -rf "$FIX"
+
+# /sell-slice mentioned mid-prompt without checklist → WARN, never BLOCK
+FIX=$(mk_fixture)
+CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"Review Pie 4.\\n3. Exercise real `/sell-slice` activity.","session_id":"s1m"}'
+assert_exit "sell-slice mention no checklist" 0
+assert_contains "sell-slice mention offers setup" "No master checklist is set up"
+if [ -f "$FIX/.claude/.bytheslice-state/last-precheck.json" ]; then
+  FAIL=$((FAIL+1)); FAILED_NAMES+=("sell-slice mention skips state"); printf '  ✗ sell-slice mention skips state\n'
+else
+  PASS=$((PASS+1)); printf '  ✓ sell-slice mention skips state\n'
+fi
+rm -rf "$FIX"
+
+# /box-it-up mentioned mid-prompt on main → WARN, never BLOCK
+FIX=$(mk_fixture)
+CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"After this, run /box-it-up to open the PR.","session_id":"s1n"}'
+assert_exit "box-it-up mention on main" 0
+assert_contains "box-it-up mention warns" "mentioned, not invoked"
 rm -rf "$FIX"
 
 # /sell-slice with checklist + clean Prep + clean tree → PASS
@@ -322,10 +341,11 @@ CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/cook-pizzas","session_
 assert_exit "cook-pizzas without checklist" 0
 rm -rf "$FIX"
 
-# /special-order without checklist → BLOCK
+# /special-order without checklist → setup context, never BLOCK
 FIX=$(mk_fixture)
 CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/special-order","session_id":"s9"}'
-assert_exit "special-order without checklist" 2
+assert_exit "special-order without checklist" 0
+assert_contains "special-order without checklist offers setup" "AskUserQuestion"
 rm -rf "$FIX"
 
 ####################################################################

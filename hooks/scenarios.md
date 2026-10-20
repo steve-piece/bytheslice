@@ -15,7 +15,8 @@ This file is the **canonical source of truth** for hook behavior. Every row is o
 
 | Skill in prompt | Project state | Expected |
 |---|---|---|
-| `/sell-slice` | no `docs/plans/00_master_checklist.md` | **BLOCK** — "requires master checklist, run /cook-pizzas first" |
+| `/sell-slice` | no `docs/plans/00_master_checklist.md` | **PASS + context**: agent asks via AskUserQuestion whether to set up ByTheSlice (Accept or Decline) |
+| any skill named mid-prompt (not the first line) | a precondition that would block | **WARN** only, no state written: a mention, not an invocation |
 | `/sell-slice` | checklist exists, all Prep `[x]`, clean tree | **PASS** |
 | `/sell-slice` | checklist exists, some Prep `[ ]` | **WARN** — "Prep section incomplete: N/M boxes checked" |
 | `/sell-slice` | checklist exists, Prep uses legacy bare `[ ]` boxes (pre-5.1.3 output), all checked | **PASS**: canonical dashed `- [ ]` and legacy bare `[ ]` boxes are both counted |
@@ -25,9 +26,9 @@ This file is the **canonical source of truth** for hook behavior. Every row is o
 | `/box-it-up` | feature branch, no `gh auth` | **WARN** — "gh CLI not authenticated" |
 | `/box-it-up` | feature branch, `gh` authed | **PASS** |
 | `/cook-pizzas` | no checklist | **PASS** — cook-pizzas is allowed to run without one (it produces the checklist) |
-| `/special-order` | no checklist | **BLOCK** — "requires master checklist" |
-| `/run-the-day` | no checklist | **BLOCK** |
-| `/close-shop` | no checklist | **BLOCK** |
+| `/special-order` | no checklist | **PASS + context**: AskUserQuestion setup offer |
+| `/run-the-day` | no checklist | **PASS + context**: AskUserQuestion setup offer |
+| `/close-shop` | no checklist | **PASS + context**: AskUserQuestion setup offer |
 | no bytheslice command | any | **PASS** |
 | any bytheslice command | `BTS_HOOKS_DISABLED=1` set | **PASS** — env var short-circuits all hooks |
 
