@@ -80,7 +80,7 @@ The skill refuses to proceed past Phase 0 if any check fails. The point is to av
    - "Stage and commit these changes? (yes / let me write the message / cancel)"
    - **Always provide a recommended answer in the available options.** Default recommendation: yes if the diff looks like the in-scope slice; "let me write" if it includes unexpected files.
    - On `yes`: stage all changes and derive the commit message **by mode**:
-     - **Per-slice mode** - use the v5 slice commit convention: **`feat(pie-N): N.M - <slice name>`** (swap `feat` for `fix`/`chore`/`docs` when the diff is purely a fix / infra-config / docs). One-line subject; short body listing touched files grouped by package/app. **If the slice touched UI** and `/sell-slice`/`/sell-pie` produced a closing-narrative paragraph (one paragraph: what was built · why this shape · what was left out · what reviewers should pay attention to), include it verbatim in the commit body before the file list. These per-slice commit messages are what the boundary PR preserves - they become the PR's commit-by-commit story, so keep each one self-describing.
+     - **Per-slice mode** - the slice's task commits (`feat(pie-N): N.M task K <task name>`) are already pushed. This is the slice's **final commit**, using the v5 slice commit convention: **`feat(pie-N): N.M <slice name>`** (swap `feat` for `fix`/`chore`/`docs` when the diff is purely a fix / infra-config / docs). One-line subject; short body listing touched files grouped by package/app. **If the slice touched UI** and `/sell-slice`/`/sell-pie` produced a closing-narrative paragraph (one paragraph: what was built · why this shape · what was left out · what reviewers should pay attention to), include it verbatim in the commit body before the file list. These task and slice commit messages are what the boundary PR preserves - they become the PR's commit-by-commit story, so keep each one self-describing. After the push, `git status --short` must be empty: the slice may not leave an untracked or modified file it created.
      - **Pie-completion / universal mode** - only reached here when the boundary run finds straggler uncommitted changes (most slices are already committed by the per-slice runs). Derive a conventional type from the diff (`feat:`/`fix:`/`chore:`/`docs:`) with a one-line subject and a file-list body.
    - On `let me write`: prompt for the message.
    - On `cancel`: stop here. Working tree unchanged.
@@ -168,7 +168,7 @@ Only runs after the PR is merged (by this skill in Phase 4 option 1, or by the u
 Surface to the user:
 - PR URL + merge commit SHA (+ note the merge strategy used: rebase / merge-commit)
 - Pie name + branch name (now deleted) + worktree path (now removed)
-- Per-slice commit count preserved on main
+- Slice and task commit count preserved on main
 - Total CI attempts (1 if green on first run; up to 3 if the fix loop ran) + ci-fix-attempter dispatch count / per-attempt summary if applicable
 - Final state: "On main, clean tree, fully synced with origin/main. Pie N closed - start the next pie in a fresh chat."
 
@@ -245,7 +245,7 @@ Walk the checklist that matches the mode. Do not report done until every applica
 ### Per-slice mode
 
 - [ ] Current branch confirmed not `main` / `master` (it is the pie branch).
-- [ ] Slice committed with a `feat(pie-N): N.M - <name>` (or fix/chore/docs) message.
+- [ ] Slice closed with a `feat(pie-N): N.M <name>` (or fix/chore/docs) final commit on top of its pushed task commits; tree clean.
 - [ ] Branch pushed to `origin`.
 - [ ] No PR opened, no CI watched - returned cleanly so the loop continues.
 

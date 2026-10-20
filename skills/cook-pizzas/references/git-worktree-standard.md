@@ -51,7 +51,9 @@ git worktree add -b pie-<n>-<scope> <path> origin/main      # cut from the REMOT
 ## 3. Phase 2 — Run (the Swarm)
 
 - **1:1 agent:worktree for parallel mutating work.** An agent's uncommitted edits are physically invisible to siblings, so a reviewer/tester agent reasons only from the artifact + spec, never the builder's half-finished state. This is the filesystem half of ByTheSlice's context-separation.
-- **Selective staging.** Stage only the files this task owns (`git add <paths>`), never `git add -A` blindly — keep the commit scoped to the slice.
+- **Selective staging.** Stage only the files this task owns (`git add <paths>`), never `git add -A` blindly, so the commit stays scoped to the task.
+- **Clean tree at every task boundary.** Each `### Task K` ends with a commit (`feat(pie-N): N.M task K <name>`) and a push; the slice closes with one `feat(pie-N): N.M <name>` commit. A slice may not end with an untracked or modified file it created.
+- **Clean up right after every merge,** from the primary checkout (§4): remove the merged branch's worktree and delete the branch, local and remote.
 - **⚠️ The Runtime Isolation Gap (the collision worktrees do NOT prevent).** Worktrees isolate *files*, not *the building's utilities*. Two agents will still collide on a shared **dev-server port** or a shared **database**. ByTheSlice mitigations, mandatory whenever work runs in parallel:
   - **Ports:** derive the dev-server / preview port from the worktree (offset per worktree), never hardcode `3000`. The `slice-tester` boots the dev server for the worktree it was handed; parallel pies must not share a port.
   - **Database:** the `slice-tester` seeds the **dev** DB. Its safeguards are exactly the collision fix and are non-negotiable — (a) the **non-prod guard** blocks any non-local/dev target (`destructive_operation` HITL), (b) every seeded row carries a unique **`bts_test_run_id`** marker so parallel runs never read/delete each other's data, (c) the **paired cleanup script runs in a finally block** and a residue check asserts the run's own marker is gone. Seeding must be keyed to the run, not the table.

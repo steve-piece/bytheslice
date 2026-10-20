@@ -218,7 +218,7 @@ Build the `/goal` condition string in this exact order:
 2. **Lifted Exit criteria** - copy every bullet from the slice's `**Exit criteria:**` block verbatim, preserving order. If the slice is `backend` / `db-schema` / `infrastructure` with zero UI surface (or a pure internal refactor with no rendered-output delta), drop the Library Preview Gate line if present.
 3. **Pipeline-level constraints** - append exactly these three lines:
    - `master checklist row for slice <SLICE_ID> in docs/plans/00_master_checklist.md shows Status: Completed`
-   - `working tree clean on the slice branch with the slice committed locally; not yet pushed`
+   - `working tree clean on the slice branch: every task commit and the final slice commit pushed, no untracked or modified file the slice created; no PR opened (default mode)`
    - `Pause on any HITL bubble surfaced by the orchestrator (Library Preview Gate, fix-loop exhaustion, prd_ambiguity, external_credentials, destructive_operation, creative_direction)`
 4. **Turn cap** - append: `Stop after 40 turns if not yet complete.`
 
@@ -236,7 +236,8 @@ Invoke `/goal <full condition string>`. Log: `Slice-completion goal set for slic
 - Branch naming: `feat/stage-<n>-<scope>` | `fix/stage-<n>-<scope>` | `chore/stage-<n>-<scope>` (on a nested checklist, the slice commits land on the **pie branch** when running under `/sell-pie`; standalone `/sell-slice` uses the per-slice branch above).
 - Prefer a git worktree per active slice/pie, cut from the **freshly-fetched `origin/main`** (never local `main`, which may be stale): `git fetch origin` then `git worktree add -b feat/stage-<n>-<scope> <path> origin/main`. Never implement directly on `main`/`master`. Worktree setup, isolation, merge, and cleanup follow [`../cook-pizzas/references/git-worktree-standard.md`](../cook-pizzas/references/git-worktree-standard.md).
 - **Merge-per-slice mode:** the branch is `pie-N-sN.M-<scope>` (on a flat checklist, `feat/stage-<n>-<scope>`), cut from freshly-fetched `origin/main` into its own worktree from the primary checkout (`PRIMARY=$(git worktree list --porcelain | sed -n '1s/^worktree //p')`): `git -C "$PRIMARY" fetch origin`, then `git -C "$PRIMARY" worktree add -b pie-N-sN.M-<scope> <path> origin/main`.
-- One checklist slice per commit; in the default `pie-pr` mode per-slice work does **not** open a PR (that is the pie boundary's job, handled by `/box-it-up`). Merge-per-slice mode opens the slice's own PR at closeout (Phase 6).
+- **Clean tree at every task boundary.** Each `### Task K` in the slice plan ends with a commit and a push: `feat(pie-N): N.M task K <task name>` (swap `feat` for `fix`/`chore`/`docs` to match the task; on a flat checklist, `feat(stage-N): task K <task name>`). The slice closes with one final commit, `feat(pie-N): N.M <slice name>`, carrying the checklist flip and any fix-loop patches. One slice per PR boundary, task commits inside. A slice may not end with an untracked or modified file it created.
+- In the default `pie-pr` mode per-slice work does **not** open a PR (that is the pie boundary's job, handled by `/box-it-up`). Merge-per-slice mode opens the slice's own PR at closeout (Phase 6).
 
 ### Phase 4 - Workflow A (produce)
 
@@ -270,7 +271,7 @@ Run as a `Workflow` (`pipeline()` per item; independent items may `parallel()`);
 3. Dispatch **`quality-reviewer`** with both prior outputs.
 4. If either reviewer returns `verdict: fail`, send findings back to a fresh builder dispatch and re-review. Repeat until both `pass`.
 5. Apply the curator's checklist diff for this item: flip `[ ]` → `[x]` only after both reviewers pass AND Workflow B is green for the slice.
-6. The builder commits its item on the slice branch using a conventional-commit message; the orchestrator does not flip checklist rows until verification passes.
+6. **Task boundary: commit + push.** Once the item's task clears both reviewers, commit it on the slice branch as `feat(pie-N): N.M task K <task name>` and push, so the tree is clean before the next task starts. A DB-schema change lands first as its own `chore(db): update schema for <item-id>` commit. The orchestrator does not flip checklist rows until verification passes.
 
 **Independent items pipeline / parallelize.** Items with no data dependency on each other may run as `parallel()` builder dispatches; dependent items chain in a `pipeline()`. Merge the per-item manifests into one slice manifest before Workflow B (the slice-level manifest is what `slice-tester` and `slice-verifier` consume).
 
@@ -363,7 +364,7 @@ If `slice-tester.overall == fail` OR `slice-verifier.overall == fail`, route the
 - 2nd fail → `debug-instrumenter` adds targeted `// INSTRUMENT` logging → re-run the failed verifier/tester → `fix-attempter` again with the richer evidence → re-run.
 - Cap 3 total loops. On 3rd persistent failure → bubble HITL with full evidence (the goal stays active so the loop resumes if the user resolves it).
 
-After green, if `debug-instrumenter` ran, strip `// INSTRUMENT` lines and commit a "remove debug instrumentation" sweep.
+After green, if `debug-instrumenter` ran, strip `// INSTRUMENT` lines. Fix-loop patches stay uncommitted until the loop is green; they land, instrumentation already stripped, in the slice's final commit (Phase 6), so no instrumentation ever reaches a commit.
 
 **Both verdicts must be `pass`** (or a half legitimately `skipped` for the slice type) before the slice is considered verified. Do not flip the slice's checklist rows or proceed to closeout until then.
 
@@ -371,20 +372,20 @@ After green, if `debug-instrumenter` ran, strip `// INSTRUMENT` lines and commit
 
 When every in-scope item is `[x]` and Workflow B is green:
 
-1. Flip slice status `In Progress` → `Completed` in `docs/plans/00_master_checklist.md` (commit this change on the slice branch).
-2. Confirm the slice branch has every commit it needs and the working tree is clean (`git status --short` empty).
+1. Flip slice status `In Progress` → `Completed` in `docs/plans/00_master_checklist.md`, then make the slice's **final commit** on the slice branch, `feat(pie-N): N.M <slice name>` (closing narrative in the body for UI slices), carrying the flip and any fix-loop patches, and push it.
+2. Confirm the slice branch has every commit it needs and the working tree is clean: `git status --short` empty, with no untracked or modified file the slice created. A leftover file is either committed with the slice (it belongs to it) or reported as a blocker; never leave it behind.
 3. Walk the **Completion Checklist** (below). The slice is not "ready to ship" until every box up through §4 is `[x]`.
 4. Report to the user using the **Progress Report Format**, ending with the **Handoff to `/box-it-up`** message.
 
 **Merge-per-slice mode (opt-in) does not stop here.** After steps 1-3, push the slice branch and run [`/box-it-up`](../box-it-up/SKILL.md)'s **Merge-per-slice closeout** (`--merge-slice`) internally, passing the branch, worktree path, slice id and name: PR `Slice N.M: <name>`, CI, up to 3 `ci-fix-attempter` rounds (still red halts with a HITL; the slice is never skipped or merged red), merge on green with a merge commit, then cleanup from the primary checkout (`pull --ff-only`, `worktree remove`, `branch -d`, remote delete, `worktree prune`). No merge approval is asked; report the merged PR in one notice instead of the handoff below. If this was the pie's last slice, the closeout writes the kitchen merge record once.
 
-**Default `pie-pr` mode: this skill stops here - at "slice committed locally, ready for review."** It does NOT push, open a PR, watch CI, merge, or clean up. That's [`/box-it-up`](../box-it-up/SKILL.md)'s job - re-scoped in v5 to the **pie boundary** (per-slice = commit + push only; PR + CI + merge happen once at pie completion). Running standalone, this hand-off is intentionally separated so you can run a manual visual UAT, do a local code review, or rebase against fresh main before deciding to ship.
+**Default `pie-pr` mode: this skill stops here - at "slice committed and pushed, ready for review."** It pushes the slice branch at every task boundary and at the final commit, but does NOT open a PR, watch CI, merge, or clean up. That's [`/box-it-up`](../box-it-up/SKILL.md)'s job - re-scoped in v5 to the **pie boundary** (per-slice = commit + push only; PR + CI + merge happen once at pie completion). Running standalone, this hand-off is intentionally separated so you can run a manual visual UAT, do a local code review, or rebase against fresh main before deciding to ship.
 
 #### Handoff to `/box-it-up`
 
 End your final message with:
 
-> Slice complete on branch `<branch>` - Workflow B green (`slice-tester` + `slice-verifier` both `pass`), master checklist updated, slice committed.
+> Slice complete on branch `<branch>` - Workflow B green (`slice-tester` + `slice-verifier` both `pass`), master checklist updated, task commits and the slice commit pushed, tree clean.
 >
 > **Next:** Review the diff at your pace (visual UAT, manual code review, anything else). When you're ready to ship, run [`/bytheslice:box-it-up`](../box-it-up/SKILL.md). Per-slice it commits + pushes only; at the **pie boundary** it opens one PR `Pie N`, runs CI once, pauses for your merge approval, then merges (preserving per-slice commits) + syncs main + cleans up the branch and worktree.
 >
@@ -419,7 +420,7 @@ After each item and at slice closeout:
 ## Hard Constraints
 
 - **Build plan must be authorized** before any producer subagent runs - UNLESS running under the `/sell-pie` loop or `flow.autoApproveBuildPlan` is `true` (C9), in which case it is auto-approved and logged, not stopped.
-- **One slice per commit; per-slice work opens no PR (default `pie-pr` mode).** Never bundle multiple checklist items unless the user explicitly approves it in Phase 2. The PR is opened at the pie boundary by `/box-it-up`. **Exception:** merge-per-slice mode opens, CI-checks and merges the slice's own PR at closeout, with a merge commit and no per-slice merge approval.
+- **One slice per PR boundary, task commits inside; per-slice work opens no PR (default `pie-pr` mode).** Every `### Task K` ends with a commit + push; the slice ends with one `feat(pie-N): N.M <slice name>` commit and a clean tree. Never bundle multiple checklist items unless the user explicitly approves it in Phase 2. The PR is opened at the pie boundary by `/box-it-up`. **Exception:** merge-per-slice mode opens, CI-checks and merges the slice's own PR at closeout, with a merge commit and no per-slice merge approval.
 - **Context separation is absolute.** The `slice-tester` receives ONLY the build manifest + Exit criteria + design-system path (+ dev URL / type / DB target). Never pass it the builder's reasoning or chat. The tester falsifies; it does not trust.
 - **Each static gate runs exactly once (C5).** `slice-verifier` carries already-green checks forward; never pay for the same lint/type/build/e2e twice across the slice.
 - **Viewports come from `verification.viewports` (C7); e2e thresholds from `verification.e2e` (C10).** Never hardcode a viewport list or run an e2e suite the config gated `"off"`.
@@ -471,12 +472,12 @@ Skip only if the slice is `type: backend`, `db-schema`, or `infrastructure` with
 - [ ] Inline notes added next to any item whose scope deviated from the plan.
 - [ ] Edits committed on the slice branch (not on `main`).
 
-### 3. Slice Committed Locally (ready for review)
+### 3. Slice Committed and Pushed (ready for review)
 
 - [ ] Branch follows naming: `feat/` | `fix/` | `chore/` + `stage-<n>-<scope>` (or the pie branch under `/sell-pie`).
-- [ ] Slice committed on the feature/pie branch (no uncommitted leftover changes).
+- [ ] Every task committed and pushed at its boundary (`feat(pie-N): N.M task K <task name>`); the final slice commit `feat(pie-N): N.M <slice name>` pushed; no untracked or modified file the slice created.
 - [ ] `slice-verifier` returned `verdict: pass`, including its CI-integrity check (no existing workflow gate weakened) and the e2e coverage the pie-boundary CI will gate on.
-- [ ] One slice = one commit's worth of changes. No bundling unless the user authorized it in Phase 2. (Per-slice = commit + push; no PR yet.)
+- [ ] One slice per PR boundary, task commits inside. No bundling unless the user authorized it in Phase 2. (Default mode: commit + push; no PR yet.)
 
 ### 4. E2E / behavioral coverage (if applicable)
 

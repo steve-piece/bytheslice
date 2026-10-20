@@ -175,8 +175,9 @@ pnpm test
 
 **Commit:**
 \`\`\`bash
-# v5 per-slice commit convention (one commit per slice, pushed to the pie branch — no PR until the pie boundary):
-git commit -m "feat(pie-N): N.M — [slice name]"
+# v5 task commit convention: commit + push at every task boundary (swap feat for fix/chore/docs to match the task).
+# The slice's last commit is feat(pie-N): N.M [slice name]. One slice per PR boundary, task commits inside.
+git commit -m "feat(pie-N): N.M task 1 [task title]"
 \`\`\`
 
 ---

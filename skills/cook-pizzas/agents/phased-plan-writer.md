@@ -132,7 +132,7 @@ Every stage plan file must include, in order:
    - **Files**: explicit workspace-relative paths to create or modify
    - **Steps**: ordered, imperative instructions
    - **Contract**: the interface this task exposes to later slices and to the builder, per the Code budget below. Table and column DDL, exported symbol signatures, route paths, prop shapes, behaviors and edge cases in prose, and the unit tests to write named by case. Never a full implementation body.
-   - **Commit**: suggested conventional-commit message
+   - **Commit**: the task-boundary commit message, `feat(pie-N): N.M task K <task title>` (swap `feat` for `fix`/`chore`/`docs` to match the task). Every task ends with a commit + push; the slice's last commit is `feat(pie-N): N.M <slice name>`.
 9. **Exit criteria**: testable, binary conditions consumed verbatim by `/bytheslice:sell-slice` Phase 2.5 as the `/goal` condition. Every line MUST be transcript-verifiable from the conversation alone — name the specific test command and exit code, the subagent verdict, the captured screenshot, or the file path Claude has read. Write `pnpm test --filter @repo/auth exits 0` not "tests pass". Write `quality-reviewer returned verdict: pass for every task` not "code quality is high". For UI-touching stages, include the Library Preview Gate line. See `../references/templates.md` → "Exit-criteria contract (consumed by `/goal`)" for the full contract.
 
 ## Code budget: contracts, not implementations

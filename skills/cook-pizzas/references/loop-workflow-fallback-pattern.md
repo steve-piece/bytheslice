@@ -80,7 +80,7 @@ Iterate the active pie's slices in dependency order. Per iteration:
 
 1. Pick the next incomplete slice.
 2. Run that slice's produce→verify cycle (itself a `Workflow` in the normal path — if `Workflow` is *also* unavailable, nest the manual-dispatch fallback from this same step inside it).
-3. On the slice's per-affordance/gate verdicts passing: commit `feat(pie-N): N.M — <name>` + push, **no PR**, mark the slice `[x]`.
+3. On the slice's per-affordance/gate verdicts passing: mark the slice `[x]`, make the final slice commit `feat(pie-N): N.M <name>` on top of the task commits already pushed at each task boundary, and push, **no PR** (default mode; merge-per-slice mode then runs `/box-it-up --merge-slice`).
 4. Re-evaluate the pie-completion predicate. If every slice is `[x]` → **stop the loop** (the self-paced analogue of not scheduling the next wake) and hand off to `/box-it-up` to open the one Pie PR. If not → continue to the next slice.
 
 Crucially, the conductor passes **only the build manifest + Exit criteria + design-system path** to the slice-tester — never the builder's reasoning. Self-pacing in one context makes it tempting to let context bleed between agents; do not. Re-state the context-separation rule to yourself each iteration.
