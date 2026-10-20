@@ -170,7 +170,7 @@ Dispatch in one batch:
 
 1. `discovery` - codebase recon
 2. `checklist-curator` - slice scoping + checklist diff proposal
-3. `rules-loader` - project rules file + `bytheslice.config.json` resolution (returns the resolved `verification.*` and `flow.*` values Workflow B / the build-plan gate consume)
+3. `rules-loader` - project rules file + `bytheslice.config.json` resolution (returns the resolved `verification.*`, `flow.*`, `review.default` and `delivery.*` values that Workflow B, the build-plan and library gates, and the closeout consume)
 
 Merge their reports into the Build Plan in Phase 2.
 

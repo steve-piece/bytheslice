@@ -32,7 +32,7 @@ It is intentionally a **separate** skill so you can review the whole pie locally
 - In **per-slice** mode, if the active Pie still has unfinished slices the skill must NOT try to open a PR - that is correct, expected mid-pie behavior, not an error.
 - In **pie-completion** mode, if the master checklist shows the active Pie still has unchecked slices (`### Slice N.M` is `[ ]`), STOP and surface as `needs_human: true` with `hitl_category: prd_ambiguity`: *"Pie N still has unfinished slices - finish them via /sell-pie before boxing the pie, or confirm you want to ship a partial pie."* Never silently ship an incomplete pie.
 
-If a master checklist exists and the branch maps to a pie row, `/box-it-up` flips that **Pie's** status from `In Progress` to `Completed` after a successful merge (Phase 5). That is the only sequential-flavored behavior - best-effort enhancement, never a precondition.
+If a master checklist exists and the branch maps to a pie row, `/box-it-up` flips that **Pie's** status from `In Progress` to `Completed` and commits the flip **on the pie branch before the PR opens** (Phase 1 step 4), so the status reaches `main` with the merge and never as an uncommitted edit on `main`. That is the only sequential-flavored behavior - best-effort enhancement, never a precondition.
 
 ## Subagent Roster
 
@@ -83,6 +83,7 @@ The skill refuses to proceed past Phase 0 if any check fails. The point is to av
    - On `cancel`: stop here. Working tree unchanged.
 2. `git push origin "$BRANCH"` - push to the pie branch. If the remote rejects (non-fast-forward, etc.), STOP and surface as `destructive_operation` HITL - never auto force-push.
 3. **Per-slice mode ends here.** Return the per-slice contract (`status: complete`, the commit SHA + branch). **Do not open a PR, do not watch CI, do not merge.** The `/sell-pie` loop advances to the next slice; CI fires only at the pie boundary.
+4. **Flip the Pie's checklist status (pie-completion mode only), before the PR opens.** In `docs/plans/00_master_checklist.md`, set the active `## Pie N` status from `In Progress` to `Completed`, commit it on the pie branch as `chore(pie-N): mark Pie N completed`, and push. The flip rides into `main` with the merge, so `main` never carries an uncommitted checklist edit (the pre-commit guard blocks commits on `main`, and Phase 5 requires a clean tree). If the operator holds or cancels the PR, the flip stays on the unmerged branch only. Skip silently in universal mode (no checklist / no pie row).
 
 ### Phase 2 - Open the Pie PR (or Reuse Existing) *(pie-completion / universal)*
 
@@ -147,17 +148,16 @@ Only runs after the PR is merged (by this skill in Phase 4 option 1, or by the u
 1. `gh pr view "$PR_NUMBER" --json state,number,mergedAt` - confirm state is `MERGED`. If not, STOP. Don't pull or delete branches on a falsely-assumed merge.
    - **Pie-completion mode only, before cleanup:** record the confirmed merge for the local kitchen. Pipe a fresh successful `gh pr view "$PR_NUMBER" --json state,number,mergedAt` response to `node "<this-skill-directory>/record-kitchen-merge.js" --mode pie --pie "<active-pie-number>" --project "${CLAUDE_PROJECT_DIR:-$PWD}"`. The helper validates `MERGED`, a PR number and a merge timestamp, then atomically replaces the single bounded `.claude/.bytheslice-state/kitchen/merged-pie.json` record with only version, pie, PR number and merge time. Use this skill's installed absolute directory for the helper path. If the read or write fails, report missing kitchen evidence; do not invent success.
    - Never run this writer in `--slice` or universal mode, before merge confirmation, or from skill/Stop log events. A skill finish cannot prove a PR merged. The kitchen reader makes no network calls and ignores malformed, stale, future or wrong-pie records.
-2. `git checkout main` - if local uncommitted changes would be overwritten, STOP and surface as `destructive_operation` HITL. Never auto-stash.
-3. `git pull --ff-only origin main` - fast-forward only. If this fails (history diverged), STOP and surface as `destructive_operation` HITL.
-4. Confirm the PR's merge result is now in local main: `git log --oneline | grep -q "$PR_NUMBER\|<merge sha>"` (for a rebase-merge, confirm the slice commits landed). If absent, STOP and surface - something's odd.
-5. **Flip the Pie's checklist status (pie-completion mode only):** in `docs/plans/00_master_checklist.md`, set the active `## Pie N` status from `In Progress` to `Completed`. Skip silently in universal mode (no checklist / no pie row).
-6. `git branch -d "$BRANCH"` - delete local pie branch (safe delete; refuses if unmerged commits exist, which is what we want).
-7. `git push origin --delete "$BRANCH"` - delete remote branch. If GitHub auto-deleted on merge, this returns "remote ref does not exist" - fine; record it but don't fail.
-8. **Remove the pie worktree (if `IS_WORKTREE` from Phase 0 was true):**
-   - `cd <main-worktree-path>` so we're not deleting our own cwd
-   - `git worktree remove "$WORKTREE_PATH"` - remove the pie worktree directory
-   - `git worktree prune` - clear stale metadata
-9. `git status --short` - must be empty. `git rev-parse --abbrev-ref HEAD` - must be `main`. `git status -uno` - confirm fully synced with remote. The pie is closed; the next pie starts in a fresh chat with a fresh worktree.
+**Every step after the merge check runs from the primary checkout, never from the pie worktree.** `main` is checked out in the primary checkout, so `git checkout main` inside the pie worktree fails, and git refuses to delete a branch a worktree still holds. Resolve the primary checkout once: `PRIMARY=$(git worktree list --porcelain | sed -n '1s/^worktree //p')` (the first entry is always the main working tree). The Pie's checklist flip is already committed on the branch (Phase 1 step 4), so nothing here edits a tracked file.
+
+2. `cd "$PRIMARY"` so the shell is not inside the worktree about to be removed. If `IS_WORKTREE` was false (the branch was checked out in the primary checkout itself), run `git -C "$PRIMARY" checkout main`; if that would overwrite uncommitted changes, STOP and surface as `destructive_operation` HITL. Then confirm `git -C "$PRIMARY" rev-parse --abbrev-ref HEAD` is `main` and `git -C "$PRIMARY" status --short` is empty. If the primary checkout sits on another branch or is dirty, STOP (`destructive_operation`): never switch, stash or overwrite a checkout the operator may be using.
+3. `git -C "$PRIMARY" pull --ff-only origin main` - fast-forward only. If this fails (history diverged), STOP and surface as `destructive_operation` HITL.
+4. Confirm the PR's merge result is now in local main: `git -C "$PRIMARY" log --oneline | grep -q "$PR_NUMBER\|<merge sha>"` (for a rebase-merge, confirm the slice commits landed). If absent, STOP and surface - something's odd.
+5. **Remove the pie worktree first (if `IS_WORKTREE` from Phase 0 was true):** `git -C "$PRIMARY" worktree remove "$WORKTREE_PATH"` (never `rm -rf`). This must precede the branch delete: git refuses to delete a branch that a worktree still has checked out.
+6. `git -C "$PRIMARY" branch -d "$BRANCH"` - delete the local pie branch (safe delete; refuses if unmerged commits exist, which is what we want). After a rebase-merge the commits on `main` carry new SHAs, so `-d` passes only while the branch's upstream ref still exists; if it refuses, confirm step 4 found every slice commit subject on `main` and surface `destructive_operation` before any `-D`.
+7. `git push origin --delete "$BRANCH"` - delete the remote branch. If GitHub auto-deleted it on merge (or `gh pr merge --delete-branch` did), this returns "remote ref does not exist" - fine; record it but don't fail. From a worktree, run `gh pr merge` without `--delete-branch`: that flag also tries to switch the local checkout to `main`, which the primary checkout holds.
+8. `git -C "$PRIMARY" worktree prune` - clear stale worktree metadata.
+9. `git -C "$PRIMARY" status --short` - must be empty. `git -C "$PRIMARY" rev-parse --abbrev-ref HEAD` - must be `main`. `git -C "$PRIMARY" status -uno` - confirm fully synced with remote. The pie is closed; the next pie starts in a fresh chat with a fresh worktree.
 
 ### Phase 6 - Final Report *(pie-completion / universal)*
 
@@ -194,6 +194,8 @@ HITL categories the skill produces:
 - **Never auto-merge a PR with failing required checks.** Phase 4 only runs when CI is green on the latest head SHA.
 - **Never box an incomplete pie.** If any slice under the active Pie is still `[ ]`, STOP (`prd_ambiguity`).
 - **Never `git stash` on the user's behalf.** If `git checkout main` would overwrite uncommitted changes, STOP.
+- **Clean up from the primary checkout, in order.** Sync `main` with `git -C "$PRIMARY" pull --ff-only`, then `worktree remove`, then `branch -d`, then the remote delete, then `worktree prune`. Never check out `main` inside a worktree, and never delete a branch a worktree still holds.
+- **Never edit a tracked file on `main`.** The Pie's checklist flip is committed on the pie branch before the PR opens.
 - **Never auto-resolve merge conflicts during cleanup pull.** `--ff-only` fails fast; the user resolves.
 - **Cap the CI fix loop at 3 attempts.** Beyond that → HITL `creative_direction`. No "one more try."
 - **Cap CI watch at 30 minutes per attempt.** Beyond that → HITL `external_credentials`.
@@ -243,6 +245,7 @@ Walk the checklist that matches the mode. Do not report done until every applica
 #### 2. Pie PR open
 
 - [ ] Any straggler changes committed; branch pushed to `origin`.
+- [ ] (pie mode) Pie status flipped `In Progress` → `Completed` and committed on the pie branch before the PR opened.
 - [ ] One PR open against `main` - titled `Pie N: <name>` for a pie (or reused existing).
 - [ ] PR URL surfaced to the user.
 
@@ -260,13 +263,13 @@ Walk the checklist that matches the mode. Do not report done until every applica
 
 #### 5. Branch + worktree cleanup
 
-- [ ] On `main` locally.
-- [ ] `git pull --ff-only origin main` succeeded.
-- [ ] (pie mode) Pie status flipped `In Progress` → `Completed` in the master checklist.
+- [ ] Cleanup ran from the primary checkout (`git -C "$PRIMARY" ...`), which is on `main`.
+- [ ] `git -C "$PRIMARY" pull --ff-only origin main` succeeded.
+- [ ] Pie worktree removed via `git worktree remove` (if a worktree was used), before the branch delete.
 - [ ] Local pie branch deleted (`git branch -d`).
 - [ ] Remote pie branch deleted (or already auto-deleted by GitHub).
-- [ ] Pie worktree removed via `git worktree remove` and pruned via `git worktree prune` (if a worktree was used).
-- [ ] `git status --short` empty; `git status -uno` confirms fully synced with `origin/main`.
+- [ ] `git worktree prune` ran.
+- [ ] `git status --short` empty in the primary checkout; `git status -uno` confirms fully synced with `origin/main`.
 
 #### 6. Final report emitted
 

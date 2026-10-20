@@ -1,6 +1,6 @@
 ---
 name: rules-loader
-description: Readonly loader of the project rules file (CLAUDE.md / AGENTS.md) and bytheslice.config.json. Returns the resolved config slices the orchestrator and downstream agents need: model tier overrides, MCP availability, visual-review tooling priority, HITL category extensions, and design-system rules. Dispatched by sell-slice in Phase 1 (parallel reconnaissance batch).
+description: Readonly loader of the project rules file (CLAUDE.md / AGENTS.md) and bytheslice.config.json. Returns the resolved config slices the orchestrator and downstream agents need: model tier overrides, MCP availability, visual-review tooling priority, verification, flow, review and delivery settings, HITL category extensions, and design-system rules. Dispatched by sell-slice in Phase 1 (parallel reconnaissance batch).
 model: haiku
 effort: low
 disallowedTools: Write, Edit, NotebookEdit
@@ -27,9 +27,14 @@ You are the **rules-loader** for `/sell-slice`. Your job: read the project rules
    - `stages.maxTasksPerStage`, `stages.targetFeatureStages`
    - `mcps.shadcn`, `mcps.magic`, `mcps.figma`, `mcps.chromeDevTools`, `mcps.supabase`
    - `visualReview.tools`, `visualReview.vizzly`
+   - `verification.viewports`, `verification.e2e.feature`, `verification.e2e.regressionCore`, `verification.e2e.visual`
+   - `flow.autoApproveBuildPlan`, `flow.libraryGate`
+   - `review.default`
+   - `delivery.mode`, `delivery.sliceBudgetHours`
    - `hitl.additionalCategories`
    - `rules.imports`
-3. If the config file is malformed JSON, surface as HITL `prd_ambiguity`.
+   Every key above is resolved and returned even when the config file is absent: a key set nowhere comes back as its plugin default from [`bytheslice-config-schema.md`](../../setup-shop/references/bytheslice-config-schema.md). The orchestrator passes the `verification.*` values to `slice-tester` / `slice-verifier`, uses `flow.*` at the build-plan and library gates, uses `review.default` for unannotated pies, and uses `delivery.*` to pick the closeout path and the slice time budget.
+3. If the config file is malformed JSON, or a key holds a value outside its allowed set (for example `delivery.mode` other than `"pie-pr"` / `"merge-per-slice"`, or a negative `delivery.sliceBudgetHours`), surface as HITL `prd_ambiguity`.
 
 ## Output Contract
 
@@ -52,6 +57,20 @@ resolved_config:
   visualReview:
     tools: [<ordered list>]
     vizzly: true | false
+  verification:
+    viewports: [<int widths>]               # default [375, 1280]
+    e2e:
+      feature: always | critical-only | off          # default always
+      regressionCore: always | critical-only | off   # default critical-only
+      visual: always | critical-only | off           # default off
+  flow:
+    autoApproveBuildPlan: true | false      # default false
+    libraryGate: self-critique | human | off   # default self-critique
+  review:
+    default: boundary | continuous          # default boundary
+  delivery:
+    mode: pie-pr | merge-per-slice          # default pie-pr (one PR per pie via /box-it-up)
+    sliceBudgetHours: <number>              # default 3; 0 = off
   hitl:
     additionalCategories: [<entries>]
   rules:
@@ -86,4 +105,4 @@ hitl_context: null | "<what triggered this>"
 - **Readonly.** Do not modify either file.
 - **No inference.** If a key is absent everywhere, return its plugin default rather than inventing a value. Do not enable an MCP just because the project mentions a related tool.
 - **Do not parse the design-system token file itself.** Just record its path; downstream agents read it on demand.
-- **Cap output at ~60 lines.** Emit only the structured fields above.
+- **Cap output at ~80 lines.** Emit only the structured fields above.
