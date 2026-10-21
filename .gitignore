@@ -15,3 +15,6 @@ node_modules/
 # Generated per-project plans (master checklist + stage files), not authored docs.
 docs/plans/
 .claude/.bytheslice-state/
+
+# The Pass ledger (one per project, append-only, never committed).
+.bytheslice/
