@@ -74,6 +74,8 @@ If the file exists but parses as malformed JSON, **stop before dispatching any P
 
 At every phase boundary, if the `bts_status` tool is available call it instead of re-reading the checklist; if it is not, read the checklist as before.
 
+Team mode stays off: an agent-team teammate has no `Workflow` and no `ScheduleWakeup` (spike 5.6), so it cannot run `/sell-pie`'s per-slice Workflow; keep pies sequential in this chat. The Pass still shows any teammates (`team: n bakers` in `bts_status`), and a teammate that must wait can call `bts_wake { afterMs, note }` in place of `ScheduleWakeup`.
+
 ### Phase 0 — Read the master checklist and build the pie queue
 
 1. Read `docs/plans/00_master_checklist.md`.

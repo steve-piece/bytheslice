@@ -1,5 +1,5 @@
 // mod/register.tsx
-// The Pass hooks module, wiring only: version gate, ledger capture, checks that warn and never block, the stall watchdog, the HITL inbox, the bts tools, the pass command, pane, band and hint.
+// The Pass hooks module, wiring only: version gate, ledger capture, checks that warn and never block, the stall watchdog, the HITL inbox, team mode (roster, teammate turns, idle and done), the bts tools, the pass command, pane, band and hint.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
@@ -17,8 +17,10 @@ import { notifyPiesReady } from './notify.ts'
 import { gate, isChecklistPath, isLimited, refresh, watchChecklist } from './projection.ts'
 import { checksText, drawPane, openPane, togglePane } from './rail.tsx'
 import { reconcileText } from './reconcile.ts'
+import { captureTeammateTurn, recordDone, recordIdle, refreshTeam, teamActive, teammateOf } from './team.ts'
 import { registerTools, serveNote, serveStatus } from './tools.ts'
-import { stamp, startWatchdog, stopWatchdog } from './watchdog.ts'
+import { stamp, stampTurn, startWatchdog, stopWatchdog } from './watchdog.ts'
+import { serveWake, stopWakes } from './wake.ts'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
 const ledgerAtom = atom({ plugin: 'bytheslice', key: 'pass.ledger' } as const, null)
@@ -48,9 +50,13 @@ export const register: Register = on => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
+  // A loop's turn start stamps it at once (a teammate's running time counts
+  // from it); a teammate's also refreshes the roster, which shows it running.
   on('turn.start', async ($, e, next) => {
-    await stamp($, e.agentId).catch(() => false)
-    return next(e)
+    await stampTurn($, e.agentId).catch(() => false)
+    const started = await next(e)
+    if (e.agentId !== undefined && (await teammateOf($, e.agentId).catch(() => null))) await refreshTeam($).catch(() => null)
+    return started
   }).catch(($, e, next) => next(e))
 
   on('session.start', async ($, e, next) => {
@@ -69,7 +75,8 @@ export const register: Register = on => {
       await primeChecks($).catch(() => undefined)
       await watchChecklist($, () => reload($))
       await pollAgents($)
-      await startPulse($)
+      // Every five seconds; the roster reads the ledger only when a teammate moved.
+      await startPulse($, () => refreshTeam($))
       // Every 30 seconds: flags stalled agents; it warns and never stops one.
       await startWatchdog($)
       // Unasked, the engine places the pane only on a wide terminal; it waits undrawn below that.
@@ -82,6 +89,7 @@ export const register: Register = on => {
   on('session.end', async ($, e, next) => {
     const ended = await next(e)
     stopWatchdog()
+    stopWakes()
     if (e.reason === 'clear' && !(await isLimited($))) await startWatchdog($).catch(() => undefined)
     return ended
   }).catch(($, e, next) => next(e))
@@ -116,6 +124,13 @@ export const register: Register = on => {
     result: 'not recorded: the Pass could not write the note. Nothing was halted.',
   }))
 
+  // A teammate's stand-in for ScheduleWakeup: arms one timer and answers at once.
+  on('tool.call', { tool: ['mcp__bytheslice__bts_wake', /^mcp__\w*bytheslice\w*__bts_wake$/] }, async ($, e) => ({
+    result: await serveWake($, inputOf(e), e.agentId),
+  })).catch(() => ({
+    result: 'not armed: the Pass could not arm that wake. Nothing was halted.',
+  }))
+
   // Records and notifies, then returns at once: the skill's own HITL flow (ask in chat and stop) is what waits.
   on('tool.call', { tool: ['mcp__bytheslice__bts_hitl', /^mcp__\w*bytheslice\w*__bts_hitl$/] }, async ($, e) => ({ result: await serveHitl($, inputOf(e)) })).catch(() => ({
     result: 'not recorded: the Pass could not record that HITL item; ask the operator in chat anyway. Nothing was halted.',
@@ -136,6 +151,7 @@ export const register: Register = on => {
     const fix = await checkFixSpawn($, e).catch(() => ({ spawn: null, findings: [] }))
     const started = await next(e)
     await markSpawn($, e, started).catch(() => undefined)
+    if (started.teammateId !== undefined) await refreshTeam($, { force: true }).catch(() => null)
     if (started.deny === undefined) {
       await countFix($, fix.spawn).catch(() => undefined)
       await trackSpawn($, started.agentId, judged.track).catch(() => undefined)
@@ -149,6 +165,8 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     await captureTurn($, e).catch(() => undefined)
+    // A teammate's turn is one usage row on its pie, and the roster counts it.
+    if ((await captureTeammateTurn($, e).catch(() => null)) !== null) await refreshTeam($, { force: true }).catch(() => null)
     const drift = await checkDrift($, e).catch(() => ({ findings: [], parent: null }))
     await reportToModel($, drift.findings, drift.parent).catch(() => [])
     return done
@@ -160,17 +178,36 @@ export const register: Register = on => {
   on('skill.prompt', async ($, e, next) => {
     const prompt = await next(e)
     await trackSkill($, e.skill).catch(() => null)
-    await captureSkill($, e.skill).catch(() => [])
+    // It names no loop: with a team, the Skill tool call records whose start it was.
+    if (!(await teamActive($).catch(() => false))) await captureSkill($, e.skill).catch(() => [])
     return prompt
   }).catch(($, e, next) => next(e))
 
+  // In a teammate's loop the start is that teammate's: its pie, its address on the rows.
   on('tool.call', { tool: 'Skill' }, async ($, e, next) => {
     const ran = await next(e)
     if (ran.deny === undefined && ran.isError !== true) {
       await trackSkill($, e.skill).catch(() => null)
-      await captureSkill($, e.skill).catch(() => [])
+      const baker = await teammateOf($, e.agentId).catch(() => null)
+      await captureSkill($, e.skill, baker ? { teammateId: baker.teammateId, pie: baker.pie } : null).catch(() => [])
+      if (baker) await refreshTeam($, { force: true }).catch(() => null)
     }
     return ran
+  }).catch(($, e, next) => next(e))
+
+  // Observe only: a teammate going idle and a teammate's task done land in the
+  // ledger once next let them happen (a settings hook beneath may keep the
+  // teammate working, or refuse the completion: then nothing is recorded).
+  on('classic.TeammateIdle', async ($, e, next) => {
+    const out = await next(e)
+    if (out.block === undefined) await recordIdle($, e).catch(() => null)
+    return out
+  }).catch(($, e, next) => next(e))
+
+  on('classic.TaskCompleted', async ($, e, next) => {
+    const out = await next(e)
+    if (out.block === undefined) await recordDone($, e).catch(() => null)
+    return out
   }).catch(($, e, next) => next(e))
 
   on('classic.UserPromptExpansion', async ($, e, next) => {

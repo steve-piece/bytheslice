@@ -1,5 +1,5 @@
 // mod/tools.ts
-// The model's view of the Pass: bts_status (the same facts the pane shows, open HITL items included), bts_note (a decision note in the ledger) and bts_hitl's registration.
+// The model's view of the Pass: bts_status (the same facts the pane shows, open HITL items and the team roster included), bts_note (a decision note in the ledger), and bts_hitl's and bts_wake's registration.
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
@@ -10,13 +10,16 @@ import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, counts } from './projection.ts'
 import { runningFor } from './rail.tsx'
 import { mismatchLine } from './reconcile.ts'
-import type { PassChecklist, PassHitlItem, PassLive, PassProjection, PassSliceView } from './types'
+import { bakersWord } from './team.ts'
+import type { PassBaker, PassChecklist, PassHitlItem, PassLive, PassProjection, PassSliceView, PassTeam } from './types'
+import { registerWake } from './wake.ts'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
 const ledgerAtom = atom({ plugin: 'bytheslice', key: 'pass.ledger' } as const, null)
 const liveAtom = atom({ plugin: 'bytheslice', key: 'pass.live' } as const, { at: 0, agents: [] })
 const branchAtom = atom({ plugin: 'bytheslice', key: 'pass.branch' } as const, null)
 const toolsAtom = atom({ plugin: 'bytheslice', key: 'pass.tools' } as const, [])
+const teamAtom = atom({ plugin: 'bytheslice', key: 'pass.team' } as const, { at: 0, bakers: [] })
 
 export const STATUS_TOOL = 'bts_status'
 export const NOTE_TOOL = 'bts_note'
@@ -24,6 +27,8 @@ export const NOTE_MAX = 2000
 export const STATUS_LINES = 40
 /** Open HITL items bts_status lists one by one before it counts the rest. */
 export const STATUS_HITL = 3
+/** Bakers bts_status lists one by one before it counts the rest. */
+export const STATUS_BAKERS = 4
 
 /** The names a session lists the tools under (`mcp__<plugin>__<name>`); register.tsx matches them. */
 export const STATUS_LISTED = 'mcp__bytheslice__bts_status'
@@ -32,7 +37,8 @@ export const NOTE_LISTED = 'mcp__bytheslice__bts_note'
 const STATUS_DESCRIPTION = [
   'The Pass status for this ByTheSlice project: the active pie and slice, each slice of the pie with its status',
   '(queued, building, testing, verifying, fixing, done) and last verdicts, live agents, the fix loop as n/3,',
-  'open HITL questions, checklist and ledger mismatches, and the next expected action.',
+  'open HITL questions, the agent team roster (team: n bakers) in team mode, checklist and ledger mismatches,',
+  'and the next expected action.',
   'Call it at every phase boundary instead of re-reading docs/plans/00_master_checklist.md.',
   'It reports facts from the ledger and the kitchen activity log; it never halts or refuses anything.',
 ].join(' ')
@@ -43,7 +49,7 @@ const NOTE_DESCRIPTION = [
   'Returns ok once the note is recorded.',
 ].join(' ')
 
-/** Registers bts_status, bts_note and bts_hitl with their schemas in the prompt's tool list; resolves the listed names. */
+/** Registers bts_status, bts_note, bts_hitl and bts_wake with their schemas in the prompt's tool list; resolves the listed names. */
 export async function registerTools($: EngineInterface): Promise<string[]> {
   const listed: string[] = []
   const status = await $.tool.register({
@@ -79,6 +85,7 @@ export async function registerTools($: EngineInterface): Promise<string[]> {
   })
   listed.push(note.tool)
   listed.push(await registerHitl($))
+  listed.push(await registerWake($))
   await update($, toolsAtom, () => listed).catch(() => undefined)
   return listed
 }
@@ -135,9 +142,19 @@ export function nextAction(c: PassChecklist | null, p: PassProjection | null): s
   return `wait for slice-verifier on Slice ${slice.id}`
 }
 
+/** One baker as bts_status lists it: address, pie, status, turns and how long since its last activity. */
+export function bakerLine(baker: PassBaker, now: number): string {
+  const pie = baker.pie === null ? 'no pie yet' : `Pie ${baker.pie}`
+  const turns = `${baker.turns} turn${baker.turns === 1 ? '' : 's'}`
+  return `${baker.teammateId} · ${pie} · ${baker.status} · ${turns} · last ${runningFor(now - baker.lastT)} ago`
+}
+
 function liveWords(live: PassLive, p: PassProjection | null, now: number): string {
   if (live.at > 0) {
-    const running = live.agents.filter(a => a.status === 'running' || a.status === 'pending' || a.status === 'waiting')
+    // Teammates are listed under team: below, not as live agents.
+    const running = live.agents.filter(
+      a => a.teammateId === undefined && (a.status === 'running' || a.status === 'pending' || a.status === 'waiting'),
+    )
     if (running.length === 0) return 'none'
     return running.map(a => `${a.role} ${a.status} ${runningFor(now - a.startedAt)}`).join(', ')
   }
@@ -157,10 +174,12 @@ export function statusReport(
     live: PassLive
     branch: string | null
     now: number
+    team?: PassTeam
   },
   scope: 'active' | 'all' = 'active',
 ): string {
   const { checklist: c, projection: p, live, branch, now } = view
+  const bakers = view.team?.bakers ?? []
   const lines: string[] = []
   if (!c) {
     lines.push('The Pass: no checklist at docs/plans/00_master_checklist.md.')
@@ -208,6 +227,11 @@ export function statusReport(
     lines.push(`Fix loop: ${sv?.fixLoop ?? 0}/${FIX_CAP}`)
   }
   lines.push(`Live agents: ${liveWords(live, p, now)}`)
+  if (bakers.length > 0) {
+    lines.push(`team: ${bakersWord(bakers.length)} (teammates, one pie each; bts_wake wakes an idle one after a delay)`)
+    for (const baker of bakers.slice(0, STATUS_BAKERS)) lines.push(`  - ${bakerLine(baker, now)}`)
+    if (bakers.length > STATUS_BAKERS) lines.push(`  and ${bakers.length - STATUS_BAKERS} more (the pane lists them all)`)
+  }
   const open = p?.hitl?.open ?? []
   if (open.length === 0) lines.push('Open HITL: none')
   else {
@@ -241,15 +265,16 @@ async function nowOf($: EngineInterface): Promise<number> {
 
 /** Serves bts_status from the atoms and the projection alone. */
 export async function serveStatus($: EngineInterface, input: Record<string, unknown>): Promise<string> {
-  const [checklist, projection, live, branch, now] = await Promise.all([
+  const [checklist, projection, live, branch, team, now] = await Promise.all([
     read($, checklistAtom),
     read($, ledgerAtom),
     read($, liveAtom),
     read($, branchAtom),
+    read($, teamAtom),
     nowOf($),
   ])
   const scope = input.scope === 'all' ? 'all' : 'active'
-  return statusReport({ checklist, projection, live, branch, now }, scope)
+  return statusReport({ checklist, projection, live, branch, now, team }, scope)
 }
 
 /** Serves bts_note: appends one note row (text cut to 2,000 characters) and answers `ok`. */
