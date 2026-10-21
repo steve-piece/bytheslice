@@ -14,7 +14,6 @@
 set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PRECHECK="$HERE/precheck-skill.sh"
 SHOP_STATUS="$HERE/shop-status.sh"
 COMMIT_GUARD="$HERE/pre-commit-guard.sh"
 STAGE_PLAN_GUARD="$HERE/stage-plan-guard.sh"
@@ -189,165 +188,6 @@ write_state() {
 {"session_id":"$sid","skill":"$skill","timestamp":"$ts"}
 EOF
 }
-
-####################################################################
-# precheck-skill.sh
-####################################################################
-
-echo
-echo "## precheck-skill.sh"
-
-# /sell-slice without checklist → setup context, never BLOCK
-FIX=$(mk_fixture)
-CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/sell-slice","session_id":"s1"}'
-assert_exit "sell-slice no checklist" 0
-assert_contains "sell-slice no checklist offers setup" "AskUserQuestion tool to ask the user whether to set up ByTheSlice"
-rm -rf "$FIX"
-
-# /sell-slice mentioned mid-prompt without checklist → WARN, never BLOCK
-FIX=$(mk_fixture)
-CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"Review Pie 4.\\n3. Exercise real `/sell-slice` activity.","session_id":"s1m"}'
-assert_exit "sell-slice mention no checklist" 0
-assert_contains "sell-slice mention offers setup" "No master checklist is set up"
-if [ -f "$FIX/.claude/.bytheslice-state/last-precheck.json" ]; then
-  FAIL=$((FAIL+1)); FAILED_NAMES+=("sell-slice mention skips state"); printf '  ✗ sell-slice mention skips state\n'
-else
-  PASS=$((PASS+1)); printf '  ✓ sell-slice mention skips state\n'
-fi
-rm -rf "$FIX"
-
-# /box-it-up mentioned mid-prompt on main → WARN, never BLOCK
-FIX=$(mk_fixture)
-CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"After this, run /box-it-up to open the PR.","session_id":"s1n"}'
-assert_exit "box-it-up mention on main" 0
-assert_contains "box-it-up mention warns" "mentioned, not invoked"
-rm -rf "$FIX"
-
-# /sell-slice with checklist + clean Prep + clean tree → PASS
-FIX=$(mk_fixture)
-mkdir -p "$FIX/docs/plans"
-cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
-# Master
-
-## Prep
-
-- [x] First
-- [x] Second
-EOF
-( cd "$FIX" && git add . && git commit -q -m "checklist" )
-CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/sell-slice","session_id":"s2"}'
-assert_exit "sell-slice happy path" 0
-assert_empty "sell-slice happy path silent"
-rm -rf "$FIX"
-
-# /sell-slice with incomplete Prep → WARN
-FIX=$(mk_fixture)
-mkdir -p "$FIX/docs/plans"
-cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
-# Master
-
-## Prep
-
-- [x] First
-- [ ] Second
-EOF
-( cd "$FIX" && git add . && git commit -q -m "checklist" )
-CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/sell-slice","session_id":"s3"}'
-assert_exit "sell-slice incomplete Prep" 0
-assert_contains "sell-slice Prep warning" "Prep section incomplete"
-rm -rf "$FIX"
-
-# /sell-slice with complete legacy bare-box Prep (pre-5.1.3 output) → PASS
-FIX=$(mk_fixture)
-mkdir -p "$FIX/docs/plans"
-cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
-# Master
-
-## Prep
-
-[x] First
-[x] Second
-EOF
-( cd "$FIX" && git add . && git commit -q -m "checklist" )
-CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/sell-slice","session_id":"s3a"}'
-assert_exit "sell-slice dashless Prep complete" 0
-assert_empty "sell-slice dashless Prep complete silent"
-rm -rf "$FIX"
-
-# /sell-slice with incomplete legacy bare-box Prep → WARN with correct counts
-FIX=$(mk_fixture)
-mkdir -p "$FIX/docs/plans"
-cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
-# Master
-
-## Prep
-
-[x] First
-[ ] Second
-EOF
-( cd "$FIX" && git add . && git commit -q -m "checklist" )
-CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/sell-slice","session_id":"s3b"}'
-assert_exit "sell-slice dashless Prep incomplete" 0
-assert_contains "sell-slice dashless Prep warning" "Prep section incomplete: 1/2"
-rm -rf "$FIX"
-
-# /sell-slice with mixed canonical dashed + legacy bare Prep boxes → both forms counted
-FIX=$(mk_fixture)
-mkdir -p "$FIX/docs/plans"
-cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
-# Master
-
-## Prep
-
-- [x] Canonical dashed box
-[ ] Legacy dashless box
-EOF
-( cd "$FIX" && git add . && git commit -q -m "checklist" )
-CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/sell-slice","session_id":"s3c"}'
-assert_exit "sell-slice mixed Prep formats" 0
-assert_contains "sell-slice mixed Prep counts both forms" "Prep section incomplete: 1/2"
-rm -rf "$FIX"
-
-# /box-it-up on main → BLOCK
-FIX=$(mk_fixture)
-CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/box-it-up","session_id":"s4"}'
-assert_exit "box-it-up on main" 2
-assert_contains "box-it-up on main message" "refuses to run on main"
-rm -rf "$FIX"
-
-# /box-it-up on feature branch (no gh) → WARN
-FIX=$(mk_fixture)
-git -C "$FIX" checkout -q -b feat/test
-CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/box-it-up","session_id":"s5"}'
-assert_exit "box-it-up feature branch no-gh" 0
-rm -rf "$FIX"
-
-# No bytheslice command → PASS silent
-FIX=$(mk_fixture)
-CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"unrelated user message","session_id":"s6"}'
-assert_exit "no skill mentioned" 0
-assert_empty "no skill silent"
-rm -rf "$FIX"
-
-# BTS_HOOKS_DISABLED=1 → PASS silent regardless
-FIX=$(mk_fixture)
-BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/sell-slice","session_id":"s7"}'
-assert_exit "precheck disabled by env" 0
-assert_empty "precheck disabled silent"
-rm -rf "$FIX"
-
-# /cook-pizzas without checklist → PASS (cook-pizzas may run without one)
-FIX=$(mk_fixture)
-CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/cook-pizzas","session_id":"s8"}'
-assert_exit "cook-pizzas without checklist" 0
-rm -rf "$FIX"
-
-# /special-order without checklist → setup context, never BLOCK
-FIX=$(mk_fixture)
-CLAUDE_PROJECT_DIR=$FIX run_hook "$PRECHECK" '{"prompt":"/special-order","session_id":"s9"}'
-assert_exit "special-order without checklist" 0
-assert_contains "special-order without checklist offers setup" "AskUserQuestion"
-rm -rf "$FIX"
 
 ####################################################################
 # pre-commit-guard.sh
@@ -976,7 +816,7 @@ else
 
   # Force each available parser through the same event, privacy and attribution cases.
   KITCHEN_BINS=$(mktemp -d)
-  for utility in bash cat dirname git awk mkdir wc tr mv rmdir sleep mktemp ln readlink rm; do
+  for utility in bash cat dirname git awk mkdir wc tr mv rmdir sleep mktemp ln readlink rm sed grep head date; do
     ln -s "$(command -v "$utility")" "$KITCHEN_BINS/$utility"
   done
   ln -s "$KITCHEN_NODE" "$KITCHEN_BINS/node"
@@ -1025,6 +865,35 @@ else
     else
       kitchen_assert "kitchen jq/Node field parity" "JSON.stringify((({t,...r}) => r)(rows[0])) === $(json_str "${KITCHEN_PARITY:-}")"
     fi
+
+    # Session skill marker: a ByTheSlice command or Skill call writes
+    # last-precheck.json (session id + canonical skill); anything else writes
+    # nothing. The hook stays silent and exits 0 either way.
+    MARK="$FIX/.claude/.bytheslice-state/last-precheck.json"
+    MARK_READ='JSON.parse(read(dir + "/.claude/.bytheslice-state/last-precheck.json"))'
+    for CASE in expansion skill bare; do
+      case "$CASE" in
+        expansion) PAYLOAD='{"session_id":"marker-upe","hook_event_name":"UserPromptExpansion","command_name":"bytheslice:sell-slice","command_source":"plugin","command_args":"PRIVATE_ARGS"}'; WANT_SID=marker-upe; WANT_SKILL=sell-slice ;;
+        skill) PAYLOAD='{"session_id":"marker-skill","hook_event_name":"PreToolUse","tool_name":"Skill","tool_input":{"skill":"bytheslice:box-it-up","args":"PRIVATE_ARGS"}}'; WANT_SID=marker-skill; WANT_SKILL=box-it-up ;;
+        bare) PAYLOAD='{"session_id":"marker-bare","hook_event_name":"PreToolUse","tool_name":"Skill","tool_input":{"skill":"sell-pie"}}'; WANT_SID=marker-bare; WANT_SKILL=sell-pie ;;
+      esac
+      rm -f "$LOG" "$MARK"
+      LAST_OUT=$(printf '%s' "$PAYLOAD" | PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" "$KITCHEN_BASH" "$KITCHEN_LOG" 2>&1)
+      LAST_EXIT=$?
+      assert_exit "kitchen $ENGINE marker $CASE exits 0" 0
+      assert_empty "kitchen $ENGINE marker $CASE silent"
+      kitchen_assert "kitchen $ENGINE marker $CASE session and skill" "const m = $MARK_READ; m.session_id === '$WANT_SID' && m.skill === '$WANT_SKILL' && m.branch === 'main' && ['clean','dirty'].includes(m.tree) && /^\\d{4}-\\d{2}-\\d{2}T/.test(m.timestamp)"
+      kitchen_assert "kitchen $ENGINE marker $CASE keeps args private" "!read(dir + '/.claude/.bytheslice-state/last-precheck.json').includes('PRIVATE_') && rows.length === 1"
+    done
+    for PAYLOAD in '{"session_id":"marker-other","hook_event_name":"UserPromptExpansion","command_name":"commit","command_source":"builtin"}' '{"session_id":"marker-other","hook_event_name":"PreToolUse","tool_name":"Skill","tool_input":{"skill":"other-plugin:sell-slice"}}' '{"session_id":"marker-other","hook_event_name":"SessionStart"}'; do
+      rm -f "$LOG" "$MARK"
+      LAST_OUT=$(printf '%s' "$PAYLOAD" | PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" "$KITCHEN_BASH" "$KITCHEN_LOG" 2>&1)
+      LAST_EXIT=$?
+      assert_exit "kitchen $ENGINE non-ByTheSlice marker exits 0" 0
+      assert_empty "kitchen $ENGINE non-ByTheSlice marker silent"
+      kitchen_assert "kitchen $ENGINE non-ByTheSlice writes no marker" "rows.length === 1 && !fs.existsSync(dir + '/.claude/.bytheslice-state/last-precheck.json')"
+    done
+    rm -f "$MARK"
 
     mkdir -p "$FIX/docs/plans"
     cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'

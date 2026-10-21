@@ -51,7 +51,7 @@ The pie-boundary checkpoint (the one kept HITL, §1.8) lives **inside** each `/s
 
 ## Inputs and Preconditions
 
-> Pre-enforced by `hooks/precheck-skill.sh` **when hooks are active**. If `BTS_HOOKS_DISABLED=1` or `disableAllHooks` is set, run the checklist-exists and `gh auth status` checks inline via tools and proceed silently. The preconditions are required either way; only the enforcement layer is optional. Never narrate the checks in chat.
+> This skill checks its own preconditions inline at the start, via tools (checklist exists, clean synced `main`, `gh auth status`). If one fails, raise the problem to the operator as a question with a recommended next step, never a refusal; a flat checklist is handled by Mode detection above. If the master checklist is missing, ask (AskUserQuestion, Accept or Decline) whether to set up ByTheSlice. Never narrate passing checks in chat. No ByTheSlice hook blocks a prompt.
 
 - `docs/plans/00_master_checklist.md` exists, is readable, and is **piefied** (contains at least one `## Pie N` header). A flat-v4 checklist is refused (see Mode detection).
 - Every `## Pie N` to be chained has its slices defined under `### Slice N.M` rows, and every referenced per-stage plan file (`docs/plans/stage_<n>_*.md`) exists.

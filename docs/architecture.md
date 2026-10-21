@@ -127,9 +127,9 @@ Every frontend slice through `/sell-slice` passes through Phase 4.5's **Library 
 
 ## Hook enforcement
 
-Preconditions and gates that used to live in prose are enforced by plugin hooks in [`hooks/`](../hooks/):
+Skill preconditions are checked inline by each skill at the start and raised as a question to the operator, never a refusal; no ByTheSlice hook blocks a prompt. Tool-level gates live in plugin hooks in [`hooks/`](../hooks/):
 
-- `/sell-slice` blocks without a master checklist.
+- [`kitchen-log.sh`](../hooks/kitchen-log.sh) records the session skill marker (`last-precheck.json`) the session-scoped guards read.
 - `git commit` on `main` is blocked at the tool layer.
 - Editing a stage plan mid-delivery draws a WARN.
 - A `PreCompact` snapshot lets a post-compaction session re-orient.

@@ -359,7 +359,8 @@ bts_session_id() {
   printf '%s' "$id"
 }
 
-# Detect the first /bytheslice slash command in a user prompt.
+# Detect the first /bytheslice slash command in a string. kitchen-log.sh
+# uses it to canonicalize the session skill marker (it passes "/<name>").
 # Prints the canonical short name (e.g. "sell-slice") or nothing.
 # `sell-pie` precedes `sell-slice` in the alternation so the longer, more
 # specific v5 command wins when both could match a prefix.

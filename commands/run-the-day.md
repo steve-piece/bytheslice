@@ -39,7 +39,7 @@ The pie-boundary merge checkpoint fires **inside every `/sell-pie` run** (via `/
 - Working tree is clean on `main`, synced with `origin/main`.
 - `gh` CLI is installed and authenticated (each Pie opens a boundary PR).
 
-If any precondition fails, the skill stops and reports the gap before dispatching any Pie.
+The skill checks these inline at the start. If any precondition fails, it raises the gap to the operator as a question before dispatching any Pie.
 
 ## When to use this command
 

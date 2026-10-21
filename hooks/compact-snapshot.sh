@@ -22,7 +22,7 @@ SESSION_ID=$(bts_session_id "$INPUT")
 STATE_DIR=$(bts_state_dir)
 STATE_FILE="$STATE_DIR/last-precheck.json"
 
-# Skill from prior precheck state (empty if absent).
+# Skill from the session skill marker (empty if absent).
 SKILL=""
 if [ -f "$STATE_FILE" ]; then
   if command -v jq >/dev/null 2>&1; then

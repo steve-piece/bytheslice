@@ -6,12 +6,11 @@ Deterministic guards that replace repetitive prose in CLAUDE.md and SKILL.md fil
 
 | Hook | Event | Behavior |
 |---|---|---|
-| `precheck-skill.sh` | `UserPromptSubmit` | Detects a /bytheslice slash command in the prompt and runs per-skill preconditions. A missing master checklist never blocks: it injects context telling the agent to offer ByTheSlice setup through AskUserQuestion (Accept or Decline). BLOCKs `/box-it-up` on main only when the prompt starts with the command; a skill named mid-prompt is a mention, so blocks downgrade to warnings and no state is written; WARN-injects dirty-tree / missing-gh / Prep-incomplete. |
 | `shop-status.sh` | `SessionStart` | Reads `docs/plans/00_master_checklist.md` if present and injects a compact summary: Prep progress, plus pie/slice counts and the first open pie (nested v5) or stage counts and the next not-started row (flat v4). |
 | `pre-commit-guard.sh` | `PreToolUse` (Bash matcher) | BLOCKs `git commit` on main/master, reading the branch of the directory each commit in the command runs in (parsed `cd`/`pushd`, `git -C`, `--git-dir`, `GIT_DIR=`, else the hook cwd), so worktree commits are judged by the worktree's branch. Shell forms it cannot model (subshell `cd`, `popd`, `$VAR` paths) fail closed. Otherwise WARN-injects a short staged-files summary. |
 | `stage-plan-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects (exit 0) on `Write`/`Edit` to `docs/plans/stage_*.md` while `/sell-slice` is the current session's active skill - plans are normally static during delivery. Never blocks (downgraded from BLOCK in v5). Session-id guarded; fails open if state is missing or cross-session. |
 | `library-gate-guard.sh` | `PreToolUse` (Write/Edit matchers) | WARN-injects when a `/sell-slice` run writes to a watched production route (`app/**`, `src/app/**`, `components/**`, `src/components/**`) without a recorded library-preview approval. Never blocks. Dormant until `record-library-approval.sh arm` writes `library-approvals.json` (Phase 4.5 arms the gate when the approval window opens). |
-| `kitchen-log.sh` | `SessionStart`, `SubagentStart`, `SubagentStop`, `PreToolUse` (Agent/Skill), `PostToolUse` (Agent), `UserPromptExpansion`, `Stop` | Fast synchronous local activity rows with an explicit metadata allowlist, completed before the hook returns including Stop during session shutdown; silent and always exit 0; labels capped at 120 characters; pie/slice attribution from label, branch, then checklist; serialized 2 MiB rotation with one backup. Uses jq or Node and skips logging when neither exists. |
+| `kitchen-log.sh` | `SessionStart`, `SubagentStart`, `SubagentStop`, `PreToolUse` (Agent/Skill), `PostToolUse` (Agent), `UserPromptExpansion`, `Stop` | Fast synchronous local activity rows with an explicit metadata allowlist, completed before the hook returns including Stop during session shutdown; silent and always exit 0; labels capped at 120 characters; pie/slice attribution from label, branch, then checklist; serialized 2 MiB rotation with one backup. Uses jq or Node and skips logging when neither exists. When a ByTheSlice skill runs, also writes the session skill marker `last-precheck.json` (see State); it only records state and never blocks a prompt. |
 | `compact-snapshot.sh` | `PreCompact` | Never blocks compaction (always exit 0). Writes `compact-snapshot.json` capturing session/skill/branch, last commit sha + subject, and the next up-to-3 unfinished checklist lines so the post-compaction turn can re-orient. |
 
 One script in this directory is not wired to an event: `record-library-approval.sh` is the state writer `/sell-slice` Phase 4.5 runs directly. `arm --slice <n.m>` opens the approval window (creates `library-approvals.json` with zero approvals, which wakes `library-gate-guard.sh`); `approve --slice <n.m> --components "<id>,<id>"` records the operator's approval (the gate then passes). It honors `BTS_HOOKS_DISABLED=1` and tolerates missing `jq` like the rest of the directory.
@@ -48,22 +47,20 @@ Run it locally before committing changes to anything under `hooks/`. No CI workf
 | `bts_tree_state` | `"clean"` or `"dirty"` |
 | `bts_state_dir` | ensures `.claude/.bytheslice-state/` exists, echoes path |
 | `bts_session_id <json>` | extracts `session_id` from a hook input envelope |
-| `bts_detect_skill <prompt>` | first /bytheslice slash command in the prompt (canonical short form; `sell-pie` matched ahead of `sell-slice`) |
+| `bts_detect_skill <text>` | first ByTheSlice command in the text, canonical short form (`sell-pie` matched ahead of `sell-slice`); `kitchen-log.sh` uses it to canonicalize the session skill marker |
 | `bts_checklist_layout` | dual-read layout detection: `"pie"` (any `## Pie N`), `"stage"` (any `## Stage N`, no Pie), or `""` (neither) |
 | `bts_unit_counts` | `"<done> <total>"` of top-level work units - `## Pie N` (v5) or `## Stage N` (v4), Pie layout preferred; empty if neither |
 | `bts_slice_counts` | `"<done> <total>"` of `### Slice N.M` headings; empty on a flat v4 checklist |
 
 ## State
 
-`.claude/.bytheslice-state/last-precheck.json` is written by `precheck-skill.sh` and read by the session-id-guarded Write/Edit guards (`stage-plan-guard.sh`, `library-gate-guard.sh`) and `compact-snapshot.sh`. Schema:
+`.claude/.bytheslice-state/last-precheck.json` is the session skill marker. `kitchen-log.sh` writes it whenever a ByTheSlice skill runs (a typed command on `UserPromptExpansion`, or the Skill tool on `PreToolUse`); it only records state and never blocks a prompt. The session-id-guarded Write/Edit guards (`stage-plan-guard.sh`, `library-gate-guard.sh`), `compact-snapshot.sh`, and `record-library-approval.sh` read it. Schema:
 
 ```json
 {
   "session_id": "...",   // guards compare against the current session
   "skill": "sell-slice",
   "timestamp": "2026-05-18T15:42:00Z",
-  "blocks": 0,
-  "warnings": 1,
   "branch": "feat/foo",
   "tree": "clean"
 }

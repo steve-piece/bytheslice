@@ -40,7 +40,7 @@ The two-level decomposition routes structured artifacts between singular-goal su
 
 ## Inputs / Preconditions
 
-> **Hook enforcement.** Skill preconditions (no existing checklist in fresh mode; git tree state; the `--repie` opt-in) are enforced by plugin hooks in `hooks/`. `stage-plan-guard.sh` is a **WARN** in v5 (it no longer blocks). The dual-read parser in `hooks/lib/checklist.sh` recognizes both `## Stage N` and `## Pie N` / `### Slice N.M`. The hook output replaces the precondition prose that used to be repeated here.
+> **Inline preconditions.** This skill checks its own preconditions inline at the start, via tools (no existing checklist in fresh mode; git tree state; the `--repie` opt-in). If one fails, raise the problem to the operator as a question with a recommended next step, never a refusal. No ByTheSlice hook blocks a prompt. `stage-plan-guard.sh` is a **WARN** in v5 (it no longer blocks). The dual-read parser in `hooks/lib/checklist.sh` recognizes both `## Stage N` and `## Pie N` / `### Slice N.M`.
 
 **Input:** a finalized PRD file (output of `/create-menu` or equivalent). Not specs, briefs, questionnaires, or API docs — those feed `/create-menu`.
 

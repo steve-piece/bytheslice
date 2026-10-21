@@ -12,7 +12,7 @@
 #       passes production wiring for the rest of the slice.
 #
 # Each approval entry records component_id, status, at (ISO timestamp),
-# session_id, and slice. The session id defaults to the one precheck-skill.sh
+# session_id, and slice. The session id defaults to the one kitchen-log.sh
 # stored in last-precheck.json, which is exactly the value the gate hook
 # compares hook envelopes against. Output is compact single-line JSON so the
 # gate's no-jq sed/grep fallbacks keep working. Honors BTS_HOOKS_DISABLED=1
@@ -71,7 +71,7 @@ WATCHED_CSV=$(sanitize "$WATCHED_CSV")
 STATE_DIR=$(bts_state_dir)
 APPROVALS_FILE="$STATE_DIR/library-approvals.json"
 
-# Default the session id to the one the precheck hook recorded. That is the
+# Default the session id to the one the session skill marker recorded. That is the
 # value library-gate-guard.sh compares against, so the pairing stays exact.
 if [ -z "$SESSION" ]; then
   PRECHECK_FILE="$STATE_DIR/last-precheck.json"

@@ -9,7 +9,7 @@ One PR per Pie, one fresh chat per Pie (the default `pie-pr` delivery mode). Opt
 
 Source of truth for in-flight work: `docs/plans/00_master_checklist.md` (gitignored, generated per project), nested as `## Pie N` / `### Slice N.M` with the `## Prep` gate acting as Pie 1 (Foundations). Per-slice plans live alongside it as `docs/plans/stage_<n>_*.md` (filenames keep the `stage_` prefix for dual-read back-compat).
 
-Skill preconditions (checklist exists, Prep section complete, git tree state, branch sanity) are enforced by plugin hooks in `hooks/`. The hook output replaces what used to be repeated prose in every SKILL.md.
+Each skill checks its own preconditions (checklist exists, Prep section complete, git tree state, branch sanity) inline at the start and raises a problem as a question to the operator, never a refusal. No ByTheSlice hook blocks a prompt; the hooks in `hooks/` record session state, log kitchen activity, and guard tool calls such as `git commit` on `main`.
 
 For a new project, run `/setup-shop` once and follow the bootstrap. For an existing project, start at `/cook-pizzas` to generate the Pie/Slice checklist. A flat v4 checklist (`## Stage N`) still works with `/sell-slice`, but `/sell-pie` and `/run-the-day` refuse it; convert with `/cook-pizzas --repie` (explicit opt-in, never silent).
 

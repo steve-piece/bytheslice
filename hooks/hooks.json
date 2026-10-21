@@ -1,17 +1,5 @@
 {
   "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/precheck-skill.sh\"",
-            "timeout": 5,
-            "statusMessage": "Running bytheslice skill preconditions..."
-          }
-        ]
-      }
-    ],
     "UserPromptExpansion": [
       {
         "hooks": [

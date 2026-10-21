@@ -22,9 +22,9 @@ The skill resolves one of three modes, then runs it:
 
 ## Preconditions
 
-Enforced by the plugin hooks in `hooks/` when active; the same checks run inline when hooks are disabled.
+The skill checks these inline at the start and raises a failed one as a question, never a refusal.
 
-- Working tree on a feature branch (not `main` / `master`); for a v5 pie, `pie-<n>-<scope>`.
+- Working tree on a feature branch (not `main` / `master`); for a v5 pie, `pie-<n>-<scope>`. On `main`, the skill says so and asks; the merge-per-slice closeout runs from `main` by design.
 - **Per-slice mode:** the slice's changes are committed locally or present as uncommitted changes the skill should commit. `gh` is not required (no PR work).
 - **Pie-completion / universal mode:** `gh` CLI installed and authenticated, and the repository has an `origin` remote.
 

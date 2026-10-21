@@ -11,27 +11,6 @@ This file is the **canonical source of truth** for hook behavior. Every row is o
 - **PASS** - hook exits 0 with no output; nothing surfaces to Claude
 - **CONTEXT** - hook exits 0 and prints to stdout; used for SessionStart context injection
 
-## UserPromptSubmit: `precheck-skill.sh`
-
-| Skill in prompt | Project state | Expected |
-|---|---|---|
-| `/sell-slice` | no `docs/plans/00_master_checklist.md` | **PASS + context**: agent asks via AskUserQuestion whether to set up ByTheSlice (Accept or Decline) |
-| any skill named mid-prompt (not the first line) | a precondition that would block | **WARN** only, no state written: a mention, not an invocation |
-| `/sell-slice` | checklist exists, all Prep `[x]`, clean tree | **PASS** |
-| `/sell-slice` | checklist exists, some Prep `[ ]` | **WARN** - "Prep section incomplete: N/M boxes checked" |
-| `/sell-slice` | checklist exists, Prep uses legacy bare `[ ]` boxes (pre-5.1.3 output), all checked | **PASS**: canonical dashed `- [ ]` and legacy bare `[ ]` boxes are both counted |
-| `/sell-slice` | checklist exists, Prep mixes dashed `- [x]` and bare `[ ]` boxes | **WARN** with both forms counted in the N/M totals |
-| `/sell-slice` | checklist exists, dirty git tree | **WARN** - "working tree is dirty" |
-| `/box-it-up` | current branch is `main` or `master` | **BLOCK** - "refuses to run on main/master" |
-| `/box-it-up` | feature branch, no `gh auth` | **WARN** - "gh CLI not authenticated" |
-| `/box-it-up` | feature branch, `gh` authed | **PASS** |
-| `/cook-pizzas` | no checklist | **PASS** - cook-pizzas is allowed to run without one (it produces the checklist) |
-| `/special-order` | no checklist | **PASS + context**: AskUserQuestion setup offer |
-| `/run-the-day` | no checklist | **PASS + context**: AskUserQuestion setup offer |
-| `/close-shop` | no checklist | **PASS + context**: AskUserQuestion setup offer |
-| no bytheslice command | any | **PASS** |
-| any bytheslice command | `BTS_HOOKS_DISABLED=1` set | **PASS** - env var short-circuits all hooks |
-
 ## PreToolUse on Bash: `pre-commit-guard.sh`
 
 The branch is read from the directory the commit runs in, resolved in this order: `cd` / `pushd` steps before the commit (`cd -` included), `git -C <dir>` or `--git-dir` on the commit itself, the hook input's `.cwd` (or the process cwd) when inside a repo, then `$CLAUDE_PROJECT_DIR`. A primary checkout on `main` with the commit running in a linked worktree on a feature branch is therefore a feature-branch commit. Every `git commit` in a command is checked, and the guard blocks if any of them lands on `main`. When a step cannot be modeled (a `cd` inside a subshell or `bash -c` that ends before the commit, `popd`, a `$VAR` or `$(...)` path, `GIT_DIR=`), the guard fails closed: it checks every directory the command visits, plus `$CLAUDE_PROJECT_DIR` for an unexpandable path.
@@ -138,6 +117,17 @@ Every wired logger hook runs synchronously and silently (exit 0), completing its
 | `jq` unavailable, Node available | same row fields and sanitation as jq, excluding timestamp |
 | Neither jq nor Node available | exit 0 silently without creating state |
 | Invalid JSON, multiple JSON values, array/scalar envelope or unwired tool/event | exit 0 silently without creating a log |
+
+### Session skill marker
+
+`kitchen-log.sh` is the only writer of `.claude/.bytheslice-state/last-precheck.json`. It records state and never blocks a prompt; no ByTheSlice hook does.
+
+| Event | Expected |
+|---|---|
+| `UserPromptExpansion` with `command_name: "bytheslice:sell-slice"` | marker written: `session_id` from the envelope, `skill: "sell-slice"` (canonical short form), timestamp, branch, tree; exit 0, silent |
+| `PreToolUse` Skill with `skill: "bytheslice:box-it-up"` (or a bare `sell-pie`) | marker written with the canonical short skill name; exit 0, silent |
+| A non-ByTheSlice command or skill (`commit`, `other-plugin:sell-slice`), or an event with no skill | no marker written; exit 0, silent |
+| Command or skill arguments | never copied into the marker |
 
 ## Notes
 

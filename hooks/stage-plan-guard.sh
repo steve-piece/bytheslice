@@ -38,7 +38,8 @@ case "$FILE_PATH" in
 esac
 
 # Session-id guard: only enforce when the incoming session matches the
-# session that recorded the precheck. Fail open if either is missing.
+# session that kitchen-log.sh recorded in the session skill marker. Fail open
+# if either is missing.
 STATE_DIR=$(bts_state_dir)
 STATE_FILE="$STATE_DIR/last-precheck.json"
 [ ! -f "$STATE_FILE" ] && exit 0

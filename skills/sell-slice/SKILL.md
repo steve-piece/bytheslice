@@ -89,7 +89,7 @@ These three static verifiers collapsed into [`slice-verifier`](agents/slice-veri
 
 ## Preconditions
 
-> Enforced by `hooks/precheck-skill.sh` (UserPromptSubmit) **when hooks are active**. The hook BLOCKs if the checklist is missing and WARN-injects on dirty tree / incomplete Prep section. If `BTS_HOOKS_DISABLED=1` or Claude Code's `disableAllHooks` is set, the hook is observably off - run the three checks below inline via tools and proceed silently. The preconditions are required either way; only the enforcement layer is optional. Never narrate the checks in chat.
+> This skill checks the three preconditions below inline at the start, via tools. If one fails, raise the problem to the operator as a question with a recommended next step, never a refusal: a missing master checklist means asking (AskUserQuestion, Accept or Decline) whether to set up ByTheSlice; a dirty tree means asking whether to proceed dirty; an incomplete Prep section is handled in Phase 0. Never narrate passing checks in chat. No ByTheSlice hook blocks a prompt.
 
 - `docs/plans/00_master_checklist.md` exists.
 - One or more `docs/plans/stage_<n>_*.md` exist (one slice plan reachable for the active unit).
