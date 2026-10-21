@@ -13,6 +13,40 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [5.5.0] - 2026-10-21
+
+**The frontend path: verifiable, and taught what it is building.** Pie 6 (slices 6.1 to 6.7) gives frontend slices the same build manifest, Exit-criteria contract and rendered checks the backend path already had, makes the understand pair run in order, gives user outcomes one sanctioned way into verification, and lets the builder look up what an installed dependency already ships.
+
+### Added
+
+- **Frontend build manifest (6.1).** `state-illustrator`, the last step of the frontend path, reads every implemented file and emits the build manifest from the files on disk, so `slice-tester` and the verifier's under-declaration backstop see frontend surfaces too. A frontend manifest that declares nothing asks instead of passing.
+- **Frontend statics script (6.3).** `skills/sell-slice/scripts/verify-frontend-statics.sh` resolves token references against the project's own catalog and flags unknown tokens, `var()` fallbacks, motion literals off the scales, `<img>` without `alt` and unlabeled controls. `slice-verifier` runs it once per frontend slice; its findings are warnings that never fail a slice.
+- **Rendered accessibility pass (6.4).** `slice-tester` checks contrast, keyboard reach and order, visible focus, focus traps, errors not signalled by color alone, reduced motion and dark-mode parity on every frontend slice and every full-stack slice with UI. **Overnight decision: the a11y verdict is blocking** (the operator default taken while the operator was away): any a11y `fail` forces `overall: fail` and enters the same 3 local fix loops.
+- **User-flow channel (6.6).** A pie block in the master checklist may carry a `**User flow:**` list of 3 to 7 numbered steps, each ending `- Slice N.M`. `stage-decomposer` proposes it, `master-checklist-synthesizer` writes it, and a step no slice owns shows up as a warning in the Phase 2 approval prompt (never a block). The owning frontend or full-stack slice gets exactly one Exit line in the sanctioned form `slice-tester completed <flow step> end-to-end on /<route> with zero console errors (screenshot at 1280 in transcript)`; a slice that owns no step writes none. A `hooks/test.sh` case proves the steps never change the hook parser's slice counts.
+- **Dependency capability audit (6.7).** `block-composer` Step 2b runs only when a gap exists and the slice hits its keyword list, looks up at most 3 installed packages through Context7, and writes `docs/component-rules-<slice>.md` only when it found rules (`CR` mandatory, each ending "Do not implement this manually."; `AR` advisory). Its return gains `dependency_audit` (`ran`, `lookups`, `rules_file`, `degraded`). `component-crafter` reads the rules first and returns `rules_consumed` and `rules_deviated`. `tool_absent` and `lookup_failed` are reported apart and both fall back to `capability_unknown`, today's behavior.
+- **Manifest lockstep test (6.7).** `node --test tests/manifest-lockstep/` fails when an agent file is neither registered nor a documented deprecated shim, when an `agents[]` entry is missing on disk, when name, version or description drift across the manifests (name and version for `package.json`), or when a `SKILL.md` description is unquoted.
+
+### Changed
+
+- **Exit criteria reach the frontend producers (6.2).** All six frontend producers receive the slice's Exit criteria verbatim and are graded against it; `slice-tester`'s inputs do not change.
+- **Phantom enforcers repaired and allowlists added (6.2).** No agent names a verifier outside the live dispatch table; `library-entry-writer` and `slice-verifier` gained `tools:` allowlists. `block-composer` treats a missing shadcn MCP as `needs_human` instead of reporting 0 percent coverage, reports `installed_files`, and calls a low-coverage keyboard-heavy slice hand-rolling territory. Five frontend producers can now report all four HITL categories.
+- **Signature bail and revert on regression (6.4).** A repeated error signature ends the fix loop early inside the 3-loop cap, a patch that turns a green gate red is reverted before the next fix, and the CI fix loop in `box-it-up` mirrors the same rule.
+- **Serialized understand pair (6.5).** **Overnight decision:** `modern-ux-expert` runs first and `layout-architect` only after it returns, in both `sell-slice` and `sell-pie`; `layout-architect` reads the UX spec in full, appends the breakpoint plan to it, and asks (`prd_ambiguity`) when the spec is missing.
+- **Context7 identifier (6.7).** `block-composer` lists only `mcp__claude_ai_Context7__resolve-library-id` and `mcp__claude_ai_Context7__query-docs`, the names a claude.ai Context7 connector exposes (confirmed with `claude mcp list` and a live session). A Context7 server installed another way reports `tool_absent`.
+- **`slice-tester` tools (6.7).** The allowlist gains the Chrome extension's `javascript_tool` and `computer` in both name forms, so the a11y pass can read the DOM and press Tab outside a batch too.
+- **Hygiene (6.7).** One description and one keyword set across `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json` and both marketplace files, all stating 49 registered subagents plus 6 documented deprecated shims (as do `docs/agents.md` and the README). Every `SKILL.md` description is quoted, which fixes `set-display-case`'s strict-YAML parse error. `inspect-display`, `platform-walker`, `close-shop`, `retrospective-reviewer`, the config schema and the model tier guide no longer describe `visual-reviewer` as a live reviewer; `slice-tester` owns the per-slice rendered review. Em and en dashes are gone from every file this pie touched.
+
+### Deprecated
+
+- **The six v4 shims stay this release** (`stage-runner`, `pr-reviewer`, `basic-checks-runner`, `aggregating-test-reviewer`, `ci-cd-guardrails`, `frontend/visual-reviewer`): on disk, unregistered, documented, and listed by path in the lockstep test. They are deleted in the next minor.
+
+### Notes
+
+- The Library Preview Gate guard under `sell-pie` (6.2) was not rebuilt: its hook was retired in 5.4.0.
+- A changed agent file takes effect in the next session, and a cache-installed plugin needs a reinstall to pick up 5.5.0.
+
+---
+
 ## [5.4.0] - 2026-10-21
 
 **The Pass: every order checked at the counter.** A Claude Code mod draws a live ticket rail beside the chat, keeps one ledger of what actually happened, and checks each delivery rule as it happens, warning instead of blocking. The hooks shrink to three scripts that never block, and the kitchen measures real progress and fills its town. Retired hooks: `stage-plan-guard.sh`, `library-gate-guard.sh`, `record-library-approval.sh`, `compact-snapshot.sh`.
