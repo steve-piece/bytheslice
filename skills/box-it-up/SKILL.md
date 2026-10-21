@@ -114,7 +114,7 @@ Loop counter starts at 1. Cap at **3 attempts**.
 2. For each failed check, retrieve logs:
    - `gh run view <run-id> --log-failed` for workflow runs, OR
    - `gh pr view "$PR_NUMBER" --comments` for non-Actions checks (e.g. external services posting back).
-3. Dispatch `bytheslice:ci-fix-attempter` ([definition](agents/ci-fix-attempter.md); fallback on hosts without plugin agents: Read the file and pass its body as the prompt). Pass:
+3. Dispatch `bytheslice:ci-fix-attempter` ([definition](agents/ci-fix-attempter.md); fallback on hosts without plugin agents: Read the file and dispatch it per [`loop-workflow-fallback-pattern.md`](../cook-pizzas/references/loop-workflow-fallback-pattern.md) "Agent shape on the fallback path": its frontmatter goes first as a header (model tier and effort, the normalized tool allowlist, the read-only line for an agent without write tools, the no-git-writes line), then its body, then the inputs; log one self-check line per dispatch in the run log). Pass:
    - `PR_NUMBER`, `PR_URL`, `BRANCH`
    - The failed-check rollup
    - Truncated log excerpts (last 200 lines per failed job) - let the agent ask for more on demand

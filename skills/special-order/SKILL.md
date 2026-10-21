@@ -117,7 +117,7 @@ Confirm answers before proceeding.
 
 ### Phase 2 — Complexity assessment
 
-Dispatch `bytheslice:complexity-assessor` ([definition](agents/complexity-assessor.md); fallback on hosts without plugin agents: Read the file and pass its body as the prompt). Pass:
+Dispatch `bytheslice:complexity-assessor` ([definition](agents/complexity-assessor.md); fallback on hosts without plugin agents: Read the file and dispatch it per [`loop-workflow-fallback-pattern.md`](../cook-pizzas/references/loop-workflow-fallback-pattern.md) "Agent shape on the fallback path": its frontmatter goes first as a header (model tier and effort, the normalized tool allowlist, the read-only line for an agent without write tools, the no-git-writes line), then its body, then the inputs; log one self-check line per dispatch in the run log). Pass:
 - The user's feature list (from Q-features) plus annotations
 - The relationship answer (Q-relationship) per feature
 - The `mvp:` band per feature (Q-mvp-band)

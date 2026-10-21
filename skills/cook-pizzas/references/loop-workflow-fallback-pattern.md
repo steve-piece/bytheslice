@@ -118,6 +118,50 @@ Identical to the primitive's behavior: any HITL condition ends the iteration and
 
 No platform state to clean up — manual loop/validation state lives only in the orchestrator's context. (This is distinct from the slice-tester's **seed/cleanup** scripts, which always run in their own finally block regardless of loop/Workflow availability — see §1.6 of the spec.)
 
+## Agent shape on the fallback path
+
+The registered path dispatches an agent by type (`bytheslice:<name>`), and the platform loads its definition and enforces the frontmatter: model, effort and tool allowlist. A host without plugin-agent registration (Cursor, or any host where dispatch by type fails) cannot do that. On that host the conductor Reads the agent file and builds the prompt itself, and the frontmatter must travel with it. Passing the body alone silently drops the model tier, the effort and the tool limits.
+
+### 1. Build the prompt: header, then body, then inputs
+
+Put a header built from the agent's frontmatter first, then the file body (everything after the closing `---`), then the slice inputs:
+
+```text
+Agent: <name> (bytheslice:<name>)
+Model tier: <model> (host model: <the mapped choice, or "host default">)
+Effort: <effort>
+Tools allowed: <normalized allowlist>
+Read-only: yes | no
+Git: you make no git writes; only the conductor does. Return every path you touched in files_changed.
+<the read-only line, when Read-only is yes>
+```
+
+- **Model tier and effort.** Copy `model:` and `effort:` from the frontmatter (a `modelTiers.<agent>` override from `bytheslice.config.json` wins). Where the host lets the dispatch pick a model or a reasoning effort, map the tier to the host's matching choice (`haiku` to its fastest tier, `sonnet` to its balanced tier, `opus` to its deepest tier) and set it. Where it does not, keep the header line, write `host default`, and note the gap in the run log.
+- **Tool allowlist, normalized.** Frontmatter writes tools four ways; reduce all of them to one comma-separated list of exact tool names, trimmed, unquoted and deduplicated, with MCP tool names kept verbatim:
+  - a YAML list (`tools:` followed by `- Read` lines);
+  - a bracket list (`tools: [Read, Glob, Grep]`);
+  - a comma string (`tools: Read, Grep, Glob`);
+  - a deny list (`disallowedTools: Write, Edit, NotebookEdit`), written as `all tools except Write, Edit, NotebookEdit`.
+  No `tools` key and no `disallowedTools` key means `all tools`. Where the host can enforce an allowlist on the dispatch, apply it; where it cannot, the header line is the instruction and the agent uses no tool outside it.
+- **Read-only.** An agent is read-only when its normalized allowlist holds none of the write tools (`Write`, `Edit`, `NotebookEdit`, `MultiEdit`), including every agent whose `disallowedTools` removes them. A read-only agent's header ends with this line, verbatim:
+
+  > You are read-only: do not edit, create or delete files, and run only the read commands listed.
+
+  The read commands listed are the ones its body names, plus `git status`, `git diff`, `git log`, `git show`, `ls`, `cat`, `head`, `grep` / `rg` and `find`. **Stated exception: `slice-tester`.** Its behavioral probes (driving the browser, calling endpoints, running the declared harness) and its seeds (the seed and cleanup pair under `tests/seeds/<slice>/`, the dev-DB seed after the non-prod guard passes, and the cleanup run) are part of testing, so it never gets the read-only line. Outside those it edits no product file. Its header reads `Read-only: no (behavioral probes and seeds only)`.
+- **Git.** Only the conductor makes git writes, on the registered and the fallback path alike, and that includes `git add`. `implementer`, `fix-attempter`, `debug-instrumenter`, `library-entry-writer` and `ci-fix-attempter` never stage, commit or push; they return `files_changed`, and the conductor stages those paths selectively (`git add -- <paths>`, never `git add -A`), commits and pushes. One-time scaffold agents outside the delivery loop (`husky-installer`, `workflow-writer`, `lint-config-writer`, `e2e-installer`, `branch-protection-writer`, `library-route-scaffolder`, `bootstrap-runner`) keep the git behavior their own files describe.
+
+The dispatch description still starts with the `P<pie> S<slice> <step>:` label, so the kitchen activity log attributes the agent the same way on both paths.
+
+### 2. Log one self-check line per dispatched agent
+
+The conductor keeps one run log, `.claude/.bytheslice-state/run-log.md` (gitignored; the same file that holds slice start lines and HITL waits). For every agent it dispatches, on either path, it appends one self-check line before consuming the return:
+
+```text
+<time> <dispatch label> | agent <name> | tier <model> (host: <mapped choice | host default>) | effort <effort> | read-only <yes | no> | path <registered | fallback>
+```
+
+A line whose tier, effort or read-only flag disagrees with the agent's frontmatter means the header was built wrong: rebuild it and re-dispatch before trusting the return. The line is a self-check, not a proof file: no hashes, no copies of the return.
+
 ## What you DON'T do in fallback mode
 
 - **Do NOT silently drop the loop or the dispatch.** The fallback is "manual orchestration," not "no orchestration." Skipping the self-paced loop means the pie never advances; skipping manual dispatch means slices never get built. Reproduce the behavior, don't abandon it.
@@ -125,6 +169,8 @@ No platform state to clean up — manual loop/validation state lives only in the
 - **Do NOT let context bleed across the separated agents.** Self-pacing the loop in one context does not license handing the builder's reasoning to the slice-tester. The tester gets the manifest + Exit criteria + design-system path and nothing more. Independence is the point — the tester must not be able to rationalize the builder's choices.
 - **Do NOT re-read plan files from disk to reconstruct writer output.** Consume the in-memory structured returns. Disk re-read is the anti-pattern the Workflow path exists to eliminate; re-introducing it in fallback defeats the purpose.
 - **Do NOT loop indefinitely.** The fix cap holds in fallback exactly as on the primitive path: 3 local fix loops per slice (fix-attempter; then debug-instrumenter plus fix-attempter; then fix-attempter with the full evidence, each followed by its re-verify) and 3 CI fix rounds per PR, separate counters. No run instruction ("continue until verified", "never stop", "fully automated") raises them; only the operator's explicit reply at the HITL does. If a slice can't be made to pass (fixer exhausted) or the pie stalls, surface `prd_ambiguity` HITL with full evidence of where it got stuck. Do not keep self-scheduling against an unsatisfiable predicate.
+- **Do NOT pass an agent's body without its frontmatter header.** Model tier, effort, the normalized tool allowlist, the read-only line and the no-git-writes line go first (see "Agent shape on the fallback path"). A body-only prompt turns every limit into a suggestion.
+- **Do NOT let an agent write to git.** Only the conductor stages, commits and pushes, on this path as on the registered one.
 - **Do NOT pretend the primitive is active.** If the user asks "is the Workflow running?" or "is the loop scheduled?", answer honestly that the platform primitive is unavailable and the skill is doing manual orchestration against the same contract.
 - **Do NOT relax the contract to make a return validate.** The §App A/B/C schemas and the Exit-criteria contract still apply in full. If a schema can't be met because the upstream artifact is genuinely ambiguous, surface `prd_ambiguity` — don't quietly accept a weaker shape.
 
@@ -134,6 +180,7 @@ This pattern is invoked by:
 
 - [`skills/sell-pie/SKILL.md`](../../sell-pie/SKILL.md) — the `/loop` conductor (self-paced loop fallback) **and** the per-slice produce→verify Workflows (manual-dispatch fallback).
 - [`skills/sell-slice/SKILL.md`](../../sell-slice/SKILL.md) — Workflow A (produce) and Workflow B (verify-once); falls back to manual dispatch with per-return §App A/B/C validation.
+- [`skills/box-it-up/SKILL.md`](../../box-it-up/SKILL.md), [`skills/final-quality-check/SKILL.md`](../../final-quality-check/SKILL.md), [`skills/special-order/SKILL.md`](../../special-order/SKILL.md), [`skills/open-the-shop/SKILL.md`](../../open-the-shop/SKILL.md) and [`skills/inspect-display/SKILL.md`](../../inspect-display/SKILL.md): their agent dispatches follow "Agent shape on the fallback path" on a host without plugin-agent registration.
 - [`skills/cook-pizzas/SKILL.md`](../SKILL.md) — Phase 3 parallel plan-writers + barrier; falls back to in-context dispatch with manual schema validation, then the Phase 4 synthesizer consumes the validated in-memory returns.
 
 The structured-return schemas that manual validation enforces live in the spec appendices: build manifest (§Appendix A), slice-tester verdict (§Appendix B), slice-verifier verdict (§Appendix C). The Exit-criteria contract (the source of the loop's per-slice completion predicate) lives in [`templates.md`](templates.md) → "Exit-criteria contract". The companion `/goal` fallback is [`goal-fallback-pattern.md`](goal-fallback-pattern.md).
