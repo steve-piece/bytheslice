@@ -246,7 +246,7 @@ Drop a `bytheslice.config.json` at your project root to override defaults:
   "modelTiers":   { "implementer": "opus", "qualityReviewer": "opus",
                     "sliceTester": "sonnet", "sliceVerifier": "sonnet" },
   "stages":       { "maxTasksPerStage": 6, "targetFeatureStages": "20-30" },
-  "verification": { "viewports": [375, 1280],
+  "verification": { "viewports": [375, 768, 1280],
                     "e2e": { "feature": "always", "regressionCore": "critical-only", "visual": "off" } },
   "flow":         { "autoApproveBuildPlan": false, "libraryGate": "self-critique" },
   "review":       { "default": "boundary" },   // per-pie override via the `<!-- review: -->` annotation

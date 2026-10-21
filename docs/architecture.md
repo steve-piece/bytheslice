@@ -15,6 +15,7 @@ The under-the-hood reference for ByTheSlice. The [README](../README.md) covers t
 - [Delivery & git - selling vs boxing](#delivery--git-selling-vs-boxing)
 - [Design-system delivery](#design-system-delivery)
 - [Orchestration principles](#orchestration-principles)
+- [Evidence, not proof ledgers](#evidence-not-proof-ledgers)
 - [Hook enforcement](#hook-enforcement)
 - [Live kitchen](#live-kitchen)
 - [Legacy & migration](#legacy--migration)
@@ -111,7 +112,7 @@ The full worktree lifecycle - setup, isolation, the runtime-isolation gap, merge
 
 Every frontend slice through `/sell-slice` passes through Phase 4.5's **Library Preview Gate** - non-skippable for new components AND for consumer-side edits that change a user-visible surface of an existing library component. The gate runs a Phase 0 extend-vs-create check, surfaces a self-critique block + clickable preview URLs, then HARD STOPS for explicit user approval before any production-route import lands. Pure internal refactors with no rendered-output delta are exempt. The gate is also enforced deterministically: Phase 4.5 arms `.claude/.bytheslice-state/library-approvals.json` via `hooks/record-library-approval.sh`, the `hooks/library-gate-guard.sh` PreToolUse hook warns on any production-route Write/Edit while the window is open, and the same script's `approve` subcommand records the operator's verdict (component list, session id, slice, timestamp) to silence it.
 
-**Visual review tooling priority** *(hardcoded, no discovery):* Claude in Chrome → Chrome DevTools MCP → Playwright → Vizzly. Screenshot viewports come from `verification.viewports` (default `[375, 1280]`).
+**Visual review tooling priority** *(hardcoded, no discovery):* Claude in Chrome → Chrome DevTools MCP → Playwright → Vizzly. Viewports come from `verification.viewports` (default `[375, 768, 1280]`); screenshots are taken only at 768 and 1280, one of each per new UI surface.
 
 ---
 
@@ -122,6 +123,22 @@ Every frontend slice through `/sell-slice` passes through Phase 4.5's **Library 
 - **HITL bubbling.** Sub-agents never prompt the user directly and never call `ask_user_input_v0` - they return `needs_human: true` with one of four categories: `prd_ambiguity`, `external_credentials`, `destructive_operation`, `creative_direction`. Only top-level orchestrators surface the prompt; under `/sell-pie`, any of the four **halts the `/loop`**.
 - **Always recommend a default in elicitation.** Every clarifying-questions phase across the plugin includes a recommended option in each choice set.
 - **Model tiers.** Three aliases (`haiku`, `sonnet`, `opus`); heavier tiers go to producing/verifying agents (`implementer` = `opus, xhigh`; `quality-reviewer` = `opus, high`; `slice-tester` and `slice-verifier` = `sonnet, high`). Full per-agent table at [`model-tier-guide.md`](../skills/setup-shop/references/model-tier-guide.md).
+
+---
+
+## Evidence, not proof ledgers
+
+**No proof ledgers.** No agent and no conductor writes artifact hashes, source freezes, fingerprint files, leases, or per-step proof files. The evidence a slice may leave is exactly:
+
+- the verdict each agent returns (the Appendix A/B/C structured returns);
+- Playwright traces, for failing checks only;
+- one 1280px (desktop) and one 768px screenshot per new UI surface;
+- a checklist note of 3 lines or fewer per slice in `docs/plans/00_master_checklist.md`;
+- one short run log, `.claude/.bytheslice-state/run-log.md` (gitignored): slice start lines, HITL ask and answer times, one self-check line per dispatched agent, and slice PR and merge lines in merge-per-slice mode.
+
+Existing operational state files stay, because they drive behavior rather than prove it: `.claude/.bytheslice-state/library-approvals.json`, `kitchen/activity.jsonl`, `kitchen/merged-pie.json`, `env-check-passed`, `last-precheck.json`, `compact-snapshot.json`, and the seed and cleanup pairs under `tests/seeds/<slice>/`. The closing-narrative paragraph in commit and PR bodies also stays; the 3-line limit applies to the checklist note only.
+
+**The one sanctioned exception: the Pass mod ledger.** The Pass mod's `.bytheslice/ledger.jsonl` ([`docs/pass-mod-spec.md`](pass-mod-spec.md)) is the single sanctioned completion record that tracks project progression over time. It is not a per-step proof file, and this rule does not ban it.
 
 ---
 

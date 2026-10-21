@@ -58,7 +58,7 @@ resolved_config:
     tools: [<ordered list>]
     vizzly: true | false
   verification:
-    viewports: [<int widths>]               # default [375, 1280]
+    viewports: [<int widths>]               # default [375, 768, 1280]; screenshots only at 768 and 1280
     e2e:
       feature: always | critical-only | off          # default always
       regressionCore: always | critical-only | off   # default critical-only

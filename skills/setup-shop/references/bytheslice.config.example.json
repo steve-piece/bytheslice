@@ -20,7 +20,7 @@
 
   // Verification knobs for sell-slice Workflow B / sell-pie per-slice loop.
   "verification": {
-    // "viewports": [375, 1280],            // widths the slice-tester renders at (C7)
+    // "viewports": [375, 768, 1280],       // widths the slice-tester renders at (C7); screenshots only at 768 and 1280
     // "e2e": {
     //   "feature": "always",              // "always" | "critical-only" | "off"
     //   "regressionCore": "critical-only",

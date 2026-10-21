@@ -70,7 +70,7 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
   // slice-verifier) and by sell-pie's per-slice loop. Drives viewport coverage
   // (C7) and e2e threshold-gating by tag (C10).
   "verification": {
-    "viewports": [375, 1280],         // widths the slice-tester renders/screenshots at; default mobile + desktop
+    "viewports": [375, 768, 1280],    // widths the slice-tester renders at; screenshots only at 768 and 1280
     "e2e": {
       "feature": "always",            // run the slice's own feature e2e: "always" | "critical-only" | "off"
       "regressionCore": "critical-only", // run the core regression suite: "always" | "critical-only" | "off"
@@ -175,7 +175,7 @@ Default `"20-30"`. The phased-plan splitter aims for a stage count in this band 
 
 Knobs for Workflow B (the verify-once stage of `/sell-slice`, also driven per-slice by `/sell-pie`). Each key is independent; omit any to take the default.
 
-- **`viewports`** *(int[], default `[375, 1280]`)* — the widths the `slice-tester` renders and screenshots `frontend` slices at (C7). The list is mobile-first; add widths (e.g. `[375, 768, 1280]`) for finer breakpoint coverage. The `slice-tester` exercises every declared affordance at each width.
+- **`viewports`** *(int[], default `[375, 768, 1280]`)* - the widths the `slice-tester` renders `frontend` slices at (C7). The list is mobile-first. The `slice-tester` exercises every declared affordance at each width, but takes screenshots only at 768 and 1280: one 768px and one 1280px (desktop) screenshot per new UI surface. Other widths (such as 375) are checked from the rendered page without a screenshot. A list that omits 768 or 1280 gets no screenshot at the missing width.
 - **`e2e`** *(object)* — threshold-gates which e2e suites the `slice-verifier` runs by tag (C10). Each value is `"always" | "critical-only" | "off"`:
   - **`feature`** *(default `"always"`)* — the slice's own feature e2e specs. `"critical-only"` runs just specs tagged critical; `"off"` skips them.
   - **`regressionCore`** *(default `"critical-only"`)* — the cross-slice core regression suite. Defaults to critical-only so per-slice loops stay cheap; raise to `"always"` near a UAT date.

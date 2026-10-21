@@ -4,6 +4,8 @@
 
 Status: draft for review, 2026-10-14. Target: Claude Code 2.1.299+ (Claude Mods, GA since 2.1.287).
 
+> **Status update, 2026-10-20 (ByTheSlice 5.3.0).** This spec stays, and it is the operator's top priority. The Pass ledger (`.bytheslice/ledger.jsonl`) is the **single sanctioned completion record**: the one ledger that tracks project progression over time. It is distinct from the per-step proof files 5.3.0 bans (artifact hashes, source freezes, fingerprint files, leases), and the 5.3.0 no-proof-ledger rule names it as the explicit exception (see [architecture.md](architecture.md#evidence-not-proof-ledgers)). Build its agent events on the Pie 4 kitchen activity log ([`hooks/kitchen-log.sh`](../hooks/kitchen-log.sh), `.claude/.bytheslice-state/kitchen/activity.jsonl`) rather than a second recorder.
+
 ## Verdict
 
 ByTheSlice turns into a live harness by shipping one mod inside the existing plugin, called **the Pass**. In a pizzeria the pass is the counter where every order is checked before it goes out, with the ticket rail hanging above it. The mod does both jobs:

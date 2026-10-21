@@ -104,7 +104,7 @@ If `bytheslice.config.json` exists at the project root, the `rules-loader` agent
 
 - `modelTiers.<agent>` - overrides the agent file's `model:` for THIS run (`sliceTester`, `sliceVerifier` are the v5 verification tiers; `ciCdGuardrails` / `basicChecksRunner` / `aggregatingTestReviewer` are deprecated aliases of `sliceVerifier`).
 - `stages.maxTasksPerStage` - overrides the default cap of 6 (warn if user sets > 8).
-- `verification.viewports` *(int[], default `[375, 1280]`)* - the widths `slice-tester` renders/screenshots `frontend` slices at (**C7**). Pass this to `slice-tester` instead of any hardcoded viewport list.
+- `verification.viewports` *(int[], default `[375, 768, 1280]`)* - the widths `slice-tester` renders `frontend` slices at (**C7**); it screenshots only at 768 and 1280. Pass this to `slice-tester` instead of any hardcoded viewport list.
 - `verification.e2e.{feature,regressionCore,visual}` *(each `"always" | "critical-only" | "off"`)* - threshold-gates which e2e suites `slice-verifier` runs by tag (**C10**). Pass the resolved values to `slice-verifier`; it gates before running anything.
 - `flow.autoApproveBuildPlan` *(bool, default `false`)* - when `true`, skip the build-plan authorization stop (**C9** - also **always** auto under the `/sell-pie` loop).
 - `flow.libraryGate` *(`"self-critique" | "human" | "off"`, default `"self-critique"`)* - controls the net-new-component library gate behavior (see Workflow A library gate).
@@ -364,7 +364,7 @@ Dispatch `state-illustrator` to ensure every interactive production surface has 
 Boot the dev server (frontend / full-stack) and dispatch [`slice-tester`](agents/slice-tester.md). **Context-separation rule (absolute):** pass the tester **only** the build manifest + the slice's Exit criteria + the design-system path (`docs/design-system.md`) + the dev-server URL + the slice type + the DB target. **Never pass the builder's context, reasoning, or chat** - the tester must falsify the manifest's claims, not trust the builder's narrative.
 
 Pass through the config:
-- **`verification.viewports`** *(C7)* - the widths the tester renders/screenshots `frontend` slices at. Do not hardcode a viewport list; use the resolved config (default `[375, 1280]`).
+- **`verification.viewports`** *(C7)* - the widths the tester renders `frontend` slices at. Do not hardcode a viewport list; use the resolved config (default `[375, 768, 1280]`). Screenshots are taken only at 768 and 1280, one of each per new UI surface (see "Evidence, not proof ledgers").
 - **`visualReview.tools`** - the ordered browser tooling priority.
 
 The tester type-routes (frontend = rendered design-system match + per-affordance exercise; full-stack/backend = seed-and-cleanup data-flow with success **and** error toasts and the **bidirectional rule** on every surface; infrastructure = probe/harness). It returns the Appendix-B verdict (per-affordance + transitions + seed outcome).
@@ -430,6 +430,22 @@ The four blocking HITL categories halt the slice (they are not auto-resolvable):
 
 ---
 
+## Evidence, not proof ledgers
+
+**No proof ledgers.** No agent and no conductor writes artifact hashes, source freezes, fingerprint files, leases, or per-step proof files. The evidence a slice may leave is exactly:
+
+- the verdict each agent returns (the Appendix A/B/C structured returns);
+- Playwright traces, for failing checks only;
+- one 1280px (desktop) and one 768px screenshot per new UI surface;
+- a checklist note of 3 lines or fewer per slice in `docs/plans/00_master_checklist.md`;
+- one short run log, `.claude/.bytheslice-state/run-log.md` (gitignored): slice start lines, HITL ask and answer times, one self-check line per dispatched agent, and slice PR and merge lines in merge-per-slice mode.
+
+Existing operational state files stay, because they drive behavior rather than prove it: `.claude/.bytheslice-state/library-approvals.json`, `kitchen/activity.jsonl`, `kitchen/merged-pie.json`, `env-check-passed`, `last-precheck.json`, `compact-snapshot.json`, and the seed and cleanup pairs under `tests/seeds/<slice>/`. The closing-narrative paragraph in commit and PR bodies also stays; the 3-line limit applies to the checklist note only.
+
+**The one sanctioned exception: the Pass mod ledger.** The Pass mod's `.bytheslice/ledger.jsonl` ([`docs/pass-mod-spec.md`](../../docs/pass-mod-spec.md)) is the single sanctioned completion record that tracks project progression over time. It is not a per-step proof file, and this rule does not ban it.
+
+---
+
 ## Progress Report Format
 
 After each item and at slice closeout:
@@ -459,6 +475,7 @@ After each item and at slice closeout:
 - **Always provide a recommended answer in available options** at every elicitation point.
 - **Workflow B gates the output summary.** No "slice complete" report until both `slice-tester` and `slice-verifier` return `pass` (or a half is legitimately skipped for the slice type).
 - **Strip `// INSTRUMENT` lines** before final commit if `debug-instrumenter` ran.
+- **No proof ledgers.** Never write artifact hashes, source freezes, fingerprint files, leases, or per-step proof files; the allowed evidence is listed in "Evidence, not proof ledgers". The Pass mod ledger is the one sanctioned exception.
 - **Fix cap: 3 local fix loops, 3 CI fix rounds, separate counters, non-overridable.** No run instruction ("continue until verified", "never stop", "fully automated") raises either cap; only the operator's explicit reply at the HITL grants more attempts.
 - **The slice time budget is soft.** At `delivery.sliceBudgetHours` the orchestrator lets the current agent finish, then checks in once (`prd_ambiguity`: extend or stop). It never kills an agent, fails a slice, or touches the fix cap.
 - **Deprecated agents are never live-dispatched.** `basic-checks-runner`, `aggregating-test-reviewer`, `ci-cd-guardrails`, and `frontend/visual-reviewer` are shims for v4 back-compat only - route through `slice-tester` / `slice-verifier`.
@@ -500,7 +517,7 @@ Skip only if the slice is `type: backend`, `db-schema`, or `infrastructure` with
 - [ ] Every completed item is flipped `[ ]` → `[x]` in `docs/plans/00_master_checklist.md`.
 - [ ] Slice status updated (`Not Started` → `In Progress` → `Completed`) to match reality.
 - [ ] Slice-level exit criteria boxes ticked where satisfied.
-- [ ] Inline notes added next to any item whose scope deviated from the plan.
+- [ ] Inline notes added next to any item whose scope deviated from the plan (3 lines or fewer for the slice; see "Evidence, not proof ledgers").
 - [ ] Edits committed on the slice branch (not on `main`).
 
 ### 3. Slice Committed and Pushed (ready for review)
