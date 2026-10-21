@@ -137,6 +137,9 @@ Repeat step 3 until the master checklist is empty. That's the whole motion.
 
 Default install paths - **Cursor:** `~/.cursor/plugins/local/bytheslice` · **Claude Code:** `~/.claude/plugins/bytheslice`. Scope a single host with `--target cursor` / `--target claude`; override paths with `--cursor-dir` / `--claude-dir` / `--skills-dir`. For declarative installs, point `--config <path>` at a JSONC file (see [`skills-config.example.json`](scripts/install/skills-config.example.json)).
 
+> [!NOTE]
+> **Updates take effect next session.** A changed agent or skill file is read when a session starts, so start a new session after updating. A plugin installed into the plugin cache is a snapshot copy: reinstall it (or update it from its marketplace) to pick up a new version.
+
 ---
 
 ## Watch the kitchen
