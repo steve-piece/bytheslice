@@ -1524,7 +1524,7 @@ class Actor {
   constructor(agentId, look, x, z, yaw = 0, isCustomer = false) {
     const meta = isCustomer ? { id: 'customer', name: 'Customer', crew: null, tier: null, role: '' } : byId[agentId];
     const u = isCustomer ? {} : UNI[meta.tier];
-    this.meta = meta; this.isCustomer = isCustomer;
+    this.meta = meta; this.isCustomer = isCustomer; this.look = { ...u, ...look };
     this.c = makeChar({ id: agentId, ...u, ...look }); this.g = this.c.g;
     this.pos = new THREE.Vector3(x, .06, z); this.yaw = yaw; this.goalYaw = yaw;
     this.path = []; this.speed = 1.55; this.mode = 'idle'; this.t = rnd() * 10; this.carry = null; this.res = null;
@@ -1868,6 +1868,10 @@ const HOMES = [
   { store: 'florist', via: 'flor', name: 'The Moreau apartment', who: ['Felix', 'Hugo'] },
   { store: 'bank', via: 'bank', name: "Walt's apartment", who: ['Walt'] },
   { store: 'bakery', via: 'bake', name: "Carl's apartment", who: ['Carl'] },
+  // the kitchen crew live in town too, in flats above the shops on Main Street
+  { store: 'hardware', via: 'hard', name: 'The line crew flat', crew: true, who: ['Chef Nico', 'Ren', 'Dom', 'Kit', 'Lu'] },
+  { store: 'cinema', via: 'cine', name: 'The pass crew flat', crew: true, who: ['Tay', 'Inez', 'Ollie', 'Pia'] },
+  { store: 'diner', via: 'diner', name: 'Above the diner', crew: true, who: ['Ezra', 'Bea', 'Pip', 'Sal'] },
 ];
 const HOME_OF = {}; HOMES.forEach(e => { e.street = e.h == null ? 'Upstairs on Main Street' : HS(e.h).z ? 'Maple Street' : 'Elm Street'; if (e.store) e.door = [STORES.find(q => q.kind === e.store).x, 4.15]; e.who.forEach(n => HOME_OF[n] = e); });
 // the walk home from a sidewalk stop: along the town's paths to the gate, up the front walk and in the door
@@ -3536,6 +3540,8 @@ const hex6 = c => '#' + (c ?? 0x7e9db5).toString(16).padStart(6, '0');
 function personOf(n) {
   const a = townies.find(q => q.townie.name === n);
   if (a) { const L = a.townie.member ? townies.find(q => q.townie.name === a.townie.member) : a, home = a.hidden && (tod !== 'day' || L.atHome || (!L.townie.brain && !L.townie.member)); return { look: a.look, kid: !!a.townie.kid, home, status: a.task }; }
+  const crew = [...castActors.values()].find(q => q.meta.name === n);
+  if (crew) return { look: crew.look, kid: false, home: !!crew.hidden, status: crew.hidden ? 'Off duty at home' : crew.task, crew: true };
   const b = bikes.find(q => q.name === n); return b && { look: b.look, kid: true, home: b.mode === 'away', status: b.what };
 }
 function homeCard(e) {
@@ -3554,7 +3560,7 @@ stationObjs.forEach((g, i) => tapTarget(g, () => { const s = cur && cur.slices.f
 { const o = root.getObjectByName('scooter'); tapTarget(o, () => `<h5>Dex's scooter</h5><div class="sub"><code>ci-fix-attempter</code> · off shift</div><dl><dt>Job</dt><dd>Rides out when CI goes red after the window and fixes it on the way.</dd></dl>`); }
 function actorCard(a) {
   if (a.kid) return kidCard(a.kid);
-  if (a.townie) {
+  if (a.townie && !a.townie.crew) {
     const top = a.needs && NEEDS.reduce((x, k) => a.needs[k] > a.needs[x] ? k : x, NEEDS[0]);
     const log = (a.log || []).filter(x => x !== a.task).slice(-3).reverse();
     const mood = a.needs && MOOD[clamp(Math.floor((1 - NEEDS.reduce((t, k) => t + a.needs[k], 0) / NEEDS.length) * 5), 0, 4)];
@@ -3659,6 +3665,55 @@ const ledger = G(0, 0, 0, root, 'ledger');
   P(cyl(.008, .008, .2, 6), M.mustard, -1.1, .945, .35, ledger).rotation.z = Math.PI / 2; ledger.visible = false; }
 const REVIEW = [[0, 'Pie 4 came back once from the pass.'], [1, 'Proposal: contrast check before plating.'], [2, 'Approved. Add it to the house rules.'], [0, 'Pie 7 missed the org filter.'], [1, 'Every rollup slice gets a tenant test.'], [2, 'Good. Brief the line in the morning.'], [0, 'First-try rate is up this week.'], [2, 'Tell the crew. Nice work today.']];
 const CREW_OUT = () => [A.sal, A.ezra, A.bea, A.pip, A.pia, A.ollie, A.tay, A.inez, ...COOKS];
+// ---------- off duty in town (live only): crew whose agent is not running live their own day around town ----------
+// They use the same brain as every neighbor (a home above a shop, needs, likes). When their agent starts they run to the
+// kitchen by the sidewalks and crosswalks (the same right-of-way rules as everyone), and head back out once they are done.
+const CREW_LIKES = {
+  implementer: { diner: 2, hardware: 1.5, cafe: 1 }, 'implementer#2': { bakery: 1.5, diner: 1.5, bench: .8 }, 'component-crafter': { florist: 2, cafe: 1.5, window: 1 },
+  'state-illustrator': { gazebo: 1.5, fountain: 1.5, cinema: 1 }, plater: { bakery: 2, cafe: 1, pond: 1 }, 'checklist-curator': { bench: 1.5, cafe: 1.5, chat: 1 },
+  'rules-loader': { bench: 2, statue: 1, listen: 1 }, discovery: { wander: 1.5, pond: 1, icecream: 1 }, 'slice-tester': { icecream: 2, bakery: 1.5, diner: 1 },
+  'slice-verifier': { bank: 1, florist: 1.5, bench: 1 }, 'local-gates-runner': { hardware: 2, diner: 1 }, 'box-it-up': { chat: 1.5, cafe: 1, window: 1 },
+  orchestrator: { cafe: 1.5, florist: .8, chat: 1 },
+};
+const TOWN_CREW = () => [A.ezra, A.bea, A.pip, A.ren, A.kit, A.lu, A.pia, A.tay, A.inez];
+const BACK = [-4.95, -5.4], BACK_IN = [[-4.95, -4.2], DOOR];
+const crewHome = a => homeFor(a.meta.name);
+function joinTown(a) {
+  const home = crewHome(a);
+  a.townie = { name: a.meta.name, what: 'Off duty around town', look: a.look, brain: { start: home.via, likes: { ...(CREW_LIKES[a.meta.id] || {}) } }, crew: true };
+  a.home = home; a.members = []; a.pace = 1.15; a.speed = a.pace; a.gen ??= 0; a.isTownCrew = true; a.task = 'Off duty around town';
+  a.needs ??= Object.fromEntries(NEEDS.map(k => [k, .25 + rnd() * .45]));
+  if (!townies.includes(a)) townies.push(a);
+  if (!BRAIN.includes(a)) BRAIN.push(a);
+  if (a.hidden) { a.node = home.via; brain(a); return; }
+  // still in the kitchen: out through the back door to the Elm Street sidewalk first
+  const gen = ++a.gen;
+  a.walk([...exitRoute(a).slice(0, -1), DOOR, BACK_IN[0], BACK]).then(() => { if (a.gen === gen && a.isTownCrew) { a.node = 'ENW'; brain(a); } });
+}
+function dropTownCrew(a) {
+  if (!a.isTownCrew) return;
+  a.gen = (a.gen || 0) + 1; release(a); a.place = null; a.pending = null; a.pose = null; a.lift = 0; a.gl = null; a.rock = false; a.follow = null;
+  a.lingerUntil = 0; a.chatting = null; a.detour = null; a.exploring = false; if (a.carry) { a.carry.visible = false; a.carry = null; }
+  for (const list of [townies, BRAIN]) { const at = list.indexOf(a); if (at >= 0) list.splice(at, 1); }
+  delete a.townie; a.isTownCrew = false; a.atHome = false; a.speed = 1.55;
+}
+// called the moment a town crew member's agent starts: the run back to work, from home or from wherever they are
+function runToWork(a) {
+  const inside = a.hidden, door = a.place?.door || a.home?.door; dropTownCrew(a);
+  if (inside && door) { a.pos.set(door[0], .06, door[1] + .15); a.show(true); a.sync(); }
+  a.speed = 3.2;
+  return [...navPts(nearNode(a.pos.x, a.pos.z), 'ENW'), BACK, ...BACK_IN];
+}
+function syncTownCrew() {
+  if (sceneMode !== 'live') return;
+  if (livePhase !== 'open' || tod !== 'day') return;
+  for (const a of TOWN_CREW()) {
+    if (a.isTownCrew || claimedByAgent(a) || phaseActors.has(a.meta.id)) continue;
+    // someone who just finished stays a moment before heading out; their idle timer sends them
+    if ([...liveAssignments.values()].some(entry => entry.actor === a && !entry.active && !entry.offDuty)) continue;
+    joinTown(a);
+  }
+}
 function exitRoute(a) {
   const x = a.pos.x, z = a.pos.z;
   if (z < -1.9) return [[x, -2.6], [-4.2, -2.75], DOOR];
@@ -3818,6 +3873,7 @@ function cancelActor(a) {
 function clearAssignments() {
   phaseActorGen++; phaseActors.clear(); ambient.clear(); liveVerifying = false; reviewActive = false; livePhase = null; liveSessionKey = null;
   for (const a of castActors.values()) clearWorkTag(a);
+  for (const a of TOWN_CREW()) dropTownCrew(a);
   for (const entry of constructionWorkers.values()) { cancelActor(entry.actor); entry.actor.show(false); }
   constructionWorkers.clear();
   if (shopper.actor) { cancelActor(shopper.actor); shopper.actor.show(false); }
@@ -3915,6 +3971,7 @@ function agentOn(event) {
   // a regular on ambient duty drops it the moment their real agent starts
   if (ambient.has(actor.meta.id)) releaseAmbient(actor);
   for (const [key, old] of liveAssignments) if (old.actor === actor) { clearTimeout(old.idleTimer); old.version++; liveAssignments.delete(key); }
+  const townRoute = actor.isTownCrew && !sceneOwnsActor(actor) ? runToWork(actor) : null;
   const wasHidden = actor.hidden, owned = sceneOwnsActor(actor);
   if (!owned) cancelActor(actor);
   entry = { ...event, actor, version: 1, active: true, offDuty: false };
@@ -3928,7 +3985,9 @@ function agentOn(event) {
   if (event.character.crew === 'line') path = [[-4.2, -2.75], [station[0], station[1]]];
   if (event.character.type === 'discovery') path = [[1.35, -2.75], [1.75, -2.6], [1.75, -.82], [-3.25, -.82]];
   if (event.character.crew === 'menu') path = [[-4.2, -.85], [-5.3, -.6], [station[0], station[1]]];
+  if (townRoute) { path = [...townRoute, ...path]; say(actor, 'On my way!', 1.8); }
   actor.walk(path, station[2]).then(() => {
+    actor.speed = 1.55;
     if (sceneMode === 'live' && entry.active && entry.version === version && !sceneOwnsActor(actor)) actor.doing(entry.row.label || event.character.type, 'work');
   });
   const words = { character: event.character, row: event.row, pies: liveSnapshot?.pies };
@@ -3943,15 +4002,16 @@ function agentOff(event) {
   entry.actor.doing(line, 'idle'); say(entry.actor, line);
   const words = { character: entry.character, row: entry.row, ok: event.ok, pies: liveSnapshot?.pies };
   feed(window.kitchenWords.finish(words), window.kitchenWords.pieOf(words));
-  const version = entry.version;
+  const version = entry.version, toTown = TOWN_CREW().includes(entry.actor);
   entry.idleTimer = setTimeout(() => {
     if (sceneMode !== 'live' || entry.active || entry.version !== version || sceneOwnsActor(entry.actor)) return;
     const actor = entry.actor;
+    if (toTown && livePhase === 'open' && tod === 'day') { entry.offDuty = true; joinTown(actor); return; }
     actor.stash = stashFor(actor, exitRoute(actor)); actor.task = 'Heading off duty';
     actor.walk(actor.stash.route).then(() => {
       if (sceneMode === 'live' && !entry.active && entry.version === version && !sceneOwnsActor(actor)) { actor.show(false); actor.doing('Off duty', 'idle'); entry.offDuty = true; }
     });
-  }, 90000);
+  }, toTown ? 12000 : 90000);
 }
 function castEvent(type, event) {
   castEvents.push({ type, key: event.key, aid: event.row.aid, name: event.row.name, ok: event.ok });
@@ -4161,7 +4221,7 @@ function liveDriver(snapshot) {
   for (const [id, entry] of phaseActors) if ((snapshot.active || []).some(row => row.type === `bytheslice:${id}`)) {
     phaseActors.delete(id); cancelActor(entry.actor);
   }
-  castDriver.apply(castSnapshot); syncBuildCrews(snapshot); syncLivePhase(snapshot); syncBaseCrew(snapshot); syncOrderLine(snapshot);
+  castDriver.apply(castSnapshot); syncBuildCrews(snapshot); syncLivePhase(snapshot); syncBaseCrew(snapshot); syncTownCrew(); syncOrderLine(snapshot);
 }
 window.liveDriver = liveDriver;
 Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
@@ -4190,6 +4250,8 @@ Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
   get baseCrew() { return BASE_CREW().map(({ actor }) => ({ character: actor.meta.id, name: actor.meta.name, ambient: ambient.has(actor.meta.id),
     task: actor.task, mode: actor.mode, hidden: !!actor.hidden, position: [actor.pos.x, actor.pos.z], tag: actor.workTagO?.on ? actor.workTagO.el.textContent : null })); },
   get oven() { return { on: ovenOn, verifying: liveVerifying }; },
+  get townCrew() { return TOWN_CREW().map(a => ({ name: a.meta.name, character: a.meta.id, inTown: !!a.isTownCrew, hidden: !!a.hidden, task: a.task, mode: a.mode,
+    speed: a.speed, x: a.pos.x, z: a.pos.z, home: crewHome(a).door, saying: a._say?.el.textContent || null, inKitchen: a.pos.x > -5.2 && a.pos.x < 5.2 && a.pos.z > -4.2 && a.pos.z < 4.2 })); },
   get ballgame() { return { status: GM.status, game: GM.no, last: GM.last,
     people: [...BBALL, ...FANS].map(a => ({ name: a.townie.name, role: a.townie.bb?.coach != null ? 'coach' : a.townie.bb?.ump ? 'umpire' : a.townie.fan ? 'fan' : 'player',
       hidden: !!a.hidden, homeAfterGame: !!a.homeAfterGame, brain: !!a.townie.brain, task: a.task, x: a.pos.x, z: a.pos.z })) }; },

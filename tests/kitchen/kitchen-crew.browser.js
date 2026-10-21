@@ -34,7 +34,7 @@ async function main() {
     await page.waitForFunction(() => window.__kitchenScene?.mode === 'live' && window.__kitchenScene.phase === 'open', null, { timeout: 45000 });
     const feed = async change => { Object.assign(state, change, { cursor: state.cursor + 1 }); await page.evaluate(next => window.__kitchenFeed(next), state); };
     const crew = () => page.evaluate(() => Object.fromEntries(window.__kitchenScene.baseCrew.map(member => [member.name, member])));
-    const settle = predicate => page.waitForFunction(predicate, null, { timeout: 30000 });
+    const settle = predicate => page.waitForFunction(predicate, null, { timeout: 60000 });
     const shot = async name => { if (!SHOTS) return; await page.evaluate(() => window.__kitchenScene.look(.6, -.6, 2.1)); await page.waitForTimeout(500); await page.screenshot({ path: `${SHOTS}-${name}.png` }); };
 
     await settle(() => window.__kitchenScene.baseCrew.every(member => member.ambient && !member.hidden && member.mode === 'inspect'));
@@ -48,7 +48,7 @@ async function main() {
 
     await feed({ active: [agent('verify', 'slice-verifier', 'P5 S5.2 verify: ledger')] });
     await settle(() => { const ollie = window.__kitchenScene.baseCrew.find(member => member.name === 'Ollie'); return ollie.mode === 'work' && /full suite/.test(ollie.task); });
-    await settle(() => window.__kitchenScene.actors.some(entry => entry.name === 'Inez' && entry.active && Math.hypot(entry.position[0] - entry.station[0], entry.position[1] - entry.station[1]) < .1));
+    await settle(() => window.__kitchenScene.actors.some(entry => entry.name === 'Inez' && entry.active && entry.mode === 'work' && Math.hypot(entry.position[0] - entry.station[0], entry.position[1] - entry.station[1]) < .1));
     const inez = (await page.evaluate(() => window.__kitchenScene.actors)).find(entry => entry.name === 'Inez');
     assert.equal(inez.tag, 'Inez · Verifying 5.2'); assert.equal(inez.mode, 'work');
     assert.deepEqual(inez.station.slice(0, 2), [2.2, -.75], 'the verifier works at the pass');
