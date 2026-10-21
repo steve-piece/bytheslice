@@ -1,13 +1,13 @@
 // mod/checks-git.test.ts
-// Unit tests for the fix-loop cap (fix-attempter per slice, ci-fix-attempter per pie) and the main-branch check: they warn, and the spawn or command completes.
+// Unit tests for the fix-loop cap (fix-attempter per slice, ci-fix-attempter per pie, plus its one HITL inbox item) and the main-branch check: they warn, and the spawn or command completes.
 
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 import { branchPie, fixKind, fixSpawnOf, judgeCommitOnMain, judgeFixCap } from './checks-git.ts'
 import { parseChecklist } from './checklist.ts'
 import { CHECKLIST_FIXTURE } from './fixtures/checklist.fixture.ts'
 import { projectLedger } from './ledger-projection.ts'
-import { ACTIVITY, activityLine, bashResult, engineLoops, spawn, stage, warnsOf } from './testing.tsx'
+import { ACTIVITY, activityLine, bashResult, engineLoops, rowsOf, spawn, stage, status, warnsOf } from './testing.tsx'
 
 const fixStart = (aid: string, slice = '5.1') =>
   activityLine({ t: 10, sid: 's', ev: 'SubagentStart', agent: 'bytheslice:fix-attempter', aid, pie: 5, slice })
@@ -25,6 +25,44 @@ test('the fourth fix-attempter spawn on a slice warns and still returns a model;
   expect(fourth).toEqual({ model: 'sonnet', agentId: 'f4' })
   expect(warnsOf(world)).toEqual([['fix-loop-cap', '5.1']])
   expect(world.toasts[0]).toContain("fix-attempter attempt 4 of cap 3 on Slice 5.1; only the operator's explicit reply at the HITL raises it")
+})
+
+test('a fourth fix spawn adds exactly one HITL inbox item, asked in chat; a fifth adds none', async ($, on) => {
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  const session = mock.session(on)
+  engineLoops(on, ['f1', 'f2', 'f3', 'f4', 'f5'])
+  await start($)
+  for (const n of [1, 2, 3]) await spawn($, 'bytheslice:fix-attempter', `P5 S5.1 fix: attempt ${n}`)
+  expect(rowsOf(world).filter(row => row.ev === 'hitl.raised')).toEqual([])
+  const fourth = await spawn($, 'bytheslice:fix-attempter', 'P5 S5.1 fix: attempt 4')
+  expect(fourth.agentId).toBe('f4')
+  const raised = rowsOf(world).filter(row => row.ev === 'hitl.raised')
+  expect(raised).toHaveLength(1)
+  expect(raised[0]).toMatchObject({ pie: 5, slice: '5.1' })
+  expect(raised[0]?.data).toMatchObject({
+    category: 'other',
+    source: 'pass',
+    asked: 'chat',
+    kind: 'fix-loop-cap',
+    question: 'Slice 5.1 is on fix-attempter attempt 4, past the cap of 3. Grant more fix loops, or stop the slice here?',
+  })
+  const id = String((raised[0]?.data as { id: string }).id)
+  // Asked in chat, so it is blocking: one native notification.
+  expect(world.notifies).toHaveLength(1)
+  const notes = session
+    .appended()
+    .filter(row => row.origin.kind === 'plugin')
+    .map(row => row.message.content.map(block => (block.type === 'text' ? block.text : '')).join(''))
+  expect(notes.at(-1)).toBe(
+    `The Pass opened HITL ${id} for the fix cap: ask the operator in chat, and when they answer call bts_hitl with { id: "${id}", answer }. Nothing was blocked.`,
+  )
+  await spawn($, 'bytheslice:fix-attempter', 'P5 S5.1 fix: attempt 5')
+  expect(rowsOf(world).filter(row => row.ev === 'hitl.raised')).toHaveLength(1)
+  expect(warnsOf(world)).toEqual([
+    ['fix-loop-cap', '5.1'],
+    ['fix-loop-cap', '5.1'],
+  ])
+  expect(await status($)).toContain('Open HITL: 1')
 })
 
 test('the activity log counts fix attempts made before this session', async ($, on) => {

@@ -122,6 +122,8 @@ When every Pie in the filtered queue is `Completed`:
 3. The **orchestrating session that invoked `/run-the-day`** (or `/sell-pie` itself, when run interactively) surfaces the prompt to the human. **This skill never calls `ask_user_input_v0`.**
 4. Once the human answers, the chain is resumed by re-invoking the chainer (or re-dispatching the active Pie) with the resolution context appended. The just-completed Pies are already merged and `Completed`, so resumption picks up at the Pie that paused.
 
+When raising a HITL and the `bts_hitl` tool is available, also call it; when the operator answers, call it again with the answer (`{ id, answer }`). It records the question, shows it in the Pass inbox and notifies; it never waits, so the stop-and-ask flow above still does.
+
 > **v5 change:** in v4, `run-the-day` was "the only surface that calls `ask_user_input_v0`." That is no longer true. In v5 no ByTheSlice agent or skill calls `ask_user_input_v0` directly — every layer bubbles `needs_human` + `hitl_*` up the return chain, and only the top-level interactive session prompts the human.
 
 ## Progress Report Format (per pie)

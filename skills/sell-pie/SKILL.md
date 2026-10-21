@@ -203,6 +203,8 @@ Reached only when **every** `### Slice N.M` under the active `## Pie N` is `[x]`
 
 `/sell-pie` is the **`/loop` conductor** - the top-level surface of its own run. When a subagent or sub-skill returns `needs_human: true`, or the pie boundary is reached, the conductor **halts the loop and surfaces the prompt to the human**. **It does NOT reschedule the wake** to "try again later" past a blocking HITL - the human's answer is what resumes the loop.
 
+When raising a HITL and the `bts_hitl` tool is available, also call it; when the operator answers, call it again with the answer (`{ id, answer }`). It records the question, shows it in the Pass inbox and notifies; it never waits, so the stop-and-ask flow above still does.
+
 **The four blocking HITL categories halt the loop** (they are genuine blocking dependencies / the kept checkpoint - spec §1.8; not auto-resolvable, not rescheduled):
 
 | Category | Typical trigger in `/sell-pie` |

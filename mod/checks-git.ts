@@ -1,12 +1,13 @@
 // mod/checks-git.ts
-// Pass checks that warn and never block: a fix-attempter (or ci-fix-attempter) past its cap of 3, and a git commit or push on main.
+// Pass checks that warn and never block: a fix-attempter (or ci-fix-attempter) past its cap of 3, which also opens a HITL inbox item, and a git commit or push on main.
 
 import { atom, read, update } from 'claude-code'
 import type { AgentSpawnInput, EngineInterface } from 'claude-code'
 
 import { gitIntent, labelOf } from './capture.ts'
-import { checksOn } from './checks.ts'
+import { checksOn, noteModel } from './checks.ts'
 import type { Finding } from './checks.ts'
+import { raiseHitl } from './hitl.ts'
 import { CI_FIX_CAP, FIX_CAP, findSlice } from './ledger-projection.ts'
 import { activePie, activeSlice } from './projection.ts'
 import type { PassChecklist, PassFixCounts, PassProjection } from './types'
@@ -101,6 +102,55 @@ export async function checkFixSpawn(
   const spawn = fixSpawnOf(e, { checklist, ledger, branch, counts })
   const found = judgeFixCap(spawn)
   return { spawn, findings: found ? [found] : [] }
+}
+
+/** The kind a fix-cap HITL item carries in the ledger. */
+export const FIX_CAP_KIND = 'fix-loop-cap'
+
+/** The HITL question a fix spawn past its cap raises. Pure. */
+export function fixCapQuestion(spawn: FixSpawn): string {
+  return spawn.kind === 'fix'
+    ? `Slice ${spawn.key} is on fix-attempter attempt ${spawn.attempt}, past the cap of ${FIX_CAP}. Grant more fix loops, or stop the slice here?`
+    : `Pie ${spawn.key} is on ci-fix-attempter round ${spawn.attempt}, past the cap of ${CI_FIX_CAP}. Grant more CI rounds, or stop here?`
+}
+
+/** The hidden note that tells the model which HITL item a fix cap opened. Pure. */
+export function fixCapNote(id: string): string {
+  return `The Pass opened HITL ${id} for the fix cap: ask the operator in chat, and when they answer call bts_hitl with { id: "${id}", answer }. Nothing was blocked.`
+}
+
+/**
+ * After a fix spawn past its cap started and its warning was reported: opens
+ * one HITL inbox item for its loop (`source: 'pass'`, category `other`, asked
+ * in chat) unless one is open, and tells the model its id in a hidden note to
+ * the loop that spawned it. Nothing is blocked. Resolves the item's id, or null.
+ */
+export async function raiseFixCap(
+  $: EngineInterface,
+  spawn: FixSpawn | null,
+  findings: readonly Finding[],
+  parent: string | null,
+): Promise<string | null> {
+  if (!spawn || !findings.some(finding => finding.code === 'fix-loop-cap')) return null
+  const projection = await read($, ledgerAtom).catch(() => null)
+  const pie = spawn.kind === 'fix' ? Number(spawn.key.split('.')[0]) : Number(spawn.key)
+  const slice = spawn.kind === 'fix' ? spawn.key : null
+  const open = (projection?.hitl?.open ?? []).find(
+    item => item.kind === FIX_CAP_KIND && item.slice === slice && (slice !== null || item.pie === pie),
+  )
+  if (open) return open.id
+  const raised = await raiseHitl($, {
+    category: 'other',
+    question: fixCapQuestion(spawn),
+    ...(slice === null ? {} : { slice }),
+    ...(Number.isNaN(pie) ? {} : { pie }),
+    source: 'pass',
+    asked: 'chat',
+    kind: FIX_CAP_KIND,
+  })
+  if (!raised.row) return null
+  await noteModel($, fixCapNote(raised.id), parent)
+  return raised.id
 }
 
 /** After a fix spawn started: this session's counter for its slice or pie moves to its attempt. */
