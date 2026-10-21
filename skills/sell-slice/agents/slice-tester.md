@@ -15,11 +15,15 @@ tools:
   - mcp__Claude_in_Chrome__select_browser
   - mcp__Claude_in_Chrome__tabs_close_mcp
   - mcp__Claude_in_Chrome__file_upload
+  - mcp__Claude_in_Chrome__javascript_tool
+  - mcp__Claude_in_Chrome__computer
   - mcp__claude-in-chrome__browser_batch
   - mcp__claude-in-chrome__list_connected_browsers
   - mcp__claude-in-chrome__select_browser
   - mcp__claude-in-chrome__tabs_close_mcp
   - mcp__claude-in-chrome__file_upload
+  - mcp__claude-in-chrome__javascript_tool
+  - mcp__claude-in-chrome__computer
 ---
 
 # Slice Tester Subagent
@@ -65,7 +69,7 @@ You are **NOT** given: the builder's reasoning, the slice diff (that goes to `sl
 
 ### 2a. Accessibility (frontend, or full-stack with UI)
 
-Run this pass on every `frontend` slice and on every `full-stack` slice whose manifest declares a route or component. It reuses the session you already have open: the same surfaces and the same forced states, at each width in `verification.viewports`. Record its evidence as DOM, computed-style or console excerpts. It adds no screenshots: the 768 and 1280 screenshots in §6 stay the only ones, and an a11y finding may cite them.
+Run this pass on every `frontend` slice and on every `full-stack` slice whose manifest declares a route or component. It reuses the session you already have open: the same surfaces and the same forced states, at each width in `verification.viewports`. Record its evidence as DOM, computed-style or console excerpts. The DOM and computed-style reads run JavaScript in the page (`javascript_tool`) and the Tab presses are key events (`computer` with `action: key`, `text: Tab`), called directly or as `browser_batch` items; at the Playwright tier they are `page.evaluate` and `page.keyboard.press('Tab')`. It adds no screenshots: the 768 and 1280 screenshots in §6 stay the only ones, and an a11y finding may cite them.
 
 | Check | Procedure | `not_applicable` only when |
 |---|---|---|
