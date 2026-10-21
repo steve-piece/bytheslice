@@ -3,7 +3,7 @@
 
 Working plan for the frontend and verification changes assessed against Kaelig
 Deloumeau-Prigent's eight-agent design-system pipeline and Penpot's agile-design
-write-up. **Status: proposed, not scheduled.** Nothing here is implemented.
+write-up. **Status: proposed, not scheduled.** Nothing here is implemented. Since then, slice 5.4 retired the library gate hook and its approval writer (it never fired; see `hooks/README.md` Inventory), so changes 2 and 3 below are moot.
 
 Twelve changes across ten files. **Zero new subagents**, so `agents[]` is untouched
 and the roster stays at 49 — which is also why none of this carries adapter-drift
@@ -44,7 +44,7 @@ compares against an undefined number, and the tester has nothing to falsify.
 
 ### 2. The Library Preview Gate's hook is dormant under `/sell-pie`
 
-`hooks/library-gate-guard.sh:59` reads `[ "$STATE_SKILL" != "sell-slice" ] && exit 0`,
+The library gate hook's line 59 reads `[ "$STATE_SKILL" != "sell-slice" ] && exit 0`,
 so the guard exits immediately in the unattended mode — the one place where autonomy makes
 it matter. `bts_detect_skill` (`hooks/lib/checklist.sh:166`) already returns the literal
 `sell-pie`, and `:161` confirms it is ordered ahead of `sell-slice` deliberately, so the
@@ -142,7 +142,7 @@ Ranked by value delivered over weight added.
 |---|---|---|---|
 | 1 | [Frontend slices must emit a build manifest — state-illustrator is the emitter](#1-frontend-slices-must-emit-a-build-manifest--state-illustrator-is-the-emitter) | `skills/sell-slice/agents/frontend/state-illustrator.md` | small |
 | 2 | [Pass the slice's Exit criteria to all six frontend producers](#2-pass-the-slices-exit-criteria-to-all-six-frontend-producers) | `skills/sell-slice/SKILL.md` | trivial |
-| 3 | [Arm the Library Preview Gate's deterministic backstop under /sell-pie](#3-arm-the-library-preview-gates-deterministic-backstop-under-sell-pie) | `hooks/library-gate-guard.sh` | trivial |
+| 3 | [Arm the Library Preview Gate's deterministic backstop under /sell-pie](#3-arm-the-library-preview-gates-deterministic-backstop-under-sell-pie) | the library gate hook (retired in 5.4) | trivial |
 | 4 | [Repair phantom enforcement and give the two write-capable agents without allowlists a tools: field](#4-repair-phantom-enforcement-and-give-the-two-write-capable-agents-without-allowlists-a-tools-field) | `skills/sell-slice/agents/frontend/component-crafter.md` | trivial |
 | 5 | [Token-existence, var() fallback ban, motion catalog and two a11y source patterns — one bundled script, one existing check key](#5-token-existence-var-fallback-ban-motion-catalog-and-two-a11y-source-patterns--one-bundled-script-one-existing-check-key) | `skills/sell-slice/scripts/verify-frontend-statics.sh` | small |
 | 6 | [Restore the rendered accessibility pass into slice-tester, inline, and record the tooling tier actually achieved](#6-restore-the-rendered-accessibility-pass-into-slice-tester-inline-and-record-the-tooling-tier-actually-achieved) | `skills/sell-slice/agents/slice-tester.md` | small |
@@ -214,7 +214,7 @@ Neither critic touched it; every proposal that included it kept it. It is the ar
 
 ### 3. Arm the Library Preview Gate's deterministic backstop under /sell-pie
 
-**File:** `hooks/library-gate-guard.sh` · **Type:** edit-hook · **Effort:** trivial
+**File:** the library gate hook (retired in 5.4) · **Type:** edit-hook · **Effort:** trivial
 
 **Why**
 
@@ -225,7 +225,7 @@ CLAUDE.md and the README describe the Library Preview Gate as deterministically 
 Line 59 reads: [ "$STATE_SKILL" != "sell-slice" ] && exit 0
 Replace with: case "$STATE_SKILL" in sell-slice|sell-pie) ;; *) exit 0 ;; esac
 
-That is the whole fix. I read the source: precheck-skill.sh writes last-precheck.json UNCONDITIONALLY at lines 84-95, outside its per-skill case statement, from SKILL=$(bts_detect_skill "$PROMPT"), and bts_detect_skill puts sell-pie first in its alternation and already returns the literal string. "skill": "sell-pie" is on disk today. No precheck branch is required.
+That is the whole fix. I read the source: precheck-skill.sh writes the session skill marker UNCONDITIONALLY at lines 84-95, outside its per-skill case statement, from SKILL=$(bts_detect_skill "$PROMPT"), and bts_detect_skill puts sell-pie first in its alternation and already returns the literal string. "skill": "sell-pie" is on disk today. No precheck branch is required.
 
 Add two cases to hooks/test.sh using the existing write_state/run_hook/assert_* helpers: guard fires with skill=sell-pie; guard still exits 0 for an unrelated skill. All fail-open properties preserved unchanged — the four early exits, the session-id dedup, BTS_HOOKS_DISABLED, and exit 0 always.
 
@@ -278,7 +278,7 @@ BASH IS REQUIRED. I verified library-entry-writer.md:152 instructs 'git add ever
 
 **How it answers the critics**
 
-Both critics killed the no-Bash version of the library-entry-writer allowlist; I adopted the fix rather than the cut, which is what the spec critic explicitly recommended ('include Bash, or move the git add to the orchestrator'). Keeping the allowlist with Bash preserves the gain — no Write scope beyond library_root stated in hard constraints, no ability to invoke record-library-approval.sh — without the break.
+Both critics killed the no-Bash version of the library-entry-writer allowlist; I adopted the fix rather than the cut, which is what the spec critic explicitly recommended ('include Bash, or move the git add to the orchestrator'). Keeping the allowlist with Bash preserves the gain (no Write scope beyond library_root stated in hard constraints, no ability to invoke the library approval writer) without the break.
 
 ---
 
@@ -294,7 +294,7 @@ The fabricated-token failure is live and reachable: component-crafter.md:55 expl
 
 NEW FILE at skills/sell-slice/scripts/. This placement is load-bearing and verified: package.json files allowlists "scripts/install", NOT scripts/, so a root-level script does not ship via npm — but "skills" is allowlisted, and "skills": "./skills" is present in BOTH .claude-plugin/plugin.json and .cursor-plugin/plugin.json, and skills is the one path key that ADDS rather than REPLACES. So this ships on both clients and both install paths with ZERO manifest edits.
 
-Invocation: bash "<plugin-root>/skills/sell-slice/scripts/verify-frontend-statics.sh" --base <sha> (same <plugin-root> convention SKILL.md already documents for record-library-approval.sh). Bash, matching the hooks/*.sh idiom — no node dependency introduced.
+Invocation: bash "<plugin-root>/skills/sell-slice/scripts/verify-frontend-statics.sh" --base <sha> (same <plugin-root> convention SKILL.md documented for the library approval writer). Bash, matching the hooks/*.sh idiom: no node dependency introduced.
 
 ALLOWLIST = union of: every token in the | Token | Light | Dark | tables of docs/design-system.md; every --x: declared under :root / .dark / @theme in the generated CSS entry; tailwind.config theme bindings. Missing all three → exit 2, 'no token catalog resolvable' (loud, never a silent pass).
 
@@ -580,7 +580,7 @@ Recorded so they are not re-proposed. Each was considered and cut for the stated
 
 - Adding an agents[] array to .cursor-plugin/plugin.json. Cursor's manifest superset consumes agents as a DIRECTORY STRING; both proposals wrote an array of nested file paths whose acceptance nothing has verified. If Cursor validates shape the way Claude Code does, the whole manifest fails and Cursor users lose the 13 skills and 13 commands they have working today — for a benefit both proposals describe as parity with no Cursor-side effect.
 
-- A precheck-skill.sh sell-pie branch as a prerequisite for the guard fix. I read the source: last-precheck.json is written unconditionally at lines 84-95, outside the case statement, and bts_detect_skill already returns the literal 'sell-pie'. The state is on disk today. Adding the branch is a real, separate behavior change introducing new BLOCK/WARN preconditions on /sell-pie and needs its own argument and tests.
+- A precheck-skill.sh sell-pie branch as a prerequisite for the guard fix. I read the source: the session skill marker is written unconditionally at lines 84-95, outside the case statement, and bts_detect_skill already returns the literal 'sell-pie'. The state is on disk today. Adding the branch is a real, separate behavior change introducing new BLOCK/WARN preconditions on /sell-pie and needs its own argument and tests.
 
 - First-click testing, LLM simulated-user studies, and Nielsen's 10 as a per-slice gate. Named so nobody builds them later. First-click validity derives entirely from a naive user's first instinct; an agent that has read the build manifest — which names every route, component and affordance — cannot be naive, so its number is a fabricated ~100%. A model roleplaying a user reports on its training priors. Both emit a confident green signal over an unchecked dimension: the fabricated-token pathology applied to UX. A fake UX verdict is strictly worse than none, because it converts an honest gap into a trusted lie. Nielsen's 10 is a category error as a carrier — the same ten items on every slice carry zero slice-specific information, and its checkable subset is already covered by state-illustrator and slice-verifier.
 
@@ -598,7 +598,7 @@ PIE 1 — "Make the frontend path verifiable" (4 slices, one PR). Everything her
 
   Slice 1.1 — Frontend build manifest. Change 1 alone: state-illustrator Step 4, the sell-slice and sell-pie orchestrator wiring, the manifest-only fallback dispatch, and slice-verifier's zero-declared to needs_human rule. Ship this by itself and let it run one real pie. Every other frontend improvement rides on it, and if it is wrong you want a clean bisect.
 
-  Slice 1.2 — The trivial batch: changes 2, 3, 4, 11. Exit criteria to six producers, library-gate-guard line 59 plus its two hooks/test.sh cases, phantom-enforcer fixes, both tools: allowlists, the shadcn-MCP-absent branch, the HITL enum widening. All frontmatter and one-line edits, no behavior risk, no new files. This is an afternoon and it is where most of the separation-of-concerns payoff actually lands.
+  Slice 1.2: The trivial batch, changes 2, 3, 4, 11. Exit criteria to six producers, the library gate hook's line 59 plus its two hooks/test.sh cases, phantom-enforcer fixes, both tools: allowlists, the shadcn-MCP-absent branch, the HITL enum widening. All frontmatter and one-line edits, no behavior risk, no new files. This is an afternoon and it is where most of the separation-of-concerns payoff actually lands.
 
   Slice 1.3 — Deterministic statics: change 5. The bundled script plus the slice-verifier §4 sub-check. Self-contained, one new file, no agent behavior change.
 
