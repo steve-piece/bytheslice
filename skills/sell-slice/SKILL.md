@@ -380,7 +380,7 @@ It runs each atomic check once: lint · typecheck · build · unit/integration �
 
 If `slice-tester.overall == fail` OR `slice-verifier.overall == fail`, route the union of their `fix_targets` to the fixer **off-context** (the fixer gets the failing verdict + evidence, not the tester's or builder's full chat):
 
-- 1st fail → `fix-attempter` with the failing verdict(s) + evidence → re-run **only the failed half** (re-dispatch `slice-tester` if a behavioral check failed; re-dispatch `slice-verifier` for the static checks the patch could plausibly have changed - `slice-verifier` carries already-green checks forward and re-runs only what changed, C5).
+- 1st fail → `fix-attempter` with the failing verdict(s) + evidence → re-run **only the failed half** (re-dispatch `slice-tester` if a behavioral check failed; re-dispatch `slice-verifier` with its prior verdict and the fix's `files_changed`). **Re-verification hard rule:** `slice-verifier` carries every green check forward and re-runs only the gates the fix patch could change, chosen by the verifier from the fix diff, and lists each in its `rerun: [{gate, reason}]` field. The full suite never re-runs after any fix (1st, 2nd or 3rd).
 - 2nd fail → `debug-instrumenter` adds targeted `// INSTRUMENT` logging → re-run the failed verifier/tester → `fix-attempter` again with the richer evidence → re-run.
 - Cap 3 total loops. On 3rd persistent failure → bubble HITL with full evidence (the goal stays active so the loop resumes if the user resolves it).
 
