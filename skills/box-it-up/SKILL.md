@@ -1,6 +1,6 @@
 ---
 name: box-it-up
-description: Box the pie and hand it across the counter - per slice, commit + push only (no PR, CI stays quiet); at the pie boundary, open one PR, watch CI once (auto-fix on red), merge on approval preserving every slice commit, sync main, delete the branch, remove the pie worktree. Opt-in merge-per-slice mode (--merge-slice, run internally by the conductor) opens, CI-checks and merges one PR per slice with a merge commit instead.
+description: "Box the pie and hand it across the counter - per slice, commit + push only (no PR, CI stays quiet); at the pie boundary, open one PR, watch CI once (auto-fix on red), merge on approval preserving every slice commit, sync main, delete the branch, remove the pie worktree. Opt-in merge-per-slice mode (--merge-slice, run internally by the conductor) opens, CI-checks and merges one PR per slice with a merge commit instead."
 user-invocable: true
 triggers: ["/bytheslice:box-it-up", "/box-it-up", "box up the pie", "box up the slice", "hand it over", "close out the pie", "/bytheslice:ship-pr", "/ship-pr", "ship the pr", "submit the pr", "open and merge the pr", "ship this branch", "ship this pie"]
 ---

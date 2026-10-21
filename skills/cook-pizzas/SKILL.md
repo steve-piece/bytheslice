@@ -1,6 +1,6 @@
 ---
 name: cook-pizzas
-description: Cook the pre-made pies before the shop opens, transforming a PRD into an ordered roadmap of vertical-slice features, grouped into Pies of 3 to 8 slices. Each Pie is a coherent chapter that bakes autonomously; each Slice is one vertical deliverable. Adds `--repie` to convert a flat v4 checklist into Pies on explicit opt-in.
+description: "Cook the pre-made pies before the shop opens, transforming a PRD into an ordered roadmap of vertical-slice features, grouped into Pies of 3 to 8 slices. Each Pie is a coherent chapter that bakes autonomously; each Slice is one vertical deliverable. Adds `--repie` to convert a flat v4 checklist into Pies on explicit opt-in."
 user-invocable: true
 triggers: ["/bytheslice:cook-pizzas", "/cook-pizzas", "cook the pizzas", "make the pies", "prep the pies", "/bytheslice:plan-phases", "/plan-phases", "plan phases", "break into phases", "phased plan", "create a development plan", "decompose the prd", "repie", "re-pie", "convert flat checklist to pies"]
 ---

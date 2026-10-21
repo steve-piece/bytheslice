@@ -2,9 +2,9 @@
 
 # 🍕 Agent Roster
 
-Every ByTheSlice subagent in one table, in plain English. The 49 unique live agents are registered plugin agents: type `@bytheslice:<name>` in any Claude Code session to aim one at something directly, or just run the skills and let them dispatch. Registration means each agent's model tier, effort level, and tool allowlist (when its file declares one; an agent without a `tools:` list gets every tool) are enforced by the platform, not just suggested.
+Every ByTheSlice subagent in one table, in plain English. ByTheSlice ships 49 registered subagents plus 6 documented deprecated shims. The 49 live agents are registered plugin agents: type `@bytheslice:<name>` in any Claude Code session to aim one at something directly, or just run the skills and let them dispatch. Registration means each agent's model tier, effort level, and tool allowlist (when its file declares one; an agent without a `tools:` list gets every tool) are enforced by the platform, not just suggested.
 
-Bold rows mark the skill each group of agents belongs to. The six agents at the bottom are v4 leftovers that stay on disk for back-compat but are not registered.
+Bold rows mark the skill each group of agents belongs to. The 6 deprecated shims at the bottom are v4 leftovers that stay on disk for back-compat but are not registered.
 
 | Agent | Kitchen character | What it does |
 |---|---|---|
@@ -88,4 +88,4 @@ The [kitchen roster](../skills/open-kitchen/kitchen.html) groups characters into
 - **Base crew and town crew.** While a pie is open in live mode, Dom works the line, Ollie tends the oven and Sal minds the window on ambient duty, with Chef Nico leading; an agent that is actually running wears a gold work tag. The rest of the named crew live in town, in flats above the Main Street shops, until their agent starts, then run in to their station and walk back out when it finishes. The People sheet's Crew and Town tabs open a profile card for any of them.
 - Additional simultaneous plugin instances use numbered helpers in the matching division, such as `line helper 1`. Unknown plugin roles use line helpers. Non-plugin agents appear as numbered **Temp** helpers at the pass, preserving their actual agent type in the role description.
 
-The six deprecated agents above stay distinct from the 49 registered roles and have no documented named live-character assignment.
+The 6 deprecated shims above stay distinct from the 49 registered roles and have no documented named live-character assignment.

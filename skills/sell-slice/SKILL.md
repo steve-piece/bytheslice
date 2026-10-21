@@ -1,6 +1,6 @@
 ---
 name: sell-slice
-description: Sell a customer their slice - the high-touch single-slice delivery loop. Execute one slice from your master checklist as an interactive spine (prep gate · recon · build-plan auth · /goal · branch) + Workflow A (produce) + library gate + Workflow B (verify-once). Run me repeatedly, one fresh chat per slice. For autonomous whole-pie baking use /sell-pie.
+description: "Sell a customer their slice - the high-touch single-slice delivery loop. Execute one slice from your master checklist as an interactive spine (prep gate · recon · build-plan auth · /goal · branch) + Workflow A (produce) + library gate + Workflow B (verify-once). Run me repeatedly, one fresh chat per slice. For autonomous whole-pie baking use /sell-pie."
 user-invocable: true
 triggers: ["/bytheslice:sell-slice", "/sell-slice", "sell a slice", "serve a customer", "bake the slice", "/bytheslice:deliver-stage", "/deliver-stage", "deliver the next stage", "ship the next slice", "work the checklist"]
 ---

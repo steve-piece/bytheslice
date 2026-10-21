@@ -1,6 +1,6 @@
 ---
 name: open-kitchen
-description: Open the project's approved 3D kitchen in the native Browser pane with a verified localhost state connection.
+description: "Open the project's approved 3D kitchen in the native Browser pane with a verified localhost state connection."
 user-invocable: true
 ---
 <!-- skills/open-kitchen/SKILL.md -->
