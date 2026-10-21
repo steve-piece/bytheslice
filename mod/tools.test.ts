@@ -142,5 +142,6 @@ test('the report and the next action cover the edge states', () => {
   const v4 = { pies: [], prep: null, layout: 'stage' as const }
   expect(nextAction(v4, null)).toContain('v4 checklist')
   const done = { pies: [{ n: 7, name: 'Done', review: 'boundary' as const, done: true, slices: [{ id: '7.1', name: 'A', done: true }] }], prep: null, layout: 'pie' as const }
-  expect(nextAction(done, null)).toBe('/box-it-up ready')
+  expect(nextAction(done, null, 'pie-7-done')).toBe('/box-it-up ready')
+  expect(nextAction(done, null, 'main')).toBe('all pies done; nothing left to box')
 })

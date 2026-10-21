@@ -8,7 +8,7 @@ import { record } from './capture.ts'
 import { registerHitl } from './hitl.ts'
 import { ledgerPath } from './ledger.ts'
 import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
-import { activePie, activeSlice, allDone, counts } from './projection.ts'
+import { activePie, activeSlice, allDone, boxReady, counts } from './projection.ts'
 import { runningFor } from './rail.tsx'
 import { mismatchLine } from './reconcile.ts'
 import { bakersWord } from './team.ts'
@@ -143,10 +143,10 @@ function sliceLine(view: PassSliceView, isActive: boolean): string {
 }
 
 /** The next expected action, a fact to act on; it gates nothing. */
-export function nextAction(c: PassChecklist | null, p: PassProjection | null): string {
+export function nextAction(c: PassChecklist | null, p: PassProjection | null, branch: string | null = null): string {
   if (!c) return 'no checklist yet: run /cook-pizzas to plan the pies'
   if (c.layout === 'stage') return 'v4 checklist: /sell-slice serves one stage at a time, or /cook-pizzas --repie'
-  if (allDone(c)) return '/box-it-up ready'
+  if (allDone(c)) return boxReady(c, branch) ? '/box-it-up ready' : 'all pies done; nothing left to box'
   const pie = activePie(c)
   const slice = activeSlice(c)
   if (!pie || !slice) return 'no open slice in the checklist'
@@ -269,7 +269,7 @@ export function statusReport(
     for (const m of mismatches.slice(0, 4)) lines.push(`  - ${mismatchLine(m)}`)
     if (mismatches.length > 4) lines.push(`  and ${mismatches.length - 4} more (pass reconcile lists them all)`)
   }
-  lines.push(`Next: ${nextAction(c, p)}`)
+  lines.push(`Next: ${nextAction(c, p, branch)}`)
   lines.push('These are facts from the ledger; nothing here halts or refuses a step.')
   if (lines.length > STATUS_LINES) {
     const tail = lines.slice(-6)

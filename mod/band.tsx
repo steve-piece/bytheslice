@@ -5,7 +5,7 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput, RenderPropsOf } from 'claude-code'
 
 import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
-import { activePie, activeSlice, allDone, counts } from './projection.ts'
+import { activePie, activeSlice, allDone, boxReady, counts } from './projection.ts'
 import { PANE_ID } from './rail.tsx'
 import { bakersWord } from './team.ts'
 import type { PassChecklist, PassLive, PassProjection, PassTeam, PassWarning } from './types'
@@ -15,6 +15,7 @@ const ledgerAtom = atom({ plugin: 'bytheslice', key: 'pass.ledger' } as const, n
 const liveAtom = atom({ plugin: 'bytheslice', key: 'pass.live' } as const, { at: 0, agents: [] })
 const warningAtom = atom({ plugin: 'bytheslice', key: 'pass.warning' } as const, null)
 const teamAtom = atom({ plugin: 'bytheslice', key: 'pass.team' } as const, { at: 0, bakers: [] })
+const branchAtom = atom({ plugin: 'bytheslice', key: 'pass.branch' } as const, null)
 
 export const NARROW_COLUMNS = 60
 export const DOCK_COLUMNS = 110
@@ -33,6 +34,7 @@ export const openHitl = (ledger: PassProjection | null): number => ledger?.hitl?
  * · fix 1/3 · HITL 1`, in the warning style while the slice's latest verdict
  * failed, while any HITL item is open, and for five minutes after a check
  * warning, which it then names. While the team has bakers it adds `· 2 bakers`.
+ * With every pie done it adds `/box-it-up ready` only while a pie branch is checked out.
  */
 export function bandLine(
   c: PassChecklist | null,
@@ -41,6 +43,7 @@ export function bandLine(
   live: PassLive | null = null,
   warning: PassWarning | null = null,
   team: PassTeam | null = null,
+  branch: string | null = null,
 ): BandLine | null {
   if (!c) return null
   const narrow = bodyColumns < NARROW_COLUMNS
@@ -49,7 +52,7 @@ export function bandLine(
   const crew = bakers > 0 ? (narrow ? ` ${bakersWord(bakers)}` : ` · ${bakersWord(bakers)}`) : ''
   const asks = (hitl > 0 ? (narrow ? ` HITL ${hitl}` : ` · HITL ${hitl}`) : '') + crew
   if (c.layout === 'stage') return hitl > 0 ? { text: `v4 checklist${asks}`, dim: false, warn: true } : { text: 'v4 checklist', dim: true }
-  if (allDone(c)) return { text: `${narrow ? 'all done' : `All pies done · ${READY}`}${asks}`, dim: false, ...(hitl > 0 ? { warn: true } : {}) }
+  if (allDone(c)) return { text: `${narrow ? 'all done' : boxReady(c, branch) ? `All pies done · ${READY}` : 'All pies done'}${asks}`, dim: false, ...(hitl > 0 ? { warn: true } : {}) }
   const pie = activePie(c)
   const slice = activeSlice(c)
   if (!pie || !slice) return null
@@ -116,14 +119,15 @@ async function paneDocked($: EngineInterface, e: RenderInput<'AbovePrompt'>): Pr
  */
 export async function drawBand($: EngineInterface, e: RenderInput<'AbovePrompt'>): Promise<RenderElement | null> {
   if (e.props.hasSurvey) return null
-  const [c, ledger, live, warning, team] = await Promise.all([
+  const [c, ledger, live, warning, team, branch] = await Promise.all([
     read($, checklistAtom),
     read($, ledgerAtom),
     read($, liveAtom),
     read($, warningAtom),
     read($, teamAtom),
+    read($, branchAtom),
   ])
-  const line = bandLine(c, e.props.bodyColumns, ledger, live, warning, team)
+  const line = bandLine(c, e.props.bodyColumns, ledger, live, warning, team, branch)
   if (!line) return null
   if (await paneDocked($, e)) return null
   const { Text } = $.ui.resolve(e)
@@ -132,7 +136,7 @@ export async function drawBand($: EngineInterface, e: RenderInput<'AbovePrompt'>
 
 /**
  * The prompt hint's props with `/box-it-up ready` added once every slice of
- * every pie is done, or null to leave the hint as the engine has it. The
+ * every pie is done and a pie branch is still checked out, or null to leave the hint as the engine has it. The
  * terminal keeps its own line and takes the words as `tail`; other surfaces
  * draw no tail yet, so there the words join the hint.
  */
@@ -140,8 +144,8 @@ export async function hintProps(
   $: EngineInterface,
   e: RenderInput<'PromptHint'>,
 ): Promise<RenderPropsOf['PromptHint'] | null> {
-  const c = await read($, checklistAtom)
-  if (!allDone(c)) return null
+  const [c, branch] = await Promise.all([read($, checklistAtom), read($, branchAtom)])
+  if (!boxReady(c, branch)) return null
   if (e.surface === 'terminal') return { ...e.props, tail: READY }
   const hint = e.props.hint.trim()
   return { ...e.props, hint: hint === '' ? READY : `${hint} · ${READY}` }
