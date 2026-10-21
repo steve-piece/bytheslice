@@ -8,8 +8,8 @@
     {
       "name": "bytheslice",
       "source": "./",
-      "description": "ByTheSlice runs your project like a grab-and-go pizza shop. v5 delivers in Pies (3 to 8 slice chapters, one PR each). Everyday loop: /sell-pie bakes a whole Pie autonomously (context-separated build/test/verify/fix per slice), then /box-it-up opens the PR, watches CI, and merges. /sell-slice is the high-touch single-slice variant. One-time prep: /setup-shop, /create-menu, /cook-pizzas, /set-display-case, /final-quality-check, /open-the-shop. All 49 live subagents natively registered with enforced model tiers, tool allowlists, and effort levels.",
-      "version": "5.3.0",
+      "description": "ByTheSlice runs your project like a grab-and-go pizza shop. v5 delivers in Pies (3 to 8 slice chapters, one PR each). Everyday loop: /sell-pie bakes a whole Pie autonomously (context-separated build/test/verify/fix per slice), then /box-it-up opens the PR, watches CI, and merges. /sell-slice is the high-touch single-slice variant. One-time prep: /setup-shop, /create-menu, /cook-pizzas, /set-display-case, /final-quality-check, /open-the-shop. All 49 live subagents natively registered with enforced model tiers, tool allowlists, and effort levels. The Pass, a Claude Code mod, shows live slice progress beside the chat and warns, never blocks, when a delivery rule slips.",
+      "version": "5.4.0",
       "keywords": [
         "prd",
         "phased-plans",
