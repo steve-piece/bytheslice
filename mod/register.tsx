@@ -1,5 +1,5 @@
 // mod/register.tsx
-// The Pass hooks module, wiring only: version gate, ledger capture, checks that warn and never block, the bts tools, the pass command, pane, band and hint.
+// The Pass hooks module, wiring only: version gate, ledger capture, checks that warn and never block, the stall watchdog, the HITL inbox, the bts tools, the pass command, pane, band and hint.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
@@ -8,25 +8,30 @@ import { drawBand, hintProps, pushStatus } from './band.tsx'
 import { captureBash, captureSkill, captureTurn, markSpawn, recordDoneFlips } from './capture.ts'
 import { primeChecks, reportToModel, trackGit, trackSkill, warnResult } from './checks.ts'
 import { checkFileWrite, checkPush } from './checks-checklist.ts'
-import { checkCommitOnMain, checkFixSpawn, countFix } from './checks-git.ts'
+import { checkCommitOnMain, checkFixSpawn, countFix, raiseFixCap } from './checks-git.ts'
 import { checkDrift, checkSpawn, trackSpawn } from './checks-spawn.ts'
+import { closeOnReply, isOperatorReply, serveHitl } from './hitl.ts'
 import { startSession } from './ledger.ts'
 import { pollAgents, refreshLedger, startPulse } from './live.ts'
+import { notifyPiesReady } from './notify.ts'
 import { gate, isChecklistPath, isLimited, refresh, watchChecklist } from './projection.ts'
 import { checksText, drawPane, openPane, togglePane } from './rail.tsx'
 import { reconcileText } from './reconcile.ts'
 import { registerTools, serveNote, serveStatus } from './tools.ts'
+import { stamp, startWatchdog, stopWatchdog } from './watchdog.ts'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
 const ledgerAtom = atom({ plugin: 'bytheslice', key: 'pass.ledger' } as const, null)
 
 // Every checklist write goes through here: the status line follows it, a slice
-// that flipped to done is recorded, and the ledger projection is read again.
+// that flipped to done is recorded, a pie it finished is announced once, and
+// the ledger projection is read again.
 async function reload($: EngineInterface): Promise<boolean> {
   const before = await read($, checklistAtom).catch(() => null)
   const c = await refresh($)
   pushStatus($, c)
   await recordDoneFlips($, before, c).catch(() => [])
+  await notifyPiesReady($, before, c).catch(() => [])
   await refreshLedger($)
   return c !== null
 }
@@ -35,6 +40,19 @@ const inputOf = (e: unknown): Record<string, unknown> =>
   e !== null && typeof e === 'object' ? (e as Record<string, unknown>) : {}
 
 export const register: Register = on => {
+  // Registered first, so it sees every tool call: a subagent's call stamps its
+  // loop's last activity for the watchdog (at most once per 5 seconds), and the
+  // call goes on unchanged.
+  on('tool.call', async ($, e, next) => {
+    await stamp($, e.agentId).catch(() => false)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  on('turn.start', async ($, e, next) => {
+    await stamp($, e.agentId).catch(() => false)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
   on('session.start', async ($, e, next) => {
     if (!(await gate($))) {
       await startSession($).catch(() => undefined)
@@ -52,10 +70,20 @@ export const register: Register = on => {
       await watchChecklist($, () => reload($))
       await pollAgents($)
       await startPulse($)
+      // Every 30 seconds: flags stalled agents; it warns and never stops one.
+      await startWatchdog($)
       // Unasked, the engine places the pane only on a wide terminal; it waits undrawn below that.
       if (hasChecklist && e.isInteractive) void openPane($).catch(() => undefined)
     }
     return next(e)
+  }).catch(($, e, next) => next(e))
+
+  // The watchdog stops with the session; a /clear keeps the process, so it starts again.
+  on('session.end', async ($, e, next) => {
+    const ended = await next(e)
+    stopWatchdog()
+    if (e.reason === 'clear' && !(await isLimited($))) await startWatchdog($).catch(() => undefined)
+    return ended
   }).catch(($, e, next) => next(e))
 
   // Checks judge before the call from atoms only, always call next, and add any
@@ -88,6 +116,19 @@ export const register: Register = on => {
     result: 'not recorded: the Pass could not write the note. Nothing was halted.',
   }))
 
+  // Records and notifies, then returns at once: the skill's own HITL flow (ask in chat and stop) is what waits.
+  on('tool.call', { tool: ['mcp__bytheslice__bts_hitl', /^mcp__\w*bytheslice\w*__bts_hitl$/] }, async ($, e) => ({ result: await serveHitl($, inputOf(e)) })).catch(() => ({
+    result: 'not recorded: the Pass could not record that HITL item; ask the operator in chat anyway. Nothing was halted.',
+  }))
+
+  // The operator's own reply in chat answers the items the model was told to ask
+  // there; the prompt goes in unchanged and its words are never read or kept.
+  on('prompt.submit', async ($, e, next) => {
+    const entered = await next(e)
+    if (entered.drop === undefined && isOperatorReply(e)) await closeOnReply($).catch(() => 0)
+    return entered
+  }).catch(($, e, next) => next(e))
+
   // The spawn policy and the fix-loop cap warn: the spawn runs on the model and task
   // it asked for, and next's answer is returned untouched.
   on('agent.spawn', async ($, e, next) => {
@@ -99,6 +140,8 @@ export const register: Register = on => {
       await countFix($, fix.spawn).catch(() => undefined)
       await trackSpawn($, started.agentId, judged.track).catch(() => undefined)
       await reportToModel($, [...fix.findings, ...judged.findings], e.parentAgentId ?? null).catch(() => [])
+      // Past the fix cap the loop also gets a HITL inbox item; the spawn already ran.
+      await raiseFixCap($, fix.spawn, fix.findings, e.parentAgentId ?? null).catch(() => null)
     }
     return started
   }).catch(($, e, next) => next(e))
