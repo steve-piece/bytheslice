@@ -1,6 +1,6 @@
 ---
 name: set-display-case
-description: Build the display case the pies will sit in, bootstrap your design system: tokens, Tailwind config, design rules, and the operator-only /library preview route. Run once before /sell-slice; also invocable standalone on any project.
+description: "Build the display case the pies will sit in, bootstrap your design system: tokens, Tailwind config, design rules, and the operator-only /library preview route. Run once before /sell-slice; also invocable standalone on any project."
 user-invocable: true
 triggers: ["/bytheslice:set-display-case", "/set-display-case", "set up the display case", "install the design system", "/bytheslice:init-design-system", "/init-design-system", "scaffold design system", "design-system stage"]
 ---

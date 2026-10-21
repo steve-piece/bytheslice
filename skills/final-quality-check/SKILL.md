@@ -1,22 +1,22 @@
 ---
 name: final-quality-check
-description: Install the quality line every pie passes through before going on display — wire CI/CD, E2E testing, design-system compliance, and visual-regression gates. Run once before /sell-slice; also invocable standalone on any project.
+description: "Install the quality line every pie passes through before going on display: wire CI/CD, E2E testing, design-system compliance, and visual-regression gates. Run once before /sell-slice; also invocable standalone on any project."
 user-invocable: true
 triggers: ["/bytheslice:final-quality-check", "/final-quality-check", "install the quality line", "wire the inspection station", "/bytheslice:scaffold-ci-cd", "/scaffold-ci-cd", "scaffold ci/cd", "set up ci", "bootstrap quality gates", "ci-cd stage"]
 ---
 <!-- skills/final-quality-check/SKILL.md -->
 <!-- Daily-prep skill (run before /sell-slice). Pizza-shop framing: install the quality line every pie crosses before landing on the display tray. Orchestrator-only: dispatches nine specialized agents to bootstrap the production-grade CI/CD + E2E + design-system-compliance + visual-regression baseline on a dedicated chore branch. Mode-detected (standalone vs sequential). -->
 
-# Final Quality Check — CI/CD + Verification Baseline
+# Final Quality Check: CI/CD + Verification Baseline
 
-This skill is the orchestrator for the CI/CD baseline. It does not write workflows itself — it **dispatches nine specialized agents** that each own one slice of the scaffold work. The orchestrator's job is detection, sequencing, user-input gating, and walking the completion checklist.
+This skill is the orchestrator for the CI/CD baseline. It does not write workflows itself; it **dispatches nine specialized agents** that each own one slice of the scaffold work. The orchestrator's job is detection, sequencing, user-input gating, and walking the completion checklist.
 
 ## Mode detection
 
 This skill runs in one of two modes, auto-detected at startup:
 
-- **Standalone** — no `docs/plans/00_master_checklist.md` at the project root. Adds CI/CD + E2E + design-system-compliance + visual-regression baseline to any project. Runs end-to-end, exits. No checklist coordination.
-- **Sequential** — master checklist exists with a `## Prep` section. On completion, flip the `[ ] Quality line installed` row to `[x]` and surface: *"Quality line ready. Next prep step: `/open-the-shop`."*
+- **Standalone**: no `docs/plans/00_master_checklist.md` at the project root. Adds CI/CD + E2E + design-system-compliance + visual-regression baseline to any project. Runs end-to-end, exits. No checklist coordination.
+- **Sequential**: master checklist exists with a `## Prep` section. On completion, flip the `[ ] Quality line installed` row to `[x]` and surface: *"Quality line ready. Next prep step: `/open-the-shop`."*
 
 Honor an explicit `--standalone` or `--sequential` flag if passed; otherwise auto-detect from disk state.
 
@@ -25,7 +25,7 @@ Honor an explicit `--standalone` or `--sequential` flag if passed; otherwise aut
 | File | Purpose |
 | --- | --- |
 | [references/scaffold-artifact-templates.md](references/scaffold-artifact-templates.md) | Verbatim file templates for every CI/CD artifact (workflows, husky hook, PR template, regex sweep script, etc.). Every implementer agent reads this before writing. |
-| [references/prd-ci-cd-checklist.md](references/prd-ci-cd-checklist.md) | **Project-wide runtime guardrails**, not scaffold-time setup. Master-checklist updates, CI gate alignment, deterministic pipelines, slice-per-PR rule, failure-artifact upload — these apply to every agent on every PR. Sub-block H of Phase 3 appends this content into the project rules file (CLAUDE.md / AGENTS.md) so every later stage skill picks it up automatically. |
+| [references/prd-ci-cd-checklist.md](references/prd-ci-cd-checklist.md) | **Project-wide runtime guardrails**, not scaffold-time setup. Master-checklist updates, CI gate alignment, deterministic pipelines, slice-per-PR rule, failure-artifact upload; these apply to every agent on every PR. Sub-block H of Phase 3 appends this content into the project rules file (CLAUDE.md / AGENTS.md) so every later stage skill picks it up automatically. |
 
 ## Subagent Roster
 
@@ -43,7 +43,7 @@ Each agent is a **registered plugin agent**: dispatch by type `bytheslice:<name>
 | 3G | [agents/branch-protection-writer.md](agents/branch-protection-writer.md) | haiku | low | write |
 | 4 | [agents/local-gates-runner.md](agents/local-gates-runner.md) | sonnet | medium | write |
 
-The PR template (Phase 3D) is small enough that the orchestrator writes it directly from the templates file — no agent is needed.
+The PR template (Phase 3D) is small enough that the orchestrator writes it directly from the templates file; no agent is needed.
 
 ## Inputs and Preconditions
 
@@ -64,14 +64,14 @@ The PR template (Phase 3D) is small enough that the orchestrator writes it direc
 
 ## Workflow
 
-### Phase 0 — Discovery (parallel)
+### Phase 0: Discovery (parallel)
 
 Dispatch in one batch:
 
-1. `scaffold-discovery` — package manager, framework, monorepo tooling, existing workflows, DB presence
-2. `framework-detector` — E2E framework choice + target apps
+1. `scaffold-discovery`: package manager, framework, monorepo tooling, existing workflows, DB presence
+2. `framework-detector`: E2E framework choice + target apps
 
-### Phase 1 — Clarifying Questions (Plan Mode)
+### Phase 1: Clarifying Questions (Plan Mode)
 
 Before any write, switch to **Plan Mode** and ask up to 5 focused questions:
 
@@ -85,13 +85,13 @@ Before any write, switch to **Plan Mode** and ask up to 5 focused questions:
 
 Wait for answers before continuing.
 
-### Phase 2 — Branch Setup
+### Phase 2: Branch Setup
 
 - Create a dedicated branch: `chore/final-quality-check`.
 - Never scaffold CI directly on `main` / `master`.
 - Keep this PR minimal: baseline quality + smoke E2E only. No product features.
 
-### Phase 3 — Implementation (sub-blocks A through H, sequential)
+### Phase 3: Implementation (sub-blocks A through H, sequential)
 
 Each sub-block dispatches its agent, waits for the structured return, and commits before moving to the next.
 
@@ -138,18 +138,18 @@ The reported score is recorded as context only. It is heavily penalized by delib
 
 *Future interface note:* shadscan ships an `mcp` subcommand exposing read-only `scan`, `list_projects`, and `explain_rule` tools over stdio. If a later slice wants an agent consuming findings directly instead of parsing CLI output, that is the better interface. Do not wire it here.
 
-#### Sub-block H — Append CI/CD operational rules to the project rules file
+#### Sub-block H: Append CI/CD operational rules to the project rules file
 
-The orchestrator (no subagent dispatch — this is a small, deterministic write similar to sub-block D's PR template):
+The orchestrator (no subagent dispatch; this is a small, deterministic write similar to sub-block D's PR template):
 
-1. Locate the project rules file. If `cook-pizzas` ran first, the file already exists at `CLAUDE.md` or `AGENTS.md` per Q12, with a placeholder section labeled "CI/CD Operational Rules — populated by `final-quality-check`" written by the `rules-assembler` agent.
+1. Locate the project rules file. If `cook-pizzas` ran first, the file already exists at `CLAUDE.md` or `AGENTS.md` per Q12, with a placeholder section labeled "CI/CD Operational Rules" (marked as populated by `final-quality-check`) written by the `rules-assembler` agent.
 2. If the placeholder is present, replace its body with the contents of `references/prd-ci-cd-checklist.md` (preserving the `- [ ]` task-list checkbox format verbatim: these are runtime gates the user and every agent walk on every PR, not one-time scaffold checks).
 3. If the placeholder is absent (e.g. the project skipped `cook-pizzas` and ran `/final-quality-check` directly as an escape hatch), append a new section to the project rules file:
    ```markdown
    <!-- bytheslice: ci-cd-operational-rules-start -->
    ## CI/CD Operational Rules
 
-   These rules govern how master-checklist updates, CI gates, and PR shape interact across every ByTheSlice run. They apply to every agent on every PR — not only to the one-time CI/CD scaffolding.
+   These rules govern how master-checklist updates, CI gates, and PR shape interact across every ByTheSlice run. They apply to every agent on every PR, not only to the one-time CI/CD scaffolding.
 
    <!-- contents of references/prd-ci-cd-checklist.md, verbatim -->
    <!-- bytheslice: ci-cd-operational-rules-end -->
@@ -158,20 +158,20 @@ The orchestrator (no subagent dispatch — this is a small, deterministic write 
 5. If neither `CLAUDE.md` nor `AGENTS.md` exists at the project root, create `CLAUDE.md` with just this section plus a one-line precedence header. Surface to the user that a fuller rules file should ideally be assembled by `/cook-pizzas`.
 6. The reference file carries the **shadscan triage rules** (never gate on the score, treat every finding as a lead, the three confirmed false-positive classes, discard library-showcase paths). They travel into the project rules automatically as part of the verbatim copy, which is what makes them apply to every later slice and not just to this run.
 
-### Phase 4 — Local Verification Gates
+### Phase 4: Local Verification Gates
 
 Dispatch `local-gates-runner` to run lint, typecheck, design-system check, unit/integration, and all three E2E suites. The first run also generates initial visual baselines.
 
 If any gate fails, fix on the same branch before proceeding. This one-time run covers the full local suite; afterwards the Husky `pre-push` hook enforces only the slice tier (gate tier 2: lint, typecheck, unit tests, build, DB tests when the schema or migrations change) on every push, and CI runs the full suite at each PR (tier 4). `--no-verify` is never the answer to a red hook.
 
-### Phase 5 — PR + CI/CD
+### Phase 5: PR + CI/CD
 
 1. Push `chore/final-quality-check` to remote.
 2. Open the PR via `git-commit-push-pr` / `new-branch-and-pr` skill if available; otherwise `gh pr create`. PR description must list every artifact created.
 3. Wait for CI to complete. If any required check fails, patch on the same branch and push until green.
 4. Once CI is green, merge.
 
-### Phase 6 — Closeout
+### Phase 6: Closeout
 
 1. After merge, update local `main`: `git checkout main && git pull --ff-only origin main`.
 2. Delete the local branch: `git branch -d chore/final-quality-check`.
@@ -201,8 +201,8 @@ After Phase 6, report:
 - **Sub-skill contract.** When invoked as a `type: ci-cd` stage by `sell-slice`, this skill is the entire stage. After completion, mark the stage `Completed` in `docs/plans/00_master_checklist.md`.
 - **shadscan is never a gate.** Never wire `--fail-under` into `.husky/pre-push` or any CI workflow, never run `shadscan setup` (it writes pre-commit hooks), and never add a shadscan step to `ci.yml`, `design-system-compliance.yml`, or the branch-protection required checks. The score is heavily penalized by deliberate architecture choices and by false positives; gating on it would block correct work.
 - **Never run shadscan `--apply`.** It launches a coding agent against unfiltered findings, which at this false-positive rate would produce wrong changes.
-- **Subagent prompts live in `./agents/*.md`.** This SKILL.md is workflow only — never inline subagent prompts here.
-- **No platform-specific rule references.** Do not write "cursor rules" or "claude rules" — use "rules file (cursor or claude)" if the distinction matters, or simply "project rules file".
+- **Subagent prompts live in `./agents/*.md`.** This SKILL.md is workflow only; never inline subagent prompts here.
+- **No platform-specific rule references.** Do not write "cursor rules" or "claude rules"; use "rules file (cursor or claude)" if the distinction matters, or simply "project rules file".
 
 ## Triggers
 
@@ -242,7 +242,7 @@ Run this checklist at the end of every run. Do **not** consider the scaffold "do
 - [ ] `package.json` (root) has scripts: `test:e2e`, `test:e2e:feature`, `test:e2e:regression`, `test:e2e:visual`, `check:design-system`.
 - [ ] At least one `@feature`-tagged smoke spec exists.
 - [ ] At least one `@regression-core`-tagged sentinel spec exists.
-- [ ] Canary `@visual` tests exist — one per viewport (375 / 768 / 1280 / 1920).
+- [ ] Canary `@visual` tests exist, one per viewport (375 / 768 / 1280 / 1920).
 - [ ] `tests/visual/baselines/` directory is committed (may be empty on first scaffold; Vizzly populates on first run).
 - [ ] Playwright (or detected E2E framework) is installed and lockfile updated.
 - [ ] If a monorepo task runner exists (`turbo.json` / `nx.json`), the new E2E tasks are wired into it.
@@ -272,7 +272,7 @@ Every box here is about the pass having *run and been reported honestly*. None o
 
 ### 4. PR Created and Submitted
 
-- [ ] All work happened on branch `chore/final-quality-check` — never on `main`.
+- [ ] All work happened on branch `chore/final-quality-check`, never on `main`.
 - [ ] PR opened via `git-commit-push-pr` / `new-branch-and-pr` skill or `gh pr create`.
 - [ ] PR description lists every artifact created.
 - [ ] PR is targeted at `main` and is **not** draft.

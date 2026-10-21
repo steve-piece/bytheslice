@@ -1,6 +1,6 @@
 ---
 name: open-the-shop
-description: Doors unlocked, lights flipped, OPEN sign up - scan environment requirements and verify all external service credentials are populated. The most HITL-heavy prep step; the operator personally stocks the cash drawer. Run once before /sell-slice; also invocable standalone.
+description: "Doors unlocked, lights flipped, OPEN sign up - scan environment requirements and verify all external service credentials are populated. The most HITL-heavy prep step; the operator personally stocks the cash drawer. Run once before /sell-slice; also invocable standalone."
 user-invocable: true
 triggers: ["/bytheslice:open-the-shop", "/open-the-shop", "stock the line", "open for business", "doors open", "/bytheslice:setup-environment", "/setup-environment", "env setup", "env-setup stage"]
 ---

@@ -43,14 +43,15 @@ Look for stages where the implementer agent was re-invoked more than twice. Evid
 
 **Signal threshold:** more than 2 implementer passes on the same stage.
 
-### 2. Visual-Reviewer Rejections
+### 2. Rendered-Review Failures
 
-Look for stages where the visual-reviewer rejected output more than once. Evidence:
+Look for slices where `slice-tester` returned `overall: fail` on its rendered review (design-system match, affordances, or the a11y pass) more than once. Evidence:
+- The Pass ledger's tester verdicts and fix-loop counts for the slice
 - PR review comments requesting visual changes after initial review
 - Commits with messages like "fix visual feedback", "address review", or "rework layout" appearing more than once per stage
 - Stage completion delayed significantly relative to estimated tasks
 
-**Signal threshold:** more than 1 visual-reviewer rejection per stage.
+**Signal threshold:** more than 1 rendered-review failure per slice.
 
 ### 3. Clustered HITL Escalations
 
@@ -218,7 +219,7 @@ After generating the analysis output above, return the structured contract below
 
 ```yaml
 status: complete | failed | needs_human
-summary: <one paragraph — scope reviewed, number of stages analyzed, patterns found, number of proposals generated>
+summary: <one paragraph: scope reviewed, number of stages analyzed, patterns found, number of proposals generated>
 artifacts: []
 needs_human: false | true
 hitl_category: null | "prd_ambiguity" | "external_credentials" | "destructive_operation" | "creative_direction"

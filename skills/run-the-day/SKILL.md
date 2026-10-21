@@ -1,18 +1,18 @@
 ---
 name: run-the-day
-description: EXPERIMENTAL. Run the whole day's service on autopilot — chain /bytheslice:sell-pie across every Pie in the master checklist for an unattended whole-roadmap run. For one Pie at a time, use /sell-pie directly.
+description: "EXPERIMENTAL. Run the whole day's service on autopilot: chain /bytheslice:sell-pie across every Pie in the master checklist for an unattended whole-roadmap run. For one Pie at a time, use /sell-pie directly."
 experimental: true
 user-invocable: true
 triggers: ["/bytheslice:run-the-day", "/run-the-day", "run the day", "fire the tray", "/bytheslice:run-pipeline", "/run-pipeline", "run the pipeline", "run pipeline", "autonomous delivery", "run all pies", "run all stages", "bake all the pies", "bake the whole roadmap"]
 ---
 <!-- skills/run-the-day/SKILL.md -->
-<!-- EXPERIMENTAL whole-roadmap chainer (v5). Pizza-shop framing: run the whole day's service end-to-end. Demoted in v5 to a THIN CHAINER over /sell-pie: it holds zero implementation context, reads the master checklist, and dispatches /sell-pie once per Pie in order. All baking, gating, context-separation, per-slice commits, and the boundary PR live in /sell-pie + /box-it-up — this skill never re-implements them. The primary entry point is /sell-pie (one Pie, autonomous, fresh chat per pie). /run-the-day is the sidecar for users who want every Pie driven in one session and accept the reliability tradeoff. --auto-mvp / --auto-all are PIE FILTERS. -->
+<!-- EXPERIMENTAL whole-roadmap chainer (v5). Pizza-shop framing: run the whole day's service end-to-end. Demoted in v5 to a THIN CHAINER over /sell-pie: it holds zero implementation context, reads the master checklist, and dispatches /sell-pie once per Pie in order. All baking, gating, context-separation, per-slice commits, and the boundary PR live in /sell-pie + /box-it-up; this skill never re-implements them. The primary entry point is /sell-pie (one Pie, autonomous, fresh chat per pie). /run-the-day is the sidecar for users who want every Pie driven in one session and accept the reliability tradeoff. --auto-mvp / --auto-all are PIE FILTERS. -->
 
-# Run the Day — Whole-Roadmap Chainer (EXPERIMENTAL)
+# Run the Day: Whole-Roadmap Chainer (EXPERIMENTAL)
 
-> **EXPERIMENTAL.** This skill chains **`/bytheslice:sell-pie`** across every Pie in the master checklist so the whole roadmap bakes in one session. Driving 4–10 Pies in a single chat is unreliable today (context drift across many pie boundaries). **The primary entry point is [`/sell-pie`](../sell-pie/SKILL.md)** — it bakes **one Pie** autonomously, then stops at the boundary; you run it once per pie in a fresh chat. Use `/run-the-day` only when you explicitly want every Pie driven in one session and accept the reliability tradeoff.
+> **EXPERIMENTAL.** This skill chains **`/bytheslice:sell-pie`** across every Pie in the master checklist so the whole roadmap bakes in one session. Driving 4 to 10 Pies in a single chat is unreliable today (context drift across many pie boundaries). **The primary entry point is [`/sell-pie`](../sell-pie/SKILL.md)**: it bakes **one Pie** autonomously, then stops at the boundary; you run it once per pie in a fresh chat. Use `/run-the-day` only when you explicitly want every Pie driven in one session and accept the reliability tradeoff.
 
-`/run-the-day` is a **thin chainer**, not an autopilot of its own. It holds **zero implementation context**. Per Pie it dispatches one [`/sell-pie`](../sell-pie/SKILL.md) invocation and waits for that pie to finish (all slices baked, the boundary PR merged) before advancing to the next Pie. Everything that actually bakes a slice — the context-separated `builder → slice-tester → slice-verifier → fixer` Workflow, per-slice commit + push, the pie-boundary PR via [`/box-it-up`](../box-it-up/SKILL.md) — lives **inside `/sell-pie`**. This skill never re-implements any of it; it only sequences pies and surfaces any HITL the inner pie raises.
+`/run-the-day` is a **thin chainer**, not an autopilot of its own. It holds **zero implementation context**. Per Pie it dispatches one [`/sell-pie`](../sell-pie/SKILL.md) invocation and waits for that pie to finish (all slices baked, the boundary PR merged) before advancing to the next Pie. Everything that actually bakes a slice, the context-separated `builder → slice-tester → slice-verifier → fixer` Workflow, per-slice commit + push, the pie-boundary PR via [`/box-it-up`](../box-it-up/SKILL.md), lives **inside `/sell-pie`**. This skill never re-implements any of it; it only sequences pies and surfaces any HITL the inner pie raises.
 
 Because `/sell-pie` already owns the loop, the gates, the context separation, and the boundary PR, `/run-the-day` carries almost no logic. If you find yourself adding per-slice or per-gate machinery here, it belongs in `/sell-pie` instead.
 
@@ -20,13 +20,13 @@ Because `/sell-pie` already owns the loop, the gates, the context separation, an
 
 `/run-the-day` is **always sequential over Pies**. It requires `docs/plans/00_master_checklist.md` with at least one Pie whose status is not `Completed`. It stops cleanly if no checklist exists, pointing the user at [`/cook-pizzas`](../cook-pizzas/SKILL.md) first.
 
-`/sell-pie` **refuses flat (v4) checklists** — a checklist written as flat `## Stage N` rows with no `## Pie N` structure cannot be chained. If the master checklist is flat, `/run-the-day` stops before dispatching anything and surfaces the same hint `/sell-pie` would: convert the checklist with `/cook-pizzas --repie` (explicit opt-in; never auto-rewritten), or deliver flat-v4 work one slice at a time with [`/sell-slice`](../sell-slice/SKILL.md). Detection: a checklist is "piefied" if it contains at least one `## Pie N` header; otherwise treat it as flat and refuse.
+`/sell-pie` **refuses flat (v4) checklists**: a checklist written as flat `## Stage N` rows with no `## Pie N` structure cannot be chained. If the master checklist is flat, `/run-the-day` stops before dispatching anything and surfaces the same hint `/sell-pie` would: convert the checklist with `/cook-pizzas --repie` (explicit opt-in; never auto-rewritten), or deliver flat-v4 work one slice at a time with [`/sell-slice`](../sell-slice/SKILL.md). Detection: a checklist is "piefied" if it contains at least one `## Pie N` header; otherwise treat it as flat and refuse.
 
-The `--auto-mvp` / `--auto-all` flags are **pie filters** (see Modes) — they select *which Pies* this chainer drives, not which slices. Slice-level autonomy is entirely `/sell-pie`'s concern.
+The `--auto-mvp` / `--auto-all` flags are **pie filters** (see Modes); they select *which Pies* this chainer drives, not which slices. Slice-level autonomy is entirely `/sell-pie`'s concern.
 
 ## Modes
 
-`/run-the-day`'s flags choose the **set of Pies** to chain. They do not change how any individual Pie bakes — that is fixed by each Pie's own `review:` property (`boundary` = autonomous, `continuous` = forced `/sell-slice` mode) inside `/sell-pie`.
+`/run-the-day`'s flags choose the **set of Pies** to chain. They do not change how any individual Pie bakes; that is fixed by each Pie's own `review:` property (`boundary` = autonomous, `continuous` = forced `/sell-slice` mode) inside `/sell-pie`.
 
 | Invocation | Pie filter | Between-pie behavior |
 |---|---|---|
@@ -34,7 +34,7 @@ The `--auto-mvp` / `--auto-all` flags are **pie filters** (see Modes) — they s
 | `/run-the-day --auto-mvp` | Only Pies marked `mvp: true` in their `## Pie N` frontmatter/annotation. | Auto-advance between `mvp: true` Pies; **pause before the first `mvp: false` Pie**; pause on any HITL the inner pie bubbles. |
 | `/run-the-day --auto-all` | All not-`Completed` Pies. | Auto-advance between every Pie; pause **only** when the inner `/sell-pie` bubbles a HITL. |
 
-In every mode, the chainer **never advances past a HITL** until the human responds. HITL is surfaced by the orchestrating session that ran the chainer (or by `/sell-pie` itself) — **this skill never calls `ask_user_input_v0`**; it sets `needs_human` + `hitl_*` in its return contract and stops the chain.
+In every mode, the chainer **never advances past a HITL** until the human responds. HITL is surfaced by the orchestrating session that ran the chainer (or by `/sell-pie` itself); **this skill never calls `ask_user_input_v0`**; it sets `needs_human` + `hitl_*` in its return contract and stops the chain.
 
 The pie-boundary checkpoint (the one kept HITL, §1.8) lives **inside** each `/sell-pie` run via `/box-it-up`'s merge-authorization gate. In the default `pie-pr` delivery mode it fires once per Pie whatever the chainer flags say. `--auto-all` does **not** auto-approve a pie's boundary merge; it only removes the *between-pie* "continue" pause. **Exception, merge-per-slice delivery:** when the run instruction explicitly asks for autonomous delivery or `delivery.mode` is `"merge-per-slice"`, each slice merges through its own PR on green CI with no per-slice approval and there is no boundary merge; the operator gets one notice per finished Pie. `review: continuous` Pies always use the default mode.
 
@@ -66,9 +66,9 @@ Before Phase 0, check for `bytheslice.config.json` at the project root. If prese
 1. Read the file as JSONC (comments + trailing commas allowed).
 2. Apply the precedence rules from [`skills/setup-shop/references/bytheslice-config-schema.md`](../setup-shop/references/bytheslice-config-schema.md): env vars > config file > project rules file > plugin defaults.
 3. Resolve the values `/sell-pie` will need (`modelTiers`, `mcps`, `verification.*`, `flow.*`, `delivery.*`, and each Pie's `review` property) and log a one-line summary of any non-default resolutions in the chainer's first message (e.g., `Config overrides: implementer→opus, libraryGate=self-critique`).
-4. **Pass the resolved config straight through** to each `/sell-pie` invocation so the inner Workflow agents re-read it. The chainer does not interpret `verification.*` / `flow.*` itself — those govern slice baking, which is `/sell-pie`'s job.
+4. **Pass the resolved config straight through** to each `/sell-pie` invocation so the inner Workflow agents re-read it. The chainer does not interpret `verification.*` / `flow.*` itself; those govern slice baking, which is `/sell-pie`'s job.
 
-If the file exists but parses as malformed JSON, **stop before dispatching any Pie** and set `needs_human: true` with `hitl_category: "prd_ambiguity"` and `hitl_question: "bytheslice.config.json failed to parse — please fix the syntax error at line N before continuing"`. Never silently fall through to defaults. If the file is absent, proceed with plugin defaults (no warning).
+If the file exists but parses as malformed JSON, **stop before dispatching any Pie** and set `needs_human: true` with `hitl_category: "prd_ambiguity"` and `hitl_question: "bytheslice.config.json failed to parse, please fix the syntax error at line N before continuing"`. Never silently fall through to defaults. If the file is absent, proceed with plugin defaults (no warning).
 
 ## Workflow
 
@@ -76,23 +76,23 @@ At every phase boundary, if the `bts_status` tool is available call it instead o
 
 Team mode stays off: an agent-team teammate has no `Workflow` and no `ScheduleWakeup` (spike 5.6), so it cannot run `/sell-pie`'s per-slice Workflow; keep pies sequential in this chat. The Pass still shows any teammates (`team: n bakers` in `bts_status`), and a teammate that must wait can call `bts_wake { afterMs, note }` in place of `ScheduleWakeup`.
 
-### Phase 0 — Read the master checklist and build the pie queue
+### Phase 0: Read the master checklist and build the pie queue
 
 1. Read `docs/plans/00_master_checklist.md`.
-2. **Piefied check.** If the file contains no `## Pie N` header, it is a flat-v4 checklist — **stop** and surface the refusal (Mode detection): recommend `/cook-pizzas --repie` to convert, or `/sell-slice` for one-at-a-time flat delivery. Do not dispatch anything.
+2. **Piefied check.** If the file contains no `## Pie N` header, it is a flat-v4 checklist, **stop** and surface the refusal (Mode detection): recommend `/cook-pizzas --repie` to convert, or `/sell-slice` for one-at-a-time flat delivery. Do not dispatch anything.
 3. Build an ordered list of `(pie_n, pie_name, review, mvp, status, [slice rows])` from the `## Pie N` headers and their `### Slice N.M` children.
 4. **Apply the pie filter** (Modes): default / `--auto-all` → every Pie whose status is not `Completed`; `--auto-mvp` → only `mvp: true` Pies that are not `Completed`.
-5. The first Pie in the filtered queue is the active starting point. If the queue is empty (everything already `Completed`, or no Pie matched the filter), skip to Phase 2 — Final Report.
+5. The first Pie in the filtered queue is the active starting point. If the queue is empty (everything already `Completed`, or no Pie matched the filter), skip to Phase 2, Final Report.
 6. Confirm the workspace is on `main`, clean, latest pulled.
 
-### Phase 1 — Per-pie loop (strictly sequential)
+### Phase 1: Per-pie loop (strictly sequential)
 
 For each Pie in the filtered queue, in order:
 
 1. **Pre-pie state check.** Verify `git status` clean, on `main`, latest pulled. (Each completed Pie returns to clean `main` via `/box-it-up`; the next Pie cuts a fresh `pie-<n>-<scope>` branch and worktree inside `/sell-pie`.)
 2. **Dispatch [`/sell-pie`](../sell-pie/SKILL.md) for the active Pie.** Pass the Pie number, the resolved config (if any), and any HITL-resolution context appended after a prior pause. `/sell-pie` reads the checklist, picks that Pie, and runs to its boundary:
    - For a `review: continuous` Pie it runs in `/sell-slice` (high-touch) mode for every slice.
-   - For a `review: boundary` Pie (default) it loops slices autonomously — per slice: the context-separated produce/verify Workflow, then commit + push via [`/box-it-up --slice`](../box-it-up/SKILL.md), no PR.
+   - For a `review: boundary` Pie (default) it loops slices autonomously, per slice: the context-separated produce/verify Workflow, then commit + push via [`/box-it-up --slice`](../box-it-up/SKILL.md), no PR.
    - When every slice under the Pie is `[x]`, `/sell-pie` opens the **one** Pie PR via `/box-it-up`, CI runs once, the human approves the merge at the boundary checkpoint, the Pie branch merges (preserving per-slice commits) and cleans up.
    - In merge-per-slice delivery (opt-in; pass the run instruction through), `/sell-pie` instead merges each slice through its own PR on green CI (merge commit, at most 3 CI fix rounds, still red halts) and cleans each slice worktree up before cutting the next; there is no boundary PR.
    **Wait for `/sell-pie` to return.** Do not start the next Pie until it does.
@@ -107,7 +107,7 @@ For each Pie in the filtered queue, in order:
    - **`--auto-all`:** do not pause unless HITL occurred.
 8. Advance to the next Pie. Repeat.
 
-### Phase 2 — Final Report
+### Phase 2: Final Report
 
 When every Pie in the filtered queue is `Completed`:
 
@@ -117,7 +117,7 @@ When every Pie in the filtered queue is `Completed`:
 
 ## HITL Handling
 
-`/run-the-day` produces **no HITL of its own** beyond the between-pie "continue" pause in default mode. Every genuine blocking decision originates **inside** a `/sell-pie` run — the four kept categories (§1.8): `external_credentials`, `prd_ambiguity`, `destructive_operation`, and the pie-boundary merge checkpoint (surfaced by `/box-it-up`). When `/sell-pie` returns `needs_human: true`:
+`/run-the-day` produces **no HITL of its own** beyond the between-pie "continue" pause in default mode. Every genuine blocking decision originates **inside** a `/sell-pie` run, the four kept categories (§1.8): `external_credentials`, `prd_ambiguity`, `destructive_operation`, and the pie-boundary merge checkpoint (surfaced by `/box-it-up`). When `/sell-pie` returns `needs_human: true`:
 
 1. **Stop the chain immediately.** Do not advance to the next Pie; do not reschedule or retry.
 2. **Propagate the structured fields verbatim** (`hitl_category`, `hitl_question`, `hitl_context`, and `hitl_questions` when `/sell-pie` returned an approval batch) into this skill's own return contract. A batch stays one batch: never split it into separate pauses.
@@ -126,19 +126,19 @@ When every Pie in the filtered queue is `Completed`:
 
 When raising a HITL and the `bts_hitl` tool is available, also call it; when the operator answers, call it again with the answer (`{ id, answer }`). It records the question, shows it in the Pass inbox and notifies; it never waits, so the stop-and-ask flow above still does.
 
-> **v5 change:** in v4, `run-the-day` was "the only surface that calls `ask_user_input_v0`." That is no longer true. In v5 no ByTheSlice agent or skill calls `ask_user_input_v0` directly — every layer bubbles `needs_human` + `hitl_*` up the return chain, and only the top-level interactive session prompts the human.
+> **v5 change:** in v4, `run-the-day` was "the only surface that calls `ask_user_input_v0`." That is no longer true. In v5 no ByTheSlice agent or skill calls `ask_user_input_v0` directly; every layer bubbles `needs_human` + `hitl_*` up the return chain, and only the top-level interactive session prompts the human.
 
 ## Progress Report Format (per pie)
 
 ```
-Pie <N> — <name>: Completed
+Pie <N> (<name>): Completed
 - Slices baked: <M> (all [x])
 - Branch: pie-<n>-<scope> (merged, then deleted)
 - PR: <pr url> (merged, CI green), merge strategy: rebase | merge-commit (merge-per-slice delivery: every slice PR url, each a merge commit)
 - Per-slice commits preserved on main: <count>
 - review: boundary | continuous
 - Worktree: removed
-- Notes: <one line — e.g. "1 HITL resolved (destructive_operation) mid-pie">
+- Notes: <one line, e.g. "1 HITL resolved (destructive_operation) mid-pie">
 
 On main, clean tree. [Advancing to Pie <N+1> automatically. | Waiting for your "continue".]
 ```
@@ -146,7 +146,7 @@ On main, clean tree. [Advancing to Pie <N+1> automatically. | Waiting for your "
 ## Final Report Format
 
 ```
-Run the Day — roadmap complete
+Run the Day: roadmap complete
 
 Pies completed: <N> of <N in the filtered queue>  (filter: all | --auto-mvp | --auto-all)
 PRs merged: <list of Pie PR URLs in pie order>
@@ -161,8 +161,8 @@ Recommended next: <empty | the deferred mvp:false Pies via /sell-pie | open Phas
 - **Thin chainer only.** `/run-the-day` reads the checklist, sequences Pies, and dispatches `/sell-pie` once per Pie. It **never** bakes a slice, runs a gate, opens a PR, or edits production code itself. All of that lives in `/sell-pie` + `/box-it-up`. If logic feels per-slice or per-gate, it belongs in `/sell-pie`.
 - **Strictly sequential over Pies.** Never dispatch two `/sell-pie` runs in parallel. Pie N+1 cannot start until Pie N's PR is merged, main is clean and synced, and its worktree is removed.
 - **Chainer edits nothing.** It reads plans and confirms a `## Pie N` status is `Completed` after the merge. It never edits the checklist on `main`, `### Slice N.M` rows, plan files, or code.
-- **Refuse flat checklists.** A checklist with no `## Pie N` header is refused with the `/cook-pizzas --repie` / `/sell-slice` hint. Never auto-convert a flat checklist — conversion is an explicit opt-in (`/cook-pizzas --repie`).
-- **`--auto-mvp` / `--auto-all` are pie filters.** They choose which Pies to chain and whether to pause *between* Pies. They never change how a Pie bakes internally — that is the Pie's `review:` property, owned by `/sell-pie`.
+- **Refuse flat checklists.** A checklist with no `## Pie N` header is refused with the `/cook-pizzas --repie` / `/sell-slice` hint. Never auto-convert a flat checklist; conversion is an explicit opt-in (`/cook-pizzas --repie`).
+- **`--auto-mvp` / `--auto-all` are pie filters.** They choose which Pies to chain and whether to pause *between* Pies. They never change how a Pie bakes internally; that is the Pie's `review:` property, owned by `/sell-pie`.
 - **Never auto-approve a pie-boundary merge (default `pie-pr` delivery).** `--auto-all` removes only the between-pie pause. The boundary merge checkpoint inside each `/sell-pie` (via `/box-it-up`) still requires the human. **Exception:** merge-per-slice delivery, turned on only by an explicit autonomous-delivery run instruction or `delivery.mode: "merge-per-slice"`, merges each slice on green CI without a per-slice approval; it never merges red and never skips a slice.
 - **Fix caps pass through unchanged.** Each slice gets 3 local fix loops and each PR 3 CI fix rounds (separate counters, inside `/sell-pie` and `/box-it-up`). Chaining, `--auto-all`, or a run instruction such as "continue until verified", "never stop" or "fully automated" never raises them; an exhausted cap halts the chain with a HITL, and only the operator's explicit reply there grants more attempts.
 - **Stop the chain on HITL, never reschedule.** When `/sell-pie` bubbles `needs_human: true`, halt and propagate. Do not loop, retry, or silently continue.
@@ -176,7 +176,7 @@ Walk this before reporting the roadmap done.
 
 - [ ] Master checklist confirmed piefied (at least one `## Pie N`); a flat checklist was refused, not chained.
 - [ ] Pie queue built and filtered correctly for the invoked mode (all / `mvp: true` only).
-- [ ] Each queued Pie was delivered by a single `/sell-pie` dispatch — no slice baking or gating done in this skill.
+- [ ] Each queued Pie was delivered by a single `/sell-pie` dispatch; no slice baking or gating done in this skill.
 - [ ] Every queued Pie returned `status: complete` with its PR `MERGED` and CI green on the merged head SHA.
 - [ ] Between every Pie: clean tree, on `main`, synced with `origin/main`, no leftover pie branch or worktree.
 - [ ] Any HITL bubbled by `/sell-pie` stopped the chain and was propagated via `needs_human` + `hitl_*` (never `ask_user_input_v0`).
@@ -189,7 +189,7 @@ Walk this before reporting the roadmap done.
 
 ```yaml
 status: complete | failed | needs_human
-summary: <one paragraph — filter mode, pies completed of queued, notable findings>
+summary: <one paragraph: filter mode, pies completed of queued, notable findings>
 pies_completed: <int>
 pies_queued: <int>
 filter: all | auto-mvp | auto-all

@@ -1,0 +1,5 @@
+/* components/badge.css */
+/* Fixture: a var() fallback that hides a fabricated token. */
+.badge {
+  color: var(--fake, var(--real));
+}

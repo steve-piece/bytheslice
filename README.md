@@ -137,6 +137,9 @@ Repeat step 3 until the master checklist is empty. That's the whole motion.
 
 Default install paths - **Cursor:** `~/.cursor/plugins/local/bytheslice` · **Claude Code:** `~/.claude/plugins/bytheslice`. Scope a single host with `--target cursor` / `--target claude`; override paths with `--cursor-dir` / `--claude-dir` / `--skills-dir`. For declarative installs, point `--config <path>` at a JSONC file (see [`skills-config.example.json`](scripts/install/skills-config.example.json)).
 
+> [!NOTE]
+> **Updates take effect next session.** A changed agent or skill file is read when a session starts, so start a new session after updating. A plugin installed into the plugin cache is a snapshot copy: reinstall it (or update it from its marketplace) to pick up a new version.
+
 ---
 
 ## Watch the kitchen
@@ -311,6 +314,7 @@ The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once*
 - [**Hook enforcement**](docs/architecture.md#hook-enforcement) - what the [`hooks/`](hooks/) layer logs and warns about (it blocks nothing)
 - [**The Pass mod**](docs/architecture.md#the-pass-mod) - packaging, the ledger, the warn-only checks, spawn policy, watchdog, HITL inbox, team mode
 - [**Legacy & migration**](docs/architecture.md#legacy--migration) - flat v4 / v3 projects, `--repie`
+- [**Agent roster**](docs/agents.md) - ByTheSlice ships 49 registered subagents plus 6 documented deprecated shims; every one in plain English
 
 ---
 

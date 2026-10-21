@@ -1,6 +1,6 @@
 ---
 name: box-it-up
-description: Box the pie and hand it across the counter - per slice, commit + push only (no PR, CI stays quiet); at the pie boundary, open one PR, watch CI once (auto-fix on red), merge on approval preserving every slice commit, sync main, delete the branch, remove the pie worktree. Opt-in merge-per-slice mode (--merge-slice, run internally by the conductor) opens, CI-checks and merges one PR per slice with a merge commit instead.
+description: "Box the pie and hand it across the counter - per slice, commit + push only (no PR, CI stays quiet); at the pie boundary, open one PR, watch CI once (auto-fix on red), merge on approval preserving every slice commit, sync main, delete the branch, remove the pie worktree. Opt-in merge-per-slice mode (--merge-slice, run internally by the conductor) opens, CI-checks and merges one PR per slice with a merge commit instead."
 user-invocable: true
 triggers: ["/bytheslice:box-it-up", "/box-it-up", "box up the pie", "box up the slice", "hand it over", "close out the pie", "/bytheslice:ship-pr", "/ship-pr", "ship the pr", "submit the pr", "open and merge the pr", "ship this branch", "ship this pie"]
 ---
@@ -123,10 +123,12 @@ Loop counter starts at 1. Cap at **3 attempts**.
    - Truncated log excerpts (last 200 lines per failed job) - let the agent ask for more on demand
    - The pie diff (`git diff origin/main...HEAD`)
    - The attempt number
+   - `previous_signature`: the `signature` the previous round returned, or `null` on attempt 1
 4. The agent makes no git writes: it returns `files_changed` and a proposed commit subject and body. **This skill** stages exactly those paths (`git add -- <paths>`), commits with the proposed message, and pushes to `origin "$BRANCH"` (never forced; a rejected push is a `destructive_operation` HITL). Do not call `--watch` from inside the dispatch - the skill returns to Phase 3 (top) after its push lands and re-invokes `gh pr checks --watch` against the new head SHA.
+   If the agent returns `bail_reason: repeated_signature`, it patched nothing because the identical failure survived the last round: stop the loop now, commit and push nothing, and surface the `creative_direction` HITL below. The bail counts as that round and never extends the 3.
 5. Increment the counter. If it would exceed 3, STOP. Surface as `creative_direction` HITL with the full failure history so the user can decide whether to debug manually, retry CI, or close the PR.
 
-The 3-attempt cap is a hard rule and is **not overridable by the run instruction**: "continue until CI is green", "never stop", "fully automated" or an autonomous-delivery instruction do not add rounds. Only the operator's explicit reply at this HITL can grant more. The CI counter is per PR and separate from the conductor's 3 local fix loops per slice; neither borrows from the other. Three identical-cause failures in a row signal a structural problem (flaky test, missing secret, infra outage) that needs human judgment.
+The 3-attempt cap is a hard rule and is **not overridable by the run instruction**: "continue until CI is green", "never stop", "fully automated" or an autonomous-delivery instruction do not add rounds. Only the operator's explicit reply at this HITL can grant more. The CI counter is per PR and separate from the conductor's 3 local fix loops per slice; neither borrows from the other. One identical repeat already signals a structural problem (flaky test, missing secret, infra outage) that needs human judgment, so the loop stops at the first repeated signature (`normalize(first_error_line) + " | " + file + " | " + job_name`, a plain string compared by equality and never persisted) instead of counting to three.
 
 ### Phase 4 - Merge Authorization Gate *(pie-completion / universal - the kept pie-boundary HITL)*
 
@@ -182,7 +184,7 @@ Runs once per slice when `delivery.mode` resolves to `merge-per-slice`. The cond
 - **Phase 0.** Run steps 1-6 against the slice worktree (`git -C "$WORKTREE_PATH" ...`). Skip step 7 (pie completeness). Add: `gh repo view --json mergeCommitAllowed --jq .mergeCommitAllowed` must print `true`. If it does not, STOP the loop with `needs_human: true`, `hitl_category: prd_ambiguity`: *"This repo disallows merge commits, which merge-per-slice delivery requires. Enable merge commits, or rerun this pie in the default one-PR-per-pie mode?"* Never fall back to squash or rebase on its own.
 - **Phase 1.** The slice's work is already committed and pushed on `BRANCH`. On the pie's last slice, Phase 1 step 4 applies: flip `## Pie N` to `Completed`, commit, push, so the flip reaches `main` with this slice's merge. If any slice of the pie is still `waiting until <YYYY-MM-DD>` (calendar-gated), this is not the last slice: do not flip the pie and do not write the kitchen merge record; the slice PR that later closes the waiting slice is the pie's last.
 - **Phase 2.** Title the PR `Slice N.M: <name>`: `gh pr create --base main --head "$BRANCH" --title "Slice N.M: <name>" --fill`.
-- **Phase 3 / 3a.** Watch CI as usual. On red, up to **3** `ci-fix-attempter` rounds (the CI fix counter is per slice). Still red after the 3rd round: **halt the loop** with a `creative_direction` HITL carrying the failure history. Never skip the slice, never merge it red, never start the next slice.
+- **Phase 3 / 3a.** Watch CI as usual. On red, up to **3** `ci-fix-attempter` rounds (the CI fix counter is per slice). Still red after the 3rd round, or a round that bails on a repeated signature: **halt the loop** with a `creative_direction` HITL carrying the failure history. Never skip the slice, never merge it red, never start the next slice.
 - **Phase 4.** No human merge gate: the run instruction or `delivery.mode` already authorized autonomous delivery. On green, merge with a **merge commit**: `gh pr merge "$PR_NUMBER" --merge` (never `--squash`, never `--rebase`, never `--delete-branch` from the worktree).
 - **Phase 5.** Identical cleanup from the primary checkout: `git -C "$PRIMARY" pull --ff-only origin main`, `git -C "$PRIMARY" worktree remove "$WORKTREE_PATH"`, `git -C "$PRIMARY" branch -d "$BRANCH"`, `git push origin --delete "$BRANCH"`, `git -C "$PRIMARY" worktree prune`. Write the kitchen merge record only after the pie's last slice (see Phase 5 step 1). Append one line to the run log `.claude/.bytheslice-state/run-log.md` (gitignored): slice id, PR URL, merge commit SHA, merge time.
 - **Phase 6.** Return a short per-slice result to the conductor (PR URL, merge SHA, CI rounds). The conductor cuts the next slice from the freshly synced `main`; on the pie's last slice it sends the operator **one** notice listing every slice PR from the run log.
@@ -198,7 +200,7 @@ For sub-agent failures (e.g. `ci-fix-attempter` returns `needs_human: true`), th
 HITL categories the skill produces:
 - `destructive_operation` - about to push from main, force-push detected, merge-conflict pull, branch-reuse without rename, would-overwrite uncommitted changes on checkout.
 - `external_credentials` - `gh` not authenticated, CI watch timeout (likely runner / secrets issue).
-- `creative_direction` - ci-fix-attempter exhausted 3 attempts; user decides whether to debug, retry, or close the PR. In `slice-merge` mode this halts the delivery loop.
+- `creative_direction` - ci-fix-attempter exhausted 3 attempts or bailed on a repeated signature; user decides whether to debug, retry, or close the PR. In `slice-merge` mode this halts the delivery loop.
 - `prd_ambiguity` - boxing a pie with unfinished slices; a squash-only repo that would collapse per-slice commits; a repo that disallows merge commits in `slice-merge` mode; a precondition that needs the user to tell the skill how to interpret state.
 
 ---

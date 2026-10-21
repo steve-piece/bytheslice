@@ -1,11 +1,11 @@
 ---
 name: sell-slice
-description: Sell a customer their slice - the high-touch single-slice delivery loop. Execute one slice from your master checklist as an interactive spine (prep gate · recon · build-plan auth · /goal · branch) + Workflow A (produce) + library gate + Workflow B (verify-once). Run me repeatedly, one fresh chat per slice. For autonomous whole-pie baking use /sell-pie.
+description: "Sell a customer their slice - the high-touch single-slice delivery loop. Execute one slice from your master checklist as an interactive spine (prep gate · recon · build-plan auth · /goal · branch) + Workflow A (produce) + library gate + Workflow B (verify-once). Run me repeatedly, one fresh chat per slice. For autonomous whole-pie baking use /sell-pie."
 user-invocable: true
 triggers: ["/bytheslice:sell-slice", "/sell-slice", "sell a slice", "serve a customer", "bake the slice", "/bytheslice:deliver-stage", "/deliver-stage", "deliver the next stage", "ship the next slice", "work the checklist"]
 ---
 <!-- skills/sell-slice/SKILL.md -->
-<!-- The high-touch single-slice delivery loop. Pizza-shop framing: pull one pie off the rack, run it through the line, slice and serve to one customer. v5 shape: an interactive spine (prep gate · recon · build-plan auth · /goal · branch) wrapping Workflow A (produce - the builder/implementer emits the build manifest) + a human library gate + Workflow B (verify-once = state-illustrator → slice-tester → slice-verifier, with an off-context fix loop). Each static gate runs exactly once. /box-it-up is the handoff. For autonomous whole-roadmap baking, /sell-pie loops one Pie unattended; /sell-slice is the careful per-slice surface. -->
+<!-- The high-touch single-slice delivery loop. Pizza-shop framing: pull one pie off the rack, run it through the line, slice and serve to one customer. v5 shape: an interactive spine (prep gate · recon · build-plan auth · /goal · branch) wrapping Workflow A (produce - the builder/implementer emits the build manifest; on type frontend no implementer runs and state-illustrator emits it at the Workflow B entry) + a human library gate + Workflow B (verify-once = state-illustrator → slice-tester → slice-verifier, with an off-context fix loop). Each static gate runs exactly once. /box-it-up is the handoff. For autonomous whole-roadmap baking, /sell-pie loops one Pie unattended; /sell-slice is the careful per-slice surface. -->
 
 # /sell-slice - The High-Touch Single-Slice Delivery Loop
 
@@ -45,7 +45,7 @@ Each subagent is a **registered plugin agent**; its definition file under `./age
 | Recon | [agents/discovery.md](agents/discovery.md) | haiku | medium | readonly |
 | Recon | [agents/checklist-curator.md](agents/checklist-curator.md) | sonnet | medium | readonly |
 | Recon | [agents/rules-loader.md](agents/rules-loader.md) | haiku | low | readonly |
-| Workflow A - produce (backend/full-stack/db-schema/infrastructure) | [agents/implementer.md](agents/implementer.md) (the **builder** - emits the build manifest) | opus | xhigh | write |
+| Workflow A - produce (backend/full-stack/db-schema/infrastructure) | [agents/implementer.md](agents/implementer.md) (the **builder** - emits the build manifest on these types; `state-illustrator` emits it on `frontend`) | opus | xhigh | write |
 | Workflow A - per-item review | [agents/spec-reviewer.md](agents/spec-reviewer.md) | sonnet | medium | readonly |
 | Workflow A - per-item review | [agents/quality-reviewer.md](agents/quality-reviewer.md) | opus | high | readonly |
 | Workflow B - verify-once (behavior) | [agents/slice-tester.md](agents/slice-tester.md) | sonnet | high | write |
@@ -57,12 +57,12 @@ Each subagent is a **registered plugin agent**; its definition file under `./age
 
 | Step | Agent file | Model | Mode |
 |------|-----------|-------|------|
-| UX strategy ‖ layout (parallel) | [agents/frontend/modern-ux-expert.md](agents/frontend/modern-ux-expert.md) | sonnet | write |
-| UX strategy ‖ layout (parallel) | [agents/frontend/layout-architect.md](agents/frontend/layout-architect.md) | sonnet | write |
+| UX strategy (first) | [agents/frontend/modern-ux-expert.md](agents/frontend/modern-ux-expert.md) | sonnet | write |
+| Layout (serial, after UX strategy returns) | [agents/frontend/layout-architect.md](agents/frontend/layout-architect.md) | sonnet | write |
 | Compose (always) | [agents/frontend/block-composer.md](agents/frontend/block-composer.md) | sonnet | write |
 | Craft (conditional on gaps) | [agents/frontend/component-crafter.md](agents/frontend/component-crafter.md) | sonnet | write |
 | Library Preview Gate | [agents/frontend/library-entry-writer.md](agents/frontend/library-entry-writer.md) | sonnet | write |
-| State coverage (Workflow B entry) | [agents/frontend/state-illustrator.md](agents/frontend/state-illustrator.md) | sonnet | write |
+| State coverage + **build manifest** emitter on `frontend` (Workflow B entry) | [agents/frontend/state-illustrator.md](agents/frontend/state-illustrator.md) | sonnet | write |
 
 > **Behavioral + rendered review is `slice-tester`'s job; static gates are `slice-verifier`'s.** The v4 frontend `visual-reviewer` is **deprecated** - its rendered design-system match folded into `slice-tester` and its console/network checks are part of the same behavioral pass.
 
@@ -126,7 +126,7 @@ Workflow A routes the work based on the active slice's `type:` frontmatter:
 | `design-system` | Dispatch the `set-display-case` sub-skill (legacy v3 only). Skip the internal builder. |
 | `ci-cd` | Dispatch the `final-quality-check` sub-skill (legacy v3 only). Skip the internal builder. |
 | `env-setup` | Dispatch the `open-the-shop` sub-skill (legacy v3 only). Skip the internal builder. |
-| `frontend` | Run the internal frontend pipeline (`modern-ux-expert ‖ layout-architect` → block-composer → component-crafter → library gate). |
+| `frontend` | Run the internal frontend pipeline (`modern-ux-expert` → `layout-architect` → block-composer → component-crafter → library gate, each step serial). No `implementer` runs on this path, so **`state-illustrator` emits the build manifest** at the Workflow B entry (Phase 5.1). |
 | `backend` | Dispatch the internal `implementer` (builder). |
 | `full-stack` | Dispatch the internal `implementer` (covers both UI and API code). |
 | `db-schema` | Dispatch the internal `implementer` with DB context flag. Schema updated FIRST in `db/schema.sql` (or detected equivalent). |
@@ -172,9 +172,9 @@ At every phase boundary, if the `bts_status` tool is available call it instead o
 The skill is an **interactive spine** (Phases 0-3) wrapping two Workflows and one human gate:
 
 - **Spine:** prep gate (Phase 0) · recon (Phase 1) · build-plan auth (Phase 2, auto under loop / `flow.autoApproveBuildPlan`) · `/goal` (Phase 2.5) · branch (Phase 3).
-- **Workflow A - produce** (Phase 4): build the slice + its unit tests; the builder emits the **build manifest**. Backend items pipeline / parallelize; frontend runs `modern-ux-expert ‖ layout-architect`.
+- **Workflow A - produce** (Phase 4): build the slice + its unit tests; the `implementer` emits the **build manifest** (on `type: frontend` no `implementer` runs, and `state-illustrator` emits it at Phase 5.1). Backend items pipeline / parallelize; frontend runs `modern-ux-expert`, then `layout-architect` serial after it.
 - **Library gate** (Phase 4.5, human): net-new-component preview-first approval.
-- **Workflow B - verify-once** (Phase 5): `state-illustrator → slice-tester → slice-verifier`, each static check exactly once, with an **off-context fix loop**.
+- **Workflow B - verify-once** (Phase 5): `state-illustrator → slice-tester → slice-verifier`, each static check exactly once, with an **off-context fix loop**. On `frontend`, `state-illustrator` also emits the **build manifest** the other two consume.
 - **Closeout** (Phase 6).
 
 ### Phase 0 - Orientation (interactive spine)
@@ -264,7 +264,7 @@ Invoke `/goal <full condition string>`. Log: `Slice-completion goal set for slic
 
 ### Phase 4 - Workflow A (produce)
 
-Per the routing table above. **The builder writes the slice + its unit tests and emits the build manifest** (§Appendix A); it runs gate tiers 1 and 2 only (see "Gate tiers"), does **not** behaviorally review its own work, and does **not** run the e2e suites (tier 3 is the `slice-verifier`'s).
+Per the routing table above. **The builder writes the slice + its unit tests and emits the build manifest** (§Appendix A) on `backend` / `full-stack` / `db-schema` / `infrastructure`; on `frontend` no `implementer` runs and **`state-illustrator` emits it** at Phase 5.1. The builder runs gate tiers 1 and 2 only (see "Gate tiers"), does **not** behaviorally review its own work, and does **not** run the e2e suites (tier 3 is the `slice-verifier`'s).
 
 #### `design-system` / `ci-cd` / `env-setup` - Legacy sub-skill dispatch (v3 projects only)
 
@@ -278,12 +278,15 @@ Load the corresponding sub-skill SKILL.md and follow it end-to-end. The sub-skil
 
 Run as a `Workflow`; if `Workflow` is unavailable, fall back per `loop-workflow-fallback-pattern.md`.
 
-1. **`modern-ux-expert` ‖ `layout-architect`** - **Dispatch in one batch (parallel):** UX strategy (`docs/ux-spec-<slice>.md`, 2-3 best-in-class references) ‖ route files + layout components + breakpoint plan. They have no ordering dependency; run them together.
-2. **`block-composer`** (always first among the compose step) → composes from shadcn blocks; reports `ui_coverage_percent`.
-3. **`component-crafter`** (only if `block-composer` reports gaps) → token-only custom components.
-4. **Library Preview Gate (Phase 4.5)** - see below.
+1. **`modern-ux-expert`** writes `docs/ux-spec-<slice>.md` (UX strategy, 2-3 best-in-class references).
+2. **`layout-architect`**, serial, only after step 1 returns: writes the route files and layout components, then appends `## Breakpoint Plan` to the same spec. The two are not parallel. `layout-architect` reads the spec in full before it starts and appends to it at the end, so dispatched together its read finds no file and the two writes race; treating the pair as independent was the bug. If the spec is missing, `layout-architect` returns `needs_human` (`prd_ambiguity`) rather than designing from the PRD alone.
+3. **`block-composer`** (always first among the compose step) → composes from shadcn blocks; reports `ui_coverage_percent`.
+4. **`component-crafter`** (only if `block-composer` reports gaps) → token-only custom components.
+5. **Library Preview Gate (Phase 4.5)** - see below.
 
-The frontend producers do not write the four UI states or behaviorally verify - `state-illustrator` (Workflow B entry) fills the states and `slice-tester` does the rendered + affordance review.
+**Pass the slice's Exit criteria verbatim in every frontend producer's input contract**: the steps above, `library-entry-writer` at Phase 4.5 and `state-illustrator` at Phase 5.1. Withholding the builder's reasoning from the tester is the point of context separation; withholding the shared standard from the builder never was. The `slice-tester` input list does not change.
+
+The frontend producers do not write the four UI states or behaviorally verify - `state-illustrator` (Workflow B entry) fills the states and `slice-tester` does the rendered + affordance review. **None of them emits the build manifest either.** `state-illustrator` is the last step of the frontend path and its manifest emitter (Phase 5.1): it runs last, reads every implemented file in full, and derives the manifest from the files on disk.
 
 #### `backend` / `full-stack` / `db-schema` / `infrastructure` - Internal builder
 
@@ -345,9 +348,15 @@ The pipeline is **`state-illustrator → slice-tester → slice-verifier`**, wit
 
 Dispatch `state-illustrator` to ensure every interactive production surface has loading / empty / error / success states. Skip for `backend` / `db-schema` / `infrastructure` with zero UI delta. (On a pure-backend slice, Workflow B starts at 5.2.)
 
+**On `type: frontend` this dispatch also emits the build manifest.** Pass the slice id, the slice type and the implemented-files list, and take `build_manifest` off its return as **the** slice manifest for 5.2 and 5.3. It is one emission, not a second opinion: `state-illustrator` derives it from the files on disk, and `slice-verifier` re-derives its own count from the diff at 5.3, independently. The manifest stays in the conversation (no file holds it); stage the state files from its `files_changed` like any agent's.
+
+- **Fallback, `mode: "manifest-only"`.** When the build plan lists zero interactive surfaces for a `frontend` slice (a static route, a display-only page), there are no states to fill, but 5.2 and 5.3 still need a manifest. Dispatch `state-illustrator` with `mode: "manifest-only"`: it skips the state work and returns `build_manifest` alone (routes and components declared, affordances empty). If its `summary` says the files on disk are not display-only, re-dispatch it in `full` mode.
+- **On `full-stack`, the `implementer` already emitted the manifest** in Phase 4. `state-illustrator` fills states and returns only the affordances and transitions it added (or `null`); merge them into the implementer's manifest before 5.2, or the backstop at 5.3 counts them in the diff and reports an under-declaration the builder never caused.
+- **A `frontend` slice never reaches 5.2 without a manifest.** If `state-illustrator` returns `needs_human`, or returns `complete` with an empty `build_manifest`, raise it as a `prd_ambiguity` HITL instead of running the tester against nothing. It is an operator question, not a fix-loop failure: it consumes none of the 3 local fix loops.
+
 #### 5.2 - `slice-tester` (behavioral verification)
 
-Boot the dev server (frontend / full-stack) and dispatch [`slice-tester`](agents/slice-tester.md). **Context-separation rule (absolute):** pass the tester **only** the build manifest + the slice's Exit criteria + the design-system path (`docs/design-system.md`) + the dev-server URL + the slice type + the DB target. **Never pass the builder's context, reasoning, or chat** - the tester must falsify the manifest's claims, not trust the builder's narrative.
+Boot the dev server (frontend / full-stack) and dispatch [`slice-tester`](agents/slice-tester.md). **Context-separation rule (absolute):** pass the tester **only** the build manifest (on `frontend`, the one `state-illustrator` returned at 5.1; otherwise the `implementer`'s) + the slice's Exit criteria + the design-system path (`docs/design-system.md`) + the dev-server URL + the slice type + the DB target. **Never pass the builder's context, reasoning, or chat** - the tester must falsify the manifest's claims, not trust the builder's narrative.
 
 Pass through the config:
 - **`verification.viewports`** *(C7)* - the widths the tester renders `frontend` slices at. Do not hardcode a viewport list; use the resolved config (default `[375, 768, 1280]`). Screenshots are taken only at 768 and 1280, one of each per new UI surface (see "Evidence, not proof ledgers").
@@ -359,9 +368,9 @@ The tester type-routes (frontend = rendered design-system match + per-affordance
 
 #### 5.3 - `slice-verifier` (gate tier 3: the full local suite, once)
 
-Dispatch [`slice-verifier`](agents/slice-verifier.md) with the **slice diff** (branch + base SHA), the **build manifest**, the resolved **`verification.e2e.*`** thresholds (C10), the package manager + script names, the workflow inventory, and the slice type. This first pass is tier 3: the full local suite, one time. The builder's tier 1 and 2 results are narrower in scope and do not substitute for it.
+Dispatch [`slice-verifier`](agents/slice-verifier.md) with the **slice diff** (branch + base SHA), the **build manifest** (on `frontend`, `state-illustrator`'s), the resolved **`verification.e2e.*`** thresholds (C10), the package manager + script names, the workflow inventory, and the slice type. This first pass is tier 3: the full local suite, one time. The builder's tier 1 and 2 results are narrower in scope and do not substitute for it.
 
-It runs each atomic check once: lint · typecheck · build · unit/integration · e2e by tag (threshold-gated per `verification.e2e` - **C10**) · design-system **static grep** (raw values / non-token - the static check only; the rendered match is the tester's) · CI-integrity (no existing gate weakened) · and the **manifest under-declaration backstop** (§1.4 - independently greps the diff for `action(` / `use server` / `onClick` / `<form` / route-file additions and **fails** if the manifest under-counts). It returns the Appendix-C verdict.
+It runs each atomic check once: lint · typecheck · build · unit/integration · e2e by tag (threshold-gated per `verification.e2e` - **C10**) · design-system **static grep** (raw values / non-token, plus the bundled `verify-frontend-statics.sh` sub-check under the same key - the static check only; the rendered match is the tester's) · CI-integrity (no existing gate weakened) · and the **manifest under-declaration backstop** (§1.4 - independently greps the diff for `action(` / `use server` / `onClick` / `<form` / route-file additions and **fails** if the manifest under-counts). It returns the Appendix-C verdict. Its `warnings` array (the statics findings) never fails the slice and never enters the fix loop; list it in the Progress Report. On a `frontend` slice a declared total of zero is `needs_human` (`prd_ambiguity`), never `pass`: raise it as a HITL, not a fix-loop failure, so it consumes none of the 3 local fix loops.
 
 #### 5.4 - Off-context fix loop
 
@@ -370,6 +379,10 @@ If `slice-tester.overall == fail` OR `slice-verifier.overall == fail`, route the
 - 1st fail → `fix-attempter` with the failing verdict(s) + evidence → re-run **only the failed half** (re-dispatch `slice-tester` if a behavioral check failed; re-dispatch `slice-verifier` with its prior verdict and the fix's `files_changed`). **Re-verification hard rule:** `slice-verifier` carries every green check forward and re-runs only the gates the fix patch could change, chosen by the verifier from the fix diff, and lists each in its `rerun: [{gate, reason}]` field. The full suite never re-runs after any fix (1st, 2nd or 3rd).
 - 2nd fail → `debug-instrumenter` adds targeted `// INSTRUMENT` logging and the failing check runs once to capture that output (evidence capture, not a verify) → `fix-attempter` with the richer evidence → re-verify.
 - 3rd fail → `fix-attempter` once more with the full evidence: every prior verdict, the instrumentation output, and both earlier patches → re-verify.
+
+**Bail on a repeated error signature.** Build each failing verdict's signature from its first `fix_targets` entry: `normalize(first_error_line) + " | " + file + " | " + check_key`, where `check_key` is the verdict key that failed (`typecheck`, an affordance, `a11y.focus_visible`) and `normalize` strips line and column numbers, absolute path prefixes and timestamps. It is a plain string held in this conversation and compared by string equality, never hashed and never written to a file. Pass the signature the last patch aimed at to `fix-attempter` as `previous_signature` (`null` on loop 1). Before starting loop 2 or 3 (before `debug-instrumenter` on loop 2), compare the new failure's signature with that one: if they are equal, the identical failure already survived a fix, so do not start another loop. Stop and bubble HITL (`needs_human`, `bail_reason: repeated_signature`) with the full evidence. `fix-attempter` runs the same comparison as a backstop and returns `bail_reason: repeated_signature` without patching. A bail uses up the loop it stopped; it never resets or extends the cap.
+
+**Revert a patch that regresses a green gate.** After each re-verify, check for a regression before comparing signatures: a gate or tester check that was `pass` before the last patch and is `fail` after it. If there is one, restore that patch before any new fix is attempted, and do it yourself (the fixers run no git command): put the paths in the patch's `files_changed` back to the last commit (`git restore --source=HEAD -- <paths>`, deleting any file the patch created). Fix-loop patches stay uncommitted until the loop is green, so this is the usual case; a patch already committed is reverted with a new commit at the task boundary instead. An earlier loop's uncommitted patch on the same paths goes back with it. The next `fix-attempter` dispatch gets the regressed gates and every restored path, with `previous_signature: null`, because after the restore the failure it hands over is the pre-patch one, not a survivor of a fix. A revert refunds no loop.
 
 **Fix cap (hard, non-overridable): 3 local fix loops.** A loop is one fix dispatch plus its re-verify, exactly the three above. Still failing after the 3rd loop → stop and bubble HITL with the full evidence (the goal stays active so the loop resumes if the user resolves it). The local counter is per slice and separate from the CI counter (3 `ci-fix-attempter` rounds per PR, owned by `/box-it-up` Phase 3a); neither borrows from the other. **Run instructions never raise the cap:** "continue until verified", "never stop", "fully automated" and similar wording do not grant attempts. Only the operator's explicit reply at the HITL can grant more (for example "two more loops"); each granted loop follows the same rules, and the full suite still never re-runs.
 
@@ -381,7 +394,7 @@ The fixers make no git writes: `fix-attempter` and `debug-instrumenter` return `
 
 When every in-scope item is `[x]` and Workflow B is green:
 
-1. Flip slice status `In Progress` → `Completed` in `docs/plans/00_master_checklist.md` (or, when the only unmet line is a date-gated criterion whose date is ahead, set `**Status:** waiting until <YYYY-MM-DD>: <criterion>` and leave the row `[ ]`; the slice stays open and a run on or after that date closes it), then make the slice's **final commit** on the slice branch, `feat(pie-N): N.M <slice name>` (closing narrative in the body for UI slices), carrying the flip and any fix-loop patches, and push it. Stage selectively: the checklist plus the fixers' `files_changed`, never `git add -A`.
+1. Flip slice status `In Progress` → `Completed` in `docs/plans/00_master_checklist.md` (or, when the only unmet line is a date-gated criterion whose date is ahead, set `**Status:** waiting until <YYYY-MM-DD>: <criterion>` and leave the row `[ ]`; the slice stays open and a run on or after that date closes it), then make the slice's **final commit** on the slice branch, `feat(pie-N): N.M <slice name>` (closing narrative in the body for UI slices), carrying the flip and any fix-loop patches, and push it. Stage selectively: the checklist plus the fixers' `files_changed`, never `git add -A`. The conductor also stages `state-illustrator`'s `files_changed` (the state files it wrote at 5.1).
 2. Confirm the slice branch has every commit it needs and the working tree is clean: `git status --short` empty, with no untracked or modified file the slice created. A leftover file is either committed with the slice (it belongs to it) or reported as a blocker; never leave it behind.
 3. Walk the **Completion Checklist** (below). The slice is not "ready to ship" until every box up through §4 is `[x]`.
 4. Report to the user using the **Progress Report Format**, ending with the **Handoff to `/box-it-up`** message.
@@ -440,7 +453,7 @@ After each item and at slice closeout:
 
 1. Checklist items completed (with file paths)
 2. Files changed (grouped by package/app)
-3. Verification results: builder tiers 1-2 (lint / typecheck / unit while coding; the slice's own tests / build / DB tests before each commit), `slice-tester` verdict (per-affordance + transitions + seed/cleanup outcome), `slice-verifier` verdict (each static gate + manifest backstop counts)
+3. Verification results: builder tiers 1-2 (lint / typecheck / unit while coding; the slice's own tests / build / DB tests before each commit), `slice-tester` verdict (per-affordance + transitions + seed/cleanup outcome), `slice-verifier` verdict (each static gate + manifest backstop counts + its non-forcing `warnings`, listed)
 4. Subagent run summary (which roles ran, Workflow A review loops, Workflow B fix-loop activity)
 5. Open risks / blockers
 6. Next recommended slice
@@ -452,7 +465,7 @@ After each item and at slice closeout:
 
 - **Build plan must be authorized** before any producer subagent runs - UNLESS running under the `/sell-pie` loop or `flow.autoApproveBuildPlan` is `true` (C9), in which case it is auto-approved and logged, not stopped.
 - **One slice per PR boundary, task commits inside; per-slice work opens no PR (default `pie-pr` mode).** Every `### Task K` ends with a commit + push; the slice ends with one `feat(pie-N): N.M <slice name>` commit and a clean tree. Never bundle multiple checklist items unless the user explicitly approves it in Phase 2. The PR is opened at the pie boundary by `/box-it-up`. **Exception:** merge-per-slice mode opens, CI-checks and merges the slice's own PR at closeout, with a merge commit and no per-slice merge approval.
-- **Context separation is absolute.** The `slice-tester` receives ONLY the build manifest + Exit criteria + design-system path (+ dev URL / type / DB target). Never pass it the builder's reasoning or chat. The tester falsifies; it does not trust.
+- **Context separation is absolute.** The `slice-tester` receives ONLY the build manifest (the `implementer`'s, or `state-illustrator`'s on `frontend`) + Exit criteria + design-system path (+ dev URL / type / DB target). Never pass it the builder's reasoning or chat. The tester falsifies; it does not trust.
 - **Gates run by tier (see "Gate tiers"); the full local suite runs once per slice (C5).** Tier 1 while coding, tier 2 before each commit, tier 3 once at slice end in `slice-verifier`, tier 4 in CI at the PR. Never demand the full ladder per task or per commit, and never bypass the `pre-push` hook with `--no-verify`.
 - **Viewports come from `verification.viewports` (C7); e2e thresholds from `verification.e2e` (C10).** Never hardcode a viewport list or run an e2e suite the config gated `"off"`.
 - **Checklist edits only after green gates.** Do not optimistically mark items done - flip `[ ]` → `[x]` only after both reviewers pass AND Workflow B is green.
@@ -480,7 +493,7 @@ Run at the end of every slice. Do not report the slice "ready to ship" until eve
 
 - [ ] Every in-scope checklist item from the active `docs/plans/stage_<n>_*.md` is implemented.
 - [ ] Both `spec-reviewer` and `quality-reviewer` returned `verdict: pass` for each item.
-- [ ] The builder emitted a complete **build manifest** (§Appendix A) covering every route / affordance / serverAction / transition.
+- [ ] The builder (`implementer`, or `state-illustrator` on `type: frontend`) emitted a complete **build manifest** (§Appendix A) covering every route / affordance / serverAction / transition. A `frontend` slice with an empty manifest is a `prd_ambiguity` HITL, never a pass.
 - [ ] Every task commit landed on a green tier 2 (the task's own tests, build, DB tests when the schema or migrations changed).
 - [ ] `slice-verifier` returned `overall: pass` on its one tier-3 run - lint, typecheck, build, unit/integration, e2e (per `verification.e2e`), design-system static grep, CI-integrity, and the manifest under-declaration backstop all clear.
 - [ ] `slice-tester` returned `overall: pass` - every declared affordance exercised, every transition confirmed **both directions on every surface**, and (for data-flow slices) the seed cleaned up with zero residue.
