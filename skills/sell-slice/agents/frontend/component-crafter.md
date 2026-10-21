@@ -106,7 +106,7 @@ token_usage_report:
       - token: <--token-name>
         role: <visual role>
 needs_human: false | true
-hitl_category: null | "creative_direction"
+hitl_category: null | "prd_ambiguity" | "external_credentials" | "destructive_operation" | "creative_direction"
 hitl_question: null | "<plain-language question if a component design decision requires human judgment>"
 hitl_context: null | "<what triggered this>"
 ```

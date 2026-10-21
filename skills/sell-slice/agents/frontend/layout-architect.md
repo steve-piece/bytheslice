@@ -104,7 +104,7 @@ layout_regions:
     shell_component: <component name or "inline">
 breakpoint_plan: docs/ux-spec-<slice>.md (appended)
 needs_human: false | true
-hitl_category: null | "creative_direction"
+hitl_category: null | "prd_ambiguity" | "external_credentials" | "destructive_operation" | "creative_direction"
 hitl_question: null | "<plain-language question if layout decision requires human judgment>"
 hitl_context: null | "<what triggered this>"
 ```

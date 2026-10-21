@@ -158,7 +158,7 @@ build_manifest:                 # Appendix A shape. Required on type: frontend; 
       surfaces: ["<surface>"]
   note: <one paragraph, plain English, describing what the slice built>
 needs_human: false | true
-hitl_category: null | "prd_ambiguity" | "creative_direction"
+hitl_category: null | "prd_ambiguity" | "external_credentials" | "destructive_operation" | "creative_direction"
 hitl_question: null | "<plain-language question>"
 hitl_context: null | "<what triggered this>"
 ```
