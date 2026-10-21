@@ -55,6 +55,8 @@ function installPluginMode({ repoRoot, args, targets, pluginMetadata }) {
       "assets/brand",
       "docs/architecture.md",
       "docs/agents.md",
+      // The Pass mod spec: README, CLAUDE.md and architecture.md link it.
+      "docs/pass-mod-spec.md",
       "README.md",
       "CHANGELOG.md",
       "LICENSE",

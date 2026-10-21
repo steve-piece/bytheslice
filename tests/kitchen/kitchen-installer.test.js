@@ -119,7 +119,7 @@ test('full plugin installs provide self-contained kitchen runtimes for both host
       const readme = await fs.readFile(path.join(pluginRoot, 'README.md'), 'utf8');
       assert.ok(readme.includes('assets/brand/logo.png'));
       assert.ok(readme.includes('docs/architecture.md'));
-      for (const reference of ['assets/brand/logo.png', 'docs/architecture.md', 'docs/agents.md']) {
+      for (const reference of ['assets/brand/logo.png', 'docs/architecture.md', 'docs/agents.md', 'docs/pass-mod-spec.md']) {
         assert.deepEqual(await fs.readFile(path.join(pluginRoot, reference)), await fs.readFile(path.join(repoRoot, reference)));
       }
       await fs.access(path.join(pluginRoot, 'commands/open-kitchen.md'));
