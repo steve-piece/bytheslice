@@ -110,4 +110,5 @@ completion_criteria:
 - `pnpm typecheck` (or `tsc --noEmit`) passes
 - Seed script runs without errors
 - RLS enabled and policies verified (Supabase only)
-- `db-schema-drift` CI job green (validates schema source matches migration state)
+- Local drift check clean: `supabase db diff` empty, `prisma migrate status` up to date, or `drizzle-kit check` passes (the `db-schema-drift` CI job runs at the PR, gate tier 4, not per slice)
+- DB tests ran before each task commit (gate tier 2: this slice touches the schema)

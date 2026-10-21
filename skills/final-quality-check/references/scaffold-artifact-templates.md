@@ -18,15 +18,27 @@ All templates assume a Turborepo-style monorepo with `apps/**` and `packages/**`
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-pnpm check:design-system && \
-pnpm lint && \
-pnpm typecheck && \
-pnpm test && \
-pnpm test:e2e:feature && \
-pnpm test:e2e:regression
+# Slice tier (gate tier 2): lint, typecheck, unit tests, build, and DB tests only
+# when this push touches the schema or migrations. The full suite (@feature,
+# @regression-core, @visual, audit, db-schema-drift, design-system-compliance)
+# runs once in CI at the PR (gate tier 4).
+# --no-verify is never the answer: a red hook is fixed, not skipped.
+set -e
+
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+
+BASE=$(git merge-base HEAD origin/main 2>/dev/null || true)
+if [ -n "$BASE" ] && git diff --name-only "$BASE" HEAD | grep -Eq '(^|/)(migrations|supabase/migrations|prisma|drizzle)/|(^|/)schema\.(sql|prisma|ts)$'; then
+  pnpm run --if-present test:db
+fi
 ```
 
 Make executable: `chmod +x .husky/pre-push`.
+
+This hook is the **slice tier**, not the full CI chain: it runs on every task push inside the delivery loop, so it stays cheap. Adjust the schema/migration path pattern to the detected DB tooling, and swap `pnpm` for the detected package manager (`npm run --if-present` works the same; for yarn use a `test:db` guard). Never add the e2e suites or `check:design-system` here: those are CI's (tier 4) and `slice-verifier`'s (tier 3).
 
 ---
 
@@ -40,7 +52,7 @@ Make executable: `chmod +x .husky/pre-push`.
 ## CI/CD checklist
 
 - [ ] E2E test added or updated for every changed behavior
-- [ ] `@regression-core` suite still passes locally
+- [ ] `@regression-core` suite green (CI runs it at the PR)
 - [ ] `@visual` baselines reviewed (approve or update before merge)
 - [ ] No design-system-compliance violations (`pnpm check:design-system` green)
 - [ ] No existing CI workflow jobs removed or weakened

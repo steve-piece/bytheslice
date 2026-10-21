@@ -124,6 +124,8 @@ Every stage must include `tests_passing`. Common additional criteria by type:
 - `frontend` / `full-stack`: `tests_passing`, `route_renders_without_error`, `visual_review_passed`
 - `backend`: `tests_passing`, `api_contract_verified`
 
+Slugs and Exit criteria follow the gate tiers (`references/templates.md` "Gate tiers"): `tests_passing` means the slice's own tests (tier 2) and the one `slice-verifier` run (tier 3). No slug or criterion demands the full ladder per task, or a CI-only check (tier 4) per slice; CI gates the PR.
+
 ## Body: Exit criteria contract
 
 Separate from the frontmatter slugs, every stage/slice file's body MUST end with an `**Exit criteria:**` bullet block. This block is the single source of truth that `/bytheslice:sell-slice` Phase 2.5 lifts verbatim into the session-scoped `/goal` condition, and that the `slice-tester` derives its bespoke test plan from (alongside the build manifest). In a v5 nested checklist, **each slice carries its own Exit-criteria block**.

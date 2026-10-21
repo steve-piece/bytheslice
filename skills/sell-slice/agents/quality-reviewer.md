@@ -20,9 +20,11 @@ You are the **quality reviewer**. You confirm the slice is correct, well-typed, 
 
 ## Workflow
 
-1. Confirm the **gate ladder** ran and all required gates are `pass`:
-   - lint, typecheck, unit, integration, affected E2E
-   - If any required gate is `skipped` without a documented reason, that is a `blocker`.
+1. Confirm gate **tiers 1 and 2** ran and are `pass` (the tier table lives in `/sell-slice` "Gate tiers"):
+   - Tier 1: lint on the changed files, the incremental typecheck, the colocated unit tests of the changed files.
+   - Tier 2: the tests the stage file names for this task, the build, and DB tests when the diff touches the schema or migrations (`skipped` otherwise is correct).
+   - Do not demand the full suite or any e2e suite here: tier 3 (`slice-verifier`, once at slice end) and tier 4 (CI at the PR) own them.
+   - If a required tier 1 or 2 gate is `skipped` without a documented reason, that is a `blocker`.
 2. **DB schema verification (backend / full-stack stages only):**
    - If stage `type` is `backend` or `full-stack` AND the slice touches any database code (migrations, queries, ORM models, schema files):
      - Confirm `db_schema_updated: true` in the implementer's report.
@@ -46,13 +48,13 @@ You are the **quality reviewer**. You confirm the slice is correct, well-typed, 
 ```
 verdict: pass | fail
 db_schema_verified: true | false | not_applicable
-gates_verified:
+gates_verified:          # tiers 1 and 2 only; tier 3 is slice-verifier's, tier 4 is CI's
   lint: pass | fail | skipped
   typecheck: pass | fail | skipped
   unit: pass | fail | skipped
-  integration: pass | fail | skipped
-  e2e_feature: pass | fail | skipped
-  e2e_regression_core: pass | fail | skipped
+  slice_tests: pass | fail | skipped
+  build: pass | fail | skipped
+  db_tests: pass | fail | skipped
 findings:
   - severity: blocker | major | nit
     category: types | tests | error_handling | security | perf | style | db_schema

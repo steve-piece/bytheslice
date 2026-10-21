@@ -135,6 +135,24 @@ After Workflow A, **Workflow B** (verify-once) runs regardless of slice type, ty
 
 ---
 
+## Gate tiers (what runs when)
+
+Static gates run in four tiers, each at the cheapest point that catches its class of failure. Nothing in a slice demands the full gate ladder per task or per commit.
+
+| Tier | When | Who runs it | What it runs |
+|---|---|---|---|
+| **1. While coding** | Continuously, as each task is written | `implementer` (and `fix-attempter` on its own patch) | Lint on the changed files; the whole-project incremental typecheck (`tsc` cannot scope to files, so run it incrementally, e.g. `tsc --noEmit --incremental`); the colocated unit tests of the changed files. |
+| **2. Before each commit** | At every task boundary, before the conductor commits | `implementer`, as its last step before returning `files_changed`; the husky `pre-push` hook re-runs the generic part on push | The slice's own tests named in its stage file; the build; DB tests only when the diff touches the schema or migrations. |
+| **3. Once at slice end** | After Workflow A, before the slice's final commit and before any PR | `slice-verifier` | The full local suite, one time: lint, typecheck, build, unit/integration, e2e by tag (per `verification.e2e`), design-system static grep, CI-integrity, manifest backstop. |
+| **4. At the PR** | When a PR opens (the pie PR by default; the slice PR in merge-per-slice mode) | CI | The full suite: `@regression-core`, `@visual`, audit, schema drift, design-system-compliance, plus everything above. |
+
+- **The conductor commits a task only on a green tier 2.** A red tier 2 goes back to the builder; it never lands in a commit. Bypassing the `pre-push` hook with `--no-verify` is never the answer: a red hook is fixed, not skipped.
+- **Tier 3 runs once per slice.** Tier 1 and 2 results are narrower in scope and never substitute for it. After a fix, `slice-verifier` re-runs only the gates that fix could change (Phase 5.4); the full suite never runs again for that slice.
+- **Tier 4 belongs to CI.** Exit criteria and checklist rows never demand a CI-only check (`@regression-core`, `@visual`, audit, `db-schema-drift`, the design-system-compliance workflow) per slice; those gate the PR.
+- `final-quality-check`'s `local-gates-runner` is a one-time scaffold validation outside this ladder and is unchanged.
+
+---
+
 ## Workflow availability (CC-only primitives)
 
 `/goal` and `Workflow` (`parallel()` / `pipeline()`) are **Claude-Code-only** primitives. Detect availability up front; if either is absent (Cursor, `disableAllHooks`, workspace-trust not accepted, or any other reason the primitive surfaces), **fall back - do not silently drop the logic:**
@@ -243,7 +261,7 @@ Invoke `/goal <full condition string>`. Log: `Slice-completion goal set for slic
 
 ### Phase 4 - Workflow A (produce)
 
-Per the routing table above. **The builder writes the slice + its unit tests and emits the build manifest** (§Appendix A); it does **not** behaviorally review its own work and does **not** run the e2e ladder.
+Per the routing table above. **The builder writes the slice + its unit tests and emits the build manifest** (§Appendix A); it runs gate tiers 1 and 2 only (see "Gate tiers"), does **not** behaviorally review its own work, and does **not** run the e2e suites (tier 3 is the `slice-verifier`'s).
 
 #### `design-system` / `ci-cd` / `env-setup` - Legacy sub-skill dispatch (v3 projects only)
 
@@ -273,7 +291,7 @@ Run as a `Workflow` (`pipeline()` per item; independent items may `parallel()`);
 3. Dispatch **`quality-reviewer`** with both prior outputs.
 4. If either reviewer returns `verdict: fail`, send findings back to a fresh builder dispatch and re-review. Repeat until both `pass`.
 5. Apply the curator's checklist diff for this item: flip `[ ]` → `[x]` only after both reviewers pass AND Workflow B is green for the slice.
-6. **Task boundary: commit + push (orchestrator only).** Once the item's task clears both reviewers, stage the builder's `files_changed` selectively (`git add -- <paths>`, never `-A`), then commit it on the slice branch as `feat(pie-N): N.M task K <task name>` and push, so the tree is clean before the next task starts. A DB-schema change lands first as its own `chore(db): update schema for <item-id>` commit. The orchestrator does not flip checklist rows until verification passes.
+6. **Task boundary: commit + push (orchestrator only).** Once the item's task clears both reviewers and the builder reported a green tier 2 (the task's own tests, build, and DB tests when the diff touched the schema or migrations), stage the builder's `files_changed` selectively (`git add -- <paths>`, never `-A`), then commit it on the slice branch as `feat(pie-N): N.M task K <task name>` and push, so the tree is clean before the next task starts. A DB-schema change lands first as its own `chore(db): update schema for <item-id>` commit. The orchestrator does not flip checklist rows until verification passes.
 
 **Independent items pipeline / parallelize.** Items with no data dependency on each other may run as `parallel()` builder dispatches; dependent items chain in a `pipeline()`. Merge the per-item manifests into one slice manifest before Workflow B (the slice-level manifest is what `slice-tester` and `slice-verifier` consume).
 
@@ -352,9 +370,9 @@ The tester type-routes (frontend = rendered design-system match + per-affordance
 
 > **Seed-and-cleanup is the tester's.** It writes the cleanup script first, runs the **non-prod guard** (blocks + bubbles `destructive_operation` if the DB target is not demonstrably local/dev), seeds, runs round-trips, runs cleanup in a finally block, and asserts zero residue. The orchestrator never seeds the DB itself.
 
-#### 5.3 - `slice-verifier` (static gates, each exactly once)
+#### 5.3 - `slice-verifier` (gate tier 3: the full local suite, once)
 
-Dispatch [`slice-verifier`](agents/slice-verifier.md) with the **slice diff** (branch + base SHA), the **build manifest**, the resolved **`verification.e2e.*`** thresholds (C10), the package manager + script names, the workflow inventory, the slice type, and the list of **already-green checks** (e.g. lint/type/build the builder already passed) so they are **not re-run** (C5).
+Dispatch [`slice-verifier`](agents/slice-verifier.md) with the **slice diff** (branch + base SHA), the **build manifest**, the resolved **`verification.e2e.*`** thresholds (C10), the package manager + script names, the workflow inventory, and the slice type. This first pass is tier 3: the full local suite, one time. The builder's tier 1 and 2 results are narrower in scope and do not substitute for it.
 
 It runs each atomic check once: lint · typecheck · build · unit/integration · e2e by tag (threshold-gated per `verification.e2e` - **C10**) · design-system **static grep** (raw values / non-token - the static check only; the rendered match is the tester's) · CI-integrity (no existing gate weakened) · and the **manifest under-declaration backstop** (§1.4 - independently greps the diff for `action(` / `use server` / `onClick` / `<form` / route-file additions and **fails** if the manifest under-counts). It returns the Appendix-C verdict.
 
@@ -411,7 +429,7 @@ After each item and at slice closeout:
 
 1. Checklist items completed (with file paths)
 2. Files changed (grouped by package/app)
-3. Verification results: builder gate (lint / typecheck / unit / smoke), `slice-tester` verdict (per-affordance + transitions + seed/cleanup outcome), `slice-verifier` verdict (each static gate + manifest backstop counts)
+3. Verification results: builder tiers 1-2 (lint / typecheck / unit while coding; the slice's own tests / build / DB tests before each commit), `slice-tester` verdict (per-affordance + transitions + seed/cleanup outcome), `slice-verifier` verdict (each static gate + manifest backstop counts)
 4. Subagent run summary (which roles ran, Workflow A review loops, Workflow B fix-loop activity)
 5. Open risks / blockers
 6. Next recommended slice
@@ -424,7 +442,7 @@ After each item and at slice closeout:
 - **Build plan must be authorized** before any producer subagent runs - UNLESS running under the `/sell-pie` loop or `flow.autoApproveBuildPlan` is `true` (C9), in which case it is auto-approved and logged, not stopped.
 - **One slice per PR boundary, task commits inside; per-slice work opens no PR (default `pie-pr` mode).** Every `### Task K` ends with a commit + push; the slice ends with one `feat(pie-N): N.M <slice name>` commit and a clean tree. Never bundle multiple checklist items unless the user explicitly approves it in Phase 2. The PR is opened at the pie boundary by `/box-it-up`. **Exception:** merge-per-slice mode opens, CI-checks and merges the slice's own PR at closeout, with a merge commit and no per-slice merge approval.
 - **Context separation is absolute.** The `slice-tester` receives ONLY the build manifest + Exit criteria + design-system path (+ dev URL / type / DB target). Never pass it the builder's reasoning or chat. The tester falsifies; it does not trust.
-- **Each static gate runs exactly once (C5).** `slice-verifier` carries already-green checks forward; never pay for the same lint/type/build/e2e twice across the slice.
+- **Gates run by tier (see "Gate tiers"); the full local suite runs once per slice (C5).** Tier 1 while coding, tier 2 before each commit, tier 3 once at slice end in `slice-verifier`, tier 4 in CI at the PR. Never demand the full ladder per task or per commit, and never bypass the `pre-push` hook with `--no-verify`.
 - **Viewports come from `verification.viewports` (C7); e2e thresholds from `verification.e2e` (C10).** Never hardcode a viewport list or run an e2e suite the config gated `"off"`.
 - **Checklist edits only after green gates.** Do not optimistically mark items done - flip `[ ]` → `[x]` only after both reviewers pass AND Workflow B is green.
 - **Subagent prompts live in `./agents/*.md`.** This SKILL.md is workflow only - never inline subagent prompts here.
@@ -449,7 +467,8 @@ Run at the end of every slice. Do not report the slice "ready to ship" until eve
 - [ ] Every in-scope checklist item from the active `docs/plans/stage_<n>_*.md` is implemented.
 - [ ] Both `spec-reviewer` and `quality-reviewer` returned `verdict: pass` for each item.
 - [ ] The builder emitted a complete **build manifest** (§Appendix A) covering every route / affordance / serverAction / transition.
-- [ ] `slice-verifier` returned `overall: pass` - lint, typecheck, build, unit/integration, e2e (per `verification.e2e`), design-system static grep, CI-integrity, and the manifest under-declaration backstop all clear.
+- [ ] Every task commit landed on a green tier 2 (the task's own tests, build, DB tests when the schema or migrations changed).
+- [ ] `slice-verifier` returned `overall: pass` on its one tier-3 run - lint, typecheck, build, unit/integration, e2e (per `verification.e2e`), design-system static grep, CI-integrity, and the manifest under-declaration backstop all clear.
 - [ ] `slice-tester` returned `overall: pass` - every declared affordance exercised, every transition confirmed **both directions on every surface**, and (for data-flow slices) the seed cleaned up with zero residue.
 - [ ] No `[ ]` items remain in the active slice (deferred items moved out-of-scope with a note).
 - [ ] If `debug-instrumenter` ran, every `// INSTRUMENT` line was stripped before final commit.

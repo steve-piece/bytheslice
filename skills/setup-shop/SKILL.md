@@ -275,7 +275,7 @@ Check the working directory (Flow C) or the newly-scaffolded project root (Flow 
 |---|---|
 | `.github/workflows/ci.yml` | Has `typecheck`, `lint`, and at least one test job (unit/integration/e2e) |
 | `.github/workflows/design-system-compliance.yml` | Exists |
-| `.husky/pre-push` | Exists and runs the same gates as CI |
+| `.husky/pre-push` | Exists and runs the slice tier (lint, typecheck, test, build); CI runs the full suite |
 | `.github/pull_request_template.md` | Exists |
 
 If ALL four markers are present and look complete, set `ci_cd_ready: true` and skip the rest of Step 3 (just announce: *"CI/CD baseline detected. Proceeding to next-step pointer."*).

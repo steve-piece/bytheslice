@@ -63,6 +63,7 @@ Additional CI jobs to add beyond the base scaffold:
 
 **Exit criteria:**
 - Every completion criterion in `final-quality-check` skill is satisfied
-- `design-system-compliance` CI job added and green on the branch
+- `design-system-compliance` CI job added, and green on the `final-quality-check` PR (CI runs it at the PR, gate tier 4)
+- `.husky/pre-push` runs the slice tier (gate tier 2), not the full CI chain
 - PR template present and references stage plans
 - Branch protection configured on `main`

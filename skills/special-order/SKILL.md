@@ -207,7 +207,7 @@ Use the same checklist row format as the existing stages in the file. Do NOT alt
 > - **Skip the chore PR — start delivery immediately**: switch back to `main` (`git checkout main`), then run `/bytheslice:sell-slice`. The first slice's PR will mix the new plan files with the implementation.
 > - **Multi-stage autonomous delivery (experimental)**: `/bytheslice:run-the-day` drives every new stage end-to-end with per-stage approval pauses. Best for batches you want shipped without per-stage babysitting.
 >
-> All new stages will go through the full CI gate (`@feature` + `@regression-core` + `@visual` + design-system-compliance + db-schema-drift if applicable). Visual + design-system-compliance gates require the project to have already run `/bytheslice:final-quality-check` — if absent, the orchestrator will surface that and ask whether to scaffold first.
+> All new stages run the tiered gates: tier 1 while coding, tier 2 (the slice's own tests, build, DB tests when the schema changes) before each commit, tier 3 (`slice-verifier`, the full local suite) once at slice end, and the full CI suite (`@feature` + `@regression-core` + `@visual` + design-system-compliance + db-schema-drift if applicable) once at the PR (tier 4). Visual + design-system-compliance gates require the project to have already run `/bytheslice:final-quality-check`: if absent, the orchestrator will surface that and ask whether to scaffold first.
 
 Return.
 

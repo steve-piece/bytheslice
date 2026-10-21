@@ -34,7 +34,7 @@ Bold rows mark the skill each group of agents belongs to. The six agents at the 
 | `workflow-writer` | Wren | Writes the GitHub Actions workflow files (CI, E2E, design-system compliance, and schema drift when you have a database), skipping any that already exist. |
 | `lint-config-writer` | Linda | Adds the lint rules that catch hardcoded colors and spacing (anything that bypasses your design tokens), and tidies `.gitignore` for test artifacts. |
 | `a11y-discovery-runner` | Ally | Runs a scoped shadscan accessibility scan to surface issues no other gate catches, throws out anything pointing at your `/library` mockups, and hands back the rest as leads to check by hand. It never blocks, never scores you, and never fixes anything. |
-| `husky-installer` | Hux | Sets up the git pre-push hook so the full check suite runs on your machine before code can leave it. |
+| `husky-installer` | Hux | Sets up the git pre-push hook so the quick slice checks (lint, types, unit tests, build) run on your machine before code can leave it; CI still runs the full suite on every PR. |
 | `branch-protection-writer` | Locke | Generates a one-time script you run to lock the main branch on GitHub so nothing merges without green checks. |
 | `local-gates-runner` | Ollie | Runs the entire gate suite locally (lint, types, tests, E2E, visual) before the first push, so problems get fixed on the branch instead of in a red PR. |
 | **🍕 /open-the-shop** | | |
