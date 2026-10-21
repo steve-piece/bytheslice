@@ -179,7 +179,7 @@ test('live customer cards, station cards, tracker attributes and Orders sheets e
   const current = { o: { n: 4, title: unsafe }, slices: [{ id: '4.1', name: unsafe, st: 0, status: 'waiting' }], stage: 1 };
   const element = { innerHTML: '' }, cards = [];
   const context = vm.createContext({ cur: current, sceneMode: 'live', STEP: ['Ticket', 'Line'],
-    CHIP: { waiting: ['c-wait', 'Waiting'] }, sliceLabel: () => 'Waiting',
+    CHIP: { waiting: ['c-wait', 'Waiting'] }, sliceLabel: () => 'Waiting', STEP_WORD: {}, taskNote: () => '',
     nm: order => `Pie ${order.n}`, custQueue: [], parked: [], served: [], $: () => element,
     stationObjs: [{}], STATION: [{ name: 'UI' }], COOKS: [{ meta: { name: 'Cook', id: 'cook' } }],
     tapTarget(g, card) { cards.push(card); } });

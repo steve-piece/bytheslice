@@ -120,6 +120,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .lrow time{font-size:11.5px;font-weight:800;color:var(--ink-soft);font-variant-numeric:tabular-nums;padding-top:1px}
 .lrow small{display:block;font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--accent)}
 .orow{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.slices li small{display:block;grid-column:2/4;font-size:11.5px;font-weight:600;color:var(--ink-soft);white-space:normal;margin-top:-4px}
 .orow b{font-size:14px}.orow small{display:block;color:var(--ink-soft);font-weight:600;font-size:12px}
 .orow .pn{font-family:var(--display);font-weight:600;font-size:15px;color:var(--ink-soft)}
 
@@ -2999,12 +3000,19 @@ parked = [{ n: 6, title: 'Stripe webhooks', why: 'Needs STRIPE_WEBHOOK_SECRET in
 let cur = null, cost = 0;
 const STEP = ['Ticket', 'Line', 'Plate', 'Oven', 'Pass', 'Window'];
 const CHIP = { waiting: ['c-wait', 'Waiting'], cooking: ['c-cook', ''], ready: ['c-ready', 'Ready'], carrying: ['c-ready', 'To the pass'], plated: ['c-plated', 'Plated'], sent: ['c-sent', 'Sent back'], passed: ['c-pass', 'Passed'] };
-function sliceLabel(sl) { return sl.status === 'cooking' ? `On the line ${Math.round(sl.pct * 100)}%` : CHIP[sl.status][1]; }
+// Live slices only ever show measured progress: tasks committed of the plan's tasks, plus the step the agents are on.
+const taskNote = sl => sl.progress ? `${sl.progress.done} of ${sl.progress.total} tasks committed` : '';
+function sliceLabel(sl) {
+  if (sl.status !== 'cooking') return CHIP[sl.status][1];
+  if (!sl.live) return `On the line ${Math.round(sl.pct * 100)}%`;
+  const pct = sl.progress ? ` ${Math.round(sl.progress.done / sl.progress.total * 100)}%` : '';
+  return `${STEP_WORD[sl.step] || 'On the line'}${pct}`;
+}
 function renderOrder() {
   if (!cur) return;
   $('#tkTitle').textContent = `${nm(cur.o)} · ${cur.o.title}`;
   $('#tkSteps').innerHTML = STEP.map((st, i) => `<i class="${i < cur.stage ? 'done' : i === cur.stage ? 'now' : ''}" title="${st}"></i>`).join('');
-  $('#tkNow').textContent = cur.stage >= STEP.length ? 'Served' : STEP[cur.stage];
+  $('#tkNow').textContent = cur.stage >= STEP.length ? 'Served' : sceneMode === 'live' ? STEP_WORD[cur.slices.find(sl => sl.status === 'cooking')?.step] || STEP[cur.stage] : STEP[cur.stage];
   $('#tkSlices').innerHTML = cur.slices.map(sl => `<i class="d-${sl.status}" title="${escapeCard(sl.id)} ${escapeCard(sl.name)}: ${sliceLabel(sl)}"></i>`).join('');
   $('#tracker').setAttribute('aria-label', `${nm(cur.o)}, ${cur.o.title}: ${cur.stage >= STEP.length ? 'served' : STEP[cur.stage]}. Open the order.`);
   if (!sheet.hidden && sheet.dataset.kind === 'orders') renderOrdersSheet();
@@ -3076,6 +3084,9 @@ function lineUpdate() {
 }
 
 // Snapshot order data is normalized separately so malformed polls cannot clear a known line.
+// Step words and progress shapes the live line accepts (sliceLabel reads STEP_WORD at render time).
+const STEP_WORD = { build: 'Building', test: 'Testing', verify: 'Verifying', fix: 'Fixing', commit: 'Committing', review: 'Reviewing', plan: 'Planning' };
+const validProgress = p => p && Number.isSafeInteger(p.done) && Number.isSafeInteger(p.total) && p.total > 0 && p.done >= 0 && p.done <= p.total ? { done: p.done, total: p.total } : null;
 function snapshotOrders(snapshot) {
   if (!Array.isArray(snapshot.pies)) return null;
   const ids = new Set(), orders = [];
@@ -3170,7 +3181,8 @@ function syncOrderLine(snapshot) {
   }
   const previous = cur?.o.key;
   cur = active ? { o: active.order, stage: 1, failed: false,
-    slices: active.order.sliceRows.map((slice, index) => ({ id: slice.number, name: slice.title,
+    slices: active.order.sliceRows.map((slice, index) => ({ id: slice.number, name: slice.title, live: true,
+      step: STEP_WORD[slice.step] ? slice.step : null, progress: validProgress(slice.progress),
       st: index % COOKS.length, status: slice.status === 'done' ? 'passed' : slice.status === 'active' ? 'cooking' : 'waiting', pct: 0 })) } : null;
   if (previous !== cur?.o.key || (pizza && pizza.wedges.length !== cur?.slices.length)) {
     if (pizza) root.remove(pizza.g); pizza = null;
@@ -3480,7 +3492,7 @@ function renderOrdersSheet() {
     $('#shTitle').textContent = 'Orders';
     const row = (pn, t, sub, chip) => `<div class="orow"><span class="pn">${escapeCard(pn)}</span><div><b>${escapeCard(t)}</b><small>${escapeCard(sub)}</small></div>${chip}</div>`;
     $('#shBody').innerHTML =
-      (cur ? `<div class="sh-now"><div class="eyebrow">Now baking · ${STEP[Math.min(cur.stage, 5)]}</div><h4>${nm(cur.o)} · ${escapeCard(cur.o.title)}</h4><ul class="slices">${cur.slices.map(sl => `<li><span class="sid">${sl.id}</span><span class="sname">${escapeCard(sl.name)}</span><span class="chip ${CHIP[sl.status][0]}">${sliceLabel(sl)}</span></li>`).join('')}</ul><p class="sh-meta">${Math.max(0, custQueue.length - 1)} more in line · ${parked.length} parked on the status board</p></div>` : '') +
+      (cur ? `<div class="sh-now"><div class="eyebrow">Now baking · ${escapeCard(cur && sceneMode === 'live' ? STEP_WORD[cur.slices.find(sl => sl.status === 'cooking')?.step] || 'Line' : STEP[Math.min(cur.stage, 5)])}</div><h4>${nm(cur.o)} · ${escapeCard(cur.o.title)}</h4><ul class="slices">${cur.slices.map(sl => `<li title="${escapeCard(taskNote(sl))}"><span class="sid">${sl.id}</span><span class="sname">${escapeCard(sl.name)}</span><span class="chip ${CHIP[sl.status][0]}">${sliceLabel(sl)}</span>${sl.live && sl.progress && sl.status === 'cooking' ? `<small>${escapeCard(taskNote(sl))}</small>` : ''}</li>`).join('')}</ul><p class="sh-meta">${Math.max(0, custQueue.length - 1)} more in line · ${parked.length} parked on the status board</p></div>` : '') +
       custQueue.filter(c => c.order && (!cur || c.order !== cur.o)).map(c => row(nm(c.order), c.order.title, c.order.slice ? 'One slice, no split' : `${c.order.slices.length} slices`, '<span class="chip c-wait">Planned</span>')).join('') +
       parked.map(p => row('Pie ' + p.n, p.title, p.why, '<span class="chip c-sent">86\'d</span>')).join('') +
       [...served].reverse().map(s => row(s.slice ? 'Slice ' + s.sid : 'Pie ' + s.n, s.title, sceneMode === 'live' ? 'Completed in the plan' : s.slice ? 'Committed and pushed' : s.first ? 'Passed on the first inspection' : 'Sent back once, then passed', '<span class="chip c-pass">Served</span>')).join('');
