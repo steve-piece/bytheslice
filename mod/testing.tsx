@@ -2,11 +2,19 @@
 // Test-only stand-ins for the engine beneath the Pass: answers the $ calls the mod makes from an in-memory world, plus mount targets.
 
 import { mock } from 'claude-code/testing'
-import type { On, RenderSurface, UiPane } from 'claude-code'
+import type { AgentInfo, On, RenderSurface, UiPane } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
 export const START_MS = 1760000000000
 export const PLUGIN = 'bytheslice'
+export const CWD = '/repo'
+export const LEDGER = '/repo/.bytheslice/ledger.jsonl'
+export const ACTIVITY = '/repo/.claude/.bytheslice-state/kitchen/activity.jsonl'
+export const ROTATED = '/repo/.claude/.bytheslice-state/kitchen/activity.1.jsonl'
+export const SESSION = 'session-test'
+export const HEAD = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678'
+export const STATUS_TOOL = 'mcp__bytheslice__bts_status'
+export const NOTE_TOOL = 'mcp__bytheslice__bts_note'
 
 /** What the stand-ins answer from; a test changes it between steps. */
 export type World = {
@@ -20,7 +28,49 @@ export type World = {
   registered: string[]
   opened: number
   closed: number
+  /** Files by absolute path beside the checklist: the ledger, the activity log. */
+  files: Record<string, string>
+  /** Every argv `$.process.run` was given, in order. */
+  runs: string[][]
+  /** What `git rev-parse --git-common-dir` answers; null makes git fail there. */
+  commonDir: string | null
+  /** HEAD's sha, ref names and subject for `git log -1`; null makes git log and rev-parse HEAD fail. */
+  head: string | null
+  refs: string
+  subject: string
+  /** When true, `tee -a` exits 1 (an unwritable ledger). */
+  unwritable: boolean
+  agents: AgentInfo[]
+  toasts: string[]
+  tools: string[]
+  /** Whether each registered tool asked for its schema in the prompt (`isDeferred: false`). */
+  deferred: Record<string, unknown>
+  costUsd: number | null
+  sessionId: string | null
+  /** The session's working directory. */
+  cwd: string
 }
+
+/** The rows a world file holds, parsed; a torn line is left out. */
+export function rowsOf(world: World, path: string = LEDGER): Record<string, unknown>[] {
+  return (world.files[path] ?? '')
+    .split('\n')
+    .filter(line => line.trim() !== '')
+    .flatMap(line => {
+      try {
+        return [JSON.parse(line) as Record<string, unknown>]
+      } catch {
+        return []
+      }
+    })
+}
+
+/** One kitchen activity line, as hooks/kitchen-log.sh writes it. */
+export function activityLine(row: Record<string, unknown>): string {
+  return `${JSON.stringify(row)}\n`
+}
+
+const isChecklist = (path: string): boolean => /(^|\/)docs\/plans\/00_master_checklist\.md$/.test(path)
 
 /** A checklist with one pie whose slices are all done. */
 export const ALL_DONE = [
@@ -46,8 +96,23 @@ export function stage(on: On, init: Partial<World> = {}) {
     registered: [],
     opened: 0,
     closed: 0,
+    files: {},
+    runs: [],
+    commonDir: '/repo/.git',
+    head: HEAD,
+    refs: 'HEAD -> pie-5-the-pass, origin/pie-5-the-pass',
+    subject: 'feat(pie-5): 5.2 task 1 ledger writer',
+    unwritable: false,
+    agents: [],
+    toasts: [],
+    tools: [],
+    deferred: {},
+    costUsd: 0.25,
+    sessionId: SESSION,
+    cwd: CWD,
     ...init,
   }
+  const abs = (path: string): string => (path.startsWith('/') ? path : `${world.cwd}/${path.replace(/^\.\//, '')}`)
   const clock = mock.clock(on, { now: START_MS })
   const missing = () => new Error('ENOENT: no such file or directory')
 
@@ -56,23 +121,81 @@ export function stage(on: On, init: Partial<World> = {}) {
     if (world.version === null) throw new Error('no version')
     return { value: { version: world.version, base: world.version } }
   })
-  on('fs.read', () => {
-    if (world.checklist === null) throw missing()
-    return { value: world.checklist }
+  on('session.id', () => {
+    if (world.sessionId === null) throw new Error('no id')
+    return { value: world.sessionId }
   })
-  on('fs.stat', () => {
-    if (world.checklist === null) throw missing()
-    return { value: { kind: 'file' as const, size: world.checklist.length, mtimeMs: world.mtimeMs, isLink: false } }
-  })
-  on('process.run', () => ({
+  on('session.cwd', () => ({ value: world.cwd }))
+  on('session.root', () => ({ value: world.cwd }))
+  on('session.usage', () => ({
     value: {
-      exitCode: world.branch === null ? 128 : 0,
-      stdout: world.branch === null ? '' : `${world.branch}\n`,
-      stderr: '',
-      isStdoutTruncated: false,
-      isStderrTruncated: false,
+      startedAt: START_MS,
+      context: { window: 200000 },
+      rateLimits: [],
+      ...(world.costUsd === null ? {} : { cost: { usd: world.costUsd } }),
     },
   }))
+  on('fs.read', (_$, e) => {
+    if (isChecklist(e.path)) {
+      if (world.checklist === null) throw missing()
+      return { value: world.checklist }
+    }
+    const text = world.files[abs(e.path)]
+    if (text === undefined) throw missing()
+    return { value: text }
+  })
+  on('fs.stat', (_$, e) => {
+    const text = isChecklist(e.path) ? world.checklist : world.files[abs(e.path)] ?? null
+    if (text === null) throw missing()
+    const mtimeMs = isChecklist(e.path) ? world.mtimeMs : 1
+    return { value: { kind: 'file' as const, size: text.length, mtimeMs, isLink: false } }
+  })
+  on('fs.exists', (_$, e) => ({
+    value: isChecklist(e.path) ? world.checklist !== null : world.files[abs(e.path)] !== undefined,
+  }))
+  on('fs.write', (_$, e) => {
+    world.files[abs(e.path)] = e.text
+    return { value: undefined }
+  })
+  on('process.run', (_$, e) => {
+    const argv = [...e.argv]
+    world.runs.push(argv)
+    const out = (exitCode: number, stdout = '', stderr = '') => ({
+      value: { exitCode, stdout, stderr, isStdoutTruncated: false, isStderrTruncated: false },
+    })
+    const line = argv.join(' ')
+    if (argv[0] === 'tee') {
+      if (world.unwritable) return out(1, '', 'tee: /repo/.bytheslice/ledger.jsonl: Permission denied')
+      const path = argv[argv.length - 1] ?? ''
+      world.files[path] = (world.files[path] ?? '') + (e.init?.stdin ?? '')
+      return out(0, e.init?.stdin ?? '')
+    }
+    if (line.startsWith('git rev-parse') && line.includes('--git-common-dir')) {
+      return world.commonDir === null ? out(128, '', 'fatal: not a git repository') : out(0, `${world.commonDir}\n`)
+    }
+    if (line === 'git rev-parse --abbrev-ref HEAD') {
+      return world.branch === null ? out(128) : out(0, `${world.branch}\n`)
+    }
+    if (line === 'git rev-parse HEAD') return world.head === null ? out(128) : out(0, `${world.head}\n`)
+    if (argv[0] === 'git' && argv[1] === 'log') {
+      return world.head === null ? out(128) : out(0, `${world.head}\n${world.refs}\n${world.subject}\n`)
+    }
+    if (argv[0] === 'tail') {
+      const path = argv[argv.length - 1] ?? ''
+      return out(0, world.files[path] ?? '')
+    }
+    return out(127, '', `${argv[0]}: not found`)
+  })
+  on('agent.list', () => ({ value: world.agents }))
+  on('tool.register', (_$, e) => {
+    world.tools.push(e.name)
+    world.deferred[e.name] = e.isDeferred
+    return { value: { tool: `mcp__${PLUGIN}__${e.name}` } }
+  })
+  on('ui.toast', (_$, e) => {
+    world.toasts.push(e.text)
+    return { value: undefined }
+  })
   on('command.register', (_$, e) => {
     world.registered.push(e.name)
     return { value: { command: e.name } }
@@ -170,4 +293,84 @@ export function engineDraws(on: On): void {
     }
     return <Text>engine</Text>
   })
+}
+
+/** Calls bts_note the way the model does; resolves the text it answered. */
+export async function note($: Engine, text: unknown, slice?: string): Promise<string> {
+  const ran = await $.tool.call({ tool: NOTE_TOOL, text, ...(slice === undefined ? {} : { slice }) })
+  return String(ran.result)
+}
+
+/** Calls bts_status the way the model does; resolves the text it answered. */
+export async function status($: Engine, scope?: 'active' | 'all'): Promise<string> {
+  const ran = await $.tool.call({ tool: STATUS_TOOL, ...(scope === undefined ? {} : { scope }) })
+  return String(ran.result)
+}
+
+/** The engine beneath an agent spawn, a turn's end and a skill's prompt: each answers as core would. */
+export function engineLoops(on: On, agentIds: string[] = ['agent-1']): void {
+  let n = 0
+  on('agent.spawn', () => ({ model: 'sonnet', agentId: agentIds[n++] ?? `agent-${n}` }))
+  on('turn.complete', (_$, e) => ({ text: '', ...(e.usage ? { usage: e.usage } : {}) }))
+  on('skill.prompt', (_$, e) => ({ text: e.text }))
+}
+
+/** Spawns an agent through the plugins as the Agent tool does. */
+export function spawn($: Engine, subagentType: string, description: string) {
+  return $.agent.spawn({
+    tool_use_id: `toolu-${description.length}`,
+    prompt: 'the task',
+    description,
+    subagentType,
+    provider: { plugin: 'engine', tier: 'core' },
+    parentModel: 'claude-opus-5-5',
+    background: false,
+    fork: false,
+  })
+}
+
+/** Ends a turn through the plugins: a subagent's when `agentId` is given, else the main loop's. */
+export function endTurn($: Engine, answer: string, agentId?: string) {
+  return $.turn.complete({
+    answer,
+    durationMs: 1200,
+    isAborted: false,
+    turnId: `turn-${agentId ?? 'main'}`,
+    reason: 'answer',
+    ...(agentId === undefined ? {} : { agentId }),
+    usage: {
+      input_tokens: 100,
+      output_tokens: 20,
+      cache_read_input_tokens: 5,
+      cache_creation_input_tokens: 0,
+      model: 'claude-opus-5-5',
+    },
+  })
+}
+
+/** A Bash result as core answers it, with an optional structured git record. */
+export function bashResult(gitOperation?: Record<string, unknown>) {
+  return { result: { stdout: '', stderr: '', interrupted: false, ...(gitOperation ? { gitOperation } : {}) } }
+}
+
+/** A ledger where Slice 5.2 is fixing: tester passed, verifier failed with two targets, one fix-attempter started. */
+export function fixingWorld(world: World): void {
+  const line = (t: number, ev: string, data?: Record<string, unknown>) =>
+    JSON.stringify({ v: 1, t, sid: 's', ev, pie: 5, slice: '5.2', ...(data ? { data } : {}) })
+  world.files[LEDGER] = `${[
+    line(1, 'slice.started'),
+    line(2, 'verdict', { gate: 'slice-tester', overall: 'pass', fix_targets: [], head: HEAD }),
+    line(3, 'verdict', {
+      gate: 'slice-verifier',
+      overall: 'fail',
+      fix_targets: ['implementer | mod/a.ts | typecheck: x', 'implementer | mod/b.ts | lint: y'],
+      head: HEAD,
+    }),
+  ].join('\n')}\n`
+  world.files[ACTIVITY] = activityLine({ t: 4, sid: 's', ev: 'SubagentStart', agent: 'bytheslice:fix-attempter', aid: 'fx', pie: 5, slice: '5.2' })
+}
+
+/** The fixture with Slice 5.1 checked, so 5.2 is the active slice. */
+export function activeAt52(checklist: string): string {
+  return checklist.replace('### Slice 5.1 - Pass pane and band [ ]\nStatus: Not Started', '### Slice 5.1 - Pass pane and band [x]\nStatus: Completed')
 }
