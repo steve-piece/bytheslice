@@ -47,6 +47,9 @@ button{font:inherit;color:inherit}
 .seg{display:flex;padding:4px;gap:2px}
 .seg button{width:34px;height:34px;border-radius:50%;border:0;background:transparent;display:grid;place-items:center;cursor:pointer}
 .seg button.on{background:var(--mustard);color:#fff;box-shadow:0 2px 6px rgba(160,110,30,.35)}
+.seg button:disabled{cursor:not-allowed;opacity:.4}
+.seg button.on:disabled{opacity:.8}
+.seg.locked{cursor:not-allowed}
 .seg svg{width:18px;height:18px}
 
 /* live baking tracker: one horizontal pill in the top bar */
@@ -250,7 +253,7 @@ button.orow:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
   <div class="pill stat" title="Pies that passed inspection on the first try"><span data-i="check"></span><b id="stGate">67%</b><span>first try</span></div>
 </div>
 <div class="hud tr">
-  <div class="pill seg" role="group" aria-label="Lighting"><button id="bDawn" aria-label="Before opening" title="Before opening" data-i="dawn"></button><button id="bDay" class="on" aria-label="Daytime" title="Open" data-i="sun"></button><button id="bNight" aria-label="Evening" title="Evening" data-i="moon"></button><button id="bLate" aria-label="After hours" title="After hours" data-i="late"></button></div>
+  <span id="todLock" hidden>Time follows the real session</span><div class="pill seg" id="todGroup" role="group" aria-label="Lighting"><button id="bDawn" aria-label="Before opening" title="Before opening" data-i="dawn"></button><button id="bDay" class="on" aria-label="Daytime" title="Open" data-i="sun"></button><button id="bNight" aria-label="Evening" title="Evening" data-i="moon"></button><button id="bLate" aria-label="After hours" title="After hours" data-i="late"></button></div>
   <button class="pill iconbtn" id="bHome" aria-label="Recenter camera" data-i="target"></button>
   <button class="pill iconbtn" id="bOpen" type="button" aria-label="Open this kitchen in your default browser (new tab)" title="Waiting for the local kitchen address" data-i="ext" disabled></button>
 </div>
@@ -3807,10 +3810,21 @@ function clearDemo() {
   if (!sheet.hidden) { sheet.hidden = true; ['#bCrew', '#bOrders', '#bLog'].forEach(id => $(id).classList.remove('on')); }
   tip.hidden = true; tipFor = null;
 }
+// A real project drives the clock: the time buttons only work in the sample shop.
+const TIME_LOCK = 'Time follows the real session';
+function lockTime(on) {
+  const group = $('#todGroup'); group.classList.toggle('locked', on);
+  if (on) { group.title = TIME_LOCK; group.setAttribute('aria-describedby', 'todLock'); } else { group.removeAttribute('title'); group.removeAttribute('aria-describedby'); }
+  ['bDawn', 'bDay', 'bNight', 'bLate'].forEach(id => {
+    const button = $('#' + id); button.dataset.title ??= button.title; button.dataset.label ??= button.getAttribute('aria-label');
+    button.disabled = on; button.title = on ? TIME_LOCK : button.dataset.title;
+    button.setAttribute('aria-label', on ? `${button.dataset.label}. ${TIME_LOCK}` : button.dataset.label);
+  });
+}
 function demoDriver() {
   if (sceneMode === 'demo') return;
   clearAssignments(); clearDemo(); sceneMode = 'demo';
-  ['bDawn', 'bDay', 'bNight', 'bLate'].forEach(id => { $('#' + id).disabled = false; });
+  lockTime(false);
   for (const [a, home] of castHomes) { a.pos.copy(home.pos); a.goalYaw = home.goal; a.show(!home.hidden); a.sync(); }
   served = [...SERVED0]; parked = [{ n: 6, title: 'Stripe webhooks', why: 'Needs STRIPE_WEBHOOK_SECRET in .env' }];
   for (let i = 0; i < 3; i++) addServed();
@@ -3820,7 +3834,7 @@ function demoDriver() {
 }
 function startLive() {
   sceneMode = 'live'; clearAssignments(); clearDemo();
-  ['bDawn', 'bDay', 'bNight', 'bLate'].forEach(id => { $('#' + id).disabled = true; $('#' + id).title = 'Lighting follows the live kitchen phase'; });
+  lockTime(true);
   A.chef.pos.set(1.2, .06, 1.6); A.chef.show(true); A.chef.sync(); A.chef.doing('Leading the session', 'idle');
 }
 function castActor(character) {
