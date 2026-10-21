@@ -1,0 +1,136 @@
+// mod/band.test.tsx
+// Unit tests for the band, status line and prompt hint on terminal and desktop: text, survey, narrow form, docked pane and the all-done hint.
+
+import { expect, test } from 'claude-code/testing'
+
+import { bandLine, statusText } from './band.tsx'
+import { parseChecklist } from './checklist.ts'
+import { CHECKLIST_FIXTURE } from './fixtures/checklist.fixture.ts'
+import { ALL_DONE, bandTarget, engineDraws, hintTarget, stage, V4 } from './testing.tsx'
+
+const SURFACES = ['terminal', 'desktop'] as const
+
+test('the band is one line naming the active pie, slice and count', async ($, on) => {
+  const { start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  engineDraws(on)
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(bandTarget(surface))
+    const lines = await ui.findAll({ type: 'Text' })
+    expect(lines.map(line => line.text)).toEqual(['Pie 5 · Slice 5.1 · 0/8 done'])
+    await ui.unmount()
+  }
+})
+
+test('the band yields to a survey', async ($, on) => {
+  const { start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  engineDraws(on)
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(bandTarget(surface, 100, { hasSurvey: true }))
+    expect((await ui.findAll({ type: 'Text' })).map(line => line.text)).toEqual(['engine'])
+    await ui.unmount()
+  }
+})
+
+test('under 60 columns the band takes the short form', async ($, on) => {
+  const { start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  engineDraws(on)
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(bandTarget(surface, 59))
+    expect((await ui.find({ type: 'Text' }))?.text).toBe('P5 S5.1 0/8')
+    await ui.unmount()
+    const wide = await $.ui.mount(bandTarget(surface, 60))
+    expect((await wide.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.1 · 0/8 done')
+    await wide.unmount()
+  }
+})
+
+test('with no checklist the band draws nothing of its own', async ($, on) => {
+  const { start } = stage(on)
+  engineDraws(on)
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(bandTarget(surface))
+    expect((await ui.find({ type: 'Text' }))?.text).toBe('engine')
+    await ui.unmount()
+  }
+})
+
+test('a v4 checklist shows the dim line v4 checklist', async ($, on) => {
+  const { start } = stage(on, { checklist: V4 })
+  engineDraws(on)
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(bandTarget(surface))
+    const line = await ui.find({ type: 'Text' })
+    expect(line?.text).toBe('v4 checklist')
+    expect(line?.props.dimColor).toBe(true)
+    await ui.unmount()
+  }
+})
+
+test('the band steps aside while the pane is docked beside a wide fullscreen terminal', async ($, on) => {
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  engineDraws(on)
+  await start($)
+  expect(world.panes.map(pane => pane.id)).toEqual(['pass'])
+  const docked = await $.ui.mount(bandTarget('terminal', 100, { columns: 160, isFullscreen: true }))
+  expect((await docked.find({ type: 'Text' }))?.text).toBe('engine')
+  await docked.unmount()
+  const mainScreen = await $.ui.mount(bandTarget('terminal', 100, { columns: 160, isFullscreen: false }))
+  expect((await mainScreen.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.1 · 0/8 done')
+  await mainScreen.unmount()
+  const narrow = await $.ui.mount(bandTarget('terminal', 80, { columns: 90, isFullscreen: true }))
+  expect((await narrow.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.1 · 0/8 done')
+  await narrow.unmount()
+  world.panes = []
+  const closed = await $.ui.mount(bandTarget('terminal', 100, { columns: 160, isFullscreen: true }))
+  expect((await closed.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.1 · 0/8 done')
+  await closed.unmount()
+})
+
+test('the status line carries P5 S5.1 ✓0/8 and follows each projection write', async ($, on) => {
+  const { world, clock, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  await start($)
+  expect(world.statuses).toEqual(['P5 S5.1 ✓0/8'])
+  world.checklist = V4
+  world.mtimeMs = 9
+  await clock.advance(10000)
+  await clock.settle()
+  expect(world.statuses).toEqual(['P5 S5.1 ✓0/8', 'v4 checklist'])
+})
+
+test('the prompt hint says /box-it-up ready only when every slice of every pie is done', async ($, on) => {
+  const { world, clock, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  engineDraws(on)
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(hintTarget(surface))
+    expect((await ui.find({ type: 'Text' }))?.text).toBe('engine hint: ? for shortcuts')
+    await ui.unmount()
+  }
+  world.checklist = ALL_DONE
+  world.mtimeMs = 3
+  await clock.advance(10000)
+  await clock.settle()
+  const terminal = await $.ui.mount(hintTarget('terminal'))
+  expect((await terminal.find({ type: 'Text' }))?.text).toBe('engine hint: ? for shortcuts | tail: /box-it-up ready')
+  await terminal.unmount()
+  const desktop = await $.ui.mount(hintTarget('desktop'))
+  expect((await desktop.find({ type: 'Text' }))?.text).toBe('engine hint: ? for shortcuts · /box-it-up ready')
+  await desktop.unmount()
+})
+
+test('band and status text cover every checklist state', () => {
+  const c = parseChecklist(CHECKLIST_FIXTURE)
+  expect(bandLine(c, 100)).toEqual({ text: 'Pie 5 · Slice 5.1 · 0/8 done', dim: false })
+  expect(bandLine(null, 100)).toBeNull()
+  expect(bandLine(parseChecklist(''), 100)).toBeNull()
+  expect(bandLine(parseChecklist(ALL_DONE), 100)?.text).toBe('All pies done · /box-it-up ready')
+  expect(bandLine(parseChecklist(ALL_DONE), 40)?.text).toBe('all done')
+  expect(statusText(c)).toBe('P5 S5.1 ✓0/8')
+  expect(statusText(null)).toBeUndefined()
+  expect(statusText(parseChecklist(ALL_DONE))).toBe('✓ all done')
+})
