@@ -44,6 +44,7 @@ export type LedgerEvent =
   | 'agent.stalled'
   | 'teammate.idle'
   | 'teammate.done'
+  | 'edit'
 
 /** One line of `.bytheslice/ledger.jsonl`: facts only, never a prompt, an answer or a secret. */
 export type LedgerRow = {
@@ -273,6 +274,38 @@ export type PassBaker = {
 /** The team roster: the teammates of the session's team, and when it was last read. */
 export type PassTeam = { at: number; bakers: PassBaker[] }
 
+/**
+ * One file a slice touched: its workspace-relative path, the +/- lines `git diff
+ * --numstat` counts since the slice's start head, the roles whose Edit or Write
+ * changed it, and `stale` when a builder (implementer, fix-attempter) edited it
+ * after the slice's last slice-verifier pass, which that edit invalidates.
+ */
+export type PassTouchedFile = { path: string; added: number; removed: number; roles: string[]; stale: boolean }
+
+/** The active slice's touched files as the pane shows them, and when they were read. */
+export type PassTouched = { slice: string | null; files: PassTouchedFile[]; at: number }
+
+/** One replay step: a commit of the slice (its sha) or the uncommitted changes (null), and its edit window. */
+export type PassReplayStep = { sha: string | null; t: number; fromT: number }
+
+/** One file of a replay step: numstat and the roles that edited it in the step's window. */
+export type PassReplayFile = { path: string; added: number; removed: number; agents: string[] }
+
+/** The replay pane's state: the slice, its steps, the step shown and its git data, loaded by a press, never by a draw. */
+export type PassReplay = {
+  slice: string
+  steps: PassReplayStep[]
+  index: number
+  subject: string
+  files: PassReplayFile[]
+  selected: number
+  diff: string
+  error: string | null
+}
+
+/** One other session's roadmap entry in `$.store` (`strip:<projectKey>:<sid>`): where it is, and when it said so. */
+export type PassStripEntry = { pie: number | null; slice: string | null; status: string; branch: string | null; t: number }
+
 /** The live agents poll: when it last ran and what it saw. */
 export type PassLive = { at: number; agents: PassLiveEntry[] }
 
@@ -319,6 +352,12 @@ declare module 'claude-code' {
       'pass.notified': string[]
       /** The team roster: one baker per live teammate; empty outside team mode. */
       'pass.team': PassTeam
+      /** The active slice's touched files: edit rows joined with git numstat since the slice's start head. */
+      'pass.touched': PassTouched
+      /** The replay pane's state, or null before pass replay ran. */
+      'pass.replay': PassReplay | null
+      /** Other live sessions of the same project, read from `$.store`, newest first. */
+      'pass.strip': { sid: string; entry: PassStripEntry }[]
     }
   }
 }

@@ -60,6 +60,10 @@ export type World = {
   sent: { to: string; text: string }[]
   /** What `$.session.send` answers. */
   sendResult: SessionSendResult
+  /** Answers a command the stand-ins do not know (git diff, git show, node), or undefined for exit 127. */
+  run?: (argv: string[], stdin?: string) => { exitCode?: number; stdout?: string; stderr?: string } | undefined
+  /** What `$.store` holds, shared by every session the test starts; a test reads it directly. */
+  store: Record<string, unknown>
 }
 
 /** The rows a world file holds, parsed; a torn line is left out. */
@@ -125,6 +129,7 @@ export function stage(on: On, init: Partial<World> = {}) {
     notifyResult: { isSent: true, channel: 'iterm2' },
     sent: [],
     sendResult: { isDelivered: true },
+    store: {},
     ...init,
   }
   const abs = (path: string): string => (path.startsWith('/') ? path : `${world.cwd}/${path.replace(/^\.\//, '')}`)
@@ -195,12 +200,24 @@ export function stage(on: On, init: Partial<World> = {}) {
     if (argv[0] === 'git' && argv[1] === 'log') {
       return world.head === null ? out(128) : out(0, `${world.head}\n${world.refs}\n${world.subject}\n`)
     }
+    const answered = world.run?.(argv, e.init?.stdin)
+    if (answered !== undefined) return out(answered.exitCode ?? 0, answered.stdout ?? '', answered.stderr ?? '')
     if (argv[0] === 'tail') {
       const path = argv[argv.length - 1] ?? ''
       return out(0, world.files[path] ?? '')
     }
     return out(127, '', `${argv[0]}: not found`)
   })
+  on('store.get', (_$, e) => ({ value: world.store[e.key] }))
+  on('store.set', (_$, e) => {
+    world.store[e.key] = JSON.parse(JSON.stringify(e.value)) as unknown
+    return { value: undefined }
+  })
+  on('store.delete', (_$, e) => {
+    delete world.store[e.key]
+    return { value: undefined }
+  })
+  on('store.keys', () => ({ value: Object.keys(world.store) }))
   on('agent.list', () => ({ value: world.agents }))
   on('tool.register', (_$, e) => {
     world.tools.push(e.name)
@@ -271,6 +288,11 @@ export function paneTarget<P extends RenderSurface>(surface: P, bodyColumns = 48
       view: {},
     },
   }
+}
+
+/** The replay pane as a surface mounts it. */
+export function replayTarget<P extends RenderSurface>(surface: P, bodyColumns = 100) {
+  return { ...paneTarget(surface, bodyColumns), requestId: 'pass-replay', props: { ...paneTarget(surface, bodyColumns).props, title: 'Replay' } }
 }
 
 /** The band above the prompt as a surface mounts it. */

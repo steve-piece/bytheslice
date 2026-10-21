@@ -1,5 +1,5 @@
 // mod/capture.ts
-// The Pass event capture: observe-only hooks that turn skills, verdicts, git results, turns and checklist flips into ledger rows.
+// The Pass event capture: observe-only hooks that turn skills, verdicts, git results, turns, file edits (path and role, never content) and checklist flips into ledger rows.
 
 import { atom, read, update } from 'claude-code'
 import type {
@@ -17,6 +17,7 @@ import { gateOf, readActivity, rollup } from './ledger-projection.ts'
 import { refreshLedger } from './live.ts'
 import { activePie, activeSlice } from './projection.ts'
 import { toastRow } from './toasts.ts'
+import { relativePath } from './touched.ts'
 import type { LedgerRow, PassAgentMark, PassChecklist, PassGate } from './types'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
@@ -500,7 +501,10 @@ export async function captureSkill($: EngineInterface, name: unknown, baker: Ski
   const started = (row: LedgerRow): boolean =>
     row.ev === 'slice.started' && row.slice === slice?.id && (baker === null || row.data?.teammateId === baker.teammateId)
   if (slice && !rows.some(started)) {
-    const written = await record($, { ev: 'slice.started', pie: pie.n, slice: slice.id, data: { skill, ...who } })
+    // The head it starts at is where its touched files and replay count from.
+    const head = (await git($, ['rev-parse', 'HEAD']))?.trim()
+    const at = head && /^[0-9a-f]{7,64}$/.test(head) ? { head } : {}
+    const written = await record($, { ev: 'slice.started', pie: pie.n, slice: slice.id, data: { skill, ...who, ...at } })
     if (written) out.push(written)
   }
   return out
@@ -552,4 +556,42 @@ export async function recordDoneFlips(
     if (rolled) out.push(rolled)
   }
   return out
+}
+
+/**
+ * An `Edit` or `Write` that ran without error becomes one `edit` row: the
+ * workspace-relative path, the agent id and its role from the spawn map
+ * (`main` for the main loop) and the tool. Never the file's content, the old
+ * or new string, or the result. A path outside the workspace is not recorded.
+ * Appended without a projection read, since edits come often.
+ */
+export async function captureEdit(
+  $: EngineInterface,
+  e: { file_path?: unknown; agentId?: string | undefined },
+  tool: string,
+  ran: ToolCallResult,
+): Promise<LedgerRow | null> {
+  if (ran.deny !== undefined || ran.isError === true || (await idle($))) return null
+  let cwd = '.'
+  try {
+    cwd = await $.session.cwd()
+  } catch {
+    // Relative paths still record.
+  }
+  const path = relativePath(e.file_path, cwd)
+  if (path === null) return null
+  const aid = typeof e.agentId === 'string' && e.agentId !== '' ? e.agentId : undefined
+  const mark = aid === undefined ? null : await typeOf($, aid)
+  const agent = mark ? mark.type.slice(mark.type.lastIndexOf(':') + 1) : aid === undefined ? 'main' : 'agent'
+  const active = await activeWhere($)
+  const slice = mark?.slice ?? active.slice
+  const pie = mark?.pie ?? (slice !== undefined ? Number(slice.split('.')[0]) : active.pie)
+  return appendRow($, {
+    ev: 'edit',
+    ...(pie === undefined || pie === null || Number.isNaN(pie) ? {} : { pie }),
+    ...(slice === undefined ? {} : { slice }),
+    ...(aid === undefined ? {} : { aid }),
+    agent,
+    data: { path, ...(aid === undefined ? {} : { aid }), agent, tool },
+  })
 }
