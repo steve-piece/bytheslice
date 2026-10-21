@@ -66,6 +66,7 @@ export async function pollAgents($: EngineInterface): Promise<PassLive | null> {
         role: roleOf(agent.type),
         status: agent.status,
         startedAt: mark?.at ?? known?.startedAt ?? at,
+        ...(typeof agent.teammateId === 'string' && agent.teammateId !== '' ? { teammateId: agent.teammateId } : {}),
       }
     })
     const next: PassLive = { at, agents }
@@ -88,14 +89,18 @@ async function activityMtime($: EngineInterface): Promise<number | null> {
   }
 }
 
-/** Every five seconds: poll the agents, and project again when the activity log changed. */
-export async function startPulse($: EngineInterface): Promise<void> {
+/**
+ * Every five seconds: poll the agents, run `afterPoll` (the team roster's
+ * refresh), and project again when the activity log changed.
+ */
+export async function startPulse($: EngineInterface, afterPoll?: () => Promise<unknown>): Promise<void> {
   pulse?.cancel()
   let seen = await activityMtime($)
   try {
     pulse = $.clock.every(PULSE_MS, () => {
       void (async () => {
         await pollAgents($)
+        if (afterPoll) await afterPoll().catch(() => undefined)
         const mark = await activityMtime($)
         if (mark === seen) return
         seen = mark

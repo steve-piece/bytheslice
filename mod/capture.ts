@@ -308,22 +308,26 @@ export async function record($: EngineInterface, row: LedgerInput): Promise<Ledg
   return written
 }
 
-/** `agent.spawn`, after `next`: keeps the started agent's type and its label's pie and slice. */
+/** `agent.spawn`, after `next`: keeps the started agent's type and its label's pie and slice; a teammate's address and name too. */
 export async function markSpawn($: EngineInterface, e: AgentSpawnInput, result: AgentSpawnResult): Promise<void> {
   if (result.deny !== undefined || typeof result.agentId !== 'string' || (await isLimited($))) return
   const label = labelOf(e.description)
-  const where = label ?? (await activeWhere($))
+  const teammateId = typeof result.teammateId === 'string' && result.teammateId !== '' ? result.teammateId : null
+  // A teammate bakes its own pie: only its label names it (else its first slice.started row does), never the active pie.
+  const where: { pie?: number; slice?: string } = label ?? (teammateId === null ? await activeWhere($) : {})
   let at = Date.now()
   try {
     at = await $.clock.now()
   } catch {
     // Wall clock it is.
   }
+  const name = typeof e.name === 'string' && e.name !== '' ? e.name : teammateId?.split('@')[0]
   const mark: PassAgentMark = {
     type: e.subagentType,
     pie: where.pie ?? null,
     slice: where.slice ?? null,
     at,
+    ...(teammateId === null ? {} : { teammateId, ...(name ? { name } : {}) }),
   }
   const id = result.agentId
   await update($, agentsAtom, marks => {
@@ -466,26 +470,37 @@ export async function captureBash(
 
 const BAKERS = /(^|:)(sell-pie|sell-slice)$/
 
+/** The teammate a baker skill started in: its address and the pie its spawn label named. */
+export type SkillBaker = { teammateId: string; pie: number | null }
+
 /**
  * A `/sell-pie` or `/sell-slice` run (its skill prompt, its Skill tool call or
  * its typed command): records `pie.started` and `slice.started` for the active
  * pie and slice, each only the first time, so the three sources never double up.
+ * Started in a teammate's loop (`baker`), it records that teammate's pie (its
+ * spawn label's, else the active pie) and that pie's first open slice, each row
+ * carrying `data.teammateId`; a slice already started by that teammate is not
+ * recorded again.
  */
-export async function captureSkill($: EngineInterface, name: unknown): Promise<LedgerRow[]> {
+export async function captureSkill($: EngineInterface, name: unknown, baker: SkillBaker | null = null): Promise<LedgerRow[]> {
   if (typeof name !== 'string' || !BAKERS.test(name.trim()) || (await isLimited($))) return []
   const c = await checklistOf($)
-  const pie = activePie(c)
-  const slice = activeSlice(c)
+  const own = baker?.pie == null ? null : c?.pies.find(entry => entry.n === baker.pie && entry.slices.some(s => !s.done)) ?? null
+  const pie = own ?? activePie(c)
+  const slice = own ? own.slices.find(s => !s.done) ?? null : activeSlice(c)
   if (!pie) return []
   const rows = await readRows($)
   const skill = name.trim().slice(name.trim().lastIndexOf(':') + 1)
+  const who = baker ? { teammateId: baker.teammateId } : {}
   const out: LedgerRow[] = []
   if (!rows.some(row => row.ev === 'pie.started' && row.pie === pie.n)) {
-    const written = await record($, { ev: 'pie.started', pie: pie.n, data: { skill } })
+    const written = await record($, { ev: 'pie.started', pie: pie.n, data: { skill, ...who } })
     if (written) out.push(written)
   }
-  if (slice && !rows.some(row => row.ev === 'slice.started' && row.slice === slice.id)) {
-    const written = await record($, { ev: 'slice.started', pie: pie.n, slice: slice.id, data: { skill } })
+  const started = (row: LedgerRow): boolean =>
+    row.ev === 'slice.started' && row.slice === slice?.id && (baker === null || row.data?.teammateId === baker.teammateId)
+  if (slice && !rows.some(started)) {
+    const written = await record($, { ev: 'slice.started', pie: pie.n, slice: slice.id, data: { skill, ...who } })
     if (written) out.push(written)
   }
   return out

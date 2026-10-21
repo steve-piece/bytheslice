@@ -2,7 +2,7 @@
 // Test-only stand-ins for the engine beneath the Pass: answers the $ calls the mod makes from an in-memory world, plus mount targets.
 
 import { mock } from 'claude-code/testing'
-import type { AgentInfo, AgentSpawnInput, On, RenderSurface, UiNotifyResult, UiPane } from 'claude-code'
+import type { AgentInfo, AgentSpawnInput, On, RenderSurface, SessionSendResult, UiNotifyResult, UiPane } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
 import { DEFAULT_ROLES } from './policy.ts'
@@ -56,6 +56,10 @@ export type World = {
   notifies: { text: string; title?: string | undefined }[]
   /** What `$.ui.notify` answers. */
   notifyResult: UiNotifyResult
+  /** Every message a plugin sent with `$.session.send`, as the `session.send` hook read it. */
+  sent: { to: string; text: string }[]
+  /** What `$.session.send` answers. */
+  sendResult: SessionSendResult
 }
 
 /** The rows a world file holds, parsed; a torn line is left out. */
@@ -119,6 +123,8 @@ export function stage(on: On, init: Partial<World> = {}) {
     cwd: CWD,
     notifies: [],
     notifyResult: { isSent: true, channel: 'iterm2' },
+    sent: [],
+    sendResult: { isDelivered: true },
     ...init,
   }
   const abs = (path: string): string => (path.startsWith('/') ? path : `${world.cwd}/${path.replace(/^\.\//, '')}`)
@@ -235,6 +241,10 @@ export function stage(on: On, init: Partial<World> = {}) {
     return { value: world.notifyResult }
   })
   on('session.end', (_$, e) => ({ sessionId: e.sessionId }))
+  on('session.send', (_$, e) => {
+    world.sent.push({ to: e.to, text: e.text })
+    return world.sendResult
+  })
 
   const start = (
     $: Engine,
@@ -341,11 +351,21 @@ export async function status($: Engine, scope?: 'active' | 'all'): Promise<strin
   return String(ran.result)
 }
 
-/** The engine beneath an agent spawn, a turn's end and a skill's prompt: each answers as core would. */
+/** The team a test session's teammates join. */
+export const TEAM = 'session-test'
+
+/**
+ * The engine beneath an agent spawn, a turn's end and a skill's prompt: each
+ * answers as core would; a teammate's spawn also answers its `<name>@<team>`.
+ */
 export function engineLoops(on: On, agentIds: string[] = ['agent-1']): void {
   let n = 0
-  on('agent.spawn', () => ({ model: 'sonnet', agentId: agentIds[n++] ?? `agent-${n}` }))
+  on('agent.spawn', (_$, e) => {
+    const agentId = agentIds[n++] ?? `agent-${n}`
+    return e.isTeammate === true ? { model: 'sonnet', agentId, teammateId: `${e.name ?? 'mate'}@${TEAM}` } : { model: 'sonnet', agentId }
+  })
   on('turn.complete', (_$, e) => ({ text: '', ...(e.usage ? { usage: e.usage } : {}) }))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
   on('skill.prompt', (_$, e) => ({ text: e.text }))
 }
 
@@ -403,6 +423,21 @@ export function endTurn($: Engine, answer: string, agentId?: string, model?: str
       model: used,
     },
   })
+}
+
+/** A teammate's `$.agent.list()` entry: type `teammate`, its address and name, idle or running. */
+export function teammateInfo(id: string, name: string, description: string, status: AgentInfo['status'] = 'running'): AgentInfo {
+  return { id, teammateId: `${name}@${TEAM}`, name, description, type: 'teammate', status }
+}
+
+/** Starts a teammate as the Agent tool does with agent teams on: named, `isTeammate`, no subagent type. */
+export function spawnTeammate($: Engine, name: string, description: string, extra: Partial<AgentSpawnInput> = {}) {
+  return spawn($, 'teammate', description, { name, isTeammate: true, background: true, ...extra })
+}
+
+/** Starts a turn in an agent's loop, as the engine raises a teammate's wake. */
+export function startTurn($: Engine, agentId: string, text = '') {
+  return $.turn.start({ text, turnId: `turn-${agentId}-${text.length}`, agentId })
 }
 
 /** A Bash result as core answers it, with an optional structured git record. */

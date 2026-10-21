@@ -42,6 +42,8 @@ export type LedgerEvent =
   | 'slice.rollup'
   | 'warn'
   | 'agent.stalled'
+  | 'teammate.idle'
+  | 'teammate.done'
 
 /** One line of `.bytheslice/ledger.jsonl`: facts only, never a prompt, an answer or a secret. */
 export type LedgerRow = {
@@ -209,8 +211,12 @@ export type PassPolicy = {
   watchdog: PassWatchdog
 }
 
-/** When an agent loop last showed activity (a tool call or a turn start), when it started, and its role. */
-export type PassSeen = { lastT: number; role: string; startT: number }
+/**
+ * When an agent loop last showed activity (a tool call or a turn start), when
+ * it started, and its role; `turnT` is when its current turn started (a
+ * teammate's running time counts from it, since it idles between turns).
+ */
+export type PassSeen = { lastT: number; role: string; startT: number; turnT?: number }
 
 /** One agent's latest stall: which episode (its `lastT` then), the count it took, and the key counts are kept by. */
 export type PassStallMark = { n: number; lastT: number; at: number; key: string }
@@ -236,11 +242,36 @@ export type PassSpawnTrack = {
 /** Fix spawns this session started: fix-attempter per slice, ci-fix-attempter per pie. */
 export type PassFixCounts = { fix: Record<string, number>; ci: Record<string, number> }
 
-/** What an `agent.spawn` hook learned about one started agent. */
-export type PassAgentMark = { type: string; pie: number | null; slice: string | null; at: number }
+/** What an `agent.spawn` hook learned about one started agent; a teammate's also its `<name>@<team>` and name. */
+export type PassAgentMark = {
+  type: string
+  pie: number | null
+  slice: string | null
+  at: number
+  teammateId?: string
+  name?: string
+}
 
-/** One `$.agent.list()` entry as the pane lists it. */
-export type PassLiveEntry = { id: string; role: string; status: string; startedAt: number }
+/** One `$.agent.list()` entry as the pane lists it; a teammate's carries its `<name>@<team>`. */
+export type PassLiveEntry = { id: string; role: string; status: string; startedAt: number; teammateId?: string }
+
+/**
+ * One teammate of the session's team as the roster shows it: its address
+ * (`<name>@<team>`), its name, the pie it bakes (its `P<pie> S<slice>` spawn
+ * label, else its first `slice.started` row), whether it runs a turn or waits
+ * for a message, its finished turns, and when it last showed activity.
+ */
+export type PassBaker = {
+  teammateId: string
+  name: string
+  pie: number | null
+  status: 'running' | 'idle'
+  turns: number
+  lastT: number
+}
+
+/** The team roster: the teammates of the session's team, and when it was last read. */
+export type PassTeam = { at: number; bakers: PassBaker[] }
 
 /** The live agents poll: when it last ran and what it saw. */
 export type PassLive = { at: number; agents: PassLiveEntry[] }
@@ -286,6 +317,8 @@ declare module 'claude-code' {
       'pass.stalls': PassStalls
       /** Keys already sent as a native notification (a HITL id, `pie:<n>`), newest last. */
       'pass.notified': string[]
+      /** The team roster: one baker per live teammate; empty outside team mode. */
+      'pass.team': PassTeam
     }
   }
 }
