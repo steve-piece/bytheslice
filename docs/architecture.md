@@ -81,6 +81,9 @@ The three v4 verifiers (`basic-checks-runner`, `aggregating-test-reviewer`, `ci-
 
 **Build manifest + under-declaration backstop.** The builder (`implementer`) emits a schema-validated manifest declaring every route / component / affordance / serverAction / transition it produced. `slice-verifier` independently greps the slice diff and **fails if the manifest under-counts** - so a builder can't hide an affordance from the tester with prompt wording alone.
 
+**Frontend statics check.** `skills/sell-slice/scripts/verify-frontend-statics.sh` (bash, no network, shipped inside `skills/` so it reaches both clients) resolves token references against the project's own catalog and flags unknown tokens (E1), `var()` fallbacks (E2), motion literals off the design-system scales (E3), `<img>` without `alt` (E4) and unlabeled form controls (E5); it exits 0 clean, 1 with findings, 2 when no catalog resolves.
+`slice-verifier` runs it once per frontend slice as a sub-check of `design_system`, scoped with `--files` on re-verification, and every result, exit 2 included, is a non-forcing entry in the verdict's `warnings` array: it never fails a slice or starts a fix loop, and the conductor lists the warnings at the pie boundary.
+
 **Context-separated dispatch.** The `/sell-pie` `/loop` conductor holds zero implementation context. Per slice it routes structured artifacts between singular-goal agents - the `slice-tester` receives only the build manifest + Exit criteria + design-system path, **never the builder's reasoning**, so it can't rationalize the builder's choices. The builder writes unit tests but never grades its own behavior; that's the tester's job.
 
 **Type-routed behavioral testing.** `slice-tester` routes on slice type:

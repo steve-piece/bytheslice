@@ -53,7 +53,7 @@ For each gap surface, write the custom component:
 
 **Token-only rule**: before writing any `className`, ask: "Is every value here a token reference?" Allowed patterns:
 - Tailwind semantic utilities mapped to design-system tokens (e.g., `bg-primary`, `text-muted-foreground`, `border-border`)
-- CSS variable references in arbitrary values: `w-[var(--container-md)]`
+- CSS variable references in arbitrary values: `w-[var(--container-md)]`, but only for a token that exists in `docs/design-system.md` or the generated CSS entry (`globals.css` `:root` / `.dark` / `@theme`), and never in the fallback form `var(--x, ...)`, which renders a plausible value and hides a token that does not exist
 - Named spacing scale (Tailwind's `p-4`, `gap-6`, etc. from the documented spacing scale)
 
 Forbidden patterns in any file you write:
@@ -114,7 +114,7 @@ hitl_context: null | "<what triggered this>"
 ## Hard Constraints
 
 - **Only for gaps.** Do not rebuild anything block-composer already covered. Check `blocks_used` in the block-composer return before writing any component.
-- **Token-only output.** This is non-negotiable. Any component containing a raw color, hardcoded font-family, or px literal that is not a spacing scale step is a defect. `slice-verifier`'s design-system static grep catches raw values statically, and `slice-tester` catches the rendered mismatch.
+- **Token-only output.** This is non-negotiable. Any component containing a raw color, hardcoded font-family, or px literal that is not a spacing scale step is a defect. `slice-verifier`'s design-system static grep catches raw values statically, its statics sub-check warns on a token that does not exist or a `var()` fallback, and `slice-tester` catches the rendered mismatch. The statics findings are warnings that do not fail the slice, so confirm every token you reference exists before you return.
 - **Compose from primitives.** Always use shadcn primitives as the base layer. Never write a component that reinvents what `Button`, `Input`, `Select`, `Popover`, or `Command` already provide.
 - **Figma MCP is optional.** If not installed, proceed from the UX spec and design system alone.
 - **Do not call `ask_user_input_v0`.** Surface component design decisions requiring human judgment via `needs_human: true` and a `hitl_question`.
