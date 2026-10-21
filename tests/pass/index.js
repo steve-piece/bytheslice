@@ -3,3 +3,4 @@
 'use strict';
 
 require('./parity.test.js');
+require('./activity.test.js');
