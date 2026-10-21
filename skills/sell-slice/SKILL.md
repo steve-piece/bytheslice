@@ -57,8 +57,8 @@ Each subagent is a **registered plugin agent**; its definition file under `./age
 
 | Step | Agent file | Model | Mode |
 |------|-----------|-------|------|
-| UX strategy ‖ layout (parallel) | [agents/frontend/modern-ux-expert.md](agents/frontend/modern-ux-expert.md) | sonnet | write |
-| UX strategy ‖ layout (parallel) | [agents/frontend/layout-architect.md](agents/frontend/layout-architect.md) | sonnet | write |
+| UX strategy (first) | [agents/frontend/modern-ux-expert.md](agents/frontend/modern-ux-expert.md) | sonnet | write |
+| Layout (serial, after UX strategy returns) | [agents/frontend/layout-architect.md](agents/frontend/layout-architect.md) | sonnet | write |
 | Compose (always) | [agents/frontend/block-composer.md](agents/frontend/block-composer.md) | sonnet | write |
 | Craft (conditional on gaps) | [agents/frontend/component-crafter.md](agents/frontend/component-crafter.md) | sonnet | write |
 | Library Preview Gate | [agents/frontend/library-entry-writer.md](agents/frontend/library-entry-writer.md) | sonnet | write |
@@ -126,7 +126,7 @@ Workflow A routes the work based on the active slice's `type:` frontmatter:
 | `design-system` | Dispatch the `set-display-case` sub-skill (legacy v3 only). Skip the internal builder. |
 | `ci-cd` | Dispatch the `final-quality-check` sub-skill (legacy v3 only). Skip the internal builder. |
 | `env-setup` | Dispatch the `open-the-shop` sub-skill (legacy v3 only). Skip the internal builder. |
-| `frontend` | Run the internal frontend pipeline (`modern-ux-expert ‖ layout-architect` → block-composer → component-crafter → library gate). No `implementer` runs on this path, so **`state-illustrator` emits the build manifest** at the Workflow B entry (Phase 5.1). |
+| `frontend` | Run the internal frontend pipeline (`modern-ux-expert` → `layout-architect` → block-composer → component-crafter → library gate, each step serial). No `implementer` runs on this path, so **`state-illustrator` emits the build manifest** at the Workflow B entry (Phase 5.1). |
 | `backend` | Dispatch the internal `implementer` (builder). |
 | `full-stack` | Dispatch the internal `implementer` (covers both UI and API code). |
 | `db-schema` | Dispatch the internal `implementer` with DB context flag. Schema updated FIRST in `db/schema.sql` (or detected equivalent). |
@@ -172,7 +172,7 @@ At every phase boundary, if the `bts_status` tool is available call it instead o
 The skill is an **interactive spine** (Phases 0-3) wrapping two Workflows and one human gate:
 
 - **Spine:** prep gate (Phase 0) · recon (Phase 1) · build-plan auth (Phase 2, auto under loop / `flow.autoApproveBuildPlan`) · `/goal` (Phase 2.5) · branch (Phase 3).
-- **Workflow A - produce** (Phase 4): build the slice + its unit tests; the `implementer` emits the **build manifest** (on `type: frontend` no `implementer` runs, and `state-illustrator` emits it at Phase 5.1). Backend items pipeline / parallelize; frontend runs `modern-ux-expert ‖ layout-architect`.
+- **Workflow A - produce** (Phase 4): build the slice + its unit tests; the `implementer` emits the **build manifest** (on `type: frontend` no `implementer` runs, and `state-illustrator` emits it at Phase 5.1). Backend items pipeline / parallelize; frontend runs `modern-ux-expert`, then `layout-architect` serial after it.
 - **Library gate** (Phase 4.5, human): net-new-component preview-first approval.
 - **Workflow B - verify-once** (Phase 5): `state-illustrator → slice-tester → slice-verifier`, each static check exactly once, with an **off-context fix loop**. On `frontend`, `state-illustrator` also emits the **build manifest** the other two consume.
 - **Closeout** (Phase 6).
@@ -278,10 +278,11 @@ Load the corresponding sub-skill SKILL.md and follow it end-to-end. The sub-skil
 
 Run as a `Workflow`; if `Workflow` is unavailable, fall back per `loop-workflow-fallback-pattern.md`.
 
-1. **`modern-ux-expert` ‖ `layout-architect`** - **Dispatch in one batch (parallel):** UX strategy (`docs/ux-spec-<slice>.md`, 2-3 best-in-class references) ‖ route files + layout components + breakpoint plan. They have no ordering dependency; run them together.
-2. **`block-composer`** (always first among the compose step) → composes from shadcn blocks; reports `ui_coverage_percent`.
-3. **`component-crafter`** (only if `block-composer` reports gaps) → token-only custom components.
-4. **Library Preview Gate (Phase 4.5)** - see below.
+1. **`modern-ux-expert`** writes `docs/ux-spec-<slice>.md` (UX strategy, 2-3 best-in-class references).
+2. **`layout-architect`**, serial, only after step 1 returns: writes the route files and layout components, then appends `## Breakpoint Plan` to the same spec. The two are not parallel. `layout-architect` reads the spec in full before it starts and appends to it at the end, so dispatched together its read finds no file and the two writes race; treating the pair as independent was the bug. If the spec is missing, `layout-architect` returns `needs_human` (`prd_ambiguity`) rather than designing from the PRD alone.
+3. **`block-composer`** (always first among the compose step) → composes from shadcn blocks; reports `ui_coverage_percent`.
+4. **`component-crafter`** (only if `block-composer` reports gaps) → token-only custom components.
+5. **Library Preview Gate (Phase 4.5)** - see below.
 
 **Pass the slice's Exit criteria verbatim in every frontend producer's input contract**: the steps above, `library-entry-writer` at Phase 4.5 and `state-illustrator` at Phase 5.1. Withholding the builder's reasoning from the tester is the point of context separation; withholding the shared standard from the builder never was. The `slice-tester` input list does not change.
 
