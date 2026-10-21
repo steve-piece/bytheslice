@@ -1535,7 +1535,7 @@ class Actor {
   // scripted move along a straight line with a height change (ladders, slides); ease 1 = speeds up
   glide(x, z, lift, sec, mode = 'climb', ease = 0) { this.path = []; this.mode = mode; this.gl = { fx: this.pos.x, fz: this.pos.z, fl: this.lift || 0, x, z, lift, sec, t: 0, ease }; return new Promise(r => this.gl.r = r); }
   doing(task, mode = 'work') { this.task = task; this.mode = mode; this.since = simT; }
-  show(v) { this.g.visible = v; this.hidden = !v; if (this.tagO) this.tagO.on = v; if (this.carry) this.carry.visible = v; }
+  show(v) { this.g.visible = v; this.hidden = !v; if (this.tagO) this.tagO.on = v; if (this.workTagO && !v) this.workTagO.on = false; if (this.carry) this.carry.visible = v; }
   update(dt) {
     this.t += dt;
     if (this.gl) { const q = this.gl; q.t += dt; let k = Math.min(1, q.t / q.sec); k = q.ease ? k * k : k; this.pos.x = lerp(q.fx, q.x, k); this.pos.z = lerp(q.fz, q.z, k); this.lift = lerp(q.fl, q.lift, k); if (q.t >= q.sec) { this.gl = null; q.r(); } }
@@ -3774,7 +3774,8 @@ function cancelActor(a) {
   a.doing('Off duty', 'idle');
 }
 function clearAssignments() {
-  phaseActorGen++; phaseActors.clear(); reviewActive = false; livePhase = null; liveSessionKey = null;
+  phaseActorGen++; phaseActors.clear(); ambient.clear(); liveVerifying = false; reviewActive = false; livePhase = null; liveSessionKey = null;
+  for (const a of castActors.values()) clearWorkTag(a);
   for (const entry of constructionWorkers.values()) { cancelActor(entry.actor); entry.actor.show(false); }
   constructionWorkers.clear();
   if (shopper.actor) { cancelActor(shopper.actor); shopper.actor.show(false); }
@@ -3852,11 +3853,14 @@ function agentOn(event) {
   if (entry?.active) {
     entry.row = event.row;
     if (sceneOwnsActor(entry.actor)) return;
+    workTag(entry.actor, event.row);
     if (entry.actor.mode !== 'walk') entry.actor.doing(event.row.label || event.character.type, 'work');
     else entry.actor.task = event.row.label || event.character.type;
     return;
   }
   const actor = castActor(event.character);
+  // a regular on ambient duty drops it the moment their real agent starts
+  if (ambient.has(actor.meta.id)) releaseAmbient(actor);
   for (const [key, old] of liveAssignments) if (old.actor === actor) { clearTimeout(old.idleTimer); old.version++; liveAssignments.delete(key); }
   const wasHidden = actor.hidden, owned = sceneOwnsActor(actor);
   if (!owned) cancelActor(actor);
@@ -3865,7 +3869,7 @@ function agentOn(event) {
   liveAssignments.set(event.key, entry);
   if (owned) return;
   if (wasHidden) actor.pos.set(DOOR[0], .06, DOOR[1]);
-  actor.show(true); actor.sync(); actor.task = event.row.label || event.character.type;
+  actor.show(true); actor.sync(); actor.task = event.row.label || event.character.type; workTag(actor, event.row);
   const version = entry.version;
   let path = [[station[0], station[1]]];
   if (event.character.crew === 'line') path = [[-4.2, -2.75], [station[0], station[1]]];
@@ -3879,7 +3883,7 @@ function agentOn(event) {
 }
 function agentOff(event) {
   const entry = liveAssignments.get(event.key); if (!entry) return;
-  entry.active = false; entry.version++;
+  entry.active = false; entry.version++; clearWorkTag(entry.actor);
   if (sceneOwnsActor(entry.actor)) return;
   cancelActor(entry.actor);
   const line = event.ok ? 'Done' : 'Sent back';
@@ -3989,6 +3993,7 @@ function walkShopper() {
   });
 }
 function updateConstruction(dt) {
+  updateAmbient(dt);
   if (shopper.active && shopper.arrived) {
     shopper.wait -= dt;
     if (shopper.wait <= 0) { shopper.index = (shopper.index + 1) % PUBLIC_ROUTE.length; walkShopper(); }
@@ -4008,6 +4013,61 @@ function phaseActor(actor, station, task) {
       actor.doing(task, 'inspect');
   });
 }
+// ---------- the base crew: while a pie is open, a few regulars stay on duty doing ambient work at their stations ----------
+// They are the backdrop. Agents actually running get the gold work tag and the 'work' animation; the regulars never do,
+// except Ollie, who runs the oven whenever a slice is being verified (the slice-verifier or the full suite).
+const BASE_CREW = () => [
+  { actor: A.dom, spots: [[SX[3], -2.45, F.S], [SX[2], -2.45, F.S]], tasks: ['Prepping toppings at the line', 'Wiping down the line'] },
+  { actor: A.ollie, spots: [[4.55, -1.55, -2.3], [3.45, -1.65, F.N]], tasks: ['Keeping the oven hot', 'Feeding the oven'] },
+  { actor: A.sal, spots: [[-3.1, 3.25, F.S], [-2.4, 2.9, F.S]], tasks: ['Minding the window', 'Tidying the counter'] },
+];
+const ambient = new Map();
+let liveVerifying = false;
+const verifyingIn = snapshot => (snapshot.active || []).some(row => /:(slice-verifier|local-gates-runner)$/.test(row.type || '') || /\bS\d+\.\d+\s+verify\b/i.test(row.label || ''));
+function claimedByAgent(actor) { return [...liveAssignments.values()].some(entry => entry.active && entry.actor === actor) || constructionWorkers.has(actor.meta.id) || (shopper.active && shopper.actor === actor); }
+function releaseAmbient(actor) { const entry = ambient.get(actor.meta.id); if (!entry) return; ambient.delete(actor.meta.id); if (phaseActors.get(actor.meta.id) === entry) phaseActors.delete(actor.meta.id); cancelActor(actor); }
+function ambientGo(entry) {
+  const { actor } = entry, spot = entry.spots[entry.at], verify = actor === A.ollie && liveVerifying;
+  const task = verify ? 'Running the full suite in the oven' : entry.tasks[entry.at], version = ++entry.version;
+  entry.task = task; entry.arrived = false; actor.task = task;
+  actor.walk([[spot[0], spot[1]]], spot[2]).then(() => {
+    if (sceneMode !== 'live' || ambient.get(actor.meta.id) !== entry || entry.version !== version) return;
+    entry.arrived = true; entry.dwell = verify ? 1e9 : 10 + rnd() * 8; actor.doing(task, verify ? 'work' : 'inspect');
+  });
+}
+function syncBaseCrew(snapshot) {
+  if (sceneMode !== 'live') return;
+  const open = livePhase === 'open' && !reviewActive;
+  const verifying = open && verifyingIn(snapshot);
+  if (verifying !== liveVerifying) { liveVerifying = verifying; const ollie = ambient.get(A.ollie.meta.id); if (ollie) { ollie.at = 0; ambientGo(ollie); } }
+  ovenOn = verifying;
+  for (const member of BASE_CREW()) {
+    const { actor } = member, id = actor.meta.id, entry = ambient.get(id);
+    if (!open || claimedByAgent(actor)) { if (entry) { ambient.delete(id); if (phaseActors.get(id) === entry) phaseActors.delete(id); } continue; }
+    if (entry) continue;
+    const last = [...liveAssignments.values()].find(item => item.actor === actor);
+    if (last) { clearTimeout(last.idleTimer); last.version++; }
+    cancelActor(actor); if (actor.hidden) { actor.pos.set(DOOR[0], .06, DOOR[1]); actor.show(true); actor.sync(); }
+    const fresh = { ...member, ambient: true, actor, at: 0, version: 0, gen: phaseActorGen, task: member.tasks[0], arrived: false, dwell: 0 };
+    ambient.set(id, fresh); phaseActors.set(id, fresh); ambientGo(fresh);
+  }
+}
+function updateAmbient(dt) {
+  for (const entry of ambient.values()) {
+    if (!entry.arrived) continue;
+    entry.dwell -= dt;
+    if (entry.dwell <= 0) { entry.at = (entry.at + 1) % entry.spots.length; ambientGo(entry); }
+  }
+}
+// the gold tag over an agent that is actually running: who, and the step and slice from its label
+function workTag(actor, row) {
+  const tag = /\bS(\d+\.\d+)\s+([a-z]+)\b/i.exec(row?.label || ''), step = STEP_WORD[tag?.[2]?.toLowerCase()];
+  const text = `${actor.meta.name} · ${step ? `${step} ${tag[1]}` : 'Working'}`;
+  if (!actor.workTagO) { const el = document.createElement('div'); el.className = 'tag active'; actor.workTagO = overlay(el, () => tmpV.set(actor.pos.x, actor.pos.y + 1.75 + (actor.c.topH || 0), actor.pos.z)); }
+  actor.workTagO.el.textContent = text; actor.workTagO.on = !actor.hidden;
+}
+function clearWorkTag(actor) { if (actor.workTagO) actor.workTagO.on = false; }
+
 function syncLivePhase(snapshot) {
   if (sceneMode !== 'live') return;
   const session = snapshot.session ? JSON.stringify([snapshot.project.root, snapshot.session.id, snapshot.session.startedAt]) : snapshot.project.root;
@@ -4018,7 +4078,7 @@ function syncLivePhase(snapshot) {
   if (changed) {
     phaseActorGen++; chefGen++;
     for (const { actor } of phaseActors.values()) { cancelActor(actor); if (actor !== A.chef) actor.show(false); }
-    phaseActors.clear(); livePhase = next; liveSessionKey = session; reviewActive = reviewing;
+    phaseActors.clear(); ambient.clear(); livePhase = next; liveSessionKey = session; reviewActive = reviewing;
     if (next === 'dawn') startAtDawn();
     else if (next === 'open') { setTod('day', true); openShop(); setSign(true); }
     else { closeShop(); setTod('night', true); setSign(false); }
@@ -4048,7 +4108,7 @@ function liveDriver(snapshot) {
   for (const [id, entry] of phaseActors) if ((snapshot.active || []).some(row => row.type === `bytheslice:${id}`)) {
     phaseActors.delete(id); cancelActor(entry.actor);
   }
-  castDriver.apply(castSnapshot); syncBuildCrews(snapshot); syncLivePhase(snapshot); syncOrderLine(snapshot);
+  castDriver.apply(castSnapshot); syncBuildCrews(snapshot); syncLivePhase(snapshot); syncBaseCrew(snapshot); syncOrderLine(snapshot);
 }
 window.liveDriver = liveDriver;
 Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
@@ -4072,8 +4132,11 @@ Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
     position: shopper.actor ? [shopper.actor.pos.x, shopper.actor.pos.z] : null, mode: shopper.actor?.mode || null }; },
   get actors() { return [...liveAssignments.values()].map(entry => ({ key: entry.key, aid: entry.row.aid, type: entry.row.type,
     character: entry.character.id, name: entry.actor.meta.name, crew: entry.actor.meta.crew, task: entry.actor.task,
-    active: entry.active, offDuty: entry.offDuty, hidden: !!entry.actor.hidden, mode: entry.actor.mode,
+    active: entry.active, offDuty: entry.offDuty, hidden: !!entry.actor.hidden, mode: entry.actor.mode, tag: entry.actor.workTagO?.on ? entry.actor.workTagO.el.textContent : null,
     position: [entry.actor.pos.x, entry.actor.pos.z], renderedPosition: [entry.actor.g.position.x, entry.actor.g.position.z], station: [...entry.station] })); },
+  get baseCrew() { return BASE_CREW().map(({ actor }) => ({ character: actor.meta.id, name: actor.meta.name, ambient: ambient.has(actor.meta.id),
+    task: actor.task, mode: actor.mode, hidden: !!actor.hidden, position: [actor.pos.x, actor.pos.z], tag: actor.workTagO?.on ? actor.workTagO.el.textContent : null })); },
+  get oven() { return { on: ovenOn, verifying: liveVerifying }; },
   get chef() { return { name: A.chef.meta.name, task: A.chef.task, hidden: !!A.chef.hidden, mode: A.chef.mode, position: [A.chef.pos.x, A.chef.pos.z] }; },
   get orders() { return { ready: liveLineReady, queue: custQueue.map((customer, index) => ({ key: customer.order.key || nm(customer.order),
     label: nm(customer.order), title: customer.order.title, single: !!customer.order.slice, added: !!customer.added,
