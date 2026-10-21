@@ -170,7 +170,7 @@ hitl_context: null | "<what triggered this>"
 - **The manifest lives only in your return.** Write no manifest file (no `docs/` or `.claude/` file holds it) and run no git command. List the state files you wrote in `files_changed`; the conductor stages them.
 - **All four states for every interactive surface.** `not_applicable` must be explicitly justified in the summary. Do not mark states not_applicable to avoid implementing them.
 - **Token-only styling.** All state UI must use design-system tokens. This includes skeleton color, error text color, and success indicator color.
-- **`prefers-reduced-motion` is mandatory.** Skeletons without motion-safe guards are a defect that visual-reviewer will catch.
+- **`prefers-reduced-motion` is mandatory.** Skeletons without motion-safe guards are a defect. Verify the media-query handling yourself before you return (Step 5): every animation class you added sits behind `motion-safe:` or an equivalent `@media (prefers-reduced-motion: reduce)` override, and `prefers_reduced_motion_verified: true` means you checked it, not that you expect a later agent to.
 - **Do not refactor existing logic.** Add state coverage; do not restructure working component code.
 - **Do not call `ask_user_input_v0`.** Surface ambiguities via `needs_human: true`.
 - **No model upgrades.** Capped at `sonnet`.

@@ -2,7 +2,7 @@
 
 # 🍕 Agent Roster
 
-Every ByTheSlice subagent in one table, in plain English. The 49 unique live agents are registered plugin agents: type `@bytheslice:<name>` in any Claude Code session to aim one at something directly, or just run the skills and let them dispatch. Registration means each agent's model tier, effort level, and tool allowlist are enforced by the platform, not just suggested.
+Every ByTheSlice subagent in one table, in plain English. The 49 unique live agents are registered plugin agents: type `@bytheslice:<name>` in any Claude Code session to aim one at something directly, or just run the skills and let them dispatch. Registration means each agent's model tier, effort level, and tool allowlist (when its file declares one; an agent without a `tools:` list gets every tool) are enforced by the platform, not just suggested.
 
 Bold rows mark the skill each group of agents belongs to. The six agents at the bottom are v4 leftovers that stay on disk for back-compat but are not registered.
 
@@ -50,7 +50,7 @@ Bold rows mark the skill each group of agents belongs to. The six agents at the 
 | `spec-reviewer` | Spence | Checks the builder's work against the plan: was the checklist item actually delivered, with no scope creep, following project conventions? |
 | `quality-reviewer` | Quinn | Checks the builder's work for craft: types, tests, edge cases, security smells, and schema-before-queries. Cannot write files, by construction. |
 | `slice-tester` | Tay | The independent QA. Gets only the build manifest and the slice's definition of done (never the builder's chatter), then actually exercises the feature: clicks through the UI at every viewport or round-trips real data, and reports evidence per claim (screenshots only at 768 and 1280). |
-| `slice-verifier` | Inez | Runs the full local suite once at the end of the slice (lint, types, build, tests, E2E, design-token grep, CI integrity) and cross-checks the diff to catch anything the manifest under-declared. After a fix it re-runs only the checks that fix could change and says which and why. |
+| `slice-verifier` | Inez | Runs the full local suite once at the end of the slice (lint, types, build, tests, E2E, design-token grep, CI integrity) and cross-checks the diff to catch anything the manifest under-declared. After a fix it re-runs only the checks that fix could change and says which and why. Its tools let it read and run commands but not edit files. |
 | `fix-attempter` | Fitz | When a check fails, makes the smallest possible fix for that one failure. No refactors, no scope growth, no commits (the conductor commits). At most 3 fix loops per slice before it asks you. |
 | `debug-instrumenter` | Dee | If the first fix did not take, adds temporary tagged logging around the failure so the next fix attempt has real data. The tags are stripped once everything is green. |
 | **🍕 /sell-slice frontend pipeline** | | |
@@ -58,7 +58,7 @@ Bold rows mark the skill each group of agents belongs to. The six agents at the 
 | `layout-architect` | Lyle | Writes the route files, page shells, and breakpoint plan (the skeleton of the screen), leaving the components' inner workings to others. |
 | `block-composer` | Blake | Covers as much of the UI as possible with ready-made shadcn blocks before any custom code, and reports exactly what percent is covered and where the gaps are. |
 | `component-crafter` | Kit | Hand-builds only the pieces block-composer could not cover, using design tokens exclusively: no raw colors, fonts, or spacing values. |
-| `library-entry-writer` | Libby | Puts every new or visually changed component in the `/library` showroom with all its variants and states, so you approve the look before it touches production routes. |
+| `library-entry-writer` | Libby | Puts every new or visually changed component in the `/library` showroom with all its variants and states, so you approve the look before it touches production routes. Its tools stop at files, read-only shell commands and the shadcn registry, and it never stages or commits. |
 | `state-illustrator` | Lu | Sweeps the UI for missing loading skeletons, empty states, error states, and success confirmations, and fills in the gaps. |
 | **🍕 /box-it-up** | | |
 | `ci-fix-attempter` | Dex | When the PR's CI goes red, reads the failing checks and makes the smallest fix that turns them green; `/box-it-up` commits and pushes it. At most 3 rounds per PR. Never weakens tests to pass. |
