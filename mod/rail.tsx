@@ -1,5 +1,5 @@
 // mod/rail.tsx
-// The Pass pane: pie header, slice rail with live status and last verdict, live agents with stall flags, gates and check warnings, the HITL inbox, the team roster in team mode, drawn from atoms only, plus the pass command's toggle and checks text.
+// The Pass pane: pie header, slice rail with live status and last verdict, live agents with stall flags, gates, touched files (red after a builder edit past the verifier's pass) and check warnings, the HITL inbox, the team roster in team mode, the other live sessions of the project (read-only), drawn from atoms only, plus the pass command's toggle and checks text.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
@@ -8,7 +8,10 @@ import { markAnswered } from './hitl.ts'
 import { FIX_CAP, findSlice } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, counts } from './projection.ts'
 import { bakersWord } from './team.ts'
-import type { PassBaker, PassChecklist, PassFinding, PassHitlItem, PassLive, PassProjection, PassSliceView, PassTeam } from './types'
+import { STRIP_SHOWN, stripLine } from './strip.ts'
+import type { StripOther } from './strip.ts'
+import { TOUCHED_SHOWN } from './touched.ts'
+import type { PassBaker, PassChecklist, PassFinding, PassHitlItem, PassLive, PassProjection, PassSliceView, PassTeam, PassTouched } from './types'
 import { stalledIds } from './watchdog-actions.ts'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
@@ -19,6 +22,8 @@ const liveAtom = atom({ plugin: 'bytheslice', key: 'pass.live' } as const, { at:
 const seenAtom = atom({ plugin: 'bytheslice', key: 'pass.seen' } as const, {})
 const stallsAtom = atom({ plugin: 'bytheslice', key: 'pass.stalls' } as const, { agents: {}, counts: {} })
 const teamAtom = atom({ plugin: 'bytheslice', key: 'pass.team' } as const, { at: 0, bakers: [] })
+const stripAtom = atom({ plugin: 'bytheslice', key: 'pass.strip' } as const, [])
+const touchedAtom = atom({ plugin: 'bytheslice', key: 'pass.touched' } as const, { slice: null, files: [], at: 0 })
 
 export const PANE_ID = 'pass'
 export const PANE_TITLE = 'The Pass'
@@ -30,7 +35,7 @@ export const PANE_TARGETS = 3
 export const ANSWER_LABEL = 'Mark answered'
 
 /** One pane row: a line of text, or with `answer` the button that marks that HITL id answered. */
-export type PaneLine = { text: string; dim?: boolean; bold?: boolean; warn?: boolean; answer?: string }
+export type PaneLine = { text: string; dim?: boolean; bold?: boolean; warn?: boolean; stale?: boolean; answer?: string }
 
 export type PaneView = {
   checklist: PassChecklist | null
@@ -42,6 +47,10 @@ export type PaneView = {
   stalled?: ReadonlySet<string>
   /** The team roster; its section shows only while it has a baker. */
   team?: PassTeam
+  /** The active slice's touched files; the section shows only for the active slice. */
+  touched?: PassTouched
+  /** Other live sessions of the same project, newest first; read-only. */
+  strip?: StripOther[]
   /** The time ages are counted to; the projection's own time when left out. */
   now?: number
 }
@@ -125,6 +134,39 @@ function gateRows(view: PassSliceView | null, columns: number): PaneLine[] {
       rows.push(fit({ text: `    and ${verdict.fixTargets.length - PANE_TARGETS} more`, dim: true }, columns))
     }
   }
+  return rows
+}
+
+/** One touched file's row: numstat, path, the roles that edited it, and `after pass` when stale. */
+export function touchedLine(file: PassTouched['files'][number]): string {
+  const roles = file.roles.length === 0 ? '' : ` · ${file.roles.join(', ')}`
+  return `  +${file.added} -${file.removed} ${file.path}${roles}${file.stale ? ' · after pass' : ''}`
+}
+
+/** The touched-files section for the active slice: a builder edit after the verifier's pass is red, since it invalidates that verdict. */
+function touchedRows(touched: PassTouched | undefined, slice: string | undefined, columns: number): PaneLine[] {
+  if (!touched || slice === undefined || touched.slice !== slice || touched.files.length === 0) return []
+  const stale = touched.files.filter(file => file.stale).length
+  const count = `${touched.files.length} file${touched.files.length === 1 ? '' : 's'}`
+  const rows: PaneLine[] = [
+    fit({ text: `Touched · ${slice} · ${count}${stale > 0 ? ` · ${stale} after the pass` : ''}`, bold: true, ...(stale > 0 ? { stale: true } : {}) }, columns),
+  ]
+  // Stale files first, so a narrow pane still shows what invalidates the verdict.
+  const ordered = [...touched.files].sort((a, b) => Number(b.stale) - Number(a.stale))
+  for (const file of ordered.slice(0, TOUCHED_SHOWN)) {
+    rows.push(fit({ text: touchedLine(file), ...(file.stale ? { stale: true } : { dim: file.roles.length === 0 }) }, columns))
+  }
+  if (ordered.length > TOUCHED_SHOWN) rows.push(fit({ text: `  and ${ordered.length - TOUCHED_SHOWN} more`, dim: true }, columns))
+  return rows
+}
+
+/** The roadmap strip: where the project's other live sessions stand, read-only, newest first. */
+function stripRows(strip: StripOther[] | undefined, now: number, columns: number): PaneLine[] {
+  const others = strip ?? []
+  if (others.length === 0) return []
+  const rows: PaneLine[] = [fit({ text: `Other sessions · ${others.length}`, dim: true }, columns)]
+  for (const other of others.slice(0, STRIP_SHOWN)) rows.push(fit({ text: `  ${stripLine(other.entry, now)}`, dim: true }, columns))
+  if (others.length > STRIP_SHOWN) rows.push(fit({ text: `  and ${others.length - STRIP_SHOWN} more`, dim: true }, columns))
   return rows
 }
 
@@ -218,6 +260,7 @@ export function paneLines(view: PaneView, columns: number): PaneLine[] {
       fit({ text: 'All pies done', bold: true }, width),
       ...(where ? [where] : []),
       fit({ text: '/box-it-up ready' }, width),
+      ...stripRows(view.strip, now, width),
       ...findingRows(ledger, now, width),
       ...inboxRows(ledger, now, width),
       ...team,
@@ -231,9 +274,11 @@ export function paneLines(view: PaneView, columns: number): PaneLine[] {
     fit({ text: `Pie ${pie.n} · ${pie.name}`, bold: true }, width),
     fit({ text: mode, dim: true }, width),
     fit({ text: `${done} of ${total} slices done` }, width),
+    ...stripRows(view.strip, now, width),
     ...sliceRows(c, ledger, width),
     ...agentRows(view.live, view.stalled ?? new Set(), width),
     ...gateRows(findSlice(ledger, activeSlice(c)?.id), width),
+    ...touchedRows(view.touched, activeSlice(c)?.id, width),
     ...findingRows(ledger, now, width),
     ...inboxRows(ledger, now, width),
     ...team,
@@ -245,7 +290,7 @@ export function paneLines(view: PaneView, columns: number): PaneLine[] {
  * disk. An inbox item's button records the answer from its press, not here.
  */
 export async function drawPane($: EngineInterface, e: RenderInput<'Pane'>): Promise<RenderElement> {
-  const [checklist, loadedAt, branch, ledger, live, seen, stalls, team] = await Promise.all([
+  const [checklist, loadedAt, branch, ledger, live, seen, stalls, team, touched, strip] = await Promise.all([
     read($, checklistAtom),
     read($, loadedAtAtom),
     read($, branchAtom),
@@ -254,6 +299,8 @@ export async function drawPane($: EngineInterface, e: RenderInput<'Pane'>): Prom
     read($, seenAtom),
     read($, stallsAtom),
     read($, teamAtom),
+    read($, touchedAtom),
+    read($, stripAtom),
   ])
   let now = ledger?.at ?? 0
   try {
@@ -262,7 +309,7 @@ export async function drawPane($: EngineInterface, e: RenderInput<'Pane'>): Prom
     // Ages count to the projection's time.
   }
   const stalled = stalledIds(stalls, seen)
-  const lines = paneLines({ checklist, loadedAt, branch, ledger, live, stalled, now, team }, e.props.bodyColumns)
+  const lines = paneLines({ checklist, loadedAt, branch, ledger, live, stalled, now, team, touched, strip }, e.props.bodyColumns)
   const { Box, Text, Button } = $.ui.resolve(e)
   return (
     <Box flexDirection="column">
@@ -275,6 +322,10 @@ export async function drawPane($: EngineInterface, e: RenderInput<'Pane'>): Prom
               void markAnswered($, line.answer ?? '').catch(() => undefined)
             }}
           />
+        ) : line.stale === true ? (
+          <Text color="error" bold={line.bold === true}>
+            {line.text}
+          </Text>
         ) : line.warn === true ? (
           <Text color="warning" bold={line.bold === true}>
             {line.text}

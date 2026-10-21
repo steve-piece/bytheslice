@@ -1,11 +1,11 @@
 // mod/register.tsx
-// The Pass hooks module, wiring only: version gate, ledger capture, checks that warn and never block, the stall watchdog, the HITL inbox, team mode (roster, teammate turns, idle and done), the bts tools, the pass command, pane, band and hint.
+// The Pass hooks module, wiring only: version gate, ledger capture (file edits as path and role only), checks that warn and never block, the stall watchdog, the HITL inbox, team mode (roster, teammate turns, idle and done), the cross-session strip, the bts tools, the pass command (replay and history included), pane, replay pane, band and hint.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import { drawBand, hintProps, pushStatus } from './band.tsx'
-import { captureBash, captureSkill, captureTurn, markSpawn, recordDoneFlips } from './capture.ts'
+import { captureBash, captureEdit, captureSkill, captureTurn, markSpawn, recordDoneFlips } from './capture.ts'
 import { primeChecks, reportToModel, trackGit, trackSkill, warnResult } from './checks.ts'
 import { checkFileWrite, checkPush } from './checks-checklist.ts'
 import { checkCommitOnMain, checkFixSpawn, countFix, raiseFixCap } from './checks-git.ts'
@@ -17,8 +17,12 @@ import { notifyPiesReady } from './notify.ts'
 import { gate, isChecklistPath, isLimited, refresh, watchChecklist } from './projection.ts'
 import { checksText, drawPane, openPane, togglePane } from './rail.tsx'
 import { reconcileText } from './reconcile.ts'
+import { REPLAY_PANE, drawReplay, openReplay } from './replay.tsx'
+import { clearStrip, pulseStrip, resetStrip } from './strip.ts'
+import { historyText } from './history.ts'
 import { captureTeammateTurn, recordDone, recordIdle, refreshTeam, teamActive, teammateOf } from './team.ts'
-import { registerTools, serveNote, serveStatus } from './tools.ts'
+import { registerTools, serveNote, servePrBody, serveStatus } from './tools.ts'
+import { markTouched, refreshTouched, refreshTouchedIfDirty, refreshTouchedSoon, resetTouched } from './touched.ts'
 import { stamp, stampTurn, startWatchdog, stopWatchdog } from './watchdog.ts'
 import { serveWake, stopWakes } from './wake.ts'
 
@@ -35,6 +39,8 @@ async function reload($: EngineInterface): Promise<boolean> {
   await recordDoneFlips($, before, c).catch(() => [])
   await notifyPiesReady($, before, c).catch(() => [])
   await refreshLedger($)
+  // The active slice may have moved: its touched files are read on the next pulse.
+  markTouched()
   return c !== null
 }
 
@@ -62,21 +68,28 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     if (!(await gate($))) {
       await startSession($).catch(() => undefined)
+      resetTouched()
+      resetStrip()
       // Awaited here, so the model has both tools listed by its first turn.
       await registerTools($).catch(() => undefined)
       await $.command
         .register({
           name: 'pass',
           description:
-            'Open or close The Pass pane; pass reconcile lists where the checklist and the ledger disagree; pass checks lists the latest check warnings.',
+            'Open or close The Pass pane; pass replay <slice> steps through a slice; pass history prints progress per pie from the ledger; pass reconcile lists where the checklist and the ledger disagree; pass checks lists the latest check warnings.',
         })
         .catch(() => undefined)
       const hasChecklist = await reload($)
       await primeChecks($).catch(() => undefined)
+      if (hasChecklist) await refreshTouched($).catch(() => null)
+      // This session's place in the roadmap strip, and the other sessions of the project.
+      if (hasChecklist) await pulseStrip($, true).catch(() => [])
       await watchChecklist($, () => reload($))
       await pollAgents($)
-      // Every five seconds; the roster reads the ledger only when a teammate moved.
-      await startPulse($, () => refreshTeam($))
+      // Every five seconds; the roster reads the ledger only when a teammate moved,
+      // the touched files run git only when an edit, verdict or commit came since,
+      // and the strip entry is written at most once per 10 seconds.
+      await startPulse($, () => Promise.all([refreshTeam($), refreshTouchedIfDirty($), pulseStrip($)]))
       // Every 30 seconds: flags stalled agents; it warns and never stops one.
       await startWatchdog($)
       // Unasked, the engine places the pane only on a wide terminal; it waits undrawn below that.
@@ -88,6 +101,8 @@ export const register: Register = on => {
   // The watchdog stops with the session; a /clear keeps the process, so it starts again.
   on('session.end', async ($, e, next) => {
     const ended = await next(e)
+    // This session leaves the other sessions' strips.
+    await clearStrip($).catch(() => undefined)
     stopWatchdog()
     stopWakes()
     if (e.reason === 'clear' && !(await isLimited($))) await startWatchdog($).catch(() => undefined)
@@ -99,7 +114,12 @@ export const register: Register = on => {
   on('tool.call', { tool: ['Edit', 'Write'] }, async ($, e, next) => {
     const findings = await checkFileWrite($, e).catch(() => [])
     const ran = await next(e)
-    if (isChecklistPath(e.file_path) && !(await isLimited($))) await reload($).catch(() => false)
+    if (isChecklistPath(e.file_path)) {
+      if (!(await isLimited($))) await reload($).catch(() => false)
+    } else if ((await captureEdit($, e, e.tool, ran).catch(() => null)) !== null) {
+      // Observe only: the path and the role that edited it, never the content.
+      await refreshTouchedSoon($).catch(() => null)
+    }
     return warnResult($, ran, findings)
   }).catch(($, e, next) => next(e))
 
@@ -111,6 +131,7 @@ export const register: Register = on => {
     ]
     const ran = await next(e)
     const rows = await captureBash($, e.command, ran).catch(() => [])
+    if (rows.length > 0) markTouched()
     if (ran.deny === undefined && ran.isError !== true) await trackGit($, e.command, rows).catch(() => undefined)
     return warnResult($, ran, findings)
   }).catch(($, e, next) => next(e))
@@ -122,6 +143,11 @@ export const register: Register = on => {
 
   on('tool.call', { tool: ['mcp__bytheslice__bts_note', /^mcp__\w*bytheslice\w*__bts_note$/] }, async ($, e) => ({ result: await serveNote($, inputOf(e)) })).catch(() => ({
     result: 'not recorded: the Pass could not write the note. Nothing was halted.',
+  }))
+
+  // Read-only: the pie PR's evidence section from the shared ledger fold.
+  on('tool.call', { tool: ['mcp__bytheslice__bts_pr_body', /^mcp__\w*bytheslice\w*__bts_pr_body$/] }, async ($, e) => ({ result: await servePrBody($, inputOf(e)) })).catch(() => ({
+    result: 'bts_pr_body: the Pass could not build the evidence section; open the PR without it. Nothing was halted.',
   }))
 
   // A teammate's stand-in for ScheduleWakeup: arms one timer and answers at once.
@@ -165,6 +191,8 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     await captureTurn($, e).catch(() => undefined)
+    // A gate's verdict may make an earlier builder edit stale.
+    if (e.agentId !== undefined) markTouched()
     // A teammate's turn is one usage row on its pie, and the roster counts it.
     if ((await captureTeammateTurn($, e).catch(() => null)) !== null) await refreshTeam($, { force: true }).catch(() => null)
     const drift = await checkDrift($, e).catch(() => ({ findings: [], parent: null }))
@@ -219,10 +247,12 @@ export const register: Register = on => {
 
   on('command.run', { command: 'pass' }, async ($, e) => {
     const sub = e.args.trim().toLowerCase()
+    if (sub === 'replay' || sub.startsWith('replay ')) return { text: await openReplay($, e.args.trim().slice(6)) }
     if (sub === 'reconcile') {
       await refreshLedger($)
       return { text: reconcileText(await read($, ledgerAtom)) }
     }
+    if (sub === 'history') return { text: await historyText($) }
     if (sub === 'checks') {
       await refreshLedger($)
       return { text: checksText(await read($, ledgerAtom), await $.clock.now().catch(() => Date.now())) }
@@ -233,6 +263,10 @@ export const register: Register = on => {
   }))
 
   on('ui.render', { component: 'Pane', requestId: 'pass' }, async ($, e) => drawPane($, e)).catch(($, e, next) =>
+    next(e),
+  )
+
+  on('ui.render', { component: 'Pane', requestId: REPLAY_PANE }, async ($, e) => drawReplay($, e)).catch(($, e, next) =>
     next(e),
   )
 
