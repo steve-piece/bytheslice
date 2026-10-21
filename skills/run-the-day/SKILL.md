@@ -115,7 +115,7 @@ When every Pie in the filtered queue is `Completed`:
 `/run-the-day` produces **no HITL of its own** beyond the between-pie "continue" pause in default mode. Every genuine blocking decision originates **inside** a `/sell-pie` run — the four kept categories (§1.8): `external_credentials`, `prd_ambiguity`, `destructive_operation`, and the pie-boundary merge checkpoint (surfaced by `/box-it-up`). When `/sell-pie` returns `needs_human: true`:
 
 1. **Stop the chain immediately.** Do not advance to the next Pie; do not reschedule or retry.
-2. **Propagate the structured fields verbatim** — `hitl_category`, `hitl_question`, `hitl_context` — into this skill's own return contract.
+2. **Propagate the structured fields verbatim** (`hitl_category`, `hitl_question`, `hitl_context`, and `hitl_questions` when `/sell-pie` returned an approval batch) into this skill's own return contract. A batch stays one batch: never split it into separate pauses.
 3. The **orchestrating session that invoked `/run-the-day`** (or `/sell-pie` itself, when run interactively) surfaces the prompt to the human. **This skill never calls `ask_user_input_v0`.**
 4. Once the human answers, the chain is resumed by re-invoking the chainer (or re-dispatching the active Pie) with the resolution context appended. The just-completed Pies are already merged and `Completed`, so resumption picks up at the Pie that paused.
 
@@ -193,7 +193,8 @@ clean_tree: true | false
 needs_human: false | true
 hitl_category: null | "prd_ambiguity" | "external_credentials" | "destructive_operation"
 hitl_question: null | "<plain-language question, propagated verbatim from /sell-pie>"
-hitl_context: null | "<what triggered this — enough to act without this conversation>"
+hitl_context: null | "<what triggered this, enough to act without this conversation>"
+hitl_questions: null | [<the inner /sell-pie approval batch, verbatim>]
 notes: <one-line summary or unresolved issue description>
 ```
 

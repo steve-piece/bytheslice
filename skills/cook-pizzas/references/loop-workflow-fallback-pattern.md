@@ -106,7 +106,7 @@ This is the manual analogue of the progress line the primitive would have stream
 
 ### 5. HITL bubbles end turns naturally
 
-Identical to the primitive's behavior: any HITL condition ends the iteration and returns control to the orchestrator/user. Agents **never call `ask_user_input_v0`** — a subagent that hits a blocking condition sets `needs_human: true` + `hitl_category` in its return (per its Return Contract), and the **orchestrator** is what prompts the user and halts. In a `/loop` fallback the four blocking categories (`external_credentials`, `prd_ambiguity`, `destructive_operation`, plus a `review: continuous` pie forcing `/sell-slice` mode) **halt the loop — they do not reschedule** the next wake.
+Identical to the primitive's behavior: any HITL condition ends the iteration and returns control to the orchestrator/user. Agents **never call `ask_user_input_v0`**: a subagent that hits a blocking condition sets `needs_human: true` + `hitl_category` in its return (per its Return Contract), and the **orchestrator** is what prompts the user and halts. Approvals follow the same batching rule as the primitive path: per slice, collect every approval it needs (build plan when not auto-approved, migrations, live loads, size exceptions, terms, credentials) into one batch of short questions, one decision each with a recommended answer, asked once at slice start or the first point all are known. The Library Preview gate is the one mid-slice stop outside the batch. In a `/loop` fallback the four blocking categories (`external_credentials`, `prd_ambiguity`, `destructive_operation`, plus a `review: continuous` pie forcing `/sell-slice` mode) **halt the loop: they do not reschedule** the next wake.
 
 ### 6. Cleanup on exit
 

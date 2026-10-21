@@ -154,7 +154,7 @@ For the active slice `N.M`:
 5. **Mark + commit + push.** In `merge-per-slice` mode, follow Phase 1-M step 3 instead of this step. Default mode (no PR): flip the slice's `### Slice N.M` row `[ ]` → `[x]` (and its status → `Completed`) in `docs/plans/00_master_checklist.md`. Then invoke **[`/box-it-up --slice`](../box-it-up/SKILL.md)**: it makes the slice's **final commit** on the pie branch with the v5 convention **`feat(pie-N): N.M <slice name>`** (the checklist flip plus any fix-loop patches, with the closing-narrative paragraph in the body for UI-touching slices) and **pushes** - **no PR is opened, so CI does not fire.** Per-slice pushes stay cheap. The slice may not end with an untracked or modified file it created.
 6. **Advance.** If more slices remain `[ ]` in the active pie, let the loop wake for the next one (or, self-paced, continue in-context to the next slice). If **every** slice is `[x]`, go to Phase 2 (pie boundary). Do **not** start a slice in a *different* pie - `/sell-pie` bakes one pie then stops.
 
-> **Per-slice `hitl_required` still fires inside an autonomous pie.** A slice whose frontmatter sets `hitl_required: true` (e.g. an `external_credentials` slice) halts the loop at that slice even though the pie is `review: boundary` (spec §1.8). The pie-level autonomy authorizes the *run*; it does not suppress a slice's own declared blocking dependency.
+> **Per-slice `hitl_required` still fires inside an autonomous pie.** A slice whose frontmatter sets `hitl_required: true` (e.g. an `external_credentials` slice) halts the loop at that slice even though the pie is `review: boundary` (spec §1.8), as one question in that slice's approval batch (see HITL Handling). The pie-level autonomy authorizes the *run*; it does not suppress a slice's own declared blocking dependency.
 
 ### Phase 1-M - Merge-per-slice delivery (`delivery.mode: merge-per-slice`)
 
@@ -206,6 +206,8 @@ Reached only when **every** `### Slice N.M` under the active `## Pie N` is `[x]`
 | `creative_direction` | the Library Preview gate surfacing a net-new-component concern; `ci-fix-attempter` exhausting its 3 attempts (at the boundary, or on a slice PR in merge-per-slice mode, via `/box-it-up`). |
 
 Any project-specific categories from `hitl.additionalCategories` surface the same way.
+
+**Batched approvals.** Per slice, right after recon (the first point they are all known), the conductor collects every approval the slice needs (migrations to apply, live data loads, size exceptions, terms or licences, credentials, a `hitl_required` dependency, and the build plan when it is not auto-approved) into **one batch** of short questions: one decision per question, each with a recommended answer. The loop halts once for the batch, not once per approval. With nothing to approve, it does not halt. An approval that surfaces mid-slice joins the next batch rather than halting alone, unless the slice cannot continue without it. **Exception:** the Library Preview gate stays its own mid-slice stop (it needs built output). Unforeseeable blocking events (fix cap exhausted, the non-prod guard, a rejected push) still halt when they happen. Return the batch in `hitl_questions`.
 
 **Agents never call `ask_user_input_v0`.** Every subagent and sub-skill sets `needs_human: true` + the `hitl_category` / `hitl_question` / `hitl_context` fields in its return; `/sell-pie`, as the conductor, reads those fields and surfaces the prompt to the human (and emits the same fields in its **own** return contract when it hands control back to a parent - e.g. `/run-the-day`). On resolution, the conductor appends the answer to the relevant context and resumes the loop at the slice (or boundary) that halted; it never silently advances past an unresolved HITL.
 
@@ -332,4 +334,5 @@ needs_human: false | true
 hitl_category: null | "prd_ambiguity" | "external_credentials" | "destructive_operation" | "creative_direction"
 hitl_question: null | "<plain-language question>"
 hitl_context: null | "<what triggered this - e.g. flat-checklist refusal, non-prod guard blocked a seed, fix-loop exhausted, pie-boundary merge approval>"
+hitl_questions: null | [{question: "<under ~10 words, one decision>", options: ["<1-4 words>"], recommended: "<option>"}]   # the slice's approval batch, when one is pending
 ```

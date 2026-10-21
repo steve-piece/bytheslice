@@ -208,13 +208,13 @@ Present a compact plan:
 7. MCP availability + visual-review tools + resolved `verification.viewports` / `verification.e2e.*`
 8. Forward-reference risks, open questions
 
-**Build-plan authorization (C9 - auto-approve under loop).** End with **"Authorize this build plan? (yes / edits / cancel)"** and wait. Workflow A does not start until the user says yes.
+**Build-plan authorization (C9 - auto-approve under loop).** End with **one approval batch**: the build-plan question **"Authorize this build plan? (yes / edits / cancel)"** plus every other approval this slice needs that is already known (see "Batched approvals" under HITL Handling), each a separate short question with a recommended answer. Wait for the answers. Workflow A does not start until the user says yes to the plan.
 
 **Skip this stop - proceed straight to Phase 2.5 - when EITHER:**
 - this `/sell-slice` is running **under the `/sell-pie` loop** (the pie-level autonomy already authorized the run), OR
 - `flow.autoApproveBuildPlan` is `true` in the resolved config.
 
-In the auto-approve case, log a one-line note instead of stopping: *"Build plan auto-approved (`<reason: /sell-pie loop | flow.autoApproveBuildPlan>`); proceeding to Workflow A."* - then continue. The plan is still rendered for the record; only the human stop is skipped.
+In the auto-approve case, log a one-line note instead of stopping: *"Build plan auto-approved (`<reason: /sell-pie loop | flow.autoApproveBuildPlan>`); proceeding to Workflow A."* - then continue. The plan is still rendered for the record; only the human stop is skipped. If the slice needs any other approval, the batch still goes out, minus the build-plan question; with nothing else to approve, there is no stop.
 
 **Always provide a recommended answer in available options** when prompting.
 
@@ -420,6 +420,8 @@ End your final message with:
 If any subagent or sub-skill returns `needs_human: true`, the orchestrator pauses and uses `ask_user_input_v0` to prompt the user. The answer is appended to the relevant context (PRD Section 6 for `prd_ambiguity`, project rules for credentials, etc.), then the dispatch is repeated.
 
 **Subagents NEVER prompt the user directly and NEVER call `ask_user_input_v0`.** They set `needs_human: true` + the `hitl_category` / `hitl_question` / `hitl_context` fields; **only the orchestrator** calls `ask_user_input_v0`. This is the v5 contract - the prompting boundary lives at the orchestrator.
+
+**Batched approvals.** Collect every approval the slice needs (the build plan, migrations to apply, live data loads, size exceptions to the task or file cap, terms or licences to accept, credentials to supply) into **one batch** of short questions: one decision per question, each with a recommended answer. Ask the batch once, at slice start or at the first point all of them are known; never drip them one at a time across the slice. An approval that only surfaces later joins the next batch instead of stopping the slice on its own. **Exception:** the Library Preview gate (Phase 4.5) stays its own mid-slice stop, because it needs built output to review. Unforeseeable blocking events (fix cap exhausted, the `slice-tester`'s non-prod guard, a rejected push) still stop when they happen.
 
 The four blocking HITL categories halt the slice (they are not auto-resolvable): `prd_ambiguity`, `external_credentials`, `destructive_operation` (most commonly the `slice-tester`'s non-prod guard blocking a seed), `creative_direction` (library gate). Any project-specific categories from `hitl.additionalCategories` surface the same way.
 

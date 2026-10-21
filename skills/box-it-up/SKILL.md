@@ -76,7 +76,7 @@ The skill refuses to proceed past Phase 0 if any check fails. The point is to av
 
 ### Phase 1 - Commit + Push *(both modes; the per-slice entry point)*
 
-1. `git status --short` - if there are uncommitted changes, surface them and ask:
+1. `git status --short` - if there are uncommitted changes, handle them per the **batched-approvals** rule: when a conductor invoked this skill (`--slice`, `--merge-slice`, or the `/sell-pie` boundary handoff) and every changed path came from agents' `files_changed` or the checklist, commit without asking (the conductor already owns those paths). Ask only when something is unexpected, and then put this question in **one batch** with every other approval already known at this point (for example a squash-only repo from the Phase 4 strategy check, run early), one decision per question, each with a recommended answer. The Phase 4 merge gate needs CI's result, so it is its own later batch. The commit question:
    - "Stage and commit these changes? (yes / let me write the message / cancel)"
    - **Always provide a recommended answer in the available options.** Default recommendation: yes if the diff looks like the in-scope slice; "let me write" if it includes unexpected files.
    - On `yes`: stage selectively, never `git add -A` or `git add .`. Stage only the paths the conductor recorded from agents' `files_changed` and the checklist; anything else is an unexpected file, so recommend "let me write" and list it. Then derive the commit message **by mode**:
