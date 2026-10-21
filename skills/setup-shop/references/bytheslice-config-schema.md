@@ -70,7 +70,7 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
   // slice-verifier) and by sell-pie's per-slice loop. Drives viewport coverage
   // (C7) and e2e threshold-gating by tag (C10).
   "verification": {
-    "viewports": [375, 1280],         // widths the slice-tester renders/screenshots at; default mobile + desktop
+    "viewports": [375, 768, 1280],    // widths the slice-tester renders at; screenshots only at 768 and 1280
     "e2e": {
       "feature": "always",            // run the slice's own feature e2e: "always" | "critical-only" | "off"
       "regressionCore": "critical-only", // run the core regression suite: "always" | "critical-only" | "off"
@@ -88,6 +88,13 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
   // annotation in the master checklist. A pie's own annotation always wins.
   "review": {
     "default": "boundary"             // "boundary" = autonomous /sell-pie; "continuous" = forced /sell-slice mode
+  },
+
+  // How finished slices reach main, plus the soft per-slice time budget.
+  // Read by sell-pie, sell-slice and box-it-up.
+  "delivery": {
+    "mode": "pie-pr",                 // "pie-pr" (default: one PR per pie via /box-it-up) | "merge-per-slice"
+    "sliceBudgetHours": 3             // soft wall-clock budget per slice; 0 = off
   },
 
   // Which MCPs the project has installed. Read by sell-slice (frontend pipeline),
@@ -168,7 +175,7 @@ Default `"20-30"`. The phased-plan splitter aims for a stage count in this band 
 
 Knobs for Workflow B (the verify-once stage of `/sell-slice`, also driven per-slice by `/sell-pie`). Each key is independent; omit any to take the default.
 
-- **`viewports`** *(int[], default `[375, 1280]`)* — the widths the `slice-tester` renders and screenshots `frontend` slices at (C7). The list is mobile-first; add widths (e.g. `[375, 768, 1280]`) for finer breakpoint coverage. The `slice-tester` exercises every declared affordance at each width.
+- **`viewports`** *(int[], default `[375, 768, 1280]`)* - the widths the `slice-tester` renders `frontend` slices at (C7). The list is mobile-first. The `slice-tester` exercises every declared affordance at each width, but takes screenshots only at 768 and 1280: one 768px and one 1280px (desktop) screenshot per new UI surface. Other widths (such as 375) are checked from the rendered page without a screenshot. A list that omits 768 or 1280 gets no screenshot at the missing width.
 - **`e2e`** *(object)* — threshold-gates which e2e suites the `slice-verifier` runs by tag (C10). Each value is `"always" | "critical-only" | "off"`:
   - **`feature`** *(default `"always"`)* — the slice's own feature e2e specs. `"critical-only"` runs just specs tagged critical; `"off"` skips them.
   - **`regressionCore`** *(default `"critical-only"`)* — the cross-slice core regression suite. Defaults to critical-only so per-slice loops stay cheap; raise to `"always"` near a UAT date.
@@ -187,6 +194,17 @@ Governs the v5 HITL collapse. Each key is independent.
 ### `review`
 
 - **`default`** *(string, default `"boundary"`)* — the review sensitivity applied to a pie that omits the `<!-- review: ... -->` annotation in the master checklist. `"boundary"` lets `/sell-pie` run that pie autonomously with one HITL at the pie boundary; `"continuous"` forces `/sell-pie` into `/sell-slice` (high-touch) mode for it. **A pie's own annotation always wins over this default** — this key only fills the gap for unannotated pies. Per-slice `hitl_required` frontmatter still fires inside an autonomous pie either way.
+
+### `delivery`
+
+How a finished slice reaches `main`, and how long a slice may run before the conductor checks in. Each key is independent.
+
+- **`mode`** *(string, default `"pie-pr"`)* - the closeout path:
+  - `"pie-pr"` *(default)* - each slice commits and pushes to the pie branch with no PR; `/box-it-up` opens one `Pie N` PR at the pie boundary, CI runs once, and the operator approves the merge.
+  - `"merge-per-slice"` - each slice gets its own branch (`pie-N-sN.M-<scope>`) cut from fresh `origin/main` into its own worktree, then its own PR `Slice N.M: <name>`. The conductor waits for CI, runs up to 3 `ci-fix-attempter` rounds on red (still red after 3 halts the loop with a HITL; a slice is never skipped), merges on green with a **merge commit** (never squash), syncs `main` `--ff-only` from the primary checkout, deletes the branch locally and remotely, removes the slice worktree, prunes, and cuts the next slice from the fresh `main`. There is no per-slice merge approval; the operator gets one notice when the pie finishes. If the repo disallows merge commits (`gh repo view --json mergeCommitAllowed`), the loop halts and asks. There is never an integration branch.
+  - **A run instruction wins for that run.** When the operator's run instruction explicitly asks for autonomous delivery (for example "merge each slice", "deliver it to main without me"), that run uses `"merge-per-slice"` even if the config says `"pie-pr"`; an instruction asking for one PR per pie likewise overrides a `"merge-per-slice"` config. Invoking `/sell-pie` on its own is not such an instruction.
+  - **`review: continuous` pies always use `"pie-pr"`**, whatever this key or the run instruction says.
+- **`sliceBudgetHours`** *(number, default `3`; `0` = off)* - a soft wall-clock budget per slice, counting CI time and excluding time spent waiting on the operator. The slice's start time lives in the run log (`.claude/.bytheslice-state/run-log.md`). When the budget is hit, the conductor lets the current agent finish, then checks in with a `prd_ambiguity` HITL carrying progress, the blocker, and the options (extend, stop).
 
 ### `mcps`
 

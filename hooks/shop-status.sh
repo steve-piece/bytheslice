@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # hooks/shop-status.sh
 # SessionStart hook. Injects a compact "shop status" header so Claude
-# starts with master-checklist state in context — replaces the repeated
+# starts with master-checklist state in context; it replaces the repeated
 # Phase 1 "read the checklist" step in several skills.
 #
 # Exit 0; stdout becomes additional session context.

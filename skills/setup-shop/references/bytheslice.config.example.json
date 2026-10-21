@@ -20,7 +20,7 @@
 
   // Verification knobs for sell-slice Workflow B / sell-pie per-slice loop.
   "verification": {
-    // "viewports": [375, 1280],            // widths the slice-tester renders at (C7)
+    // "viewports": [375, 768, 1280],       // widths the slice-tester renders at (C7); screenshots only at 768 and 1280
     // "e2e": {
     //   "feature": "always",              // "always" | "critical-only" | "off"
     //   "regressionCore": "critical-only",
@@ -37,6 +37,12 @@
   // Default review sensitivity for pies missing a `<!-- review: ... -->` annotation.
   "review": {
     // "default": "boundary"                 // "boundary" | "continuous"
+  },
+
+  // How finished slices reach main, plus the soft per-slice time budget.
+  "delivery": {
+    // "mode": "pie-pr",                     // "pie-pr" (one PR per pie) | "merge-per-slice" (one PR per slice, merged on green CI)
+    // "sliceBudgetHours": 3                 // soft per-slice wall-clock budget; 0 = off
   },
 
   // Declare which MCPs the project has installed.

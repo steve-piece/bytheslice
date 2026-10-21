@@ -34,6 +34,7 @@ This task is injected into any stage detected as auth-tagged by `phased-plan-wri
         - e2e (dev, flag off): protected route returns 302 → login (real auth flow intact); banner is not rendered until a real session is established
         - e2e (prod build): banner does NOT render and the auto-login middleware path is unreachable regardless of flag value (assert protected route → 302 to login even with `DEV_AUTH_BYPASS=true`)
         - Build-time: importing anything from `lib/dev/*` under `NODE_ENV=production` throws (unit test or CI guard)
+    - **Gate tiers for these tests:** the prod-import unit test runs while coding (tier 1); the three e2e cases are this task's own tests and run before its commit (tier 2); the prod-bundle grep runs in `slice-verifier`'s one slice-end pass (tier 3) and in CI at the PR (tier 4). None of them needs the full suite per commit.
 
 ---
 

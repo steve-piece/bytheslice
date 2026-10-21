@@ -77,7 +77,7 @@ case "$FILE_PATH" in
 esac
 
 # Does the touched path fall under any watched glob? Translate `foo/**` and
-# `foo/*` to a `foo/` prefix check — a simple suffix-tolerant match.
+# `foo/*` to a `foo/` prefix check: a simple suffix-tolerant match.
 matches_watched=0
 while IFS= read -r pat; do
   [ -z "$pat" ] && continue
@@ -102,7 +102,7 @@ if ! [ "${APPROVED_COUNT:-0}" -ge 0 ] 2>/dev/null; then
   APPROVED_COUNT=0
 fi
 if [ -z "$APPROVED_COUNT" ] || [ "$APPROVED_COUNT" = "0" ]; then
-  # No jq, or zero approvals — fall back to a grep for an approved entry.
+  # No jq, or zero approvals: fall back to a grep for an approved entry.
   if grep -q '"status"[[:space:]]*:[[:space:]]*"approved"' "$APPROVALS_FILE" 2>/dev/null; then
     APPROVED_COUNT=1
   else
@@ -111,7 +111,7 @@ if [ -z "$APPROVED_COUNT" ] || [ "$APPROVED_COUNT" = "0" ]; then
 fi
 
 if [ "${APPROVED_COUNT:-0}" -gt 0 ]; then
-  # An approval is on record — assume it covers this slice's component.
+  # An approval is on record: assume it covers this slice's component.
   exit 0
 fi
 

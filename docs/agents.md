@@ -34,7 +34,7 @@ Bold rows mark the skill each group of agents belongs to. The six agents at the 
 | `workflow-writer` | Wren | Writes the GitHub Actions workflow files (CI, E2E, design-system compliance, and schema drift when you have a database), skipping any that already exist. |
 | `lint-config-writer` | Linda | Adds the lint rules that catch hardcoded colors and spacing (anything that bypasses your design tokens), and tidies `.gitignore` for test artifacts. |
 | `a11y-discovery-runner` | Ally | Runs a scoped shadscan accessibility scan to surface issues no other gate catches, throws out anything pointing at your `/library` mockups, and hands back the rest as leads to check by hand. It never blocks, never scores you, and never fixes anything. |
-| `husky-installer` | Hux | Sets up the git pre-push hook so the full check suite runs on your machine before code can leave it. |
+| `husky-installer` | Hux | Sets up the git pre-push hook so the quick slice checks (lint, types, unit tests, build) run on your machine before code can leave it; CI still runs the full suite on every PR. |
 | `branch-protection-writer` | Locke | Generates a one-time script you run to lock the main branch on GitHub so nothing merges without green checks. |
 | `local-gates-runner` | Ollie | Runs the entire gate suite locally (lint, types, tests, E2E, visual) before the first push, so problems get fixed on the branch instead of in a red PR. |
 | **🍕 /open-the-shop** | | |
@@ -46,12 +46,12 @@ Bold rows mark the skill each group of agents belongs to. The six agents at the 
 | `discovery` | Pip | Fast, read-only reconnaissance: maps which files, symbols, and callers the slice will touch, so the build plan is grounded in the real codebase. |
 | `checklist-curator` | Ezra | Picks the next slice off the master checklist, defines pass/fail acceptance tests for it, and proposes the exact checklist update. Suggests, never edits. |
 | `rules-loader` | Bea | Loads the project rules file and `bytheslice.config.json`, and hands back the resolved settings the rest of the pipeline should obey. |
-| `implementer` | Ren | The builder. Writes the code and its unit tests for one checklist item, updates the DB schema first when needed, and declares everything it produced in a build manifest. Never grades its own work. |
+| `implementer` | Ren | The builder. Writes the code and its unit tests for one checklist item, updates the DB schema first when needed, and declares everything it produced in a build manifest. Runs the quick checks while coding and before each commit, never grades its own work, and hands its changed files to the conductor, which does all the committing. |
 | `spec-reviewer` | Spence | Checks the builder's work against the plan: was the checklist item actually delivered, with no scope creep, following project conventions? |
 | `quality-reviewer` | Quinn | Checks the builder's work for craft: types, tests, edge cases, security smells, and schema-before-queries. Cannot write files, by construction. |
-| `slice-tester` | Tay | The independent QA. Gets only the build manifest and the slice's definition of done (never the builder's chatter), then actually exercises the feature: clicks through the UI or round-trips real data, and reports evidence per claim. |
-| `slice-verifier` | Inez | Runs every static gate exactly once (lint, types, build, tests, E2E, design-token grep, CI integrity) and cross-checks the diff to catch anything the manifest under-declared. |
-| `fix-attempter` | Fitz | When a check fails, makes the smallest possible fix for that one failure. No refactors, no scope growth. |
+| `slice-tester` | Tay | The independent QA. Gets only the build manifest and the slice's definition of done (never the builder's chatter), then actually exercises the feature: clicks through the UI at every viewport or round-trips real data, and reports evidence per claim (screenshots only at 768 and 1280). |
+| `slice-verifier` | Inez | Runs the full local suite once at the end of the slice (lint, types, build, tests, E2E, design-token grep, CI integrity) and cross-checks the diff to catch anything the manifest under-declared. After a fix it re-runs only the checks that fix could change and says which and why. |
+| `fix-attempter` | Fitz | When a check fails, makes the smallest possible fix for that one failure. No refactors, no scope growth, no commits (the conductor commits). At most 3 fix loops per slice before it asks you. |
 | `debug-instrumenter` | Dee | If the first fix did not take, adds temporary tagged logging around the failure so the next fix attempt has real data. The tags are stripped once everything is green. |
 | **🍕 /sell-slice frontend pipeline** | | |
 | `modern-ux-expert` | Mo | Researches how best-in-class products solve this screen and writes a short UX spec with the chosen patterns and a few visual references. |
@@ -61,7 +61,7 @@ Bold rows mark the skill each group of agents belongs to. The six agents at the 
 | `library-entry-writer` | Libby | Puts every new or visually changed component in the `/library` showroom with all its variants and states, so you approve the look before it touches production routes. |
 | `state-illustrator` | Lu | Sweeps the UI for missing loading skeletons, empty states, error states, and success confirmations, and fills in the gaps. |
 | **🍕 /box-it-up** | | |
-| `ci-fix-attempter` | Dex | When the PR's CI goes red, reads the failing checks and pushes the smallest fix that makes them green again. Never weakens tests to pass, never force-pushes. |
+| `ci-fix-attempter` | Dex | When the PR's CI goes red, reads the failing checks and makes the smallest fix that turns them green; `/box-it-up` commits and pushes it. At most 3 rounds per PR. Never weakens tests to pass. |
 | **🍕 /inspect-display** | | |
 | `platform-walker` | Wally | Drives a real browser through every route of your running app, screenshots everything, reads the console, and returns a ranked list of what looks broken, stubbed, or empty. |
 | **🍕 /special-order** | | |

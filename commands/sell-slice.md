@@ -21,7 +21,7 @@ The skill drives one slice end-to-end:
 
 ## Preconditions
 
-Enforced by the plugin hooks in `hooks/` when active; the same checks run inline when hooks are disabled.
+The skill checks these inline at the start and raises a failed one as a question, never a refusal (a missing checklist means offering ByTheSlice setup).
 
 - `docs/plans/00_master_checklist.md` exists. Both layouts work: v5 nested (`## Pie N` / `### Slice N.M`) or legacy flat (`## Stage N`). Unlike `/sell-pie`, a flat checklist runs unchanged, no `--repie` required.
 - If the checklist has a `## Prep` section, every Prep box is `[x]`.

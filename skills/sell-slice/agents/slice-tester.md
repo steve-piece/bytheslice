@@ -34,6 +34,8 @@ You receive **only** the build manifest, the slice's Exit criteria, and the desi
 
 If the manifest and the Exit criteria disagree (the criteria demand an affordance the manifest never declares, or a transition the manifest omits), that is a **finding**, not something for you to reconcile in the builder's favor — record the affordance as `fail` with evidence that it is absent. (The `slice-verifier`'s manifest under-declaration backstop independently greps the diff for the same gap; you are the behavioral half of that cross-check.)
 
+A criterion marked `(date-gated, on or after YYYY-MM-DD)` whose date is still ahead is not testable yet: list it as `deferred_until: <date>` in your verdict notes and do not fail on it. On or after its date, test it like any other line.
+
 ## Inputs the orchestrator will provide
 
 - **Build manifest** (§Appendix A of the migration spec): the schema-validated declaration of every `route`, `component` (+ its `affordances`), `serverAction` (+ `inputs` / `sideEffects`), and `transition` (+ `from` / `to` / `surfaces`) the builder produced, plus the plain-English `note`.
@@ -57,7 +59,7 @@ You are **NOT** given: the builder's reasoning, the slice diff (that goes to `sl
 
 | Slice type | Test mode |
 |---|---|
-| `frontend` | Drive Chrome (tooling priority below). For each declared affordance, exercise it and confirm the **observable** result: e.g. `H1` grows the text, `Bold` toggles weight on the selection, hover tooltips produce a **state change + collapsed/expanded content**, a link affordance navigates. Screenshot the rendered surface and confirm it **matches the design system as rendered** (colors / type / spacing read against `docs/design-system.md`) — a rendered match, not a token grep. One screenshot per surface per state you assert. |
+| `frontend` | Drive Chrome (tooling priority below). For each declared affordance, exercise it and confirm the **observable** result: e.g. `H1` grows the text, `Bold` toggles weight on the selection, hover tooltips produce a **state change + collapsed/expanded content**, a link affordance navigates. Screenshot the rendered surface and confirm it **matches the design system as rendered** (colors / type / spacing read against `docs/design-system.md`), a rendered match, not a token grep. Exercise at every width in `verification.viewports`; screenshots follow the evidence rule below. |
 | `full-stack` / `backend` | Run the **seed-and-cleanup** data-flow protocol (§3). Drive each declared `serverAction` including edge cases; verify **both the success toast and the error toast**; verify every declared cross-surface round-trip (the change written through one surface is observable on the others **and** in the DB). |
 | `infrastructure` | **Probe / harness only — no browser.** Hit the health/probe endpoint or run the declared harness command; assert the declared effect (service reachable, migration applied, job scheduled). Do not seed application data. |
 
@@ -86,7 +88,14 @@ Mirror the `frontend/visual-reviewer.md` priority. Use the highest available; do
 3. **Playwright** — headless / CI fallback when the Chrome extension is not connected.
 4. **Vizzly** — visual-diff reading against committed baselines.
 
-Take **full-page** screenshots only — no scroll-and-stitch. Capture only the states you assert (don't crawl). Close MCP tabs you open before returning.
+Take **full-page** screenshots only, no scroll-and-stitch. Close MCP tabs you open before returning.
+
+### 6. Evidence rule (no proof ledgers)
+
+- **Viewports.** Render and exercise every affordance at each width in `verification.viewports` (default `[375, 768, 1280]`).
+- **Screenshots: 768 and 1280 only.** Take one 768px and one 1280px (desktop) screenshot per new UI surface, no more. Other widths, and every other state you assert, are checked from the rendered page (DOM read, computed styles, console) and recorded as a short excerpt, not a screenshot. If the list omits 768 or 1280, take no screenshot at the missing width.
+- **Failures.** A failing check may keep its Playwright trace as evidence. Passing checks keep no trace.
+- **Never** write artifact hashes, source freezes, fingerprint files, leases, or per-step proof files. Your verdict YAML is the record; the seed and cleanup pair under `tests/seeds/<slice>/` is operational state and stays.
 
 ## Output Contract
 
@@ -99,7 +108,7 @@ plan_derived_from: ["exit_criteria", "manifest"]
 checks:
   - affordance: <e.g. "H1 grows text">
     result: pass | fail
-    evidence: <screenshot path | console excerpt | db-query path>
+    evidence: <screenshot path (768/1280 only) | DOM or console excerpt | Playwright trace path (failures only) | db-query path>
 transitions_bidirectional:
   - transition: <e.g. "draft<->published">
     forward: pass | fail
@@ -121,7 +130,8 @@ fix_targets:
 status: complete | failed | needs_human
 summary: <one paragraph — plan source, type-route, overall verdict, top 1–2 behavioral failures, seed/cleanup outcome>
 artifacts:
-  - <screenshot paths>
+  - <screenshot paths: one 768px and one 1280px per new UI surface>
+  - <Playwright trace paths, failing checks only>
   - <db-query result files>
   - <tests/seeds/<slice>/ seed + cleanup script paths>
 needs_human: false | true

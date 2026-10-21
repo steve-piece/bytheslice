@@ -13,15 +13,19 @@ Load and follow the [`sell-pie`](../skills/sell-pie/SKILL.md) skill.
 
 The skill drives one pie end-to-end:
 
-1. **Set up the loop** — read the nested master checklist, pick the active Pie, read its `review:` mode, confirm prior pies merged, set the pie-completion `/goal`, cut the pie branch + worktree.
+1. **Set up the loop**: read the nested master checklist, pick the active Pie, read its `review:` mode and the delivery mode, confirm prior pies merged, set the pie-completion `/goal`, cut the pie branch + worktree (default mode) or stay on `main` and cut one worktree per slice (merge-per-slice mode).
 2. **Loop the slices** (autonomous, `review: boundary`) — `/loop` wakes once per slice; each runs a context-separated `Workflow`:
-   - **builder** writes the slice + unit tests and emits the **build manifest**;
+   - **approvals** the slice needs go out as one batch of short questions, each with a recommended answer (the Library Preview gate stays its own stop);
+   - **builder** writes the slice + unit tests, runs gate tiers 1 and 2 (quick checks while coding; the slice's own tests and build before each task commit), and emits the **build manifest**;
    - **slice-tester** independently verifies behavior — receiving **only** the manifest + Exit criteria + design-system path, never the builder's reasoning, so it cannot rationalize the builder's choices;
-   - **slice-verifier** runs each static gate once + the manifest under-declaration backstop;
-   - **fixer** applies the smallest off-context fix on failure (capped at 3 loops → HITL).
-   Then commit + push the slice (`feat(pie-N): N.M — <name>`) via `/box-it-up --slice` — **no PR, so CI stays quiet** — and advance.
+   - **slice-verifier** runs the full local suite once (tier 3) + the manifest under-declaration backstop; after a fix it re-runs only the gates that fix could change, listed in `rerun`;
+   - **fixer** applies the smallest off-context fix on failure: at most 3 local fix loops per slice, and separately 3 CI fix rounds per PR. No run instruction ("continue until verified", "never stop", "fully automated") raises either cap; on exhaustion the loop halts with a HITL and only your explicit reply there grants more.
+   Each `### Task K` is committed and pushed at its boundary (`feat(pie-N): N.M task K <name>`); the slice closes with `feat(pie-N): N.M <name>` via `/box-it-up --slice`, **no PR, so CI stays quiet**, and the loop advances. Only the conductor stages, commits and pushes; agents return `files_changed`.
+   - A slice whose only unmet criterion is date-gated is left `waiting until <YYYY-MM-DD>`, skipped with its dependents, and closed by the next run on or after the date.
+   - Each slice has a soft time budget (`delivery.sliceBudgetHours`, default 3); when it runs out the loop lets the current agent finish and asks once: extend or stop.
 3. **Continuous mode** (`review: continuous`) — for sensitive pies (Payments, Auth, real-data migrations), drive each slice through high-touch `/sell-slice` instead of the autonomous Workflow.
-4. **Pie boundary** — when every slice is `[x]`, stop and hand off to `/box-it-up`: open one PR `Pie N`, run CI **once**, take the merge-authorization HITL, merge **preserving every per-slice commit** (never squash), sync main, delete the branch, remove the worktree. The next pie starts in a fresh chat.
+4. **Merge-per-slice mode** (opt-in: an explicit autonomous-delivery run instruction, or `delivery.mode: "merge-per-slice"`; never for a `review: continuous` pie): each slice gets branch `pie-N-sN.M-<scope>` in its own worktree cut from fresh `origin/main`, its own PR `Slice N.M: <name>`, up to 3 CI fix rounds, and a merge commit on green with no per-slice approval; cleanup runs from the primary checkout and the next slice starts from the fresh `main`. You get one notice when the pie finishes, in place of the boundary step below.
+5. **Pie boundary** (default mode): when every slice is `[x]`, stop and hand off to `/box-it-up`: open one PR `Pie N`, run CI **once**, take the merge-authorization HITL, merge **preserving every per-slice commit** (never squash), sync main, delete the branch, remove the worktree. The next pie starts in a fresh chat.
 
 The **conductor holds zero implementation context** — it routes structured artifacts between the singular-goal subagents and never writes code, tests behavior, or seeds a DB itself.
 
@@ -30,7 +34,7 @@ The **conductor holds zero implementation context** — it routes structured art
 - `docs/plans/00_master_checklist.md` exists and is **nested** (`## Pie N` / `### Slice N.M`). A **flat** v4 checklist is refused — convert with `/cook-pizzas --repie` (explicit opt-in) or use `/sell-slice`.
 - An **active Pie** exists (a `## Pie N` whose slices are not all `[x]`), and **every prior Pie is merged-or-authorized**.
 - Each slice plan carries `pie` / `slice` / `review` frontmatter and a well-formed `**Exit criteria:**` block.
-- Clean git working tree; the pie branch `pie-<n>-<scope>` exists or will be cut off `main` into one worktree per pie. Never on `main`.
+- Clean git working tree; the pie branch `pie-<n>-<scope>` exists or will be cut from freshly-fetched `origin/main` into one worktree per pie. Never bake on `main`. Merge-per-slice mode instead needs a clean primary checkout on a synced `main`, `gh` authenticated, and a repo that allows merge commits.
 
 ## When to use this command
 

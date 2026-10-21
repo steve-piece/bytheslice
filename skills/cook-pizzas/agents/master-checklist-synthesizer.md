@@ -62,12 +62,13 @@ This is **Pie 1, Foundations**. `/sell-slice` checks every box below before acce
 
 ### Slice 2.1: [Slice Name]
 **Type:** [type] | **Depends on:** Slices [list]
+**Status:** Not Started
 
 Completion criteria:
 - [ ] [criterion from the return's completion_criteria]
 - [ ] tests_passing
 - [ ] slice-tester pass (behavioral; per-affordance verdict + evidence)
-- [ ] slice-verifier pass (lint + typecheck + build + unit/integration + e2e-by-tag + design-system grep + CI-integrity + manifest backstop)
+- [ ] slice-verifier pass (gate tier 3, once at slice end: lint + typecheck + build + unit/integration + e2e-by-tag + design-system grep + CI-integrity + manifest backstop)
 - [ ] HITL items resolved (only if hitl_required: true)
 
 Exit criteria:
@@ -98,11 +99,12 @@ Exit criteria:
 - A label line such as `Completion criteria:` sits directly above its list. No blank line is needed; a bullet list interrupts a paragraph.
 - Do not put checkboxes inside table cells. The summary tables use the words `open` and `done` in their Status column instead.
 - Each `completion_criteria` entry from the return becomes one checkbox, verbatim.
-- Each `exit_criteria` line from the return becomes one checkbox, verbatim. Do not paraphrase; `/sell-slice` lifts this block into the `/goal` condition and `slice-tester` derives its plan from it.
+- Each `exit_criteria` line from the return becomes one checkbox, verbatim. A `(date-gated, on or after YYYY-MM-DD)` marker stays on its line exactly as written.
+- Each slice block carries a `**Status:** Not Started` line under its `**Type:**` line. The delivery loop later sets it to `In Progress`, `Completed`, or `waiting until <YYYY-MM-DD>: <criterion>` for a slice held only by a date-gated criterion (see `../references/templates.md` "Calendar-gated criteria"). Do not paraphrase; `/sell-slice` lifts this block into the `/goal` condition and `slice-tester` derives its plan from it.
 - Every slice block always ends its Completion criteria with these universal checks (add them even if the return omits them, and skip any the return already lists):
   1. `- [ ] tests_passing`
   2. `- [ ] slice-tester pass (behavioral; per-affordance verdict + evidence)`
-  3. `- [ ] slice-verifier pass (lint + typecheck + build + unit/integration + e2e-by-tag + design-system grep + CI-integrity + manifest backstop)`
+  3. `- [ ] slice-verifier pass (gate tier 3, once at slice end: lint + typecheck + build + unit/integration + e2e-by-tag + design-system grep + CI-integrity + manifest backstop)`
   4. `- [ ] HITL items resolved` (only if `hitl_required: true` for the slice)
 
 ## Hard rules
@@ -110,7 +112,7 @@ Exit criteria:
 - **One file only**: `docs/plans/00_master_checklist.md`
 - **Headings are the contract the hooks parse.** `## Prep` must be the first word of the Prep heading. Pie headings are `## Pie N: <name>` and slice headings are `### Slice N.M: <name>`; `hooks/lib/checklist.sh` keys on `## Pie <digits>` and `### Slice <digits>.<digits>`, so keep the number immediately after the word.
 - **Order is pie, then slice**, never the `stage` integer.
-- **No invented criteria**: only the return envelopes plus the universal checks.
+- **No invented criteria**: only the return envelopes plus the universal checks. The universal checks follow the gate tiers (`../references/templates.md` "Gate tiers"): the full local suite is tier 3, once per slice; never add a per-task full-ladder row or a CI-only (tier 4) row to a slice.
 - **No narrative.** The checklist is a status tracker. Decisions, corrections, and delivery notes belong in the slice plan files or a separate journal, not above the `## Prep` gate; every line above the gate is loaded into context by every `/sell-slice` and `/sell-pie` run.
 - **No platform-specific references**: write "project rules file", not "cursor rules" or "claude rules".
 - **No em dashes or en dashes** anywhere in the file. Use a colon, comma, or parentheses.

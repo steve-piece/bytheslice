@@ -40,7 +40,7 @@ The two-level decomposition routes structured artifacts between singular-goal su
 
 ## Inputs / Preconditions
 
-> **Hook enforcement.** Skill preconditions (no existing checklist in fresh mode; git tree state; the `--repie` opt-in) are enforced by plugin hooks in `hooks/`. `stage-plan-guard.sh` is a **WARN** in v5 (it no longer blocks). The dual-read parser in `hooks/lib/checklist.sh` recognizes both `## Stage N` and `## Pie N` / `### Slice N.M`. The hook output replaces the precondition prose that used to be repeated here.
+> **Inline preconditions.** This skill checks its own preconditions inline at the start, via tools (no existing checklist in fresh mode; git tree state; the `--repie` opt-in). If one fails, raise the problem to the operator as a question with a recommended next step, never a refusal. No ByTheSlice hook blocks a prompt. `stage-plan-guard.sh` is a **WARN** in v5 (it no longer blocks). The dual-read parser in `hooks/lib/checklist.sh` recognizes both `## Stage N` and `## Pie N` / `### Slice N.M`.
 
 **Input:** a finalized PRD file (output of `/create-menu` or equivalent). Not specs, briefs, questionnaires, or API docs — those feed `/create-menu`.
 
@@ -264,10 +264,11 @@ CLAUDE.md or AGENTS.md (per Q12)
 - **Two levels:** Pies are coherent 3–8-slice chapters with low cross-coupling (the unit of autonomy, PR, worktree, HITL); Slices are vertical deliverables (UI + route + data + tests for one user-facing thing).
 - **Hard cap per slice:** 6 tasks, ~15 files, completable in one Claude session.
 - **Plans carry contracts, not implementations.** Code fences hold commands, schema DDL, exported signatures and type shapes, and byte-exact config; behaviors, states, edge cases, and test cases are prose. Bodies are the builder's job, written against the real tree. See `agents/phased-plan-writer.md` "Code budget".
-- **One PR per Pie** (not per slice): per-slice work is commit + push to the pie branch; the PR opens at the pie boundary via `/box-it-up`.
+- **One PR per Pie** (not per slice) in the default `pie-pr` delivery mode: per-slice work is commit + push to the pie branch; the PR opens at the pie boundary via `/box-it-up`. Opt-in merge-per-slice delivery (`delivery.mode`, or an explicit autonomous-delivery run instruction) opens and merges one PR per slice instead.
 - **`review:` is a pie property:** `boundary` (default, autonomous) vs `continuous` (forces `/sell-slice` mode). Sensitive pies (Payments, Auth, real-data migrations) are `continuous`.
 - **No forward references:** a slice may only reference packages, tables, or components built in prior slices.
 - **Exit criteria are testable AND transcript-verifiable:** every line in a slice's `**Exit criteria:**` block must be verifiable by reading the conversation alone — a command's exit code, a subagent's `overall: pass`, a captured screenshot, a file path Claude has read. This block is lifted verbatim into the `/goal` condition by `/sell-slice` Phase 2.5 and is what `slice-tester` derives its bespoke plan from. See [`references/templates.md`](references/templates.md) → "Exit-criteria contract (consumed by `/goal`)".
+- **Exit criteria follow the gate tiers:** tier 1 while coding, tier 2 (the slice's own tests, build, DB tests when the schema changes) before each commit, tier 3 (`slice-verifier`, the full local suite) once at slice end, tier 4 (CI's full suite) at the PR. Plans never demand the full ladder per task or a CI-only check per slice. See [`references/templates.md`](references/templates.md) → "Gate tiers".
 - **Design HITL is front-loaded** to the design-system slice (Pie 1) so feature pies compose pre-approved components and rarely stop for design.
 - **Auth slices always get the dev-mode auth helpers task** — one combined task bundling localhost auto-login (opt-in via `DEV_AUTH_BYPASS`) + seeded-user switcher banner; both sub-bullets ship together (see `references/canned-stages/auth-dev-mode-switcher-task.md`).
 - **Never silently rewrite plan files.** Flat v4 checklists stay valid; conversion to pies happens only via explicit `--repie`.

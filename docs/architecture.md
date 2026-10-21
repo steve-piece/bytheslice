@@ -15,6 +15,7 @@ The under-the-hood reference for ByTheSlice. The [README](../README.md) covers t
 - [Delivery & git - selling vs boxing](#delivery--git-selling-vs-boxing)
 - [Design-system delivery](#design-system-delivery)
 - [Orchestration principles](#orchestration-principles)
+- [Evidence, not proof ledgers](#evidence-not-proof-ledgers)
 - [Hook enforcement](#hook-enforcement)
 - [Live kitchen](#live-kitchen)
 - [Legacy & migration](#legacy--migration)
@@ -26,7 +27,7 @@ The under-the-hood reference for ByTheSlice. The [README](../README.md) covers t
 
 `cook-pizzas` produces `docs/plans/00_master_checklist.md` as a **two-level Pie / Slice roadmap**.
 
-- A **Pie** (`## Pie N`, 3-8 slices, carrying a `review: boundary|continuous` property) is the unit of `/loop` autonomy, HITL checkpoint, PR, context-refresh, and worktree.
+- A **Pie** (`## Pie N`, 3-8 slices, carrying a `review: boundary|continuous` property) is the unit of `/loop` autonomy, HITL checkpoint, PR, context-refresh, and worktree (in the default `pie-pr` delivery mode; opt-in merge-per-slice delivery makes the slice the unit of PR and worktree).
 - A **Slice** (`### Slice N.M`) is one vertical deliverable, hard-capped at **6 tasks / ~10-15 files** - completable in one fresh agent session. Override `stages.maxTasksPerStage` in `bytheslice.config.json` if you truly need a bigger slice.
 - **Pie 1 is Foundations** (slices 1.1-1.4: design system, CI/CD, env, DB schema), tracked via the `## Prep` gate. Feature pies are Pie 2+.
 
@@ -73,7 +74,7 @@ Override auto-detection with explicit `--standalone` / `--sequential` flags. Per
 | Agent | Type | What it does |
 |---|---|---|
 | `slice-tester` | behavioral | Rendered design-system match + per-affordance exercise + seed-and-cleanup data-flow round-trips (with the bidirectional rule). |
-| `slice-verifier` | static | Lint / type / build / unit / e2e-by-tag (threshold-gated per `verification.e2e`) + design-system static grep + CI-integrity + the build-manifest under-declaration backstop. Each gate runs **exactly once**. |
+| `slice-verifier` | static | Lint / type / build / unit / e2e-by-tag (threshold-gated per `verification.e2e`) + design-system static grep + CI-integrity + the build-manifest under-declaration backstop. The full local suite runs **once per slice**; after a fix only the touched gates re-run. |
 
 The three v4 verifiers (`basic-checks-runner`, `aggregating-test-reviewer`, `ci-cd-guardrails`) and `frontend/visual-reviewer` are deprecated shims folded into these two.
 
@@ -89,15 +90,42 @@ The three v4 verifiers (`basic-checks-runner`, `aggregating-test-reviewer`, `ci-
 
 `slice-verifier`'s static gates run on every type; foundation slices that produce no behavior skip the tester.
 
+**Gates run in four tiers, not as a full ladder per slice step.**
+
+| Tier | When | What runs | Who |
+|---|---|---|---|
+| 1 | While coding | Lint on changed files, whole-project incremental typecheck (tsc cannot scope to files), colocated unit tests of changed files | builder |
+| 2 | Before each commit | The slice's own tests named in its stage file, the build, and DB tests only when the diff touches the schema or migrations | builder; the `pre-push` hook runs this tier too |
+| 3 | Once at slice end, before any PR | The full local suite, one time | `slice-verifier` |
+| 4 | At the PR | The full suite: regression, audit, schema drift, design system | CI |
+
+Stage files and canned stages state their exit criteria in these tiers and never demand the full ladder per task or per commit. `--no-verify` is never the answer to a slow or red `pre-push` hook.
+
+**Re-verification re-runs only what a fix could change.** After any fix (1st, 2nd or 3rd), `slice-verifier` gets its prior verdict plus the fix's `files_changed`, carries every green check forward, re-runs only the gates that patch could change (its choice, from the fix diff), and reports them in `rerun: [{gate, reason}]`. The full suite never re-runs after a fix.
+
+**Fix cap: 3 local fix loops and 3 CI fix rounds, separate counters.** A loop is one fix dispatch plus its re-verify: `fix-attempter`; then `debug-instrumenter` plus `fix-attempter`; then `fix-attempter` with the full evidence. CI rounds (`ci-fix-attempter` in `/box-it-up`) count per PR. Run instructions such as "continue until verified", "never stop" or "fully automated" never raise either cap; only the operator's explicit reply at the HITL can grant more.
+
+**Batched approvals.** Every approval a slice needs (build plan, migrations, live data loads, size exceptions, terms, credentials) goes out as one batch of short questions, one decision each with a recommended answer, at slice start or the first point all are known. The Library Preview gate is the one mid-slice stop outside the batch, because it needs built output.
+
+**Calendar-gated criteria.** An Exit criterion marked `(date-gated, on or after YYYY-MM-DD)` that is the only unmet line sets the slice's Status to `waiting until <YYYY-MM-DD>: <criterion>`. The slice stays open, the loop moves to the next independent slice (or stops), and the next run on or after the date closes it. Nothing keeps a loop alive to wait, and a pie with a waiting slice is not complete for the boundary.
+
+**Soft time budget.** `delivery.sliceBudgetHours` (default 3, `0` = off) is a wall-clock budget per slice that counts CI and excludes operator waits; the start time lives in the run log. When it is hit, the conductor lets the current agent finish, then checks in once with a `prd_ambiguity` HITL (extend or stop).
+
 ---
 
 ## Delivery & git: selling vs boxing
 
 **Selling and boxing are decoupled, at the pie boundary.** Each slice commits + pushes to the pie branch with **no PR and no CI**. `/box-it-up` opens the single `Pie N` PR, runs CI once, and merges - preserving every per-slice commit - only at the pie boundary.
 
-The split exists so you can run a manual visual UAT or local code review between slices, and so CI fires once per pie instead of once per slice. `/box-it-up` is also safe for hand-rolled feature branches that never went through ByTheSlice delivery.
+The split exists so you can run a manual visual UAT or local code review between slices, and so CI fires once per pie instead of once per slice (default `pie-pr` mode). `/box-it-up` is also safe for hand-rolled feature branches that never went through ByTheSlice delivery.
 
-**One Pie per PR.** Default branch naming: `pie-<n>-<scope>`, one worktree per pie (cut from freshly-fetched `origin/main`). Slices land as `feat(pie-N): N.M - <name>` commits on that branch (no per-slice PR); the single PR opens at the pie boundary. The full worktree lifecycle - setup, isolation, the runtime-isolation gap, merge, cleanup - is standardized in [`git-worktree-standard.md`](../skills/cook-pizzas/references/git-worktree-standard.md).
+**One Pie per PR.** Default branch naming: `pie-<n>-<scope>`, one worktree per pie (cut from freshly-fetched `origin/main`). Each `### Task K` lands as its own `feat(pie-N): N.M task K <name>` commit, pushed at the task boundary, and each slice closes with one `feat(pie-N): N.M <name>` commit on that branch (no per-slice PR); the single PR opens at the pie boundary. The tree is clean at every task boundary, and a slice never ends with an untracked or modified file it created.
+
+All of the above is the default `pie-pr` delivery mode. **Merge-per-slice delivery** is opt-in: an explicit autonomous-delivery run instruction, or `delivery.mode: "merge-per-slice"` in `bytheslice.config.json` (the run instruction wins for that run; `review: continuous` pies always stay on the default). Each slice then gets branch `pie-<n>-s<n>.<m>-<scope>` cut from fresh `origin/main` into its own worktree, its own PR `Slice N.M: <name>`, CI per slice with up to 3 fix rounds (still red halts the loop, never skips), and a merge commit on green with no per-slice approval. Cleanup runs from the primary checkout after every merge, and the next slice is cut from the fresh `main`. The operator gets one notice per finished pie. There is never an integration branch.
+
+**Only the conductor makes git writes, `git add` included.** The builder, fixers, `library-entry-writer` and `ci-fix-attempter` return `files_changed`; the conductor stages exactly those paths (never `git add -A`), commits and pushes, on the registered and fallback paths alike. Pie cleanup after a merge runs from the primary checkout: `pull --ff-only`, `worktree remove`, `branch -d`, remote delete, `worktree prune`, with the checklist flip already committed on the branch before the PR merged.
+
+The full worktree lifecycle - setup, isolation, the runtime-isolation gap, merge, cleanup - is standardized in [`git-worktree-standard.md`](../skills/cook-pizzas/references/git-worktree-standard.md).
 
 ---
 
@@ -107,7 +135,7 @@ The split exists so you can run a manual visual UAT or local code review between
 
 Every frontend slice through `/sell-slice` passes through Phase 4.5's **Library Preview Gate** - non-skippable for new components AND for consumer-side edits that change a user-visible surface of an existing library component. The gate runs a Phase 0 extend-vs-create check, surfaces a self-critique block + clickable preview URLs, then HARD STOPS for explicit user approval before any production-route import lands. Pure internal refactors with no rendered-output delta are exempt. The gate is also enforced deterministically: Phase 4.5 arms `.claude/.bytheslice-state/library-approvals.json` via `hooks/record-library-approval.sh`, the `hooks/library-gate-guard.sh` PreToolUse hook warns on any production-route Write/Edit while the window is open, and the same script's `approve` subcommand records the operator's verdict (component list, session id, slice, timestamp) to silence it.
 
-**Visual review tooling priority** *(hardcoded, no discovery):* Claude in Chrome → Chrome DevTools MCP → Playwright → Vizzly. Screenshot viewports come from `verification.viewports` (default `[375, 1280]`).
+**Visual review tooling priority** *(hardcoded, no discovery):* Claude in Chrome → Chrome DevTools MCP → Playwright → Vizzly. Viewports come from `verification.viewports` (default `[375, 768, 1280]`); screenshots are taken only at 768 and 1280, one of each per new UI surface.
 
 ---
 
@@ -121,11 +149,27 @@ Every frontend slice through `/sell-slice` passes through Phase 4.5's **Library 
 
 ---
 
+## Evidence, not proof ledgers
+
+**No proof ledgers.** No agent and no conductor writes artifact hashes, source freezes, fingerprint files, leases, or per-step proof files. The evidence a slice may leave is exactly:
+
+- the verdict each agent returns (the Appendix A/B/C structured returns);
+- Playwright traces, for failing checks only;
+- one 1280px (desktop) and one 768px screenshot per new UI surface;
+- a checklist note of 3 lines or fewer per slice in `docs/plans/00_master_checklist.md`;
+- one short run log, `.claude/.bytheslice-state/run-log.md` (gitignored): slice start lines, HITL ask and answer times, one self-check line per dispatched agent, and slice PR and merge lines in merge-per-slice mode.
+
+Existing operational state files stay, because they drive behavior rather than prove it: `.claude/.bytheslice-state/library-approvals.json`, `kitchen/activity.jsonl`, `kitchen/merged-pie.json`, `env-check-passed`, `last-precheck.json`, `compact-snapshot.json`, and the seed and cleanup pairs under `tests/seeds/<slice>/`. The closing-narrative paragraph in commit and PR bodies also stays; the 3-line limit applies to the checklist note only.
+
+**The one sanctioned exception: the Pass mod ledger.** The Pass mod's `.bytheslice/ledger.jsonl` ([`docs/pass-mod-spec.md`](pass-mod-spec.md)) is the single sanctioned completion record that tracks project progression over time. It is not a per-step proof file, and this rule does not ban it.
+
+---
+
 ## Hook enforcement
 
-Preconditions and gates that used to live in prose are enforced by plugin hooks in [`hooks/`](../hooks/):
+Skill preconditions are checked inline by each skill at the start and raised as a question to the operator, never a refusal; no ByTheSlice hook blocks a prompt. Tool-level gates live in plugin hooks in [`hooks/`](../hooks/):
 
-- `/sell-slice` blocks without a master checklist.
+- [`kitchen-log.sh`](../hooks/kitchen-log.sh) records the session skill marker (`last-precheck.json`) the session-scoped guards read.
 - `git commit` on `main` is blocked at the tool layer.
 - Editing a stage plan mid-delivery draws a WARN.
 - A `PreCompact` snapshot lets a post-compaction session re-orient.
@@ -202,5 +246,6 @@ Session and active-work metadata drive dawn, open service and after-hours lighti
 - `/sell-pie` self-paces over the pie's ≤8 slices in one context.
 - Workflow-backed skills fall back to in-context dispatch with **orchestrator-side manual schema validation**.
 - `/goal` falls back to the manual goal-tracking pattern.
+- An agent dispatched without plugin-agent registration carries its frontmatter as a header: model tier and effort (mapped to the host's model choice where it has one), the normalized tool allowlist, the verbatim read-only line for every agent without write tools (`slice-tester`'s probes and seeds excepted), and the no-git-writes line. The conductor logs one self-check line per dispatched agent in `.claude/.bytheslice-state/run-log.md`.
 
 Full protocols: [`loop-workflow-fallback-pattern.md`](../skills/cook-pizzas/references/loop-workflow-fallback-pattern.md) and [`goal-fallback-pattern.md`](../skills/cook-pizzas/references/goal-fallback-pattern.md).

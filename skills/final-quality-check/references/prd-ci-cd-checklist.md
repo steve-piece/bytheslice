@@ -8,7 +8,7 @@ These rules govern how master-checklist updates, CI gates, and PR shape interact
 
 - [ ] CI must gate merges on: lint, typecheck, unit/integration tests, `@feature` E2E, `@regression-core` E2E, `@visual` E2E, design-system-compliance, and (if applicable) db-schema-drift.
 
-- [ ] Do not mark checklist items complete until all required local and CI gates are green for that slice.
+- [ ] Do not mark checklist items complete until that slice's local gates are green: tier 2 (its own tests, build, DB tests when the schema or migrations changed) at every commit, and tier 3 (`slice-verifier`, the full local suite, once at slice end). CI (tier 4) gates the PR: the pie PR by default, the slice PR in merge-per-slice mode.
 
 - [ ] Expand CI/E2E coverage when shared routes, components, schemas, or APIs are modified; include both changed-flow and regression-core tests.
 
@@ -16,7 +16,7 @@ These rules govern how master-checklist updates, CI gates, and PR shape interact
 
 - [ ] Upload failure artifacts (trace/video/report/logs) for all E2E failures and treat missing artifacts as a failed run.
 
-- [ ] Any CI/CD extension must keep required checks aligned with local pre-push gates and documented in repository workflow files.
+- [ ] Any CI/CD extension must keep CI as the full suite and the local `pre-push` hook as the slice tier (lint, typecheck, unit tests, build, DB tests when the schema or migrations change), with every required check documented in repository workflow files. Never bypass the hook with `--no-verify`; a red hook is fixed, not skipped.
 
 - [ ] Keep one scoped checklist slice per PR whenever possible; avoid bundling unrelated stage tasks in one delivery.
 

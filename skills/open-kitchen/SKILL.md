@@ -1,10 +1,10 @@
-<!-- skills/open-kitchen/SKILL.md -->
-<!-- Open the approved local 3D kitchen in the native Browser pane after verifying its project-specific server. -->
 ---
 name: open-kitchen
 description: Open the project's approved 3D kitchen in the native Browser pane with a verified localhost state connection.
 user-invocable: true
 ---
+<!-- skills/open-kitchen/SKILL.md -->
+<!-- Open the approved local 3D kitchen in the native Browser pane after verifying its project-specific server. -->
 
 # Open Kitchen
 

@@ -124,6 +124,8 @@ Every stage must include `tests_passing`. Common additional criteria by type:
 - `frontend` / `full-stack`: `tests_passing`, `route_renders_without_error`, `visual_review_passed`
 - `backend`: `tests_passing`, `api_contract_verified`
 
+Slugs and Exit criteria follow the gate tiers (`references/templates.md` "Gate tiers"): `tests_passing` means the slice's own tests (tier 2) and the one `slice-verifier` run (tier 3). No slug or criterion demands the full ladder per task, or a CI-only check (tier 4) per slice; CI gates the PR.
+
 ## Body: Exit criteria contract
 
 Separate from the frontmatter slugs, every stage/slice file's body MUST end with an `**Exit criteria:**` bullet block. This block is the single source of truth that `/bytheslice:sell-slice` Phase 2.5 lifts verbatim into the session-scoped `/goal` condition, and that the `slice-tester` derives its bespoke test plan from (alongside the build manifest). In a v5 nested checklist, **each slice carries its own Exit-criteria block**.
@@ -133,6 +135,8 @@ Every line MUST be:
 1. **Transcript-verifiable** — the `/goal` evaluator does not run commands or read files independently; it only judges what Claude has already surfaced in the conversation. Write criteria that Claude's own output can demonstrate.
 2. **Binary** — either met or not met.
 3. **Specific to this slice** — name the routes, files, suites, or subagent verdicts that prove intent.
+
+**Date-gated lines.** A criterion that can only be checked after a calendar date is allowed when marked as such: `(date-gated, on or after YYYY-MM-DD) <criterion>`. It is the one exception to "verifiable now". While its date is ahead, the slice's checklist `**Status:**` reads `waiting until <YYYY-MM-DD>: <criterion>` and the slice stays open; see `references/templates.md` → "Calendar-gated criteria".
 
 See `references/templates.md` → "Exit-criteria contract (consumed by `/goal`)" for full guidance and good/bad examples. The `phased-plan-writer` agent is the enforcement point.
 

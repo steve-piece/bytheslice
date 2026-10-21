@@ -57,12 +57,13 @@ This is **Pie 1 — Foundations**: its four slices (1.1–1.4) are the run-once 
 
 ### Slice N.1: [Slice Name]
 **Type:** [type] | **Depends on:** Slices [list]
+**Status:** Not Started    <!-- In Progress | Completed | waiting until <YYYY-MM-DD>: <criterion> -->
 
 Completion criteria:
 - [ ] [criterion from frontmatter]
 - [ ] tests_passing
 - [ ] slice-tester pass (behavioral; per-affordance verdict + evidence)
-- [ ] slice-verifier pass (lint + typecheck + build + unit/integration + e2e-by-tag + design-system grep + CI-integrity + manifest backstop)
+- [ ] slice-verifier pass (gate tier 3, once at slice end: lint + typecheck + build + unit/integration + e2e-by-tag + design-system grep + CI-integrity + manifest backstop)
 - [ ] All unit tests added and passing
 - [ ] HITL items resolved (only if hitl_required: true)
 
@@ -170,13 +171,15 @@ export function listThings(input: { limit?: number }): Promise<Thing[]>;
 **Step 2: [Step description]**
 
 \`\`\`bash
-pnpm test
+# Gate tier 2, before the task commit: this task's own tests, the build, and DB tests only if the schema or migrations changed.
+pnpm test path/to/new-file.test.ts && pnpm build
 \`\`\`
 
 **Commit:**
 \`\`\`bash
-# v5 per-slice commit convention (one commit per slice, pushed to the pie branch — no PR until the pie boundary):
-git commit -m "feat(pie-N): N.M — [slice name]"
+# v5 task commit convention: commit + push at every task boundary (swap feat for fix/chore/docs to match the task).
+# The slice's last commit is feat(pie-N): N.M [slice name]. One slice per PR boundary, task commits inside.
+git commit -m "feat(pie-N): N.M task 1 [task title]"
 \`\`\`
 
 ---
@@ -188,20 +191,34 @@ git commit -m "feat(pie-N): N.M — [slice name]"
 ---
 
 **Exit criteria:**
-- `pnpm test` passes (or the project's resolved test command exits 0)
+- The slice's own tests exit 0: `pnpm test <the test files this plan names>` (gate tier 2)
+- `slice-verifier` returns `overall: pass` for this slice (gate tier 3, the one full local run)
 - Route `/path` renders without errors (capture screenshot proof in the transcript)
-- [Other testable, binary condition — see the contract below]
+- [Other testable, binary condition, see the contract below]
 ```
 
 ### Contract, not implementation
 
 Plan files carry the interface between slices and leave the implementation to the builder. See `agents/phased-plan-writer.md` "Code budget" for the full rule. In short: code fences hold commands, schema DDL, exported signatures and type shapes (about 15 lines each), and byte-exact config fragments. They never hold component, route, action, hook, utility, or test bodies; those are prose (behavior, states, edge cases, named test cases). A slice plan should land under roughly 400 lines with fences well under a fifth of them.
 
+### Gate tiers (what an Exit criterion may demand)
+
+Generated plans follow the delivery loop's four gate tiers (`skills/sell-slice/SKILL.md` "Gate tiers"). A slice never demands the full gate ladder per task or per commit.
+
+| Tier | When | What runs |
+|---|---|---|
+| 1 | While coding (builder) | Lint on changed files, the whole-project incremental typecheck, the colocated unit tests of changed files |
+| 2 | Before each commit (every task boundary) | The slice's own tests named in this plan, the build, DB tests only when the diff touches the schema or migrations |
+| 3 | Once at slice end, before any PR | `slice-verifier`: the full local suite, one time |
+| 4 | At the PR | CI: the full suite (`@regression-core`, `@visual`, audit, schema drift, design-system-compliance) |
+
+So a task's **Commit** step runs tier 2 only, and the Exit criteria name the slice's own tests (tier 2) and the `slice-verifier` verdict (tier 3). They never name a CI-only check (tier 4): that runs at the PR, which in the default delivery mode is the pie's, not the slice's.
+
 ### Exit-criteria contract (consumed by `/goal`)
 
 The **Exit criteria** block is the single source of truth for "what it means for this slice to be done." `/bytheslice:sell-slice` Phase 2.5 lifts this block verbatim into the session-scoped `/goal` condition, where a fast model (default Haiku) checks it between turns.
 
-Every line MUST be:
+Every line MUST be (a line marked `(date-gated, on or after YYYY-MM-DD)` is the one exception to "now"; see "Calendar-gated criteria" below):
 
 1. **Transcript-verifiable from the conversation.** The evaluator does not run commands or read files independently — only what Claude has already surfaced in the transcript counts as evidence. Write criteria that Claude's own output can demonstrate (a command's exit code that lands in the transcript, a subagent's structured `verdict: pass`, a file path Claude has read).
 2. **Binary.** Each criterion is either met or not met. No partial credit, no "looks good."
@@ -211,8 +228,7 @@ Good examples (transcript-verifiable, binary, specific):
 
 - ``pnpm test --filter @repo/auth`` exits 0 with all suites green
 - `tsc --noEmit` exits 0 with no errors
-- `gh pr checks <pr-number> --watch` returns exit 0 on the merged head SHA
-- `slice-verifier` agent returns `overall: pass` (lint/typecheck/build/unit-integration/e2e-by-tag/design-system/ci-integrity all green, manifest backstop clean) for this slice
+- `slice-verifier` agent returns `overall: pass` (gate tier 3: lint/typecheck/build/unit-integration/e2e-by-tag/design-system/ci-integrity all green, manifest backstop clean) for this slice
 - `slice-tester` agent returns `overall: pass` with a per-affordance verdict for every declared affordance in the build manifest
 - `quality-reviewer` and `spec-reviewer` agents both return `verdict: pass` for every in-scope task
 - `library-entry-writer` reports `production_imports_added: 0` until user approval; then user explicitly approved each entry at the Phase 4.5 gate
@@ -226,6 +242,15 @@ Bad examples (vague, non-transcript-verifiable, generic):
 - "Code quality is high" → subjective; not binary
 - "Ship-ready" → meta; not a criterion
 - "Tests pass" without naming the test command → too generic
+- "`gh pr checks` green", "`@regression-core` passes", "`db-schema-drift` CI job green" → CI-only (gate tier 4); CI runs at the PR, not per slice
+
+### Calendar-gated criteria (the one allowed exception to "verifiable now")
+
+Some criteria can only be checked after a date (a 7-day retention number, a scheduled job's first real run, a vendor's go-live). Write such a line **marked as date-gated**, with the earliest date it can be checked:
+
+- `(date-gated, on or after 2026-11-03) the nightly export job's first scheduled run wrote rows to exports.daily`
+
+Rules: use it only when no earlier check exists; every other line stays verifiable now. When the rest of the slice is green but a date-gated line's date is still ahead, the slice is not done: its `**Status:**` line in the master checklist reads `waiting until <YYYY-MM-DD>: <criterion>` and its row stays `[ ]`. The delivery loop skips it and moves on to the next slice that does not `depends_on` it, or stops if there is none; nothing keeps a loop alive to wait. The next `/sell-pie` run on or after the date checks the criterion and closes the slice. A pie with a waiting slice is not complete, so its boundary PR cannot open. In merge-per-slice mode the slice's code is merged; only the slice stays open.
 
 ### Library Preview Gate criterion (UI-touching slices only)
 

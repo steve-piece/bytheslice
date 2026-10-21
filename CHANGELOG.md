@@ -13,6 +13,43 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [5.3.0] - 2026-10-20
+
+**Ship each slice without babysitting it.** Gates run in tiers instead of the full ladder at every step, fixes are capped hard, approvals arrive as one batch, and an opt-in mode merges every slice to `main` on green CI.
+
+### Added
+
+- **Merge-per-slice delivery (opt-in).** An explicit autonomous-delivery run instruction, or `delivery.mode: "merge-per-slice"`, gives each slice its own branch `pie-N-sN.M-<scope>` cut from fresh `origin/main` into its own worktree, its own PR `Slice N.M: <name>`, up to 3 CI fix rounds, and a merge commit on green with no per-slice approval. Cleanup runs from the primary checkout after every merge; the next slice starts from the fresh `main`; the operator gets one notice per pie; the kitchen merge record is written once, after the last slice. The run instruction wins for that run, `review: continuous` pies always keep one PR per pie, and a repo that disallows merge commits halts and asks. `/sell-slice` standalone supports the same closeout (`/box-it-up --merge-slice`, run internally).
+- **Tiered gates.** Tier 1 while coding (lint on changed files, incremental typecheck, colocated unit tests), tier 2 before each commit (the slice's own tests, build, DB tests only when the schema or migrations changed), tier 3 once at slice end (`slice-verifier` runs the full local suite one time), tier 4 in CI at the PR. Stage templates, canned stages, the plan writer and the synthesizer write exit criteria in these tiers. The husky `pre-push` template runs tier 2, `husky-installer` offers to swap an old full chain, and `--no-verify` is named only as a prohibition.
+- **Targeted re-verification.** After any fix, `slice-verifier` carries green checks forward, re-runs only the gates the fix could change (chosen from the fix's `files_changed`), and reports them in a new `rerun: [{gate, reason}]` field. The full suite never re-runs after a fix.
+- **Batched approvals.** Every approval a slice needs (build plan, migrations, live loads, size exceptions, terms, credentials) goes out as one batch of short questions with recommended answers. The Library Preview gate stays its own stop.
+- **Calendar-gated exit criteria.** A criterion marked `(date-gated, on or after YYYY-MM-DD)` leaves the slice `waiting until <YYYY-MM-DD>: <criterion>`; the loop skips it and its dependents, nothing waits in a loop, and the next run on or after the date closes it. A pie with a waiting slice is not complete for the boundary.
+- **Soft slice time budget.** `delivery.sliceBudgetHours` (default 3, `0` = off) counts wall-clock including CI and excluding operator waits. On a hit the conductor lets the current agent finish, then checks in once (extend or stop).
+- **Fallback agent shape.** On a host without plugin-agent registration, each agent's frontmatter travels as a header: model tier and effort (mapped to the host's model choice), the tool allowlist normalized from any of the four frontmatter forms, the verbatim read-only line for agents without write tools (`slice-tester`'s probes and seeds excepted), and the no-git-writes line. The conductor logs one self-check line per dispatched agent in `.claude/.bytheslice-state/run-log.md`.
+
+### Changed
+
+- **Fix cap is hard:** 3 local fix loops per slice (fix; then debug instrumentation plus fix; then fix with the full evidence) and 3 CI fix rounds per PR, separate counters. Run instructions such as "continue until verified" or "never stop" never raise them; only the operator's explicit reply at the HITL does.
+- **Clean tree at every task boundary.** Each `### Task K` is committed and pushed as `feat(pie-N): N.M task K <name>`; the slice closes with `feat(pie-N): N.M <slice name>` and may not leave an untracked or modified file it created. One slice per PR boundary, task commits inside.
+- **Only the conductor makes git writes, `git add` included,** on the registered and fallback paths. `implementer`, `fix-attempter`, `debug-instrumenter`, `library-entry-writer` and `ci-fix-attempter` return `files_changed`; the conductor stages selectively, commits and pushes.
+- **No proof ledgers.** Artifact hashes, source freezes, fingerprint files, leases and per-step proof files are banned. Allowed evidence: verdicts, Playwright traces for failures, one 768px and one 1280px screenshot per new UI surface, a checklist note of 3 lines or fewer per slice, and one run log. Operational state files and the closing-narrative paragraph stay. The Pass mod ledger (`docs/pass-mod-spec.md`) is the explicit exception and the single sanctioned completion record; its spec gains a status note pointing its agent events at the kitchen activity log.
+- Default `verification.viewports` is now `[375, 768, 1280]`; `slice-tester` exercises every width and screenshots only at 768 and 1280.
+- Every agent dispatch site (`sell-slice`, `sell-pie`, `box-it-up`, `final-quality-check`, `special-order`, `open-the-shop`, `inspect-display`) points its fallback at the new agent-shape section.
+- Release manifests and npm metadata advance together to 5.3.0. CLAUDE.md, README, architecture, agent roster and the `sell-pie` / `box-it-up` / `special-order` command docs describe the new rules.
+
+### Removed
+
+- Removed the blocking UserPromptSubmit precondition hook (precheck-skill.sh); skills check preconditions inline and ask instead of refusing; kitchen-log.sh now writes the session skill marker.
+
+### Fixed
+
+- **`/box-it-up` pie cleanup ordering.** The checklist flip used to land on `main` uncommitted, `git checkout main` ran inside the pie worktree (where `main` cannot be checked out), and `git branch -d` ran before `git worktree remove`. The flip is now committed on the pie branch before the PR merges, and every cleanup step runs from the primary checkout in order: `pull --ff-only`, `worktree remove`, `branch -d`, remote delete, `worktree prune`.
+- **`rules-loader` resolves every config key.** It now returns `verification.*`, `flow.*`, `review.*` and the new `delivery.*` keys (with plugin defaults when unset), as `/sell-slice` already assumed.
+- `/open-kitchen`'s SKILL.md now opens with its YAML frontmatter on line 1 (the file-path comments moved below it), so clients that require frontmatter on the first line no longer reject the skill at parse time.
+- Leftover em dashes in hook scripts replaced.
+
+---
+
 ## [5.2.0] - 2026-10-17
 
 **Watch the kitchen while the project takes shape.** The new local 3D viewer connects project setup, checklist orders and agent activity to the shop scene.

@@ -131,7 +131,7 @@ The existing entry already shows the canonical variant × state matrix from when
 
 ### Step 2c: Self-critique pass
 
-Before staging files and emitting your output contract, look at what you built and **pre-flag what a reviewer would say**. This converts "ask for approval" into "give the reviewer a head start" and prevents avoidable round-trips at the HITL gate.
+Before emitting your output contract, look at what you built and **pre-flag what a reviewer would say**. This converts "ask for approval" into "give the reviewer a head start" and prevents avoidable round-trips at the HITL gate.
 
 For every entry created or modified in this dispatch, list:
 
@@ -147,9 +147,9 @@ Emit the self-critique as a structured field in the output contract (see below) 
 
 Phase 4.6 (`state-illustrator`) is responsible for the production-route surfaces. The library entry you write or update is the **canonical** version of every state, when state-illustrator runs after the HITL approval, it imports the production component and re-uses the variants and states defined here so library and prod stay in sync. You do not import anything from prod yet.
 
-### Step 4: Stage but do not commit
+### Step 4: Return the files, do not stage or commit
 
-`git add` every new or modified file under `<library_root>/` (entry files in `_entries/` plus `_registry/registry.tsx` when a line was appended). Do not commit. The orchestrator commits after the user approves at the HITL gate.
+List every new or modified file under `<library_root>/` (entry files in `_entries/` plus `_registry/registry.tsx` when a line was appended) in `files_changed`. Do not stage or commit. The conductor stages exactly those paths and commits after the library gate resolves.
 
 ## Output Contract
 
@@ -193,6 +193,9 @@ self_critique:
     close_but_not_exact_tokens: [<list with rationale>]
     untested_compositions: [<list, e.g. "inside Sheet", "narrow column">]
     other_concerns: [<list, anything that felt off>]
+files_changed:                       # every path you created or modified; the conductor stages exactly these
+  - path: <workspace-relative>
+    change: created | modified
 total_new_files: <int>
 total_modified_files: <int>
 production_imports_added: 0   # MUST be zero, production import happens after HITL approval
@@ -235,4 +238,4 @@ hitl_context: null | "<what triggered this>"
 - **No production-route file edits.** This agent only writes inside `<library_root>/` (entries + registries).
 - **Never write `.claude/.bytheslice-state/library-approvals.json`.** Arming the library gate and recording the operator's approval belong to the orchestrator, which runs `hooks/record-library-approval.sh` (Phase 4.5) strictly after this agent returns. An approval recorded from inside this agent would mark components approved before the operator has seen them, and the deterministic `library-gate-guard.sh` hook would go silent on production-route writes it should still be warning about.
 - **Never delete existing entries** as part of adding new ones. They're someone else's review surface; if they need to go, that's a separate decision the orchestrator drives (rejection path in Phase 4.5).
-- **Stage but do not commit.**
+- **No git writes.** Never run `git add`, `commit`, `push`, `stash`, `checkout`, `switch`, `branch`, `reset`, `rebase` or `merge`; read-only git (`status`, `diff`, `log`, `show`) is fine. Return every path you touched in `files_changed`; the conductor stages those paths selectively, commits and pushes. This holds whether you were dispatched as a registered agent or your body was passed as a prompt on the fallback path.

@@ -29,7 +29,7 @@ Honor an explicit `--standalone` or `--sequential` flag if passed; otherwise aut
 
 ## Subagent Roster
 
-Each agent is a **registered plugin agent**: dispatch by type `bytheslice:<name>` (Agent tool `subagent_type`, or `Workflow` `agentType`), passing only the task inputs as the prompt. The files under `./agents/` carry the role prompt plus enforced model/effort/tools. Fallback (Cursor, or a host without plugin-agent registration): Read the file and pass its body plus inputs as the prompt.
+Each agent is a **registered plugin agent**: dispatch by type `bytheslice:<name>` (Agent tool `subagent_type`, or `Workflow` `agentType`), passing only the task inputs as the prompt. The files under `./agents/` carry the role prompt plus enforced model/effort/tools. Fallback (Cursor, or a host without plugin-agent registration): Read the file and dispatch it per [`loop-workflow-fallback-pattern.md`](../cook-pizzas/references/loop-workflow-fallback-pattern.md) "Agent shape on the fallback path": its frontmatter goes first as a header (model tier and effort, the normalized tool allowlist, the read-only line for an agent without write tools, the no-git-writes line), then its body, then the inputs; log one self-check line per dispatch in the run log.
 
 | Phase | Agent file | Model | Effort | Mode |
 |-------|-----------|-------|--------|------|
@@ -99,7 +99,7 @@ Each sub-block dispatches its agent, waits for the structured return, and commit
 |---|---|---|
 | A | `e2e-installer` | Playwright installed, scripts in package.json, baseline @feature/@regression-core/@visual specs, `tests/visual/baselines/` |
 | B | `workflow-writer` | `.github/workflows/{ci,e2e,e2e-coverage,design-system-compliance,db-schema-drift}.yml` |
-| C | `husky-installer` | `.husky/pre-push` with the canonical gate chain |
+| C | `husky-installer` | `.husky/pre-push` with the slice-tier gate chain (gate tier 2); offers to swap a legacy full-chain hook |
 | D | (orchestrator direct) | `.github/pull_request_template.md` from the templates file |
 | E | `lint-config-writer` | eslint-plugin-tailwindcss config additions, `.stylelintrc.json`, `.gitignore` updates |
 | F | `a11y-discovery-runner` | Scoped shadscan accessibility findings, written into the stage report as UNVERIFIED LEADS. Writes no project files. Non-blocking. |
@@ -162,7 +162,7 @@ The orchestrator (no subagent dispatch — this is a small, deterministic write 
 
 Dispatch `local-gates-runner` to run lint, typecheck, design-system check, unit/integration, and all three E2E suites. The first run also generates initial visual baselines.
 
-If any gate fails, fix on the same branch before proceeding. The Husky `pre-push` hook will enforce these on push automatically.
+If any gate fails, fix on the same branch before proceeding. This one-time run covers the full local suite; afterwards the Husky `pre-push` hook enforces only the slice tier (gate tier 2: lint, typecheck, unit tests, build, DB tests when the schema or migrations change) on every push, and CI runs the full suite at each PR (tier 4). `--no-verify` is never the answer to a red hook.
 
 ### Phase 5 — PR + CI/CD
 
@@ -222,7 +222,7 @@ Run this checklist at the end of every run. Do **not** consider the scaffold "do
 
 ### 1. Scaffold Artifacts Present
 
-- [ ] `.husky/pre-push` exists and is executable (includes `check:design-system` in gate chain).
+- [ ] `.husky/pre-push` exists, is executable, and runs the slice tier (lint, typecheck, test, build, DB tests only when the schema or migrations change), not the full CI chain. `check:design-system` and the e2e suites run in CI (tier 4).
 - [ ] `.github/pull_request_template.md` exists with E2E attestation, design-system-compliance, and visual-diff checklist items.
 - [ ] `.github/workflows/ci.yml` exists (full job order: typecheck → lint → design-system-compliance → unit tests → integration tests → @feature → @regression-core → @visual → db-schema-drift if applicable → build).
 - [ ] `.github/workflows/design-system-compliance.yml` exists (regex sweep → eslint-plugin-tailwindcss → stylelint).

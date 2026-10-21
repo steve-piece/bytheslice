@@ -51,7 +51,7 @@ The walk itself runs as one sub-agent dispatch — sub-agents have isolated cont
 
 ## Inputs and Preconditions
 
-> Skill-routing preconditions (checklist gate, branch sanity) are pre-enforced by `hooks/precheck-skill.sh` **when hooks are active**. If `BTS_HOOKS_DISABLED=1` or `disableAllHooks` is set, run those checks inline via tools and proceed silently. The browser-MCP availability check below is skill-specific and runs in-skill regardless.
+> This skill checks its own skill-routing preconditions (checklist present, branch sanity) inline at the start, via tools. If one fails, raise the problem to the operator as a question with a recommended next step, never a refusal; a missing master checklist means asking (AskUserQuestion, Accept or Decline) whether to set up ByTheSlice. Never narrate passing checks in chat. No ByTheSlice hook blocks a prompt. The browser-MCP availability check below runs in-skill as well.
 
 - Repo root is a runnable web app (or monorepo of web apps).
 - `package.json` (or `turbo.json` / `pnpm-workspace.yaml` / `nx.json`) declares a `dev` script.
@@ -82,7 +82,7 @@ If no browser MCP is available, the skill stops and surfaces `needs_human: exter
 
 ### Phase 2 — Dispatch the platform-walker subagent
 
-Dispatch `bytheslice:platform-walker` via the Agent tool ([definition](agents/platform-walker.md) carries model/effort/tools, enforced by registration; fallback on hosts without plugin agents: Read the file and pass its body as the prompt). Pass:
+Dispatch `bytheslice:platform-walker` via the Agent tool ([definition](agents/platform-walker.md) carries model/effort/tools, enforced by registration; fallback on hosts without plugin agents: Read the file and dispatch it per [`loop-workflow-fallback-pattern.md`](../cook-pizzas/references/loop-workflow-fallback-pattern.md) "Agent shape on the fallback path": its frontmatter goes first as a header (model tier and effort, the normalized tool allowlist, the read-only line for an agent without write tools, the no-git-writes line), then its body, then the inputs; log one self-check line per dispatch in the run log). Pass:
 
 - The detected framework(s)
 - The list of apps + ports

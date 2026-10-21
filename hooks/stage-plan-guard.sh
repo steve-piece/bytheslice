@@ -2,7 +2,7 @@
 # hooks/stage-plan-guard.sh
 # PreToolUse hook on Write + Edit. WARNs on edits to stage/slice plan files
 # (docs/plans/stage_<n>_*.md) while /sell-slice is the active skill for
-# the current session — plans are static during delivery, but the v5 loop
+# the current session; plans are static during delivery, but the v5 loop
 # (/sell-pie) legitimately churns plan files, so this advises rather than
 # blocks (downgraded from BLOCK in v5, C4).
 #
@@ -38,7 +38,8 @@ case "$FILE_PATH" in
 esac
 
 # Session-id guard: only enforce when the incoming session matches the
-# session that recorded the precheck. Fail open if either is missing.
+# session that kitchen-log.sh recorded in the session skill marker. Fail open
+# if either is missing.
 STATE_DIR=$(bts_state_dir)
 STATE_FILE="$STATE_DIR/last-precheck.json"
 [ ! -f "$STATE_FILE" ] && exit 0
@@ -64,5 +65,5 @@ fi
 # Only /sell-slice locks stage plans.
 [ "$STATE_SKILL" != "sell-slice" ] && exit 0
 
-printf '[bytheslice] editing a stage plan file during /sell-slice — plans are normally static. Prefer /special-order or /cook-pizzas to modify a plan; proceeding anyway.\n'
+printf '[bytheslice] editing a stage plan file during /sell-slice: plans are normally static. Prefer /special-order or /cook-pizzas to modify a plan; proceeding anyway.\n'
 exit 0

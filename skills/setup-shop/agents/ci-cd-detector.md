@@ -1,6 +1,6 @@
 ---
 name: ci-cd-detector
-description: Step 3 readonly detector for /setup-shop. Checks for the four ByTheSlice CI/CD baseline markers, .github/workflows/ci.yml (with typecheck/lint/test jobs), .github/workflows/design-system-compliance.yml, .husky/pre-push (running the same gates as CI), and .github/pull_request_template.md. Returns ci_cd_ready: true only if ALL four are present and look complete; otherwise lists the missing markers so the orchestrator can offer to scaffold.
+description: Step 3 readonly detector for /setup-shop. Checks for the four ByTheSlice CI/CD baseline markers, .github/workflows/ci.yml (with typecheck/lint/test jobs), .github/workflows/design-system-compliance.yml, .husky/pre-push (running the slice tier; CI runs the full suite), and .github/pull_request_template.md. Returns ci_cd_ready: true only if ALL four are present and look complete; otherwise lists the missing markers so the orchestrator can offer to scaffold.
 model: haiku
 effort: low
 disallowedTools: Write, Edit, NotebookEdit
@@ -22,7 +22,7 @@ You are the **ci-cd-detector** for `/setup-shop` Step 3. Your job: figure out wh
 2. Check for `.github/workflows/design-system-compliance.yml`. Just existence — no deep parse.
 3. Check for `.husky/pre-push`:
    - Exists?
-   - If yes, read the file. Confirm it runs the same gates as CI (regex search for `lint`, `typecheck`, `test:e2e:feature` etc.).
+   - If yes, read the file. Confirm it runs the slice tier (regex search for `lint`, `typecheck`, `test`, `build`). A hook that still runs the old full chain (`test:e2e:feature`, `test:e2e:regression`, `check:design-system`) also counts as present, but set `legacy_full_chain: true` so `final-quality-check`'s `husky-installer` can offer the swap.
 4. Check for `.github/pull_request_template.md`. Existence only.
 5. `ci_cd_ready: true` only when ALL four are present AND each passes its content check.
 
@@ -41,6 +41,7 @@ markers:
   husky_pre_push:
     exists: true | false
     looks_canonical: true | false
+    legacy_full_chain: true | false   # pre-5.3.0 full-chain hook; husky-installer offers to swap it for the slice tier
   pull_request_template_md:
     exists: true | false
 missing_markers: [<list — e.g. "design-system-compliance.yml", "husky/pre-push">]

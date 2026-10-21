@@ -2,7 +2,7 @@
 # hooks/compact-snapshot.sh
 # PreCompact hook. Persists a small snapshot of the active ByTheSlice state
 # right before context is compacted, so the next turn can re-orient. Never
-# blocks compaction — always exits 0.
+# blocks compaction; always exits 0.
 #
 # Hook contract: reads JSON from stdin (envelope incl. .session_id).
 # Writes .bytheslice-state/compact-snapshot.json. Always exit 0.
@@ -22,7 +22,7 @@ SESSION_ID=$(bts_session_id "$INPUT")
 STATE_DIR=$(bts_state_dir)
 STATE_FILE="$STATE_DIR/last-precheck.json"
 
-# Skill from prior precheck state (empty if absent).
+# Skill from the session skill marker (empty if absent).
 SKILL=""
 if [ -f "$STATE_FILE" ]; then
   if command -v jq >/dev/null 2>&1; then
