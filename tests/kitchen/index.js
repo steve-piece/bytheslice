@@ -9,5 +9,6 @@ require('./kitchen-build-out.test.js');
 require('./kitchen-phase.test.js');
 require('./kitchen-order-line.test.js');
 require('./kitchen-progress.test.js');
+require('./kitchen-ledger-progress.test.js');
 require('./kitchen-words.test.js');
 require('./kitchen-installer.test.js');

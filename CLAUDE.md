@@ -15,10 +15,11 @@ Rules every delivery run follows (details in [docs/architecture.md](docs/archite
 - **Merge-per-slice mode** (opt-in, see above): one branch, worktree and PR per slice, merged with a merge commit on green CI.
 - **Fallback agent shape.** On a host without plugin-agent registration, each agent's frontmatter travels as a header (model tier, effort, normalized tool allowlist, the read-only line for agents without write tools, no git writes), and the conductor logs one self-check line per dispatch in `.claude/.bytheslice-state/run-log.md`.
 - **No proof ledgers.** No hashes, fingerprints, leases or per-step proof files; the Pass mod ledger ([docs/pass-mod-spec.md](docs/pass-mod-spec.md)) is the one sanctioned completion record.
+- **The Pass.** The plugin's Claude Code mod (`mod/`, Claude Code 2.1.299+) draws a live pane and band, keeps the ledger at `.bytheslice/ledger.jsonl`, gives the model `bts_status`, `bts_note`, `bts_hitl`, `bts_pr_body` and `bts_wake`, and warns on rule slips (a checkbox without a verdict, builder context in a tester prompt, the fix cap, a commit on `main`); nothing it does blocks, and without it everything still works.
 
 Source of truth for in-flight work: `docs/plans/00_master_checklist.md` (gitignored, generated per project), nested as `## Pie N` / `### Slice N.M` with the `## Prep` gate acting as Pie 1 (Foundations). Per-slice plans live alongside it as `docs/plans/stage_<n>_*.md` (filenames keep the `stage_` prefix for dual-read back-compat).
 
-Each skill checks its own preconditions (checklist exists, Prep section complete, git tree state, branch sanity) inline at the start and raises a problem as a question to the operator, never a refusal. No ByTheSlice hook blocks a prompt; the hooks in `hooks/` record session state, log kitchen activity, and guard tool calls such as `git commit` on `main`.
+Each skill checks its own preconditions (checklist exists, Prep section complete, git tree state, branch sanity) inline at the start and raises a problem as a question to the operator, never a refusal. No ByTheSlice hook blocks a prompt or a tool call; the hooks in `hooks/` log kitchen activity, inject the checklist summary at session start, and warn on a `git commit` on `main`.
 
 For a new project, run `/setup-shop` once and follow the bootstrap. For an existing project, start at `/cook-pizzas` to generate the Pie/Slice checklist. A flat v4 checklist (`## Stage N`) still works with `/sell-slice`, but `/sell-pie` and `/run-the-day` refuse it; convert with `/cook-pizzas --repie` (explicit opt-in, never silent).
 

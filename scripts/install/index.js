@@ -41,15 +41,22 @@ function installPluginMode({ repoRoot, args, targets, pluginMetadata }) {
 
   for (const target of targets.pluginTargets) {
     const manifest = target.host === "cursor" ? pluginMetadata.cursor : pluginMetadata.claude;
+    // mod/ is the Pass, a Claude Code hooks module that hooks/hooks.json names under
+    // "modules"; Cursor reads only that file's "hooks" key, so its copy omits mod/.
     const sourcePaths = [
       target.manifestDir,
       "skills",
       "commands",
       "mcp",
+      // The Pass ledger fold: the kitchen server's progress tab and the mod both run it.
+      "scripts/ledger-summary.js",
       "hooks",
+      ...(target.host === "claude" ? ["mod"] : []),
       "assets/brand",
       "docs/architecture.md",
       "docs/agents.md",
+      // The Pass mod spec: README, CLAUDE.md and architecture.md link it.
+      "docs/pass-mod-spec.md",
       "README.md",
       "CHANGELOG.md",
       "LICENSE",

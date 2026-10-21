@@ -82,8 +82,9 @@ Collect the following for the chosen scope:
 | `git log` (project repo) | Commit history, timestamps, author attribution |
 | Recent PRs (project repo) | PR titles, descriptions, review comments via `gh pr list` |
 | HITL escalation log | Any `needs_human: true` returns captured in stage output |
+| Pass ledger (when the Pass mod ran) | `node "${CLAUDE_PLUGIN_ROOT}/scripts/ledger-summary.js" --root <project> --format json`: per slice fix loops, warnings by code, stalls, HITL wait and cost. It prints `{ "pies": [] }` without a ledger; then say the ledger metrics are absent |
 
-Pass all collected data to `bytheslice:retrospective-reviewer`.
+Pass all collected data to `bytheslice:retrospective-reviewer`, with `project_path` so it can read the ledger itself (its "Ledger metrics" section).
 
 ### Step 3 — Analyze and draft proposals
 

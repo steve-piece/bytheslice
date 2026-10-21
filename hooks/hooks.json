@@ -1,4 +1,5 @@
 {
+  "modules": ["../mod/register.tsx"],
   "hooks": {
     "UserPromptExpansion": [
       {
@@ -66,38 +67,6 @@
         ]
       },
       {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/stage-plan-guard.sh\"",
-            "timeout": 3,
-            "statusMessage": "Checking stage-plan write guard..."
-          },
-          {
-            "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/library-gate-guard.sh\"",
-            "timeout": 3
-          }
-        ]
-      },
-      {
-        "matcher": "Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/stage-plan-guard.sh\"",
-            "timeout": 3,
-            "statusMessage": "Checking stage-plan write guard..."
-          },
-          {
-            "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/library-gate-guard.sh\"",
-            "timeout": 3
-          }
-        ]
-      },
-      {
         "matcher": "Agent",
         "hooks": [
           {
@@ -126,17 +95,6 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/kitchen-log.sh\"",
             "timeout": 5
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/compact-snapshot.sh\"",
-            "timeout": 4
           }
         ]
       }

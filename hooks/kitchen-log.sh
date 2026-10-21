@@ -7,13 +7,6 @@
 # PostToolUse (Agent), UserPromptExpansion, and Stop, completing the local
 # append before return. Always exits 0 and prints nothing.
 #
-# Session skill marker: when the row names a ByTheSlice skill (a typed
-# command on UserPromptExpansion, or the Skill tool on PreToolUse), the hook
-# also writes .claude/.bytheslice-state/last-precheck.json with the session
-# id, canonical skill, timestamp, branch and tree state. The Write/Edit
-# guards, compact-snapshot.sh and record-library-approval.sh read it. It only
-# records state; no ByTheSlice hook ever blocks a prompt.
-#
 # Row shape (fields an event does not carry are omitted, never null-padded):
 #   {"t":<epoch ms>,"sid":"..","ev":"..","agent":"..","aid":"..","label":"..",
 #    "skill":"..","tok":<int>,"ms":<int>,"ok":<bool>,"pie":<int>,"slice":"N.M",
@@ -27,9 +20,15 @@
 #
 # Attribution (`pie` / `slice`), first match wins:
 #   1. a label starting `P<pie> S<slice>` (the dispatch label convention)
-#   2. the branch name (hook cwd, else the project root) matching pie-N or
+#   2. for an unlabeled row, the most recent labeled row of the same session
+#      (same `sid`) in activity.jsonl or activity.1.jsonl: on SubagentStart or
+#      SubagentStop the labeled row with the same `aid` first, then the latest
+#      labeled row for the same agent type, then the latest labeled row at all.
+#      A dispatch's own subagent rows stay on the pie and slice its label
+#      named, even when the hook cwd sits in another worktree.
+#   3. the branch name (hook cwd, else the project root) matching pie-N or
 #      pie/N; the slice is then the first open `### Slice` under `## Pie N`
-#   3. the first open `### Slice` under the first open `## Pie` in
+#   4. the first open `### Slice` under the first open `## Pie` in
 #      docs/plans/00_master_checklist.md
 #
 # JSON engine: jq, else a `node -e` script, else exit 0 silently.
@@ -217,35 +216,107 @@ kl_fallback_attr() {
   ' "$checklist" 2>/dev/null
 }
 
+# Session inheritance (jq). Inputs: candidate log lines on stdin (only lines
+# holding a `P<pie> S<slice>` label reach it), $row (the unlabeled row).
+# Prints "<pie> <slice>" from the best labeled row of the same session, or
+# nothing. A torn or foreign line is skipped, never fatal.
+KL_INHERIT_JQ='
+($row.sid // "") as $sid
+| ($row.aid // "") as $aid
+| ($row.agent // "") as $agent
+| [inputs | (fromjson? // empty) | select(type == "object")
+    | select($sid != "" and .sid == $sid and (.pie | type) == "number"
+             and (.label | type) == "string" and (.label | test("^P[0-9]+ S[0-9]+\\.[0-9]+")))] as $c
+| (($row.ev == "SubagentStart" or $row.ev == "SubagentStop") and $aid != "") as $sub
+| ((if $sub then ([$c[] | select(.aid == $aid)] | last) else null end)
+   // (if $agent != "" then ([$c[] | select(.agent == $agent)] | last) else null end)
+   // ($c | last)) as $hit
+| if $hit then "\($hit.pie) \($hit.slice // "")" else empty end
+'
+
+# Session inheritance (node fallback). Same logic as KL_INHERIT_JQ; the row
+# arrives in KL_ROW, the log files as arguments, oldest first.
+KL_INHERIT_NODE='
+const fs = require("fs");
+let row;
+try { row = JSON.parse(process.env.KL_ROW || ""); } catch (e) { process.exit(0); }
+const sid = typeof row.sid === "string" ? row.sid : "";
+if (sid === "") process.exit(0);
+const aid = typeof row.aid === "string" ? row.aid : "";
+const agent = typeof row.agent === "string" ? row.agent : "";
+const labeled = /"label":"P[0-9]+ S[0-9]+\.[0-9]+/;
+const cap = /^P[0-9]+ S[0-9]+\.[0-9]+/;
+const rows = [];
+for (const file of process.argv.slice(1)) {
+  let text = "";
+  try { text = fs.readFileSync(file, "utf8"); } catch (e) { continue; }
+  for (const line of text.split("\n")) {
+    if (!labeled.test(line)) continue;
+    let r;
+    try { r = JSON.parse(line); } catch (e) { continue; }
+    if (!r || typeof r !== "object" || r.sid !== sid || typeof r.pie !== "number") continue;
+    if (typeof r.label !== "string" || !cap.test(r.label)) continue;
+    rows.push(r);
+  }
+}
+const last = (pick) => { for (let i = rows.length - 1; i >= 0; i--) if (pick(rows[i])) return rows[i]; return null; };
+const sub = (row.ev === "SubagentStart" || row.ev === "SubagentStop") && aid !== "";
+const hit = (sub ? last((r) => r.aid === aid) : null) ||
+  (agent !== "" ? last((r) => r.agent === agent) : null) || last(() => true);
+if (hit) process.stdout.write(hit.pie + " " + (typeof hit.slice === "string" ? hit.slice : ""));
+'
+
+# Builds the row. Args: fallback pie and slice (empty when unresolved).
+kl_build() {
+  if [ "$KL_ENGINE" = jq ]; then
+    printf '%s' "$INPUT" | jq -cs --arg fpie "$1" --arg fslice "$2" \
+      --argjson max "$KL_LABEL_MAX" "$KL_JQ" 2>/dev/null
+  else
+    printf '%s' "$INPUT" | KL_PIE="$1" KL_SLICE="$2" KL_LABEL_MAX="$KL_LABEL_MAX" \
+      node -e "$KL_NODE" 2>/dev/null
+  fi
+}
+
+# Attribution an unlabeled row inherits from its own session's labeled rows.
+# Prints "<pie> <slice>" or nothing. Arg: the row as first built. Reads the
+# log without the lock: a line torn by a concurrent writer is skipped.
+kl_inherit_attr() {
+  local dir files=()
+  dir="$(bts_root)/.claude/.bytheslice-state/kitchen"
+  [ -f "$dir/activity.1.jsonl" ] && files+=("$dir/activity.1.jsonl")
+  [ -f "$dir/activity.jsonl" ] && files+=("$dir/activity.jsonl")
+  [ "${#files[@]}" -gt 0 ] || return 0
+  if [ "$KL_ENGINE" = jq ]; then
+    grep -hE '"label":"P[0-9]+ S[0-9]+\.[0-9]+' "${files[@]}" 2>/dev/null |
+      jq -nrR --argjson row "$1" "$KL_INHERIT_JQ" 2>/dev/null
+  else
+    KL_ROW="$1" node -e "$KL_INHERIT_NODE" "${files[@]}" 2>/dev/null
+  fi
+}
+
 CWD=$(kl_cwd)
 [ -n "$CWD" ] && [ -d "$CWD" ] && git -C "$CWD" rev-parse --git-dir >/dev/null 2>&1 || CWD=$(bts_root)
 
-FPIE="" FSLICE=""
-read -r FPIE FSLICE <<EOF
-$(kl_fallback_attr "$CWD")
-EOF
-
-if [ "$KL_ENGINE" = jq ]; then
-  ROW=$(printf '%s' "$INPUT" | jq -cs --arg fpie "$FPIE" --arg fslice "$FSLICE" \
-    --argjson max "$KL_LABEL_MAX" "$KL_JQ" 2>/dev/null)
-else
-  ROW=$(printf '%s' "$INPUT" | KL_PIE="$FPIE" KL_SLICE="$FSLICE" KL_LABEL_MAX="$KL_LABEL_MAX" \
-    node -e "$KL_NODE" 2>/dev/null)
-fi
+# A labeled row is attributed by its label alone. Any other row inherits its
+# session's labeled attribution, else the branch and checklist decide, and is
+# then built again with that attribution so the field order stays canonical.
+ROW=$(kl_build "" "")
 [ -n "$ROW" ] || exit 0
-
-# Session skill marker. When a ByTheSlice skill runs (typed command or Skill
-# tool), record which one in last-precheck.json for the session-id-guarded
-# Write/Edit guards, compact-snapshot and record-library-approval. This only
-# records state; nothing in ByTheSlice ever blocks a prompt.
-KL_SKILL=$(printf '%s' "$ROW" | sed -n 's/.*"skill":"\([^"]*\)".*/\1/p')
-[ -n "$KL_SKILL" ] && KL_SKILL=$(bts_detect_skill "/$KL_SKILL")
-if [ -n "$KL_SKILL" ]; then
-  KL_SID=$(printf '%s' "$ROW" | sed -n 's/.*"sid":"\([^"]*\)".*/\1/p')
-  printf '{\n  "session_id": "%s",\n  "skill": "%s",\n  "timestamp": "%s",\n  "branch": "%s",\n  "tree": "%s"\n}\n' \
-    "$KL_SID" "$KL_SKILL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(bts_branch)" "$(bts_tree_state)" \
-    > "$(bts_state_dir)/last-precheck.json" 2>/dev/null || true
-fi
+case "$ROW" in
+  *'"pie":'*) ;;
+  *)
+    ATTR=$(kl_inherit_attr "$ROW")
+    [ -n "$ATTR" ] || ATTR=$(kl_fallback_attr "$CWD")
+    FPIE="" FSLICE=""
+    read -r FPIE FSLICE <<EOF
+$ATTR
+EOF
+    if [ -n "$FPIE" ]; then
+      ROW=$(kl_build "$FPIE" "$FSLICE")
+      [ -n "$ROW" ] || exit 0
+    fi
+    ;;
+esac
 
 LOG_DIR="$(bts_state_dir)/kitchen"
 mkdir -p "$LOG_DIR" 2>/dev/null || exit 0

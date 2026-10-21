@@ -72,6 +72,10 @@ If the file exists but parses as malformed JSON, **stop before dispatching any P
 
 ## Workflow
 
+At every phase boundary, if the `bts_status` tool is available call it instead of re-reading the checklist; if it is not, read the checklist as before.
+
+Team mode stays off: an agent-team teammate has no `Workflow` and no `ScheduleWakeup` (spike 5.6), so it cannot run `/sell-pie`'s per-slice Workflow; keep pies sequential in this chat. The Pass still shows any teammates (`team: n bakers` in `bts_status`), and a teammate that must wait can call `bts_wake { afterMs, note }` in place of `ScheduleWakeup`.
+
 ### Phase 0 — Read the master checklist and build the pie queue
 
 1. Read `docs/plans/00_master_checklist.md`.
@@ -119,6 +123,8 @@ When every Pie in the filtered queue is `Completed`:
 2. **Propagate the structured fields verbatim** (`hitl_category`, `hitl_question`, `hitl_context`, and `hitl_questions` when `/sell-pie` returned an approval batch) into this skill's own return contract. A batch stays one batch: never split it into separate pauses.
 3. The **orchestrating session that invoked `/run-the-day`** (or `/sell-pie` itself, when run interactively) surfaces the prompt to the human. **This skill never calls `ask_user_input_v0`.**
 4. Once the human answers, the chain is resumed by re-invoking the chainer (or re-dispatching the active Pie) with the resolution context appended. The just-completed Pies are already merged and `Completed`, so resumption picks up at the Pie that paused.
+
+When raising a HITL and the `bts_hitl` tool is available, also call it; when the operator answers, call it again with the answer (`{ id, answer }`). It records the question, shows it in the Pass inbox and notifies; it never waits, so the stop-and-ask flow above still does.
 
 > **v5 change:** in v4, `run-the-day` was "the only surface that calls `ask_user_input_v0`." That is no longer true. In v5 no ByTheSlice agent or skill calls `ask_user_input_v0` directly — every layer bubbles `needs_human` + `hitl_*` up the return chain, and only the top-level interactive session prompts the human.
 

@@ -60,6 +60,8 @@ CI watching itself is inline (`gh pr checks <pr> --watch` blocks until checks se
 
 ## Workflow
 
+At every phase boundary, if the `bts_status` tool is available call it instead of re-reading the checklist; if it is not, read the checklist as before.
+
 > **Per-slice mode runs Phase 1 only, then returns.** Phases 0 and 2-6 are pie-completion / universal closeout. `slice-merge` mode runs Phases 0 → 6 with the overrides in "Merge-per-slice closeout" below. The phase numbering is shared so the commit logic is defined once.
 
 ### Phase 0 - Pre-flight Safety Checks *(pie-completion / universal)*
@@ -94,6 +96,7 @@ The skill refuses to proceed past Phase 0 if any check fails. The point is to av
 2. **Otherwise**, open one PR for the whole pie:
    - **Title:** for a pie, `Pie N: <name>` (lift `N` and the name from the `## Pie N - <name>` checklist header). For a hand-rolled branch, fall back to `gh pr create --fill` (latest commit subject).
    - `gh pr create --base main --head "$BRANCH" --fill` - the `--fill` body lifts the accumulated slice commit subjects/bodies, so the per-slice closing-narrative paragraphs carry the design story into the PR description without a separate step. For a named pie, set the title explicitly (`--title "Pie N: <name>"`) and keep `--fill` for the body.
+   - **Evidence section (the Pass ledger):** when `bts_pr_body` is available, write its output into the PR body under `## Evidence` after the `--fill` content; the section is generated, do not edit it by hand. Call it once with `{ "pie": N }` before `gh pr create`. A `--body` or `--body-file` overwrites what `--fill` would write, so build the body file yourself: the `--fill` content (`git log --reverse --format='%s%n%n%b' origin/main..HEAD`), then a blank line and `## Evidence`, then the tool's output verbatim; pass it with `--body-file` and keep `--title`. When the tool is absent, or answers its one-line `bts_pr_body:` message (no ledger, no `node`), open the PR with `--fill` alone and leave the section out. It warns and never blocks: a missing section is not a reason to stop.
    - Capture the returned URL as `PR_URL` and the number as `PR_NUMBER`.
 3. Output the PR URL to the user immediately so they can open it in a browser if they want to skim the pie.
 

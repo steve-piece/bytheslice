@@ -33,6 +33,7 @@ ByTheSlice runs your project like a **pizza shop**. You don't build a whole app 
 - [Quick Start](#quick-start)
 - [Install](#install)
 - [Watch the kitchen](#watch-the-kitchen)
+- [The Pass](#the-pass)
 
 **Under the hood** *(for developers + power agentic-coding users)*
 - [The Kitchen - workflow diagram](#the-kitchen-workflow-diagram)
@@ -150,7 +151,8 @@ Run [`/open-kitchen`](skills/open-kitchen/SKILL.md) from your project to open it
 | Safe | The local successful environment-check marker. No credentials appear in the kitchen. |
 | Oven, door alarm and locks | CI workflow, pre-push hook and branch-protection setup-script presence. Presence does not prove those protections have run or are enabled remotely. |
 | Cooking line and pass | Named builders, reviewers, testers and verifiers working at their stations. Click a character for its role and current task. |
-| Service window and customer line | Open orders in checklist order, with the active order at the window. Orders, Crew and Log open the detail panels. |
+| Service window and customer line | Open orders in checklist order, with the active order at the window. Orders, Crew (the People sheet, with Crew and Town tabs and a profile for anyone) and Log open the detail panels. |
+| Progress (header button) | Slice progress per pie from [the Pass](#the-pass) ledger: a slice table (started, done, duration, fix loops, verifier verdict, cost) and a step line of slices done over time. Without a ledger it says so. |
 | Sign and lighting | Checklist shop status and session phases: before opening, open service and after hours. |
 
 The header's browser button enables after a valid local snapshot arrives. A click opens the same verified localhost kitchen in a new tab using the host's browser handoff. The host may keep that tab inside its pane. Camera recenter, zoom to fit and pause controls remain available.
@@ -166,6 +168,36 @@ node "/absolute/plugin/root/skills/open-kitchen/open-kitchen.js" --project "/abs
 Replace both paths with real absolute paths. The helper prints a verified `http://127.0.0.1:<port>/` link for that project, reusing a matching server or starting one. The server defaults to port 4477, tries the next free port, and records discovery at `.claude/.bytheslice-state/kitchen/port`. The visible page refreshes state every three seconds. See [the local transport and privacy contract](docs/architecture.md#live-kitchen).
 
 **Host verification status:** both artifact bridge probes (`host:plugin_bytheslice_kitchen` and `host:kitchen`) returned `server_not_connected`. The localhost Browser-pane path is selected; native `/open-kitchen` invocation and a production `/sell-slice` session remain unverified. A ready localhost link alone does not complete the native command.
+
+---
+
+## The Pass
+
+In a pizzeria the pass is the counter where every order is checked before it goes out, with the ticket rail above it. **The Pass** is ByTheSlice's Claude Code mod, and it does both jobs: a live ticket rail beside the chat, and checks that warn when a delivery rule slips. It ships inside the plugin ([`mod/`](mod/)), loads with it, and needs no setup.
+
+| Surface | What it shows |
+|---|---|
+| **Pane** (`The Pass`) | The pie header; one row per slice with its status and last verdict; live agents, stalled ones flagged; the latest check warnings; the HITL inbox; the files the active slice touched (a builder edit after the verifier's pass shows red); the team roster in team mode; and the project's other sessions, read-only. It opens on its own when an interactive session starts in a project with a master checklist and the terminal is wide enough. |
+| **Band** (above the prompt) | One line such as `Pie 5 · Slice 5.2 verifying · 3 agents · fix 1/3 · HITL 1`, in a warning style while a verdict failed or a HITL item is open, and for five minutes after a check warning. The prompt hint adds `/box-it-up ready` once every slice is done. |
+| **Toasts and notifications** | A toast when a slice is done, a verdict fails, a branch is pushed or a check warns. A native notification only for a blocking HITL question and a finished pie. |
+| **Model tools** | `bts_status` (the same projection the pane draws, with a `Next:` line that is advice), `bts_note` (a decision note), `bts_hitl` (raise or answer a HITL item), `bts_pr_body` (the pie PR's Evidence section) and `bts_wake` (a teammate's stand-in for a scheduled wakeup). |
+
+| Command | What it does |
+|---|---|
+| `/pass` | Opens or closes the pane. |
+| `/pass checks` | Lists the latest ten check warnings. |
+| `/pass history` | Prints progress per pie from the ledger. |
+| `/pass replay <slice>` | Steps through a slice's commits (and its uncommitted changes) with each file's diff, in a focused pane. |
+| `/pass reconcile` | Lists where the checklist and the ledger disagree. It edits nothing. |
+
+**The ledger** is `.bytheslice/ledger.jsonl` at the primary checkout, so every pie worktree writes the same file, and the folder carries its own `.gitignore`, so it never reaches git. It records what happened: pie and slice starts, verdicts with the commit they judged, commits, pushes and merges, check warnings, HITL items and their waits, stalls, decision notes, usage, and file edits as path and role only. It never holds prompts, agent messages, file contents or secrets. Agent starts and stops come from the kitchen activity log rather than a second recorder. [`scripts/ledger-summary.js`](scripts/ledger-summary.js) folds it for `/pass history` (`--format text`), the kitchen and `/close-shop` (`--format json`), and the pie PR (`--format pr-body`).
+
+> [!IMPORTANT]
+> - **Nothing the Pass does blocks.** Every check warns three ways (a `warn` ledger row, a toast, and a note the model reads after the call) and the edit, spawn, commit or push goes ahead unchanged. The check codes are listed in [architecture](docs/architecture.md#the-pass-mod).
+> - **Claude Code 2.1.299 or later.** Mods arrived in 2.1.287; the Pass waits for 2.1.299 (teammate turn starts, spawn on resume) and stays inert on anything older, logging one line. Team mode also needs agent teams turned on (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`).
+> - **Optional by design.** Without the mod (Cursor, an older Claude Code, a host with mods turned off) everything still works: the skills, hooks and kitchen run as before, and the pane, band and checks simply do not appear.
+
+The full design and every as-built note live in the [Pass mod spec](docs/pass-mod-spec.md).
 
 ---
 
@@ -268,7 +300,7 @@ Full schema and precedence rules: [`bytheslice-config-schema.md`](skills/setup-s
 
 ## Architecture & conventions
 
-The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once**, **context-separated** dispatch, **preview-first** library delivery, **deterministic hook** enforcement. The full reference lives in **[docs/architecture.md](docs/architecture.md)**:
+The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once**, **context-separated** dispatch, **preview-first** library delivery, and **warn-only** hooks and Pass checks that never block. The full reference lives in **[docs/architecture.md](docs/architecture.md)**:
 
 - [**Pies & Slices**](docs/architecture.md#pies--slices-the-two-level-checklist) - the two-level checklist, caps, the Prep gate
 - [**Mode detection**](docs/architecture.md#mode-detection-standalone-vs-sequential) - standalone vs sequential, per-skill posture table
@@ -276,7 +308,8 @@ The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once*
 - [**Delivery & git**](docs/architecture.md#delivery--git-selling-vs-boxing) - selling vs boxing, one pie per PR, worktrees
 - [**Design-system delivery**](docs/architecture.md#design-system-delivery) - preview-first library gate, visual review tooling
 - [**Orchestration principles**](docs/architecture.md#orchestration-principles) - subagent-driven, exit-criteria contract, HITL bubbling, model tiers
-- [**Hook enforcement**](docs/architecture.md#hook-enforcement) - what the [`hooks/`](hooks/) layer blocks at the tool level
+- [**Hook enforcement**](docs/architecture.md#hook-enforcement) - what the [`hooks/`](hooks/) layer logs and warns about (it blocks nothing)
+- [**The Pass mod**](docs/architecture.md#the-pass-mod) - packaging, the ledger, the warn-only checks, spawn policy, watchdog, HITL inbox, team mode
 - [**Legacy & migration**](docs/architecture.md#legacy--migration) - flat v4 / v3 projects, `--repie`
 
 ---
@@ -342,7 +375,7 @@ Only if you ask. Say so in the run instruction ("merge each slice") or set `deli
 <details>
 <summary><b>What does it leave behind as evidence?</b></summary>
 
-Very little, on purpose: the agents' verdicts, Playwright traces for failures, one 768px and one 1280px screenshot per new UI surface, a short checklist note per slice, and one run log. No hashes, fingerprints, leases or per-step proof files. The one exception is the planned Pass mod ledger, the single record of project progress over time ([spec](docs/pass-mod-spec.md)).
+Very little, on purpose: the agents' verdicts, Playwright traces for failures, one 768px and one 1280px screenshot per new UI surface, a short checklist note per slice, and one run log. No hashes, fingerprints, leases or per-step proof files. The one exception is [the Pass](#the-pass) ledger, the single record of project progress over time ([spec](docs/pass-mod-spec.md)).
 
 </details>
 

@@ -94,7 +94,7 @@ These three static verifiers collapsed into [`slice-verifier`](agents/slice-veri
 - `docs/plans/00_master_checklist.md` exists.
 - One or more `docs/plans/stage_<n>_*.md` exist (one slice plan reachable for the active unit).
 - Clean git working tree, OR explicit user OK to proceed dirty.
-- Slice/stage plan files (`docs/plans/stage_*.md`) are write-protected during this skill by `hooks/stage-plan-guard.sh` (WARN in v5 - downgraded from BLOCK); production-route edits without a recorded library approval surface a warning via `hooks/library-gate-guard.sh` (armed and recorded at Phase 4.5 by `hooks/record-library-approval.sh`).
+- Slice/stage plan files (`docs/plans/stage_*.md`) stay static during this skill: with the Pass mod loaded, a plan write draws a `plan-write-during-bake` warning. Nothing blocks. Production wiring waits for the Phase 4.5 approval; no hook enforces it.
 
 ---
 
@@ -166,6 +166,8 @@ The house phrasing for any Workflow-backed step below is: *"Run as a `Workflow` 
 ---
 
 ## Workflow
+
+At every phase boundary, if the `bts_status` tool is available call it instead of re-reading the checklist; if it is not, read the checklist as before.
 
 The skill is an **interactive spine** (Phases 0-3) wrapping two Workflows and one human gate:
 
@@ -314,14 +316,6 @@ Dispatch `library-entry-writer` with one of two **modes** per item:
 
 Both modes render all variants × all states (default / hover / focus / disabled / loading / empty / error / populated) AND wire the source-path copy buttons through `<EntryHeader sourcePath=…>` / `<EntrySection sourcePath=… sourceLines=…>`.
 
-**Arm the enforcement gate.** When the round's writer dispatches complete (and before resolving the gate), arm the deterministic backstop so premature production wiring gets flagged by the plugin's `library-gate-guard.sh` PreToolUse hook:
-
-```bash
-bash "<plugin-root>/hooks/record-library-approval.sh" arm --slice <N.M>
-```
-
-`<plugin-root>` is the bytheslice plugin directory, two levels up from this SKILL.md (the recorder ships at [`hooks/record-library-approval.sh`](../../hooks/record-library-approval.sh)). The command writes `.claude/.bytheslice-state/library-approvals.json` with zero approvals for this slice (session id from `last-precheck.json`, slice label, timestamp, watched-path globs). From this moment until an approval is recorded, every Write/Edit under `app/**`, `src/app/**`, `components/**`, or `src/components/**` surfaces a non-blocking warning. Re-running `arm` resets the approvals list, so each slice starts unapproved. Warns emitted during a sanctioned revision round are expected noise; they never block.
-
 **Discover the dev port** before surfacing URLs. Check in order: `lsof -i -P | grep LISTEN | grep node` (already-serving ports), `package.json` `scripts.dev` declared port, framework-specific port hints (`next.config.js`, `proxy.ts`). If still ambiguous, ask the user.
 
 **HARD STOP** (when `flow.libraryGate: "human"`, or `"self-critique"` flagged a concern). Surface a single Phase 4.5 prompt that embeds:
@@ -332,17 +326,9 @@ bash "<plugin-root>/hooks/record-library-approval.sh" arm --slice <N.M>
 
 **Do not start production wiring** until the user explicitly approves (in `"human"` mode) or the self-critique cleared without concern (in `"self-critique"` mode). The cost asymmetry (rewriting a story file vs. rewriting story file + routes + server actions + types + tests) is what makes the gate worth enforcing.
 
-**Record the approval before wiring.** The moment the gate resolves in favor of wiring (the operator replied **approved** in `"human"` mode, or the self-critique cleared without concern in `"self-critique"` mode), record it BEFORE touching any production route:
-
-```bash
-bash "<plugin-root>/hooks/record-library-approval.sh" approve --slice <N.M> --components "<id1>,<id2>"
-```
-
-The component list is every `entries_added[].id` and `entries_modified[].id` from `library-entry-writer`'s output contract that was approved (a partial approval records only the approved ids). Each id becomes one `status: "approved"` entry carrying component id, session id, slice, and ISO timestamp; `library-gate-guard.sh` then passes production writes silently for the rest of the slice.
-
-- On **approved** → record the approval (the `approve` command above), then import the component from the library into the production route(s) named by the slice spec (or, in the modify case, land the consumer-route edit). The library entry files from the writer's `files_changed` are staged selectively and committed with their task at its boundary. Continue to Workflow B.
+- On **approved** → import the component from the library into the production route(s) named by the slice spec (or, in the modify case, land the consumer-route edit). The library entry files from the writer's `files_changed` are staged selectively and committed with their task at its boundary. Continue to Workflow B.
 - On **revision** → re-dispatch `component-crafter` with the user's notes, then re-run 4.5 for the revised component (fresh self-critique). Cap at 2 revision loops; on the 3rd round, surface as `creative_direction` HITL and stop.
-- On **rejected** → remove the entry: delete `_entries/<id>-entry.tsx`, remove the id from `_registry/tabs.ts` (`LIBRARY_TABS`), remove the import + map row from `_registry/stories.tsx` (`STORIES`), and remove the sidebar row from `_registry/entries.ts`. Surface as `creative_direction` HITL. Record no approval: the armed gate keeps warning on production-route writes, which is the correct failsafe.
+- On **rejected** → remove the entry: delete `_entries/<id>-entry.tsx`, remove the id from `_registry/tabs.ts` (`LIBRARY_TABS`), remove the import + map row from `_registry/stories.tsx` (`STORIES`), and remove the sidebar row from `_registry/entries.ts`. Surface as `creative_direction` HITL. Nothing from a rejected entry is wired into a production route.
 - **No production-route imports happen before approval.** `library-entry-writer`'s output contract requires `production_imports_added: 0`.
 
 **Hard rules:**
@@ -422,6 +408,8 @@ If any subagent or sub-skill returns `needs_human: true`, the orchestrator pause
 
 **Subagents NEVER prompt the user directly and NEVER call `ask_user_input_v0`.** They set `needs_human: true` + the `hitl_category` / `hitl_question` / `hitl_context` fields; **only the orchestrator** calls `ask_user_input_v0`. This is the v5 contract - the prompting boundary lives at the orchestrator.
 
+When raising a HITL and the `bts_hitl` tool is available, also call it; when the operator answers, call it again with the answer (`{ id, answer }`). It records the question, shows it in the Pass inbox and notifies; it never waits, so the stop-and-ask flow above still does.
+
 **Batched approvals.** Collect every approval the slice needs (the build plan, migrations to apply, live data loads, size exceptions to the task or file cap, terms or licences to accept, credentials to supply) into **one batch** of short questions: one decision per question, each with a recommended answer. Ask the batch once, at slice start or at the first point all of them are known; never drip them one at a time across the slice. An approval that only surfaces later joins the next batch instead of stopping the slice on its own. **Exception:** the Library Preview gate (Phase 4.5) stays its own mid-slice stop, because it needs built output to review. Unforeseeable blocking events (fix cap exhausted, the `slice-tester`'s non-prod guard, a rejected push) still stop when they happen.
 
 **Soft time budget.** The slice has a soft wall-clock budget, `delivery.sliceBudgetHours` (default `3`; `0` turns it off). It counts from the slice's start line in the run log, includes CI time (the merge-per-slice closeout waits on CI inside the slice), and excludes time spent waiting on the operator: the orchestrator writes each HITL ask and its answer to the run log and subtracts those windows. Check the elapsed time whenever an agent returns. When the budget is hit, never interrupt a running agent: let the current agent finish, then stop with one `prd_ambiguity` check-in carrying the slice's progress (tasks committed, gates green, fix loops used), the current blocker, and two options: **extend** (adds another `sliceBudgetHours`; recommended when the slice advanced since the last check-in) or **stop** (the slice stays `In Progress` with its task commits pushed; the next run resumes it). The budget is soft: it never fails a slice and never raises or lowers the fix cap. Under the `/sell-pie` loop the conductor owns this check.
@@ -440,7 +428,7 @@ The four blocking HITL categories halt the slice (they are not auto-resolvable):
 - a checklist note of 3 lines or fewer per slice in `docs/plans/00_master_checklist.md`;
 - one short run log, `.claude/.bytheslice-state/run-log.md` (gitignored): slice start lines, HITL ask and answer times, one self-check line per dispatched agent, and slice PR and merge lines in merge-per-slice mode.
 
-Existing operational state files stay, because they drive behavior rather than prove it: `.claude/.bytheslice-state/library-approvals.json`, `kitchen/activity.jsonl`, `kitchen/merged-pie.json`, `env-check-passed`, `last-precheck.json`, `compact-snapshot.json`, and the seed and cleanup pairs under `tests/seeds/<slice>/`. The closing-narrative paragraph in commit and PR bodies also stays; the 3-line limit applies to the checklist note only.
+Existing operational state files stay, because they drive behavior rather than prove it: `.claude/.bytheslice-state/kitchen/activity.jsonl`, `kitchen/merged-pie.json`, `env-check-passed`, and the seed and cleanup pairs under `tests/seeds/<slice>/`. The closing-narrative paragraph in commit and PR bodies also stays; the 3-line limit applies to the checklist note only.
 
 **The one sanctioned exception: the Pass mod ledger.** The Pass mod's `.bytheslice/ledger.jsonl` ([`docs/pass-mod-spec.md`](../../docs/pass-mod-spec.md)) is the single sanctioned completion record that tracks project progression over time. It is not a per-step proof file, and this rule does not ban it.
 

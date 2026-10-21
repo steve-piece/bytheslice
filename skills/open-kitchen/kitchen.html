@@ -44,6 +44,7 @@ button{font:inherit;color:inherit}
 .stat span{font-weight:600;color:var(--ink-soft);font-size:12.5px}
 .iconbtn{width:42px;height:42px;display:grid;place-items:center;border:0;cursor:pointer}
 .iconbtn svg{width:20px;height:20px}
+.pill.iconbtn.on{background:var(--ink);color:var(--cream)}
 .seg{display:flex;padding:4px;gap:2px}
 .seg button{width:34px;height:34px;border-radius:50%;border:0;background:transparent;display:grid;place-items:center;cursor:pointer}
 .seg button.on{background:var(--mustard);color:#fff;box-shadow:0 2px 6px rgba(160,110,30,.35)}
@@ -151,6 +152,19 @@ button.orow{width:100%;background:none;border:0;border-bottom:1px solid var(--li
 button.orow:hover,button.orow:focus-visible{background:rgba(74,52,38,.04);outline:none}
 button.orow:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
 .sh-back{border:0;background:rgba(74,52,38,.07);border-radius:999px;padding:5px 12px;font:inherit;font-size:12.5px;font-weight:800;color:var(--ink-soft);cursor:pointer;margin:0 0 10px}
+/* Progress sheet: the Pass ledger per pie (read-only, from /state progress) */
+.pg{padding:10px 0 14px;border-bottom:1px solid var(--line)}
+.pg h4{font-family:var(--display);font-weight:600;font-size:17px;margin:0 0 2px}
+.pg .facts{font-size:12px;font-weight:700;color:var(--ink-soft);margin:0 0 8px}
+.pg svg.step{display:block;width:100%;height:64px;margin:4px 0 8px}
+.pg svg.step .axis{stroke:var(--line);stroke-width:1}
+.pg svg.step .line{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round}
+.pg svg.step .dot{fill:var(--accent)}
+.pg table{width:100%;border-collapse:collapse;font-size:11.5px;font-variant-numeric:tabular-nums}
+.pg th{text-align:left;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-soft);padding:3px 4px 4px 0;border-bottom:1px solid var(--line)}
+.pg td{padding:5px 4px 5px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.pg td.v-pass{color:var(--sage);font-weight:800}.pg td.v-fail{color:var(--bad);font-weight:800}
+.pg-empty{color:var(--ink-soft);font-size:13px;padding:12px 0}
 .od .eyebrow{font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--accent)}
 .od h4{font-family:var(--display);font-weight:600;font-size:18px;margin:2px 0 6px}
 .od .cdesc{margin:0 0 8px;color:var(--ink-soft);font-size:13px}
@@ -278,6 +292,7 @@ button.orow:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
 </div>
 <div class="hud tr">
   <span id="todLock" hidden>Time follows the real session</span><div class="pill seg" id="todGroup" role="group" aria-label="Lighting"><button id="bDawn" aria-label="Before opening" title="Before opening" data-i="dawn"></button><button id="bDay" class="on" aria-label="Daytime" title="Open" data-i="sun"></button><button id="bNight" aria-label="Evening" title="Evening" data-i="moon"></button><button id="bLate" aria-label="After hours" title="After hours" data-i="late"></button></div>
+  <button class="pill iconbtn" id="bProgress" type="button" aria-label="Progress" title="Progress: the Pass ledger per pie" aria-controls="sheet" data-i="progress"></button>
   <button class="pill iconbtn" id="bHome" aria-label="Recenter camera" data-i="target"></button>
   <button class="pill iconbtn" id="bOpen" type="button" aria-label="Open this kitchen in your default browser (new tab)" title="Waiting for the local kitchen address" data-i="ext" disabled></button>
 </div>
@@ -542,6 +557,7 @@ const IC = {
   plus:'<circle cx="12" cy="12" r="9.5" fill="#e1e9ef" stroke="#5f7d93" stroke-width="1.5"/><path d="M12 7.5v9M7.5 12h9" stroke="#3f5a70" stroke-width="2.2" stroke-linecap="round"/>',
   rush:'<path d="M13.5 2.8L5.5 13.2h5.2l-1.4 8 8.2-10.6h-5.3z" fill="#f3cf72" stroke="#c9643f" stroke-width="1.5" stroke-linejoin="round"/>',
   late:'<path d="M17.5 15.6A7.2 7.2 0 0 1 8.4 6.5a7.2 7.2 0 1 0 9.1 9.1z" fill="currentColor"/><path d="M17 3.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6zM20.5 8.5l.4.9.9.4-.9.4-.4.9-.4-.9-.9-.4.9-.4z" fill="currentColor"/>',
+  progress:'<path d="M4 4.5v15h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 16h3v-3.5h3V9h3V6h3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
   log:'<path d="M8 6.5h11M8 12h11M8 17.5h11" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="4.5" cy="6.5" r="1.3" fill="currentColor"/><circle cx="4.5" cy="12" r="1.3" fill="currentColor"/><circle cx="4.5" cy="17.5" r="1.3" fill="currentColor"/>',
   yum:'<circle cx="12" cy="12" r="10" fill="#f3cf72" stroke="#c99a2e" stroke-width="1.2"/><path d="M7 10.2q1.5-1.6 3 0M14 10.2q1.5-1.6 3 0" fill="none" stroke="#4a3426" stroke-width="1.5" stroke-linecap="round"/><path d="M7.2 13.4q4.8 4.4 9.6 0" fill="#fff" stroke="#4a3426" stroke-width="1.4" stroke-linejoin="round"/><path d="M12.4 15.4q2 .2 1.7 2.3-1.8.9-2.6-.9z" fill="#e8706a"/>',
   hearts:'<circle cx="12" cy="12" r="10" fill="#f3cf72" stroke="#c99a2e" stroke-width="1.2"/><path d="M8.3 11.6l-2-1.9a1.2 1.2 0 0 1 2-1.3 1.2 1.2 0 0 1 2 1.3zM15.7 11.6l-2-1.9a1.2 1.2 0 0 1 2-1.3 1.2 1.2 0 0 1 2 1.3z" fill="#d83a3a"/><path d="M7.5 14q4.5 4.2 9 0z" fill="#4a3426"/>',
@@ -3731,15 +3747,54 @@ let tipFor = null;
 
 // ---------- sheets ----------
 const sheet = $('#sheet');
+const SHEET_BUTTONS = ['#bCrew', '#bOrders', '#bLog', '#bProgress'];
 function openSheet(kind) {
-  const btn = { crew: $('#bCrew'), orders: $('#bOrders'), log: $('#bLog') }[kind]; const was = !sheet.hidden && sheet.dataset.kind === kind;
-  ['#bCrew', '#bOrders', '#bLog'].forEach(id => $(id).classList.remove('on'));
+  const btn = { crew: $('#bCrew'), orders: $('#bOrders'), log: $('#bLog'), progress: $('#bProgress') }[kind]; const was = !sheet.hidden && sheet.dataset.kind === kind;
+  SHEET_BUTTONS.forEach(id => $(id).classList.remove('on'));
   if (was) { sheet.hidden = true; return; }
   sheet.hidden = false; sheet.dataset.kind = kind; delete sheet.dataset.detail; btn.classList.add('on'); tip.hidden = true;
   if (kind === 'crew') renderPeopleSheet();
   else if (kind === 'log') renderLogSheet();
+  else if (kind === 'progress') renderProgressSheet();
   else renderOrdersSheet();
 }
+// ---------- the progress sheet: the Pass ledger per pie, over time (read-only) ----------
+const pgWhen = t => Number.isFinite(t) ? new Date(t).toLocaleString([], { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+function pgDuration(ms) {
+  if (!Number.isFinite(ms)) return '';
+  const s = Math.max(0, Math.round(ms / 1000)), m = Math.floor(s / 60);
+  return s < 60 ? `${s}s` : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
+}
+const pgCost = usd => Number.isFinite(usd) ? `$${usd.toFixed(2)}` : '';
+function pgVerdict(slice) {
+  const v = (slice.verdicts || []).filter(x => x.gate === 'slice-verifier').reduce((a, x) => (!a || x.t >= a.t ? x : a), null);
+  return v ? v.overall : '';
+}
+// slices done over time as a step line: x from the pie's start to its last finish, y from 0 to its slice count; inline SVG, no library
+function pgStepLine(pie) {
+  const done = pie.slices.map(sl => sl.doneAt).filter(Number.isFinite).sort((a, b) => a - b);
+  const total = pie.slices.length, W = 300, H = 64, P = 4;
+  const t0 = Number.isFinite(pie.startedAt) ? pie.startedAt : done[0], t1 = done.length ? done[done.length - 1] : t0;
+  const x = t => !Number.isFinite(t0) || t1 <= t0 ? W - P : P + (t - t0) / (t1 - t0) * (W - 2 * P);
+  const y = n => H - P - (total ? n / total : 0) * (H - 2 * P);
+  let d = `M${P},${y(0)}`; const dots = [];
+  done.forEach((t, i) => { const px = x(t).toFixed(1); d += ` H${px} V${y(i + 1).toFixed(1)}`; dots.push(`<circle class="dot" cx="${px}" cy="${y(i + 1).toFixed(1)}" r="2.6"/>`); });
+  return `<svg class="step" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${escapeCard(`Slices done over time: ${done.length} of ${total}`)}"><path class="axis" d="M${P},${H - P}H${W - P}M${P},${P}V${H - P}"/><path class="line" d="${d}"/>${dots.join('')}</svg>`;
+}
+function renderProgressSheet() {
+  $('#shTitle').textContent = 'Progress';
+  const pies = window.kitchenLive?.snapshot?.progress?.pies;
+  if (!Array.isArray(pies) || !pies.length) { $('#shBody').innerHTML = '<p class="pg-empty">No ledger yet. Bake a pie with the Pass mod loaded.</p>'; return; }
+  $('#shBody').innerHTML = [...pies].reverse().map(pie => {
+    const done = pie.slices.filter(sl => Number.isFinite(sl.doneAt)).length;
+    const cost = pie.slices.filter(sl => Number.isFinite(sl.costUsd)).reduce((sum, sl) => sum + sl.costUsd, 0);
+    const facts = [`${done} of ${pie.slices.length} slices done`, Number.isFinite(pie.startedAt) ? `started ${pgWhen(pie.startedAt)}` : '',
+      Number.isFinite(pie.mergedAt) ? `merged ${pgWhen(pie.mergedAt)}` : '', pie.slices.some(sl => Number.isFinite(sl.costUsd)) ? pgCost(cost) : ''].filter(Boolean).join(' · ');
+    const rows = pie.slices.map(sl => { const v = pgVerdict(sl); return `<tr data-slice="${escapeCard(sl.id)}"><td title="${escapeCard(sl.name || '')}"><b>${escapeCard(sl.id)}</b></td><td>${escapeCard(pgWhen(sl.startedAt))}</td><td>${escapeCard(pgWhen(sl.doneAt))}</td><td>${escapeCard(pgDuration(sl.durationMs))}</td><td>${Number(sl.fixLoops) || 0}</td><td class="${v ? `v-${escapeCard(v)}` : ''}">${escapeCard(v)}</td><td>${escapeCard(pgCost(sl.costUsd))}</td></tr>`; }).join('');
+    return `<section class="pg" data-pie="${Number(pie.n)}"><h4>Pie ${Number(pie.n)}${pie.name ? ` · ${escapeCard(pie.name)}` : ''}</h4><p class="facts">${escapeCard(facts)}</p>${pgStepLine(pie)}<table><thead><tr><th>Slice</th><th>Started</th><th>Done</th><th>Time</th><th>Fix</th><th>Verifier</th><th>Cost</th></tr></thead><tbody>${rows}</tbody></table></section>`;
+  }).join('');
+}
+window.addEventListener('kitchen:state', () => { if (!sheet.hidden && sheet.dataset.kind === 'progress') renderProgressSheet(); });
 // ---------- the people sheet: Crew and Town tabs ----------
 // a tiny head-and-shoulders avatar from a character's look, shared by the Town tab and house cards
 function avatar(look, kid = false) {
@@ -3831,8 +3886,8 @@ $('#shBody').addEventListener('click', event => {
   const pick = event.target.closest('[data-order]');
   if (pick && sheet.dataset.kind === 'orders' && orderIndex.has(pick.dataset.order)) { sheet.dataset.detail = pick.dataset.order; renderOrdersSheet(); }
 });
-$('#bLog').onclick = () => openSheet('log'); $('#bCrew').onclick = () => openSheet('crew'); $('#bOrders').onclick = () => openSheet('orders'); $('#tracker').onclick = () => openSheet('orders');
-$('#shClose').onclick = () => { sheet.hidden = true; ['#bCrew', '#bOrders', '#bLog'].forEach(id => $(id).classList.remove('on')); };
+$('#bProgress').onclick = () => openSheet('progress'); $('#bLog').onclick = () => openSheet('log'); $('#bCrew').onclick = () => openSheet('crew'); $('#bOrders').onclick = () => openSheet('orders'); $('#tracker').onclick = () => openSheet('orders');
+$('#shClose').onclick = () => { sheet.hidden = true; SHEET_BUTTONS.forEach(id => $(id).classList.remove('on')); };
 $('#bFit').onclick = () => animTo(FIT); $('#bHome').onclick = () => animTo(HOME);
 $('#bPause').onclick = () => { paused = !paused; $('#bPause').innerHTML = svg(paused ? 'play' : 'pause') + `<span class="lbl">${paused ? 'Resume' : 'Pause'}</span>`; };
 // ---------- after hours: the crew clocks out, Chef Nico and the review board stay ----------
@@ -4085,7 +4140,7 @@ function clearDemo() {
   $('#tkSteps').replaceChildren(); $('#tkSlices').replaceChildren();
   $('#tracker').setAttribute('aria-label', 'Waiting for live work. Open orders.');
   liveShopStatus = null; STATUS.prep = 'n/a'; setTickets(); renderStats();
-  if (!sheet.hidden) { sheet.hidden = true; ['#bCrew', '#bOrders', '#bLog'].forEach(id => $(id).classList.remove('on')); }
+  if (!sheet.hidden) { sheet.hidden = true; SHEET_BUTTONS.forEach(id => $(id).classList.remove('on')); }
   tip.hidden = true; tipFor = null;
 }
 // A real project drives the clock: the time buttons only work in the sample shop.

@@ -1,10 +1,12 @@
 // mcp/kitchen-state.js
-// Reads and folds privacy-limited kitchen activity and checklist state into a full project snapshot.
+// Reads and folds privacy-limited kitchen activity, checklist state and the Pass ledger summary (progress over time, read-only) into a full project snapshot.
 'use strict';
 
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
+// The shared ledger fold; an install without it (a skills-only copy) shows no progress rather than failing.
+const ledgerSummary = (() => { try { return require('../scripts/ledger-summary.js'); } catch { return null; } })();
 
 const EVENTS = new Set(['SessionStart', 'Stop', 'SubagentStart', 'SubagentStop',
   'PreToolUse', 'PostToolUse', 'UserPromptExpansion']);
@@ -288,7 +290,13 @@ function countPlanTasks(markdown) {
 const PIECE_MARKERS = { walls: 'config', menu: 'prd', tickets: 'checklist', case: 'designSystem',
   safe: 'envCheck', oven: 'workflows', alarm: 'prePush', locks: 'branchProtection' };
 
-function buildSnapshot({ root, checklist = '', markers = {}, rows = [], cursor = 0, port = null, now, mergedPie = null, planTasks = {}, taskSubjects = null }) {
+// The Pass ledger as progress over time: the shared fold of scripts/ledger-summary.js, names from the checklist. No ledger is no pies.
+function progressOf(ledger, checklist) {
+  if (typeof ledger !== 'string' || !ledgerSummary) return { pies: [] };
+  return ledgerSummary.summarize(ledgerSummary.parseRows(ledger), { names: ledgerSummary.namesFromText(checklist) });
+}
+
+function buildSnapshot({ root, checklist = '', markers = {}, rows = [], cursor = 0, port = null, now, mergedPie = null, planTasks = {}, taskSubjects = null, ledger = null }) {
   const parsed = parseChecklist(checklist);
   const activity = foldActivity(rows, now, { mergedPie, activePie: parsed.pies.find(pie => pie.status === 'active')?.pie ?? null });
   for (const pie of parsed.pies) {
@@ -315,7 +323,7 @@ function buildSnapshot({ root, checklist = '', markers = {}, rows = [], cursor =
   }));
   const built = parsed.prepComplete || Object.values(pieces).every(piece => piece.present);
   return { project: { root, name: path.basename(root), setup: built ? 'built' : Object.values(pieces).some(piece => piece.present) ? 'partial' : 'none', pieces },
-    pies: parsed.pies, shopStatus: shopStatus(checklist), ...activity, cursor, port };
+    pies: parsed.pies, shopStatus: shopStatus(checklist), ...activity, cursor, port, progress: progressOf(ledger, checklist) };
 }
 
 async function readFileOrEmpty(file) {
@@ -389,6 +397,14 @@ function readTaskSubjects(root, now = Date.now()) {
   return value;
 }
 
+// Read-only, once per snapshot: the newest 1 MiB of the project's Pass ledger (the primary checkout's, shared by its worktrees), or null.
+function readLedger(root) {
+  if (!ledgerSummary) return null;
+  try {
+    return ledgerSummary.readLedgerText(ledgerSummary.ledgerFile(ledgerSummary.resolveRoot(root)), ledgerSummary.KITCHEN_MAX_BYTES);
+  } catch { return null; }
+}
+
 async function readKitchenState(root, { since, port = null, now = Date.now() } = {}) {
   if (since !== undefined && !integer(since)) throw new TypeError('since must be a nonnegative integer');
   root = path.resolve(root);
@@ -409,7 +425,7 @@ async function readKitchenState(root, { since, port = null, now = Date.now() } =
   const [planTasks, taskSubjects] = plans.length ? await Promise.all([readPlanTasks(root, plans), readTaskSubjects(root, now)]) : [{}, null];
   return buildSnapshot({ root, checklist: markdown, planTasks, taskSubjects,
     markers: { config, checklist: checklistExists, designSystem, workflows, prePush, envCheck, branchProtection, library, prd: docs.some(entry => entry.isFile() && /^prd-.*\.md$/.test(entry.name)) },
-    rows: [...previous.rows, ...latest.rows], cursor: latest.cursor, port, now, mergedPie });
+    rows: [...previous.rows, ...latest.rows], cursor: latest.cursor, port, now, mergedPie, ledger: readLedger(root) });
 }
 
 module.exports = { shopStatus, mergeEvidence, sanitizeRow, parseActivity, parseChecklist, foldActivity, buildSnapshot, readKitchenState,

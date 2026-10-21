@@ -67,7 +67,7 @@ Bold rows mark the skill each group of agents belongs to. The six agents at the 
 | **🍕 /special-order** | | |
 | `complexity-assessor` | Cass | Sizes up a mid-project feature request: one slice or several, what type, what it depends on, roughly how much work. Plans only, writes nothing. |
 | **🍕 /close-shop** | | |
-| `retrospective-reviewer` | Rhea | Reads the project's history (logs, commits, PRs, escalations) and identifies recurring friction the plugin itself caused. |
+| `retrospective-reviewer` | Rhea | Reads the project's history (logs, commits, PRs, escalations, and the Pass ledger's metrics when the mod ran) and identifies recurring friction the plugin itself caused. |
 | `proposal-drafter` | Paz | Turns those findings into ready-to-apply patch files against the plugin repo, one per improvement. Barred from modifying /close-shop itself. |
 | **🗄️ Deprecated (on disk, not registered)** | | |
 | `basic-checks-runner` | Not registered | Old lint/types/build runner from /sell-slice v4. Folded into `slice-verifier`. |
@@ -85,6 +85,7 @@ The [kitchen roster](../skills/open-kitchen/kitchen.html) groups characters into
 - **Sal** represents `/box-it-up` at the front window. It is a skill character rather than another registered agent.
 - **Dom** is `implementer#2`, the second simultaneous instance of the registered `implementer` role. Ren is the first instance. Dom does not increase the unique registered-agent count.
 - **Pia** is the `plater` scene helper that collects slices and plates pies. It is not a registered plugin agent.
+- **Base crew and town crew.** While a pie is open in live mode, Dom works the line, Ollie tends the oven and Sal minds the window on ambient duty, with Chef Nico leading; an agent that is actually running wears a gold work tag. The rest of the named crew live in town, in flats above the Main Street shops, until their agent starts, then run in to their station and walk back out when it finishes. The People sheet's Crew and Town tabs open a profile card for any of them.
 - Additional simultaneous plugin instances use numbered helpers in the matching division, such as `line helper 1`. Unknown plugin roles use line helpers. Non-plugin agents appear as numbered **Temp** helpers at the pass, preserving their actual agent type in the role description.
 
 The six deprecated agents above stay distinct from the 49 registered roles and have no documented named live-character assignment.

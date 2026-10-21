@@ -119,7 +119,7 @@ test('full plugin installs provide self-contained kitchen runtimes for both host
       const readme = await fs.readFile(path.join(pluginRoot, 'README.md'), 'utf8');
       assert.ok(readme.includes('assets/brand/logo.png'));
       assert.ok(readme.includes('docs/architecture.md'));
-      for (const reference of ['assets/brand/logo.png', 'docs/architecture.md', 'docs/agents.md']) {
+      for (const reference of ['assets/brand/logo.png', 'docs/architecture.md', 'docs/agents.md', 'docs/pass-mod-spec.md']) {
         assert.deepEqual(await fs.readFile(path.join(pluginRoot, reference)), await fs.readFile(path.join(repoRoot, reference)));
       }
       await fs.access(path.join(pluginRoot, 'commands/open-kitchen.md'));
@@ -133,6 +133,11 @@ test('full plugin installs provide self-contained kitchen runtimes for both host
           }
         }
       }
+      // The Pass hooks module ships with the Claude copy only; Cursor reads just the "hooks" key.
+      assert.deepEqual(hooks.modules, ['../mod/register.tsx']);
+      const passModule = path.join(pluginRoot, 'hooks', hooks.modules[0]);
+      if (host === 'claude') await fs.access(passModule);
+      else await assert.rejects(fs.access(path.join(pluginRoot, 'mod')));
       const projectRoot = path.join(root, `${host}-project`);
       const stateDir = path.join(projectRoot, '.claude/.bytheslice-state/kitchen');
       await fs.mkdir(stateDir, { recursive: true });
