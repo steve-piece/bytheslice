@@ -1,5 +1,5 @@
 // tests/kitchen/kitchen-orders.browser.js
-// Exercises the live Orders sheet: measured slice progress with the current step.
+// Exercises the live Orders sheet: measured slice progress with the current step, and pie details for served and planned pies.
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -64,6 +64,30 @@ async function main() {
     assert.equal((await page.textContent('#shBody')).includes('0%'), false, 'no percent appears anywhere without evidence');
     console.log('PASS orders progress: no task evidence shows a plain Building step and no percent');
 
+    if (process.argv.includes('--progress-only')) { assert.deepEqual(errors, []); return; }
+
+    // fix 3: served and planned pies open their details
+    await page.click('#shBody button.orow[data-order="pie-3"]');
+    let detail = await page.textContent('#shBody .od');
+    assert.match(detail, /Pie 3 · Served/); assert.match(detail, /Native Agent Registration/);
+    assert.match(detail, /register the roster as native plugin agents/);
+    assert.match(detail, /Commits 8453de9/); assert.match(detail, /Dated 2026-07-22 in the plan/);
+    assert.match(detail, /What it shipped/); assert.match(detail, /3\.1\s*Register agents/); assert.match(detail, /Agents array added to the manifest\./);
+    assert.equal(await page.$$eval('#shBody .od .slices li', items => items.length), 2);
+    await shot('served-detail');
+    console.log('PASS pie details: a served pie lists every slice, what it shipped, its commits and its date');
+
+    await page.click('#shBody [data-back]');
+    assert.ok(await page.$('#shBody button.orow[data-order="pie-6"]'), 'back returns to the order list');
+    await page.focus('#shBody button.orow[data-order="pie-6"]'); await page.keyboard.press('Enter');
+    detail = await page.textContent('#shBody .od');
+    assert.match(detail, /Pie 6 · Planned/); assert.match(detail, /6\.1\s*Frontend build manifest\s*Waiting/); assert.doesNotMatch(detail, /Commits/);
+    console.log('PASS pie details: a planned pie opens from the keyboard with its slices waiting');
+
+    await feed({});
+    assert.match(await page.textContent('#shBody .od'), /Pie 6 · Planned/, 'a poll keeps the open detail');
+    await page.click('#shClose'); await page.click('#bOrders');
+    assert.ok(await page.$('#shBody .sh-now'), 'reopening the sheet starts at the order list');
     assert.deepEqual(errors, []);
   } finally {
     await browser.close(); server.close();

@@ -120,6 +120,16 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .lrow time{font-size:11.5px;font-weight:800;color:var(--ink-soft);font-variant-numeric:tabular-nums;padding-top:1px}
 .lrow small{display:block;font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--accent)}
 .orow{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+button.orow{width:100%;background:none;border:0;border-bottom:1px solid var(--line);font:inherit;color:inherit;text-align:left;cursor:pointer;border-radius:0}
+button.orow:hover,button.orow:focus-visible{background:rgba(74,52,38,.04);outline:none}
+button.orow:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
+.sh-back{border:0;background:rgba(74,52,38,.07);border-radius:999px;padding:5px 12px;font:inherit;font-size:12.5px;font-weight:800;color:var(--ink-soft);cursor:pointer;margin:0 0 10px}
+.od .eyebrow{font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--accent)}
+.od h4{font-family:var(--display);font-weight:600;font-size:18px;margin:2px 0 6px}
+.od .cdesc{margin:0 0 8px;color:var(--ink-soft);font-size:13px}
+.od .facts{font-size:12px;font-weight:700;color:var(--ink-soft);margin:0 0 12px;display:flex;flex-wrap:wrap;gap:6px 12px}
+.od .facts code{font-size:11.5px}
+.od h5{font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--ink-soft);margin:12px 0 6px}
 .slices li small{display:block;grid-column:2/4;font-size:11.5px;font-weight:600;color:var(--ink-soft);white-space:normal;margin-top:-4px}
 .orow b{font-size:14px}.orow small{display:block;color:var(--ink-soft);font-weight:600;font-size:12px}
 .orow .pn{font-family:var(--display);font-weight:600;font-size:15px;color:var(--ink-soft)}
@@ -3088,6 +3098,7 @@ function lineUpdate() {
 const STEP_WORD = { build: 'Building', test: 'Testing', verify: 'Verifying', fix: 'Fixing', commit: 'Committing', review: 'Reviewing', plan: 'Planning' };
 const validProgress = p => p && Number.isSafeInteger(p.done) && Number.isSafeInteger(p.total) && p.total > 0 && p.done >= 0 && p.done <= p.total ? { done: p.done, total: p.total } : null;
 function snapshotOrders(snapshot) {
+  const factText = (value, max = 240) => typeof value === 'string' ? value.slice(0, max) : '';
   if (!Array.isArray(snapshot.pies)) return null;
   const ids = new Set(), orders = [];
   for (const pie of snapshot.pies) {
@@ -3099,6 +3110,7 @@ function snapshotOrders(snapshot) {
     const single = pie.single === true || pie.slices.length === 1;
     orders.push({ key: pie.id, n: pie.pie, sid: pie.slices[0]?.number || `${pie.pie}.1`, slice: single,
       title: String(pie.title || ''), desc: String(pie.title || ''), status: pie.status,
+      summary: factText(pie.summary), commit: factText(pie.commit, 90), date: factText(pie.date, 10),
       slices: pie.slices.map((slice, i) => [String(slice.title || ''), i % COOKS.length]),
       sliceRows: pie.slices.map(slice => ({ ...slice })) });
   }
@@ -3477,7 +3489,7 @@ function openSheet(kind) {
   const btn = { crew: $('#bCrew'), orders: $('#bOrders'), log: $('#bLog') }[kind]; const was = !sheet.hidden && sheet.dataset.kind === kind;
   ['#bCrew', '#bOrders', '#bLog'].forEach(id => $(id).classList.remove('on'));
   if (was) { sheet.hidden = true; return; }
-  sheet.hidden = false; sheet.dataset.kind = kind; btn.classList.add('on'); tip.hidden = true;
+  sheet.hidden = false; sheet.dataset.kind = kind; delete sheet.dataset.detail; btn.classList.add('on'); tip.hidden = true;
   if (kind === 'crew') {
     $('#shTitle').textContent = 'Crew';
     const active = new Set(actors.filter(a => !a.hidden && !a.isCustomer).map(a => a.meta.id));
@@ -3488,16 +3500,50 @@ function openSheet(kind) {
   else renderOrdersSheet();
 }
 function renderOrdersSheet() {
-  {
-    $('#shTitle').textContent = 'Orders';
-    const row = (pn, t, sub, chip) => `<div class="orow"><span class="pn">${escapeCard(pn)}</span><div><b>${escapeCard(t)}</b><small>${escapeCard(sub)}</small></div>${chip}</div>`;
-    $('#shBody').innerHTML =
-      (cur ? `<div class="sh-now"><div class="eyebrow">Now baking · ${escapeCard(cur && sceneMode === 'live' ? STEP_WORD[cur.slices.find(sl => sl.status === 'cooking')?.step] || 'Line' : STEP[Math.min(cur.stage, 5)])}</div><h4>${nm(cur.o)} · ${escapeCard(cur.o.title)}</h4><ul class="slices">${cur.slices.map(sl => `<li title="${escapeCard(taskNote(sl))}"><span class="sid">${sl.id}</span><span class="sname">${escapeCard(sl.name)}</span><span class="chip ${CHIP[sl.status][0]}">${sliceLabel(sl)}</span>${sl.live && sl.progress && sl.status === 'cooking' ? `<small>${escapeCard(taskNote(sl))}</small>` : ''}</li>`).join('')}</ul><p class="sh-meta">${Math.max(0, custQueue.length - 1)} more in line · ${parked.length} parked on the status board</p></div>` : '') +
-      custQueue.filter(c => c.order && (!cur || c.order !== cur.o)).map(c => row(nm(c.order), c.order.title, c.order.slice ? 'One slice, no split' : `${c.order.slices.length} slices`, '<span class="chip c-wait">Planned</span>')).join('') +
-      parked.map(p => row('Pie ' + p.n, p.title, p.why, '<span class="chip c-sent">86\'d</span>')).join('') +
-      [...served].reverse().map(s => row(s.slice ? 'Slice ' + s.sid : 'Pie ' + s.n, s.title, sceneMode === 'live' ? 'Completed in the plan' : s.slice ? 'Committed and pushed' : s.first ? 'Passed on the first inspection' : 'Sent back once, then passed', '<span class="chip c-pass">Served</span>')).join('');
-  }
+  $('#shTitle').textContent = 'Orders'; orderIndex.clear();
+  if (sheet.dataset.detail) { const pick = findOrder(sheet.dataset.detail); if (pick) return renderOrderDetail(pick); delete sheet.dataset.detail; }
+  const row = (o, state, sub, chip) => { orderIndex.set(orderKey(o), { o, state }); return `<button type="button" class="orow" data-order="${escapeCard(orderKey(o))}" aria-label="${escapeCard(`${nm(o)}, ${o.title}: open details`)}"><span class="pn">${escapeCard(nm(o))}</span><div><b>${escapeCard(o.title)}</b><small>${escapeCard(sub)}</small></div>${chip}</button>`; };
+  const nowStep = cur && sceneMode === 'live' ? STEP_WORD[cur.slices.find(sl => sl.status === 'cooking')?.step] || 'Line' : cur ? STEP[Math.min(cur.stage, 5)] : '';
+  if (cur) orderIndex.set(orderKey(cur.o), { o: cur.o, state: 'baking' });
+  $('#shBody').innerHTML =
+    (cur ? `<div class="sh-now"><div class="eyebrow">Now baking · ${escapeCard(nowStep)}</div><h4>${nm(cur.o)} · ${escapeCard(cur.o.title)}</h4><ul class="slices">${cur.slices.map(sl => `<li title="${escapeCard(taskNote(sl))}"><span class="sid">${sl.id}</span><span class="sname">${escapeCard(sl.name)}</span><span class="chip ${CHIP[sl.status][0]}">${sliceLabel(sl)}</span>${sl.live && sl.progress && sl.status === 'cooking' ? `<small>${escapeCard(taskNote(sl))}</small>` : ''}</li>`).join('')}</ul><p class="sh-meta">${Math.max(0, custQueue.length - 1)} more in line · ${parked.length} parked on the status board</p></div>` : '') +
+    custQueue.filter(c => c.order && (!cur || c.order !== cur.o)).map(c => row(c.order, 'planned', c.order.slice ? 'One slice, no split' : `${c.order.slices.length} slices`, '<span class="chip c-wait">Planned</span>')).join('') +
+    parked.map(p => `<div class="orow"><span class="pn">Pie ${p.n}</span><div><b>${escapeCard(p.title)}</b><small>${escapeCard(p.why)}</small></div><span class="chip c-sent">86'd</span></div>`).join('') +
+    [...served].reverse().map(s => row(s, 'served', sceneMode === 'live' ? s.date ? `Completed in the plan · ${s.date}` : 'Completed in the plan' : s.slice ? 'Committed and pushed' : s.first ? 'Passed on the first inspection' : 'Sent back once, then passed', '<span class="chip c-pass">Served</span>')).join('');
 }
+// every order row in the sheet opens its details; the index is rebuilt on each render so it follows the live line
+const orderIndex = new Map();
+const orderKey = o => o.key || nm(o);
+const sliceItem = (id, name, chip, note = '') => `<li><span class="sid">${escapeCard(id)}</span><span class="sname">${escapeCard(name)}</span>${chip}${note ? `<small>${escapeCard(note)}</small>` : ''}</li>`;
+function findOrder(key) {
+  if (cur && orderKey(cur.o) === key) return { o: cur.o, state: 'baking' };
+  const waiting = custQueue.find(c => c.order && orderKey(c.order) === key); if (waiting) return { o: waiting.order, state: 'planned' };
+  const done = served.find(s => orderKey(s) === key); return done ? { o: done, state: 'served' } : null;
+}
+// One pie in full: every slice with its status, and for a served pie the commits and date its checklist row states.
+function renderOrderDetail({ o, state }) {
+  const live = sceneMode === 'live' && Array.isArray(o.sliceRows);
+  const rows = live ? o.sliceRows : (o.slices || []).map((sl, i) => ({ number: o.slice ? o.sid : `${o.n}.${i + 1}`, title: sl[0], status: state === 'served' ? 'done' : 'open' }));
+  const curRow = id => cur && cur.o === o ? cur.slices.find(sl => sl.id === id) : null;
+  const chip = row => { const c = curRow(row.number); if (c) return `<span class="chip ${CHIP[c.status][0]}">${escapeCard(sliceLabel(c))}</span>`;
+    return row.status === 'done' ? '<span class="chip c-pass">Served</span>' : row.status === 'active' ? `<span class="chip c-cook">${escapeCard(STEP_WORD[row.step] || 'In progress')}</span>` : '<span class="chip c-wait">Waiting</span>'; };
+  const note = row => [row.summary, state === 'served' && row.commit ? `Commit ${row.commit}` : '', curRow(row.number) ? taskNote(curRow(row.number)) : row.progress && row.status !== 'done' ? taskNote(row) : ''].filter(Boolean).join(' · ');
+  const facts = state === 'served' ? [o.commit ? `<span>Commits <code>${escapeCard(o.commit)}</code></span>` : '', o.date ? `<span>Dated ${escapeCard(o.date)} in the plan</span>` : ''].filter(Boolean).join('') : '';
+  const label = { served: 'Served', planned: 'Planned', baking: 'Now baking' }[state];
+  $('#shBody').innerHTML = `<div class="od"><button type="button" class="sh-back" data-back>‹ All orders</button>
+    <div class="eyebrow">${escapeCard(nm(o))} · ${label}</div><h4>${escapeCard(o.title)}</h4>
+    ${o.summary || (!live && o.desc) ? `<p class="cdesc">${escapeCard(o.summary || o.desc)}</p>` : ''}
+    ${facts ? `<p class="facts">${facts}</p>` : ''}
+    <h5>${state === 'served' ? 'What it shipped' : 'Slices'}</h5>
+    ${rows.length ? `<ul class="slices">${rows.map(row => sliceItem(row.number, row.title, chip(row), note(row))).join('')}</ul>` : '<p class="cdesc">No slice list was recorded for this order.</p>'}</div>`;
+  $('#shBody').querySelector('[data-back]').focus({ preventScroll: true });
+}
+$('#shBody').addEventListener('click', event => {
+  const back = event.target.closest('[data-back]');
+  if (back) { delete sheet.dataset.detail; renderOrdersSheet(); $('#shBody').querySelector(`[data-order]`)?.focus({ preventScroll: true }); return; }
+  const pick = event.target.closest('[data-order]');
+  if (pick && sheet.dataset.kind === 'orders' && orderIndex.has(pick.dataset.order)) { sheet.dataset.detail = pick.dataset.order; renderOrdersSheet(); }
+});
 $('#bLog').onclick = () => openSheet('log'); $('#bCrew').onclick = () => openSheet('crew'); $('#bOrders').onclick = () => openSheet('orders'); $('#tracker').onclick = () => openSheet('orders');
 $('#shClose').onclick = () => { sheet.hidden = true; ['#bCrew', '#bOrders', '#bLog'].forEach(id => $(id).classList.remove('on')); };
 $('#bFit').onclick = () => animTo(FIT); $('#bHome').onclick = () => animTo(HOME);

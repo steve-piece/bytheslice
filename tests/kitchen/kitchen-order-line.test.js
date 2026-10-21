@@ -177,10 +177,10 @@ test('the actual live makePizza path calls makeSlice for a single order', () => 
 test('live customer cards, station cards, tracker attributes and Orders sheets escape plan titles', () => {
   const unsafe = '<img src=x onerror=alert(1)>', escaped = '&lt;img src=x onerror=alert(1)&gt;';
   const current = { o: { n: 4, title: unsafe }, slices: [{ id: '4.1', name: unsafe, st: 0, status: 'waiting' }], stage: 1 };
-  const element = { innerHTML: '' }, cards = [];
+  const element = { innerHTML: '', addEventListener() {} }, cards = [];
   const context = vm.createContext({ cur: current, sceneMode: 'live', STEP: ['Ticket', 'Line'],
     CHIP: { waiting: ['c-wait', 'Waiting'] }, sliceLabel: () => 'Waiting', STEP_WORD: {}, taskNote: () => '',
-    nm: order => `Pie ${order.n}`, custQueue: [], parked: [], served: [], $: () => element,
+    nm: order => `Pie ${order.n}`, custQueue: [], parked: [], served: [], $: () => element, sheet: { dataset: {} },
     stationObjs: [{}], STATION: [{ name: 'UI' }], COOKS: [{ meta: { name: 'Cook', id: 'cook' } }],
     tapTarget(g, card) { cards.push(card); } });
   const escapeSource = html.slice(html.indexOf('function escapeCard('), html.indexOf('let tipAnchor'));
