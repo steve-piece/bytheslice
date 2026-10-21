@@ -28,6 +28,7 @@
   ],
   "skills": "./skills",
   "commands": "./commands",
+  "types": "./mod/types/index.d.ts",
   "mcpServers": {
     "kitchen": {
       "command": "node",
