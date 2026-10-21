@@ -1,11 +1,12 @@
 // mod/tools.ts
-// The model's view of the Pass: bts_status (the same facts the pane shows, open HITL items and the team roster included), bts_note (a decision note in the ledger), and bts_hitl's and bts_wake's registration.
+// The model's view of the Pass: bts_status (the same facts the pane shows, open HITL items and the team roster included), bts_note (a decision note in the ledger), bts_pr_body (the pie PR's evidence section from scripts/ledger-summary.js), and bts_hitl's and bts_wake's registration.
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
 import { record } from './capture.ts'
 import { registerHitl } from './hitl.ts'
+import { ledgerPath } from './ledger.ts'
 import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, counts } from './projection.ts'
 import { runningFor } from './rail.tsx'
@@ -23,6 +24,9 @@ const teamAtom = atom({ plugin: 'bytheslice', key: 'pass.team' } as const, { at:
 
 export const STATUS_TOOL = 'bts_status'
 export const NOTE_TOOL = 'bts_note'
+export const PR_BODY_TOOL = 'bts_pr_body'
+/** The shared ledger fold under the plugin root. */
+export const SUMMARY_SCRIPT = 'scripts/ledger-summary.js'
 export const NOTE_MAX = 2000
 export const STATUS_LINES = 40
 /** Open HITL items bts_status lists one by one before it counts the rest. */
@@ -33,6 +37,7 @@ export const STATUS_BAKERS = 4
 /** The names a session lists the tools under (`mcp__<plugin>__<name>`); register.tsx matches them. */
 export const STATUS_LISTED = 'mcp__bytheslice__bts_status'
 export const NOTE_LISTED = 'mcp__bytheslice__bts_note'
+export const PR_BODY_LISTED = 'mcp__bytheslice__bts_pr_body'
 
 const STATUS_DESCRIPTION = [
   'The Pass status for this ByTheSlice project: the active pie and slice, each slice of the pie with its status',
@@ -49,7 +54,14 @@ const NOTE_DESCRIPTION = [
   'Returns ok once the note is recorded.',
 ].join(' ')
 
-/** Registers bts_status, bts_note, bts_hitl and bts_wake with their schemas in the prompt's tool list; resolves the listed names. */
+const PR_BODY_DESCRIPTION = [
+  'The pie PR evidence section, generated from the Pass ledger by scripts/ledger-summary.js: a Markdown slice table',
+  '(verifier verdict at commit, tester verdict, fix loops, models, duration, cost), one warnings line per check code,',
+  'HITL waits and the decision notes. pie defaults to the active pie. Write the output into the PR body under',
+  '## Evidence after the --fill content; it is generated, so never edit it by hand. Read-only: it changes nothing.',
+].join(' ')
+
+/** Registers bts_status, bts_note, bts_pr_body, bts_hitl and bts_wake with their schemas in the prompt's tool list; resolves the listed names. */
 export async function registerTools($: EngineInterface): Promise<string[]> {
   const listed: string[] = []
   const status = await $.tool.register({
@@ -84,6 +96,17 @@ export async function registerTools($: EngineInterface): Promise<string[]> {
     isDeferred: false,
   })
   listed.push(note.tool)
+  const prBody = await $.tool.register({
+    name: PR_BODY_TOOL,
+    description: PR_BODY_DESCRIPTION,
+    inputSchema: {
+      type: 'object',
+      properties: { pie: { type: 'integer', minimum: 0, description: 'The pie number; the active pie when left out.' } },
+      additionalProperties: false,
+    },
+    isDeferred: false,
+  })
+  listed.push(prBody.tool)
   listed.push(await registerHitl($))
   listed.push(await registerWake($))
   await update($, toolsAtom, () => listed).catch(() => undefined)
@@ -293,4 +316,43 @@ export async function serveNote($: EngineInterface, input: Record<string, unknow
     data: { text, ...(Array.from(raw).length > NOTE_MAX ? { cut: true } : {}) },
   })
   return row ? 'ok' : 'not recorded: the ledger could not be written'
+}
+
+/**
+ * Serves bts_pr_body: the output of `node <plugin root>/scripts/ledger-summary.js
+ * --pie <n> --format pr-body`, or one line naming what is missing (node, the
+ * ledger, a pie). Read-only; it never writes the PR itself.
+ */
+export async function servePrBody($: EngineInterface, input: Record<string, unknown>): Promise<string> {
+  const given = typeof input.pie === 'number' && Number.isSafeInteger(input.pie) && input.pie >= 0 ? input.pie : null
+  const c = await read($, checklistAtom).catch(() => null)
+  const pie = given ?? activePie(c)?.n ?? null
+  if (pie === null) return 'bts_pr_body: no pie named and no active pie in the checklist; call it with { pie: <n> }.'
+  let ledger: string
+  try {
+    ledger = await ledgerPath($)
+  } catch {
+    return 'bts_pr_body: the ledger path could not be resolved, so there is no evidence section; open the PR without it.'
+  }
+  if (!(await $.fs.exists(ledger).catch(() => false))) {
+    return `bts_pr_body: no ledger at ${ledger}; this pie was baked without the Pass, so the PR has no evidence section.`
+  }
+  let cwd = '.'
+  try {
+    cwd = await $.session.cwd()
+  } catch {
+    // The script resolves the ledger from the process directory.
+  }
+  const script = `${$.plugin.root.replace(/\/$/, '')}/${SUMMARY_SCRIPT}`
+  try {
+    const run = await $.process.run(['node', script, '--root', cwd, '--pie', String(pie), '--format', 'pr-body'], { cwd, timeoutMs: 20000 })
+    if (run.exitCode === 127) return 'bts_pr_body: node was not found on PATH, so the evidence section could not be generated; open the PR without it.'
+    if (run.exitCode !== 0) {
+      const why = run.stderr.trim().split('\n')[0] ?? ''
+      return `bts_pr_body: ${SUMMARY_SCRIPT} exited ${run.exitCode}${why === '' ? '' : ` (${why})`}; open the PR without the evidence section.`
+    }
+    return run.stdout.trimEnd()
+  } catch {
+    return 'bts_pr_body: node could not be started, so the evidence section could not be generated; open the PR without it.'
+  }
 }

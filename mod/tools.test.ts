@@ -1,12 +1,12 @@
 // mod/tools.test.ts
-// Unit tests for bts_status and bts_note: registration, an empty ledger, a mid-slice ledger, a mismatch, scope all, and note truncation.
+// Unit tests for bts_status, bts_note and bts_pr_body: registration, an empty ledger, a mid-slice ledger, a mismatch, scope all, note truncation, and the PR body from the ledger script or its one-line fallbacks.
 
 import { expect, test } from 'claude-code/testing'
 
 import { CHECKLIST_FIXTURE } from './fixtures/checklist.fixture.ts'
 import { rowLine } from './ledger.ts'
 import { ACTIVITY, LEDGER, START_MS, activityLine, note, rowsOf, stage, status } from './testing.tsx'
-import { NOTE_MAX, nextAction, statusReport } from './tools.ts'
+import { NOTE_MAX, PR_BODY_LISTED, SUMMARY_SCRIPT, nextAction, statusReport } from './tools.ts'
 
 const DONE_51 = CHECKLIST_FIXTURE.replace(
   '### Slice 5.1 - Pass pane and band [ ]\nStatus: Not Started',
@@ -15,11 +15,48 @@ const DONE_51 = CHECKLIST_FIXTURE.replace(
 
 const ledger = (...lines: string[]) => `${lines.join('\n')}\n`
 
-test('the four tools register at session start with their schemas in the prompt', async ($, on) => {
+test('the five tools register at session start with their schemas in the prompt', async ($, on) => {
   const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
   await start($)
-  expect(world.tools).toEqual(['bts_status', 'bts_note', 'bts_hitl', 'bts_wake'])
-  expect(world.deferred).toEqual({ bts_status: false, bts_note: false, bts_hitl: false, bts_wake: false })
+  expect(world.tools).toEqual(['bts_status', 'bts_note', 'bts_pr_body', 'bts_hitl', 'bts_wake'])
+  expect(world.deferred).toEqual({ bts_status: false, bts_note: false, bts_pr_body: false, bts_hitl: false, bts_wake: false })
+})
+
+const prBody = async ($: Parameters<typeof status>[0], input: Record<string, unknown> = {}) =>
+  String((await $.tool.call({ tool: PR_BODY_LISTED, ...input })).result)
+
+test('bts_pr_body returns the ledger script output for the pie, run with node from the plugin root', async ($, on) => {
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  world.files[LEDGER] = ledger(rowLine({ ev: 'slice.started', pie: 5, slice: '5.1' }, 1, 's'))
+  const body = '_Generated from `.bytheslice/ledger.jsonl`_\n\n| Slice | Verifier at commit |\n|---|---|\n| 5.1 Pass pane and band | none |\n'
+  const seen: string[][] = []
+  world.run = argv => {
+    if (argv[0] !== 'node') return undefined
+    seen.push(argv)
+    return { stdout: body }
+  }
+  await start($)
+  expect(await prBody($, { pie: 4 })).toBe(body.trimEnd())
+  expect(await prBody($)).toBe(body.trimEnd())
+  expect(seen.map(argv => argv.slice(2))).toEqual([
+    ['--root', '/repo', '--pie', '4', '--format', 'pr-body'],
+    ['--root', '/repo', '--pie', '5', '--format', 'pr-body'],
+  ])
+  expect(seen.every(argv => argv[1]?.endsWith(`/${SUMMARY_SCRIPT}`))).toBe(true)
+  // Read-only: the ledger gained no row.
+  expect(rowsOf(world)).toHaveLength(1)
+})
+
+test('bts_pr_body without a ledger, or without node, answers one line naming what is missing', async ($, on) => {
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  await start($)
+  const missing = await prBody($)
+  expect(missing).toBe(`bts_pr_body: no ledger at ${LEDGER}; this pie was baked without the Pass, so the PR has no evidence section.`)
+  world.files[LEDGER] = ledger(rowLine({ ev: 'slice.started', pie: 5, slice: '5.1' }, 1, 's'))
+  // The stand-in answers exit 127 for node, as a shell with no node on PATH does.
+  const noNode = await prBody($)
+  expect(noNode).toBe('bts_pr_body: node was not found on PATH, so the evidence section could not be generated; open the PR without it.')
+  for (const line of [missing, noNode]) expect(line.includes('\n')).toBe(false)
 })
 
 test('bts_status on an empty ledger names the active pie and every slice queued', async ($, on) => {
