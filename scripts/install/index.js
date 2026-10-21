@@ -41,12 +41,15 @@ function installPluginMode({ repoRoot, args, targets, pluginMetadata }) {
 
   for (const target of targets.pluginTargets) {
     const manifest = target.host === "cursor" ? pluginMetadata.cursor : pluginMetadata.claude;
+    // mod/ is the Pass, a Claude Code hooks module that hooks/hooks.json names under
+    // "modules"; Cursor reads only that file's "hooks" key, so its copy omits mod/.
     const sourcePaths = [
       target.manifestDir,
       "skills",
       "commands",
       "mcp",
       "hooks",
+      ...(target.host === "claude" ? ["mod"] : []),
       "assets/brand",
       "docs/architecture.md",
       "docs/agents.md",

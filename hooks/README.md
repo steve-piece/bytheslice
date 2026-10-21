@@ -2,6 +2,8 @@
 
 Deterministic guards that replace repetitive prose in CLAUDE.md and SKILL.md files. Hooks fire on Claude Code lifecycle events; scripts return exit-code 2 to BLOCK or exit-code 0 (with stdout) to inject WARN context.
 
+The Pass, the plugin's Claude Code mod (a TypeScript hooks module that `hooks.json` names under `modules` beside the `hooks` block), lives in [`mod/`](../mod/); Cursor reads only the `hooks` key and ignores it.
+
 ## Hooks
 
 | Hook | Event | Behavior |

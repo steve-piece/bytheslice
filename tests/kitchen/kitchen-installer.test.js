@@ -133,6 +133,11 @@ test('full plugin installs provide self-contained kitchen runtimes for both host
           }
         }
       }
+      // The Pass hooks module ships with the Claude copy only; Cursor reads just the "hooks" key.
+      assert.deepEqual(hooks.modules, ['../mod/register.tsx']);
+      const passModule = path.join(pluginRoot, 'hooks', hooks.modules[0]);
+      if (host === 'claude') await fs.access(passModule);
+      else await assert.rejects(fs.access(path.join(pluginRoot, 'mod')));
       const projectRoot = path.join(root, `${host}-project`);
       const stateDir = path.join(projectRoot, '.claude/.bytheslice-state/kitchen');
       await fs.mkdir(stateDir, { recursive: true });
