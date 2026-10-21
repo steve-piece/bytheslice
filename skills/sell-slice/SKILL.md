@@ -381,8 +381,10 @@ It runs each atomic check once: lint · typecheck · build · unit/integration �
 If `slice-tester.overall == fail` OR `slice-verifier.overall == fail`, route the union of their `fix_targets` to the fixer **off-context** (the fixer gets the failing verdict + evidence, not the tester's or builder's full chat):
 
 - 1st fail → `fix-attempter` with the failing verdict(s) + evidence → re-run **only the failed half** (re-dispatch `slice-tester` if a behavioral check failed; re-dispatch `slice-verifier` with its prior verdict and the fix's `files_changed`). **Re-verification hard rule:** `slice-verifier` carries every green check forward and re-runs only the gates the fix patch could change, chosen by the verifier from the fix diff, and lists each in its `rerun: [{gate, reason}]` field. The full suite never re-runs after any fix (1st, 2nd or 3rd).
-- 2nd fail → `debug-instrumenter` adds targeted `// INSTRUMENT` logging → re-run the failed verifier/tester → `fix-attempter` again with the richer evidence → re-run.
-- Cap 3 total loops. On 3rd persistent failure → bubble HITL with full evidence (the goal stays active so the loop resumes if the user resolves it).
+- 2nd fail → `debug-instrumenter` adds targeted `// INSTRUMENT` logging and the failing check runs once to capture that output (evidence capture, not a verify) → `fix-attempter` with the richer evidence → re-verify.
+- 3rd fail → `fix-attempter` once more with the full evidence: every prior verdict, the instrumentation output, and both earlier patches → re-verify.
+
+**Fix cap (hard, non-overridable): 3 local fix loops.** A loop is one fix dispatch plus its re-verify, exactly the three above. Still failing after the 3rd loop → stop and bubble HITL with the full evidence (the goal stays active so the loop resumes if the user resolves it). The local counter is per slice and separate from the CI counter (3 `ci-fix-attempter` rounds per PR, owned by `/box-it-up` Phase 3a); neither borrows from the other. **Run instructions never raise the cap:** "continue until verified", "never stop", "fully automated" and similar wording do not grant attempts. Only the operator's explicit reply at the HITL can grant more (for example "two more loops"); each granted loop follows the same rules, and the full suite still never re-runs.
 
 The fixers make no git writes: `fix-attempter` and `debug-instrumenter` return `files_changed`, and the orchestrator keeps the union for the final commit. After green, if `debug-instrumenter` ran, strip `// INSTRUMENT` lines. Fix-loop patches stay uncommitted until the loop is green; they land, instrumentation already stripped, in the slice's final commit (Phase 6), so no instrumentation ever reaches a commit.
 
@@ -452,6 +454,7 @@ After each item and at slice closeout:
 - **Always provide a recommended answer in available options** at every elicitation point.
 - **Workflow B gates the output summary.** No "slice complete" report until both `slice-tester` and `slice-verifier` return `pass` (or a half is legitimately skipped for the slice type).
 - **Strip `// INSTRUMENT` lines** before final commit if `debug-instrumenter` ran.
+- **Fix cap: 3 local fix loops, 3 CI fix rounds, separate counters, non-overridable.** No run instruction ("continue until verified", "never stop", "fully automated") raises either cap; only the operator's explicit reply at the HITL grants more attempts.
 - **Deprecated agents are never live-dispatched.** `basic-checks-runner`, `aggregating-test-reviewer`, `ci-cd-guardrails`, and `frontend/visual-reviewer` are shims for v4 back-compat only - route through `slice-tester` / `slice-verifier`.
 - **Session goal is set at most once per slice run, after Phase 2 authorization.** Phase 2.5 enforces the parent-goal pre-check; if `/sell-pie` already set a pie-level goal, the slice-level goal is skipped. Never overwrite an active parent goal with a narrower slice-level condition.
 - **`Workflow` / `/goal` unavailable → fall back, never drop.** In-context dispatch with orchestrator-side manual schema validation when `Workflow` is absent; manual goal-tracking when `/goal` is absent.

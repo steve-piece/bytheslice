@@ -123,7 +123,7 @@ Loop counter starts at 1. Cap at **3 attempts**.
 4. The agent makes no git writes: it returns `files_changed` and a proposed commit subject and body. **This skill** stages exactly those paths (`git add -- <paths>`), commits with the proposed message, and pushes to `origin "$BRANCH"` (never forced; a rejected push is a `destructive_operation` HITL). Do not call `--watch` from inside the dispatch - the skill returns to Phase 3 (top) after its push lands and re-invokes `gh pr checks --watch` against the new head SHA.
 5. Increment the counter. If it would exceed 3, STOP. Surface as `creative_direction` HITL with the full failure history so the user can decide whether to debug manually, retry CI, or close the PR.
 
-The 3-attempt cap is a hard rule. Three identical-cause failures in a row signal a structural problem (flaky test, missing secret, infra outage) that needs human judgment.
+The 3-attempt cap is a hard rule and is **not overridable by the run instruction**: "continue until CI is green", "never stop", "fully automated" or an autonomous-delivery instruction do not add rounds. Only the operator's explicit reply at this HITL can grant more. The CI counter is per PR and separate from the conductor's 3 local fix loops per slice; neither borrows from the other. Three identical-cause failures in a row signal a structural problem (flaky test, missing secret, infra outage) that needs human judgment.
 
 ### Phase 4 - Merge Authorization Gate *(pie-completion / universal - the kept pie-boundary HITL)*
 
@@ -215,7 +215,7 @@ HITL categories the skill produces:
 - **Clean up from the primary checkout, in order.** Sync `main` with `git -C "$PRIMARY" pull --ff-only`, then `worktree remove`, then `branch -d`, then the remote delete, then `worktree prune`. Never check out `main` inside a worktree, and never delete a branch a worktree still holds.
 - **Never edit a tracked file on `main`.** The Pie's checklist flip is committed on the pie branch before the PR opens.
 - **Never auto-resolve merge conflicts during cleanup pull.** `--ff-only` fails fast; the user resolves.
-- **Cap the CI fix loop at 3 attempts.** Beyond that → HITL `creative_direction`. No "one more try."
+- **Cap the CI fix loop at 3 attempts.** Beyond that → HITL `creative_direction`. No "one more try." No run instruction raises the cap; only the operator's explicit reply at the HITL does. Separate from the 3 local fix loops per slice.
 - **Cap CI watch at 30 minutes per attempt.** Beyond that → HITL `external_credentials`.
 - **Reuse existing PRs.** If an open PR already tracks the branch, watch its CI; never create a duplicate.
 - **Never call `ask_user_input_v0`.** Set `needs_human` + `hitl_*` and let the orchestrator prompt.

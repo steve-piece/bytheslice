@@ -318,6 +318,13 @@ Technically yes (the orchestrator will accept a HITL override with `destructive_
 </details>
 
 <details>
+<summary><b>How many times will it try to fix a failure?</b></summary>
+
+At most **3 local fix loops per slice** (a loop is one fix plus its re-check: a targeted fix, then debug logging plus a fix, then a fix with all the evidence) and, separately, **3 CI fix rounds per PR**. After that the kitchen stops and asks you, with the full evidence. Telling it "continue until verified", "never stop" or "fully automated" does not raise the cap; only your explicit reply at that question can grant more attempts.
+
+</details>
+
+<details>
 <summary><b>What happens if a slice is too big?</b></summary>
 
 `/sell-slice` will stop at the 6-task / ~15-file cap and return `needs_human: true` with category `prd_ambiguity` asking you to split the stage. Then re-run `/cook-pizzas` against the same PRD with that stage flagged for further decomposition (or use `/special-order` to add a refined split).

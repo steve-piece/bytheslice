@@ -18,7 +18,7 @@ The skill drives one pie end-to-end:
    - **builder** writes the slice + unit tests and emits the **build manifest**;
    - **slice-tester** independently verifies behavior — receiving **only** the manifest + Exit criteria + design-system path, never the builder's reasoning, so it cannot rationalize the builder's choices;
    - **slice-verifier** runs each static gate once + the manifest under-declaration backstop;
-   - **fixer** applies the smallest off-context fix on failure (capped at 3 loops → HITL).
+   - **fixer** applies the smallest off-context fix on failure: at most 3 local fix loops per slice, and separately 3 CI fix rounds per PR. No run instruction ("continue until verified", "never stop", "fully automated") raises either cap; on exhaustion the loop halts with a HITL and only your explicit reply there grants more.
    Then commit + push the slice (`feat(pie-N): N.M — <name>`) via `/box-it-up --slice` — **no PR, so CI stays quiet** — and advance.
 3. **Continuous mode** (`review: continuous`) — for sensitive pies (Payments, Auth, real-data migrations), drive each slice through high-touch `/sell-slice` instead of the autonomous Workflow.
 4. **Pie boundary** — when every slice is `[x]`, stop and hand off to `/box-it-up`: open one PR `Pie N`, run CI **once**, take the merge-authorization HITL, merge **preserving every per-slice commit** (never squash), sync main, delete the branch, remove the worktree. The next pie starts in a fresh chat.
