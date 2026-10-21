@@ -2051,6 +2051,8 @@ const BBPEOPLE = [
   { name: 'Priya', what: 'Cheering in the stands', look: { hair: 'bun', hairC: 0x1f1813, top: 0xc0392b }, fan: true, still: [STANDS.x(0), 20.6], face: Math.PI / 2, pose: 'sit', seatY: -.14, lift: .38, home: standsHome('Priya', 20.6) },
   { name: 'Marcus', what: 'Cheering in the stands', look: { hair: 'beard', hairC: 0x2a1d17, top: 0xc0392b }, fan: true, still: [STANDS.x(0), 21.3], face: Math.PI / 2, pose: 'sit', seatY: -.14, lift: .38, home: standsHome('Marcus', 21.3) },
 ];
+// Tess stands behind her counter (the house side, away from the sidewalk), facing the customers on the sidewalk
+const LEMON_SPOT = [HS(4).gate[0] + 1.6, -13.68];
 const TOWNIES = [
   { name: 'Marge', what: 'Out on Main Street', look: { hair: 'bob', hairC: 0x8a5a3a, top: 0xc98f86, pants: 0x5f7d93 }, brain: { start: 'flor', home: { via: 'barb', door: [-19.3, 4.15] }, likes: { florist: 1.5, window: 1.2, barber: .4, chat: .5 } } },
   { name: 'Theo', what: 'Out and about', look: { hair: 'cap', hatC: 0x5f7d93, hairC: 0x2a1d17, top: 0xd8a23c }, brain: { start: 'g6', home: { house: 6 }, likes: { bakery: 2, diner: .5 } } },
@@ -2086,7 +2088,7 @@ const TOWNIES = [
   { name: 'Martha', what: 'Gardening in her front yard', look: { hair: 'sunhat', hairC: 0xdcd2c3, hatC: 0xe6cf98, top: 0xb9a7c9, pants: 0x6c8a52 }, waver: true, brain: { start: 'g2', begin: 'garden', home: { house: 2 }, likes: { garden: 4, florist: 1.2, window: .5 } } },
   { name: 'Earl', what: 'Coffee and the morning paper on the porch', look: { hair: 'baldGlasses', hairC: 0xdcd2c3, top: 0x7e9db5, pants: 0x5a4a40, prop: 'newspaper' }, rock: true, brain: { start: 'g3', begin: 'porch', home: { house: 3 }, likes: { porch: 4, bakery: 1, bench: .6, cafe: .8 }, early: true } },
   { name: 'Hank', what: 'Mowing the lawn', look: { hair: 'cap', hatC: 0xc9533b, hairC: 0x8a5a3a, top: 0x9fae8c }, loop: [[HS(5).x - .8, -14.0], [HS(5).x + 1.6, -14.0]], speed: .7, mower: true, home: doorPath(5).slice(1) },
-  { name: 'Tess', what: 'Selling lemonade, 50 cents', look: { hair: 'puffs', hairC: 0x2a1d17, top: 0xf3cf72 }, still: [HS(4).gate[0] + 1.6, -13.35], face: 0, kid: true, home: [[HS(4).gate[0] + 1.2, -13.85], [HS(4).gate[0], -13.85], HS(4).porch, HS(4).door] },
+  { name: 'Tess', what: 'Selling lemonade, 50 cents', look: { hair: 'puffs', hairC: 0x2a1d17, top: 0xf3cf72 }, still: LEMON_SPOT, face: 0, kid: true, home: [[HS(4).gate[0] + 1.2, -13.85], [HS(4).gate[0], -13.85], HS(4).porch, HS(4).door] },
   { name: 'Carl', what: 'Delivering the mail', look: { hair: 'cap', hatC: 0x3f5f8a, hairC: 0x2a1d17, top: 0x8fa9c0, pants: 0x3f5f8a, prop: 'satchel' }, mail: true, home: [[15.75, 4.15]], navHome: true },
 ];
 const townies = TOWNIES.map((t, i) => {
@@ -2121,7 +2123,7 @@ const bouquet = (() => {
 const iceCone = (() => { const g = G(0, 0, 0, root, 'cone'); g.userData.oneHand = { tilt: -.15 }; P(cyl(.05, .012, .17, 10), m('waffle', 0xd9a35a, { b: 1.2 }), 0, .04, 0, g); P(sph(.056, 12, 8), m('scoop', 0xf2b8c6, { nobump: true }), 0, .14, 0, g); P(sph(.02, 8, 6), m('cherry', 0xc0101a, { nobump: true }), 0, .2, 0, g); g.visible = false; return g; })();
 const mug = P(cyl(.06, .05, .12, 12), m('mug', 0xfbf6ec), HS(3).x + 1.9, .87, HZ + .45); P(rbox(.4, .5, .4, .03), M.walnut, HS(3).x + 1.88, .55, HZ + .45);
 const steam = [0, 1, 2].map(i => { const p = P(sph(.04, 8, 6), m('steam', 0xffffff, { op: .5, nobump: true }), HS(3).x + 1.9, 1.0, HZ + .45); p.castShadow = false; return p; });
-{ const ls = G(HS(4).gate[0] + 1.6, 0, -13.0); P(rbox(1.1, .7, .5, .03), M.creamW, 0, .35, 0, ls); P(rbox(1.2, .05, .6, .02), m('lemonTop', 0xf3cf72), 0, .72, 0, ls); P(cyl(.08, .08, .22, 12), m('pitcher', 0xf6e58a, { op: .8 }), -.3, .86, 0, ls); [0, .2].forEach(x => P(cyl(.04, .035, .1, 10), M.creamW, x, .8, .05, ls)); [-.5, .5].forEach(x => P(cyl(.025, .025, 1.0, 6), M.walnutL, x, 1.0, -.2, ls)); P(rbox(1.1, .3, .04, .01), m('lemonSign', 0xf3cf72), 0, 1.45, -.2, ls); }
+{ const ls = G(HS(4).gate[0] + 1.6, 0, -13.0, root, 'lemonadeStand'); P(rbox(1.1, .7, .5, .03), M.creamW, 0, .35, 0, ls); P(rbox(1.2, .05, .6, .02), m('lemonTop', 0xf3cf72), 0, .72, 0, ls); P(cyl(.08, .08, .22, 12), m('pitcher', 0xf6e58a, { op: .8 }), -.3, .86, 0, ls); [0, .2].forEach(x => P(cyl(.04, .035, .1, 10), M.creamW, x, .8, .05, ls)); [-.5, .5].forEach(x => P(cyl(.025, .025, 1.0, 6), M.walnutL, x, 1.0, -.2, ls)); P(rbox(1.1, .3, .04, .01), m('lemonSign', 0xf3cf72), 0, 1.45, -.2, ls); }
 async function life(a) {
   const t = a.townie, gen = ++a.gen, alive = () => a.gen === gen;
   a.tballReady = false;
@@ -4151,6 +4153,8 @@ Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
   get baseCrew() { return BASE_CREW().map(({ actor }) => ({ character: actor.meta.id, name: actor.meta.name, ambient: ambient.has(actor.meta.id),
     task: actor.task, mode: actor.mode, hidden: !!actor.hidden, position: [actor.pos.x, actor.pos.z], tag: actor.workTagO?.on ? actor.workTagO.el.textContent : null })); },
   get oven() { return { on: ovenOn, verifying: liveVerifying }; },
+  get lemonade() { const stand = root.getObjectByName('lemonadeStand'), box = new THREE.Box3().setFromObject(stand.children[0]), tess = townies.find(a => a.townie.name === 'Tess');
+    return { counter: { x: [box.min.x, box.max.x], z: [box.min.z, box.max.z] }, sidewalkZ: HS(4).gate[1], tess: { x: tess.pos.x, z: tess.pos.z, yaw: tess.goalYaw, task: tess.task, hidden: !!tess.hidden, mode: tess.mode } }; },
   get chef() { return { name: A.chef.meta.name, task: A.chef.task, hidden: !!A.chef.hidden, mode: A.chef.mode, position: [A.chef.pos.x, A.chef.pos.z] }; },
   get orders() { return { ready: liveLineReady, queue: custQueue.map((customer, index) => ({ key: customer.order.key || nm(customer.order),
     label: nm(customer.order), title: customer.order.title, single: !!customer.order.slice, added: !!customer.added,
