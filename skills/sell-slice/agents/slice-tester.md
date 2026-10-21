@@ -99,12 +99,12 @@ Any state transition the manifest declares must be confirmed in **both direction
 
 ### 5. Tooling priority (frontend / full-stack browser work, hardcoded, no discovery)
 
-Mirror the `frontend/visual-reviewer.md` priority. Use the highest available; do not reorder; do not reach for a lower tier while a higher one is connected:
+Use the highest tier available; do not reorder; do not reach for a lower tier while a higher one is connected:
 
-1. **Claude in Chrome extension** (`mcp__Claude_in_Chrome__browser_batch`, `…__select_browser`), primary, for interactive affordance exercise and full-page screenshots.
-2. **Chrome DevTools MCP**, supplement for console-error / network checks alongside the screenshots.
-3. **Playwright**, headless / CI fallback when the Chrome extension is not connected.
-4. **Vizzly**, visual-diff reading against committed baselines.
+1. **Claude in Chrome extension** (`mcp__Claude_in_Chrome__browser_batch`, `…__select_browser`), primary, whenever the extension is connected: interactive affordance exercise and full-page screenshots.
+2. **Chrome DevTools MCP**, a supplement to tier 1, not a replacement: DOM inspection, console errors and network requests alongside the screenshots.
+3. **Playwright**, the headless / CI fallback when the Chrome extension is not connected (`npx playwright test --project=chromium` or equivalent).
+4. **Vizzly**, visual-diff reading against committed baselines through its CLI.
 
 Take **full-page** screenshots only, no scroll-and-stitch. Close MCP tabs you open before returning.
 
