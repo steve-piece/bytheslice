@@ -1,15 +1,16 @@
 // mod/tools.ts
-// The model's view of the Pass: bts_status (the same facts the pane shows) and bts_note (a decision note in the ledger).
+// The model's view of the Pass: bts_status (the same facts the pane shows, open HITL items included), bts_note (a decision note in the ledger) and bts_hitl's registration.
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
 import { record } from './capture.ts'
+import { registerHitl } from './hitl.ts'
 import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, counts } from './projection.ts'
 import { runningFor } from './rail.tsx'
 import { mismatchLine } from './reconcile.ts'
-import type { PassChecklist, PassLive, PassProjection, PassSliceView } from './types'
+import type { PassChecklist, PassHitlItem, PassLive, PassProjection, PassSliceView } from './types'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
 const ledgerAtom = atom({ plugin: 'bytheslice', key: 'pass.ledger' } as const, null)
@@ -21,6 +22,8 @@ export const STATUS_TOOL = 'bts_status'
 export const NOTE_TOOL = 'bts_note'
 export const NOTE_MAX = 2000
 export const STATUS_LINES = 40
+/** Open HITL items bts_status lists one by one before it counts the rest. */
+export const STATUS_HITL = 3
 
 /** The names a session lists the tools under (`mcp__<plugin>__<name>`); register.tsx matches them. */
 export const STATUS_LISTED = 'mcp__bytheslice__bts_status'
@@ -40,7 +43,7 @@ const NOTE_DESCRIPTION = [
   'Returns ok once the note is recorded.',
 ].join(' ')
 
-/** Registers both tools with their schemas in the prompt's tool list; resolves the listed names. */
+/** Registers bts_status, bts_note and bts_hitl with their schemas in the prompt's tool list; resolves the listed names. */
 export async function registerTools($: EngineInterface): Promise<string[]> {
   const listed: string[] = []
   const status = await $.tool.register({
@@ -75,11 +78,19 @@ export async function registerTools($: EngineInterface): Promise<string[]> {
     isDeferred: false,
   })
   listed.push(note.tool)
+  listed.push(await registerHitl($))
   await update($, toolsAtom, () => listed).catch(() => undefined)
   return listed
 }
 
 const gateWord = (gate: string): string => (gate === 'slice-tester' ? 'tester' : 'verifier')
+
+/** One open HITL item as bts_status lists it: id, category, slice, age and the question on one short line. */
+export function hitlStatusLine(item: PassHitlItem, now: number): string {
+  const question = Array.from(item.question.replace(/\s+/g, ' ').trim())
+  const shown = question.length <= 100 ? question.join('') : `${question.slice(0, 99).join('').trimEnd()}…`
+  return `${item.id} ${item.category}${item.slice === null ? '' : ` ${item.slice}`} ${runningFor(now - item.t)}: ${shown}`
+}
 
 /** A slice's status word: `fixing (1/3)` while fixing, else the plain word. */
 export function statusWord(view: PassSliceView): string {
@@ -197,7 +208,13 @@ export function statusReport(
     lines.push(`Fix loop: ${sv?.fixLoop ?? 0}/${FIX_CAP}`)
   }
   lines.push(`Live agents: ${liveWords(live, p, now)}`)
-  lines.push('Open HITL: none')
+  const open = p?.hitl?.open ?? []
+  if (open.length === 0) lines.push('Open HITL: none')
+  else {
+    lines.push(`Open HITL: ${open.length} (oldest first; answer with bts_hitl { id, answer })`)
+    for (const item of open.slice(0, STATUS_HITL)) lines.push(`  - ${hitlStatusLine(item, now)}`)
+    if (open.length > STATUS_HITL) lines.push(`  and ${open.length - STATUS_HITL} more (the pane lists them all)`)
+  }
   const mismatches = (p?.mismatches ?? []).filter(m => m.kind === 'done-without-pass')
   if (mismatches.length === 0) lines.push('Mismatches: none')
   else {

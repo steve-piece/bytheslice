@@ -1,5 +1,5 @@
 // mod/ledger-projection.ts
-// Pure projection of ledger rows plus the kitchen activity log onto the checklist: slice status, verdicts, fix loops, live agents, rollups, warnings.
+// Pure projection of ledger rows plus the kitchen activity log onto the checklist: slice status, verdicts, fix loops, live agents, rollups, warnings, the HITL inbox.
 
 import type { EngineInterface } from 'claude-code'
 
@@ -9,6 +9,8 @@ import type {
   PassChecklist,
   PassFinding,
   PassGate,
+  PassHitl,
+  PassHitlItem,
   PassLiveAgent,
   PassMismatch,
   PassProjection,
@@ -165,6 +167,52 @@ export function findingsOf(rows: readonly LedgerRow[], keep = FINDINGS_KEEP): Pa
     out.push({ code, slice: row.slice ?? null, text, t: row.t })
   }
   return out
+}
+
+const HITL_CATEGORIES: ReadonlySet<string> = new Set([
+  'prd_ambiguity',
+  'external_credentials',
+  'destructive_operation',
+  'creative_direction',
+  'other',
+])
+
+const text = (value: unknown): string | null => (typeof value === 'string' && value !== '' ? value : null)
+
+/**
+ * The HITL inbox from the ledger: each `hitl.raised` row is an item until its
+ * first `hitl.answered` row (any route: a reply, the pane, the tool); open
+ * items come oldest first, and each answered one keeps how long it waited
+ * (the answer's time minus the raise's). A row without an id is skipped. Pure.
+ */
+export function hitlOf(rows: readonly LedgerRow[]): PassHitl {
+  const raised = new Map<string, PassHitlItem>()
+  const waitedMs: Record<string, number> = {}
+  for (const row of rows) {
+    const id = text(row.data?.id)
+    if (id === null) continue
+    if (row.ev === 'hitl.raised' && !raised.has(id)) {
+      const data = row.data ?? {}
+      const category = typeof data.category === 'string' && HITL_CATEGORIES.has(data.category) ? data.category : 'other'
+      raised.set(id, {
+        id,
+        category: category as PassHitlItem['category'],
+        question: text(data.question) ?? '',
+        context: text(data.context),
+        source: data.source === 'pass' ? 'pass' : 'agent',
+        asked: data.asked === 'pane' ? 'pane' : 'chat',
+        kind: text(data.kind),
+        pie: row.pie ?? null,
+        slice: row.slice ?? null,
+        t: row.t,
+      })
+    } else if (row.ev === 'hitl.answered' && waitedMs[id] === undefined) {
+      const item = raised.get(id)
+      if (item) waitedMs[id] = Math.max(0, row.t - item.t)
+    }
+  }
+  const open = [...raised.values()].filter(item => waitedMs[item.id] === undefined).sort((a, b) => a.t - b.t)
+  return { open, waitedMs }
 }
 
 /** What a slice.rollup row keeps: per-role agent counts, tokens and time, and fix loops. */
@@ -377,6 +425,7 @@ export function projectLedger(
     mismatches: mismatchesOf(views),
     untracked: views.filter(view => view.done && !view.tracked).length,
     findings: findingsOf(rows),
+    hitl: hitlOf(rows),
     at: now,
   }
 }

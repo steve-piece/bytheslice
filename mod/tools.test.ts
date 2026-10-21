@@ -15,11 +15,11 @@ const DONE_51 = CHECKLIST_FIXTURE.replace(
 
 const ledger = (...lines: string[]) => `${lines.join('\n')}\n`
 
-test('both tools register at session start with their schemas in the prompt', async ($, on) => {
+test('the three tools register at session start with their schemas in the prompt', async ($, on) => {
   const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
   await start($)
-  expect(world.tools).toEqual(['bts_status', 'bts_note'])
-  expect(world.deferred).toEqual({ bts_status: false, bts_note: false })
+  expect(world.tools).toEqual(['bts_status', 'bts_note', 'bts_hitl'])
+  expect(world.deferred).toEqual({ bts_status: false, bts_note: false, bts_hitl: false })
 })
 
 test('bts_status on an empty ledger names the active pie and every slice queued', async ($, on) => {
