@@ -1,0 +1,32 @@
+{"v":1,"t":1760000000000,"sid":"s1","ev":"pie.started","pie":4,"data":{"skill":"sell-pie"}}
+{"v":1,"t":1760000000000,"sid":"s1","ev":"slice.started","pie":4,"slice":"4.7","data":{"skill":"sell-pie"}}
+{"v":1,"t":1760000300000,"sid":"s1","ev":"verdict","pie":4,"slice":"4.7","data":{"gate":"slice-verifier","overall":"pass","fix_targets":[],"rerun":[],"head":"4747474747474747474747474747474747474747"}}
+{"v":1,"t":1760000360000,"sid":"s1","ev":"commit","pie":4,"slice":"4.7","data":{"sha":"4747474747474747474747474747474747474747","branch":"pie-4-live-kitchen"}}
+{"v":1,"t":1760000420000,"sid":"s1","ev":"usage","pie":4,"slice":"4.7","data":{"turnId":"t1","durationMs":1000,"tokens":{"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":900,"cache_creation_input_tokens":0},"model":"claude-opus-5-5","costUsd":0.5}}
+{"v":1,"t":1760000480000,"sid":"s1","ev":"slice.done","pie":4,"slice":"4.7","data":{"verdict":{"overall":"pass","head":"4747474747474747474747474747474747474747","t":1760000300000}}}
+{"v":1,"t":1760000540000,"sid":"s1","ev":"merge","pie":4,"data":{"kind":"pr","pr":42}}
+{"v":1,"t":1760000600000,"sid":"s2","ev":"pie.started","pie":5,"data":{"skill":"sell-pie"}}
+{"v":1,"t":1760000600000,"sid":"s2","ev":"slice.started","pie":5,"slice":"5.1","data":{"skill":"sell-pie","head":"aaaa111122223333444455556666777788889999"}}
+{"v":1,"t":1760000720000,"sid":"s2","ev":"edit","pie":5,"slice":"5.1","data":{"path":"mod/rail.tsx","aid":"ag1","agent":"implementer","tool":"Edit"}}
+{"v":1,"t":1760000840000,"sid":"s2","ev":"usage","pie":5,"slice":"5.1","data":{"turnId":"t2","durationMs":1000,"tokens":{"input_tokens":200,"output_tokens":100},"model":"claude-opus-5-5","costUsd":0.25}}
+{"v":1,"t":1760000900000,"sid":"s2","ev":"verdict","pie":5,"slice":"5.1","data":{"gate":"slice-tester","overall":"pass","fix_targets":[],"head":"bbbb111122223333444455556666777788889999"}}
+{"v":1,"t":1760000960000,"sid":"s2","ev":"verdict","pie":5,"slice":"5.1","data":{"gate":"slice-verifier","overall":"pass","fix_targets":[],"head":"bbbb111122223333444455556666777788889999"}}
+{"v":1,"t":1760001020000,"sid":"s2","ev":"commit","pie":5,"slice":"5.1","data":{"sha":"bbbb111122223333444455556666777788889999","branch":"pie-5-the-pass"}}
+{"v":1,"t":1760001080000,"sid":"s2","ev":"note","pie":5,"slice":"5.1","data":{"text":"chose tee -a for appends"}}
+{"v":1,"t":1760001200000,"sid":"s2","ev":"slice.done","pie":5,"slice":"5.1","data":{"verdict":null}}
+{"v":1,"t":1760001200000,"sid":"s2","ev":"slice.rollup","pie":5,"slice":"5.1","data":{"agents":{},"fixLoops":0,"tokens":1000,"ms":0}}
+{"v":1,"t":1760001260000,"sid":"s2","ev":"slice.started","pie":5,"slice":"5.2","data":{"skill":"sell-pie","head":"bbbb111122223333444455556666777788889999"}}
+{"v":1,"t":1760001500000,"sid":"s2","ev":"verdict","pie":5,"slice":"5.2","data":{"gate":"slice-verifier","overall":"fail","fix_targets":["implementer | mod/a.ts | typecheck"],"head":"cccc111122223333444455556666777788889999"}}
+{"v":1,"t":1760001560000,"sid":"s2","ev":"warn","pie":5,"slice":"5.2","data":{"code":"push-without-verdict","text":"pushed before a verifier pass"}}
+{"v":1,"t":1760001620000,"sid":"s2","ev":"warn","pie":5,"slice":"5.2","data":{"code":"push-without-verdict","text":"pushed again"}}
+{"v":1,"t":1760001680000,"sid":"s2","ev":"warn","pie":5,"slice":"5.2","data":{"code":"commit-on-main","text":"committed on main"}}
+{"v":1,"t":1760001740000,"sid":"s2","ev":"hitl.raised","pie":5,"slice":"5.2","data":{"id":"hitl-1","category":"prd_ambiguity","question":"Which budget?","source":"agent","asked":"chat"}}
+{"v":1,"t":1760002100000,"sid":"s2","ev":"hitl.answered","pie":5,"slice":"5.2","data":{"id":"hitl-1","answer":"replied in chat","waitedMs":360000,"via":"reply"}}
+{"v":1,"t":1760002160000,"sid":"s2","ev":"agent.stalled","pie":5,"slice":"5.2","data":{"aid":"ag2","role":"implementer","runningMs":1,"idleMs":1,"n":1}}
+{"v":1,"t":1760002400000,"sid":"s2","ev":"usage","pie":5,"slice":"5.2","data":{"turnId":"t3","durationMs":1000,"tokens":{"input_tokens":300,"output_tokens":100},"model":"claude-sonnet-4-6","costUsd":1.0}}
+{"v":1,"t":1760002460000,"sid":"s2","ev":"verdict","pie":5,"slice":"5.2","data":{"gate":"slice-verifier","overall":"pass","fix_targets":[],"head":"dddd111122223333444455556666777788889999"}}
+{"v":1,"t":1760002520000,"sid":"s2","ev":"commit","pie":5,"slice":"5.2","data":{"sha":"dddd111122223333444455556666777788889999","branch":"pie-5-the-pass"}}
+{"v":1,"t":1760003000000,"sid":"s2","ev":"slice.done","pie":5,"slice":"5.2","data":{"verdict":null}}
+{"v":1,"t":1760003000000,"sid":"s2","ev":"slice.rollup","pie":5,"slice":"5.2","data":{"agents":{},"fixLoops":1,"tokens":500,"ms":0}}
+{"v":1,"t":1760003060000,"sid":"s2","ev":"slice.started","pie":5,"slice":"5.3","data":{"skill":"sell-pie","head":"dddd111122223333444455556666777788889999"}}
+{"v":1,"t":1760003120000,"sid":"s2","ev":"usage","pie":5,"slice":"5.3","data":{"turnId":"t4","durationMs":1000,"tokens":{"input_tokens":10,"output_tokens":5},"model":"claude-opus-5-5","costUsd":1.5}}

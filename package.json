@@ -18,6 +18,7 @@
     "mcp",
     "mod",
     "scripts/install",
+    "scripts/ledger-summary.js",
     ".cursor-plugin",
     ".claude-plugin",
     "assets/brand",

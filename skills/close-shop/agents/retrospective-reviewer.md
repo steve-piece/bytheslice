@@ -26,6 +26,7 @@ The `close-shop` skill passes the following at dispatch time:
 | `pr_list` | Recent PR titles, descriptions, and review comments from the project repo |
 | `hitl_log` | Any `needs_human: true` return contracts logged during stage execution |
 | `plugin_path` | Absolute path to the plugin repo (resolved by the skill before dispatch) |
+| `project_path` | Absolute path to the project repo; its primary checkout holds the Pass ledger at `.bytheslice/ledger.jsonl` when the Pass mod ran |
 
 ---
 
@@ -89,6 +90,31 @@ Look for pairs where:
 - The time delta between commits is less than 30 minutes
 
 **Signal threshold:** any user-correction commit detected.
+
+---
+
+## Ledger metrics
+
+When the project ran the Pass mod, its ledger holds exact numbers, so prefer them over counts inferred from commits and logs. Run the shared fold (read-only, metadata only: the ledger never stores file contents or prompts):
+
+```bash
+node <plugin_path>/scripts/ledger-summary.js --root <project_path> --format json
+```
+
+It prints `{ "pies": [] }` when there is no ledger. Otherwise use these fields as evidence, citing the pie and slice ids:
+
+| Metric | Field | Feeds |
+| --- | --- | --- |
+| Fix-loop depth per slice | `pies[].slices[].fixLoops` | Signal 1 (repeated implementer passes); a slice at 3 is a strong signal |
+| Warning counts by code | `pies[].slices[].warnings[]` (`{ code, n }`), `totals.warnings` | A check code that recurs across slices points at the skill step it guards |
+| Stalls | `pies[].slices[].stalls`, `totals.stalls` | Agents that went quiet past their budget; recurring roles point at their prompt |
+| HITL wait | `pies[].slices[].hitl` (`raised`, `open`, `waitMs`) | Signal 3 (clustered HITL); a long wait is operator friction, not agent friction |
+| Cost per slice | `pies[].slices[].costUsd`, `models` | Signal 4 (token budget overruns); compare slices of the same type |
+
+Rules:
+- Say when a metric is absent: a slice with no `costUsd` (null), no verdicts, or a pie missing from the ledger was baked without the Pass mod or before it existed. Write "not in the ledger" rather than reading the absence as zero.
+- The ledger is the one completion record: when it and the commit history disagree, name both in `patterns_observed` and treat the ledger as the record.
+- Every Pass check warns; none blocks. A warning count is friction evidence, never a sign that work was refused.
 
 ---
 
