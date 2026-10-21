@@ -133,7 +133,7 @@ The full worktree lifecycle - setup, isolation, the runtime-isolation gap, merge
 
 **Preview-first library delivery.** `/set-display-case` scaffolds an operator-only `/library` preview route - at `app/(dashboard)/library/` on Next.js App Router, or the framework's idiomatic location on Vite / SvelteKit / Astro (see [`framework-detect.md`](../skills/setup-shop/references/framework-detect.md)) - excluded from every nav surface, sitemap, and robots.
 
-Every frontend slice through `/sell-slice` passes through Phase 4.5's **Library Preview Gate** - non-skippable for new components AND for consumer-side edits that change a user-visible surface of an existing library component. The gate runs a Phase 0 extend-vs-create check, surfaces a self-critique block + clickable preview URLs, then HARD STOPS for explicit user approval before any production-route import lands. Pure internal refactors with no rendered-output delta are exempt. The gate is also enforced deterministically: Phase 4.5 arms `.claude/.bytheslice-state/library-approvals.json` via `hooks/record-library-approval.sh`, the `hooks/library-gate-guard.sh` PreToolUse hook warns on any production-route Write/Edit while the window is open, and the same script's `approve` subcommand records the operator's verdict (component list, session id, slice, timestamp) to silence it.
+Every frontend slice through `/sell-slice` passes through Phase 4.5's **Library Preview Gate** - non-skippable for new components AND for consumer-side edits that change a user-visible surface of an existing library component. The gate runs a Phase 0 extend-vs-create check, surfaces a self-critique block + clickable preview URLs, then HARD STOPS for explicit user approval before any production-route import lands. Pure internal refactors with no rendered-output delta are exempt. No hook enforces the gate at the tool layer: the hook that warned on early production-route writes was retired in 5.4 after it never fired, so the Phase 4.5 stop and `library-entry-writer`'s `production_imports_added: 0` contract hold the line.
 
 **Visual review tooling priority** *(hardcoded, no discovery):* Claude in Chrome → Chrome DevTools MCP → Playwright → Vizzly. Viewports come from `verification.viewports` (default `[375, 768, 1280]`); screenshots are taken only at 768 and 1280, one of each per new UI surface.
 
@@ -159,7 +159,7 @@ Every frontend slice through `/sell-slice` passes through Phase 4.5's **Library 
 - a checklist note of 3 lines or fewer per slice in `docs/plans/00_master_checklist.md`;
 - one short run log, `.claude/.bytheslice-state/run-log.md` (gitignored): slice start lines, HITL ask and answer times, one self-check line per dispatched agent, and slice PR and merge lines in merge-per-slice mode.
 
-Existing operational state files stay, because they drive behavior rather than prove it: `.claude/.bytheslice-state/library-approvals.json`, `kitchen/activity.jsonl`, `kitchen/merged-pie.json`, `env-check-passed`, `last-precheck.json`, `compact-snapshot.json`, and the seed and cleanup pairs under `tests/seeds/<slice>/`. The closing-narrative paragraph in commit and PR bodies also stays; the 3-line limit applies to the checklist note only.
+Existing operational state files stay, because they drive behavior rather than prove it: `.claude/.bytheslice-state/kitchen/activity.jsonl`, `kitchen/merged-pie.json`, `env-check-passed`, and the seed and cleanup pairs under `tests/seeds/<slice>/`. The closing-narrative paragraph in commit and PR bodies also stays; the 3-line limit applies to the checklist note only.
 
 **The one sanctioned exception: the Pass mod ledger.** The Pass mod's `.bytheslice/ledger.jsonl` ([`docs/pass-mod-spec.md`](pass-mod-spec.md)) is the single sanctioned completion record that tracks project progression over time. It is not a per-step proof file, and this rule does not ban it.
 
@@ -167,14 +167,14 @@ Existing operational state files stay, because they drive behavior rather than p
 
 ## Hook enforcement
 
-Skill preconditions are checked inline by each skill at the start and raised as a question to the operator, never a refusal; no ByTheSlice hook blocks a prompt. Tool-level gates live in plugin hooks in [`hooks/`](../hooks/):
+Skill preconditions are checked inline by each skill at the start and raised as a question to the operator, never a refusal. No ByTheSlice hook blocks a prompt or a tool call: every script in [`hooks/`](../hooks/) exits 0, and a warning reaches the model as hook context.
 
-- [`kitchen-log.sh`](../hooks/kitchen-log.sh) records the session skill marker (`last-precheck.json`) the session-scoped guards read.
-- `git commit` on `main` is blocked at the tool layer.
-- Editing a stage plan mid-delivery draws a WARN.
-- A `PreCompact` snapshot lets a post-compaction session re-orient.
+- [`kitchen-log.sh`](../hooks/kitchen-log.sh) logs kitchen activity (the Pass mod tracks the active skill itself).
+- [`shop-status.sh`](../hooks/shop-status.sh) injects the checklist summary at session start, and again after a resume or a compaction, so a compacted session re-orients.
+- [`pre-commit-guard.sh`](../hooks/pre-commit-guard.sh) warns on `git commit` on `main` (or on a branch it cannot tell); the commit is not stopped.
+- Editing a stage plan mid-delivery draws a warning from the Pass mod (`plan-write-during-bake`), on Claude Code hosts that load it.
 
-Hooks dual-read flat `## Stage N` and nested `## Pie N` / `### Slice N.M` checklists. Every hook is session-id-scoped and fails open; the regression suite lives at `hooks/test.sh`. Disable per-session with `BTS_HOOKS_DISABLED=1`. See [`hooks/README.md`](../hooks/README.md).
+Slice 5.4 retired the hooks the mod covers or that never fired; `hooks/README.md` keeps the inventory and what each retirement means on a host without the mod. Hooks dual-read flat `## Stage N` and nested `## Pie N` / `### Slice N.M` checklists; the regression suite lives at `hooks/test.sh`. Disable per-session with `BTS_HOOKS_DISABLED=1`. See [`hooks/README.md`](../hooks/README.md).
 
 > **v5 note:** the `Stop`-gate and `commit-checklist-correlator` hooks were deleted - `/loop` + the pie-completion `/goal` own loop continuation natively.
 
