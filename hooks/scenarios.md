@@ -6,27 +6,32 @@ This file is the **canonical source of truth** for hook behavior. Every row is o
 
 ## Legend
 
-- **BLOCK** - hook exits 2; Claude Code prevents the action and shows the message
-- **WARN** - hook exits 0 and prints to stdout; Claude sees the warning as additional context but proceeds
+No ByTheSlice hook blocks: every wired script exits 0, and none prints a block decision (`hooks/test.sh` checks this for every script `hooks.json` wires).
+
+- **WARN** - hook exits 0 and prints Claude Code hook JSON whose text starts `WARN`: `hookSpecificOutput.additionalContext` reaches the model, `systemMessage` reaches the person; the tool call proceeds
+- **NOTE** - hook exits 0 and prints plain text, which Claude Code shows in the transcript only
 - **PASS** - hook exits 0 with no output; nothing surfaces to Claude
 - **CONTEXT** - hook exits 0 and prints to stdout; used for SessionStart context injection
 
 ## PreToolUse on Bash: `pre-commit-guard.sh`
 
-The branch is read from the directory the commit runs in, resolved in this order: `cd` / `pushd` steps before the commit (`cd -` included), `git -C <dir>` or `--git-dir` on the commit itself, the hook input's `.cwd` (or the process cwd) when inside a repo, then `$CLAUDE_PROJECT_DIR`. A primary checkout on `main` with the commit running in a linked worktree on a feature branch is therefore a feature-branch commit. Every `git commit` in a command is checked, and the guard blocks if any of them lands on `main`. When a step cannot be modeled (a `cd` inside a subshell or `bash -c` that ends before the commit, `popd`, a `$VAR` or `$(...)` path, `GIT_DIR=`), the guard fails closed: it checks every directory the command visits, plus `$CLAUDE_PROJECT_DIR` for an unexpandable path.
+The branch is read from the repository the commit runs in, resolved in this order: `cd` / `pushd` steps before the commit (`cd -` included), `git -C <dir>` or `--git-dir` on the commit itself, then the hook input's `.cwd` (or the process cwd). It never falls back to `$CLAUDE_PROJECT_DIR`: the project dir is not where the command runs, and in 5.3 that fallback named a scratch repo's commit as a commit on the primary checkout's `main`. A primary checkout on `main` with the commit running in a linked worktree on a feature branch is a feature-branch commit. Every `git commit` in a command is checked. When the target cannot be told from the command text (a `cd` inside a subshell or `bash -c` that ends before the commit, `popd`, a `$VAR` or `$(...)` path, `git checkout` / `git switch` earlier in the command, a path that does not exist yet, or a directory outside any git repo), the guard warns "branch unknown" instead of guessing.
 
 | Bash command | Branch | Expected |
 |---|---|---|
-| `git commit -m "..."` | `main` or `master` | **BLOCK**: "refusing git commit on main/master" |
-| `git commit -m "..."` | feature branch | **WARN**: staged file list |
-| `git -C <worktree> commit`, `cd <worktree> && git commit` (quoted, relative, or `~` paths) | primary on `main`, worktree on feature branch | **WARN** (not blocked) |
-| `git commit` with hook cwd (or input `.cwd`) inside a worktree | primary on `main`, worktree on feature branch | **WARN** (not blocked) |
-| `git -C <primary> commit`, `cd <primary> && git commit` | primary on `main`, run from a worktree | **BLOCK** |
-| `git commit` with hook cwd outside any repo | `$CLAUDE_PROJECT_DIR` on `main` | **BLOCK** (falls back to the project dir) |
-| `git -C <worktree> commit && git -C <primary> commit`, `cd <wt> && git commit && cd <primary> && git commit` | primary on `main` | **BLOCK** (every commit is checked) |
-| `(cd <worktree> && make) && git commit`, `cd <wt> && cd - && git commit` | cwd is the primary on `main` | **BLOCK** |
-| `pushd <primary>`, `cd -P <primary>`, `--git-dir <primary>/.git`, `GIT_DIR=<primary>/.git`, `/usr/bin/git commit`, `` `git commit` ``, `bash -c 'cd <primary> && git commit'`, backslash-escaped paths | primary on `main`, run from a worktree | **BLOCK** |
-| `cd "$VAR" && git commit`, `git -C "$(...)" commit` | `$CLAUDE_PROJECT_DIR` on `main` | **BLOCK** (unexpandable path fails closed, even when it would have named a worktree) |
+| `git commit -m "..."` | `main` or `master` | **WARN**: "git commit on main/master (<dir>)", plus the staged file list; exit 0 |
+| `git commit -m "..."` | feature branch | **NOTE**: staged file list |
+| `git -C <worktree> commit`, `cd <worktree> && git commit` (quoted, relative, or `~` paths) | primary on `main`, worktree on feature branch | **NOTE** (no warning) |
+| `git commit` with hook cwd (or input `.cwd`) inside a worktree | primary on `main`, worktree on feature branch | **NOTE** (no warning) |
+| `git -C <primary> commit`, `cd <primary> && git commit` | primary on `main`, run from a worktree | **WARN** naming `main` |
+| `git commit` with hook cwd outside any repo | `$CLAUDE_PROJECT_DIR` on `main` | **WARN** "branch unknown"; never names the project dir's `main` |
+| `S=<scratch>; mkdir -p $S && cd $S && git init && git commit` | primary on `main` | **WARN** "branch unknown"; never names the primary's `main` |
+| `git -C <worktree> commit && git -C <primary> commit`, `cd <wt> && git commit && cd <primary> && git commit` | primary on `main` | **WARN** naming `main` (every commit is checked) |
+| `cd <wt> && cd - && git commit` | cwd is the primary on `main` | **WARN** naming `main` |
+| `(cd <worktree> && make) && git commit` | cwd is the primary on `main` | **WARN** "branch unknown" (a subshell cd is not followed) |
+| `pushd <primary>`, `cd -P <primary>`, `--git-dir <primary>/.git`, `GIT_DIR=<primary>/.git`, `/usr/bin/git commit`, `` `git commit` ``, `bash -c 'cd <primary> && git commit'`, backslash-escaped paths | primary on `main`, run from a worktree | **WARN** naming `main` |
+| `cd "$VAR" && git commit`, `git -C "$(...)" commit`, `popd && git commit` | any | **WARN** "branch unknown" |
+| `git switch -c <branch> && git commit`, `git checkout <branch> && git commit` | cwd on `main` | **WARN** "branch unknown" (an earlier switch moves HEAD before the commit) |
 | `git status`, `git -C <dir> status`, `git commit-tree` | any | **PASS** (not a git commit) |
 | `npm test` | any | **PASS** |
 | any command | `BTS_HOOKS_DISABLED=1` | **PASS** |
@@ -39,53 +44,8 @@ The branch is read from the directory the commit runs in, resolved in this order
 | checklist present | **CONTEXT** - stage counts, Prep progress, next not-started row |
 | checklist present, nested v5 (`## Pie N` headings) | **CONTEXT**: Prep progress, pie and slice counts via the dual-read lib helpers (`bts_unit_counts` / `bts_slice_counts`), first open pie |
 | checklist present, flat v4 (`Status:` table rows) | **CONTEXT**: Prep progress (if a `## Prep` section exists), stage counts from the `Status:` scan, next not-started row |
+| checklist present, session started by `resume` or `compact` | **CONTEXT**: the same summary (the hook has no `source` matcher), so a compacted session re-orients from it |
 | `BTS_HOOKS_DISABLED=1` | **PASS** - silent |
-
-## PreToolUse on Write/Edit: `stage-plan-guard.sh`
-
-| Tool target | Session state | Expected |
-|---|---|---|
-| `docs/plans/stage_1_foo.md` | current session, `skill == "sell-slice"` | **WARN** - "plans are normally static" (downgraded from BLOCK in v5, C4) |
-| `docs/plans/stage_1_foo.md` | current session, `skill != "sell-slice"` | **PASS** |
-| `docs/plans/00_master_checklist.md` | current session, `skill == "sell-slice"` | **PASS** - not a `stage_*` plan file |
-| `src/app/page.tsx` (non-plan path) | current session, `skill == "sell-slice"` | **PASS** |
-| `docs/plans/stage_1_foo.md` | state from a *different* `session_id` | **PASS** - stale state never blocks |
-| `docs/plans/stage_1_foo.md` | no `last-precheck.json` | **PASS** - fail open |
-| any stage plan path | `BTS_HOOKS_DISABLED=1` | **PASS** |
-
-## PreToolUse on Write/Edit: `library-gate-guard.sh`
-
-| Tool target | State | Expected |
-|---|---|---|
-| `app/dashboard/page.tsx` (watched) | no `library-approvals.json` | **PASS**, gate not armed (Phase 4.5's `arm` step has not run, e.g. a backend slice) |
-| `app/dashboard/page.tsx` (watched) | approvals file present, no approval entry, current-session `skill == "sell-slice"` | **WARN** - "no library approval is recorded" |
-| `app/dashboard/page.tsx` (watched) | approvals file present, an approval recorded, `skill == "sell-slice"` | **PASS** |
-| `lib/util.ts` (not watched) | approvals file present, no approval, `skill == "sell-slice"` | **PASS** - path not under a watched glob |
-| `app/dashboard/page.tsx` (watched) | approvals present, no approval, `skill != "sell-slice"` | **PASS** |
-| `app/dashboard/page.tsx` (watched) | approvals present, state from a *different* `session_id` | **PASS** - stale state never warns |
-| any watched path | `BTS_HOOKS_DISABLED=1` | **PASS** |
-
-## State writer: `record-library-approval.sh`
-
-Not an event hook: `/sell-slice` Phase 4.5 invokes it directly. `arm` opens the approval window (the gate above starts warning); `approve` closes it (the gate passes). Session id defaults to the one in `last-precheck.json`, the exact value the gate compares against.
-
-| Invocation | Prior state | Expected |
-|---|---|---|
-| `arm --slice <n.m>` | file present or not | file written: zero approvals, default `watched_paths`, session id + slice + `armed_at`; gate now **WARN**s on watched paths |
-| `arm --slice <n.m>` | approvals recorded for a prior slice | file reset: approvals emptied, slice and `armed_at` updated; gate **WARN**s again |
-| `approve --slice <n.m> --components "<a>,<b>"` | file armed | one `status: "approved"` entry appended per component (`component_id`, `at`, `session_id`, `slice`); gate **PASS**es on watched paths |
-| `approve --slice <n.m> --components "<a>"` | no file (arm skipped) | file initialized with the approved entries; gate **PASS**es |
-| `approve` without `--components`, or either subcommand without `--slice` | any | usage error, exit 2, nothing written |
-| any subcommand | `BTS_HOOKS_DISABLED=1` | no-op, exit 0, nothing written |
-
-## PreCompact: `compact-snapshot.sh`
-
-| State | Expected |
-|---|---|
-| `last-precheck.json` present | **PASS** (exit 0, silent) - writes `compact-snapshot.json` with skill carried over |
-| no `last-precheck.json` | **PASS** (exit 0, silent) - still writes a minimal `compact-snapshot.json` |
-| checklist present with unfinished lines | snapshot's `master_checklist_summary` holds up to 3 of them |
-| `BTS_HOOKS_DISABLED=1` | **PASS** - no snapshot written |
 
 ## Activity events: `kitchen-log.sh`
 
@@ -120,20 +80,17 @@ Every wired logger hook runs synchronously and silently (exit 0), completing its
 | Neither jq nor Node available | exit 0 silently without creating state |
 | Invalid JSON, multiple JSON values, array/scalar envelope or unwired tool/event | exit 0 silently without creating a log |
 
-### Session skill marker
+## Wiring: `hooks.json`
 
-`kitchen-log.sh` is the only writer of `.claude/.bytheslice-state/last-precheck.json`. It records state and never blocks a prompt; no ByTheSlice hook does.
-
-| Event | Expected |
+| Check | Expected |
 |---|---|
-| `UserPromptExpansion` with `command_name: "bytheslice:sell-slice"` | marker written: `session_id` from the envelope, `skill: "sell-slice"` (canonical short form), timestamp, branch, tree; exit 0, silent |
-| `PreToolUse` Skill with `skill: "bytheslice:box-it-up"` (or a bare `sell-pie`) | marker written with the canonical short skill name; exit 0, silent |
-| A non-ByTheSlice command or skill (`commit`, `other-plugin:sell-slice`), or an event with no skill | no marker written; exit 0, silent |
-| Command or skill arguments | never copied into the marker |
+| Every `command` in `hooks.json` | names a script that exists under `hooks/` |
+| Every script `hooks.json` wires | contains no `exit 2` and prints no block decision (`"decision": "block"`, `"permissionDecision": "deny"`) |
+| `kitchen-log.sh` registrations | exactly eight (asserted with the kitchen rows above) |
 
 ## Notes
 
 - Every hook honors `BTS_HOOKS_DISABLED=1` as the first action after `set -u`. That's the supported per-session disable.
-- Every hook tolerates missing `jq`; existing guards use `sed`, while `kitchen-log.sh` uses Node or silently skips logging when neither parser is available.
+- Every hook tolerates missing `jq`; `pre-commit-guard.sh` falls back to `sed`, while `kitchen-log.sh` uses Node or silently skips logging when neither parser is available.
 - All state lives under `.claude/.bytheslice-state/` (gitignored).
 - All awk in the hooks is POSIX-portable (BSD awk on macOS has no gawk extensions such as the 3-argument `match()`).

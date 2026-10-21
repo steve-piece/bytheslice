@@ -21,8 +21,8 @@ const skillAtom = atom({ plugin: 'bytheslice', key: 'pass.activeSkill' } as cons
 /** Slice types that want a slice-tester pass before `[x]` under the default policy. */
 export const UI_TYPES: ReadonlySet<string> = new Set(['frontend', 'full-stack'])
 /**
- * The skills during which slice plans stay static: sell-slice alone, as
- * hooks/stage-plan-guard.sh has it. sell-pie appends build notes to stage
+ * The skills during which slice plans stay static: sell-slice alone, the rule
+ * the retired stage plan Bash hook held. sell-pie appends build notes to stage
  * files by design, so a plan write there is normal and silent.
  */
 export const BAKERS: ReadonlySet<string> = new Set(['sell-slice'])

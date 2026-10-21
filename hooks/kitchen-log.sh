@@ -7,13 +7,6 @@
 # PostToolUse (Agent), UserPromptExpansion, and Stop, completing the local
 # append before return. Always exits 0 and prints nothing.
 #
-# Session skill marker: when the row names a ByTheSlice skill (a typed
-# command on UserPromptExpansion, or the Skill tool on PreToolUse), the hook
-# also writes .claude/.bytheslice-state/last-precheck.json with the session
-# id, canonical skill, timestamp, branch and tree state. The Write/Edit
-# guards, compact-snapshot.sh and record-library-approval.sh read it. It only
-# records state; no ByTheSlice hook ever blocks a prompt.
-#
 # Row shape (fields an event does not carry are omitted, never null-padded):
 #   {"t":<epoch ms>,"sid":"..","ev":"..","agent":"..","aid":"..","label":"..",
 #    "skill":"..","tok":<int>,"ms":<int>,"ok":<bool>,"pie":<int>,"slice":"N.M",
@@ -324,19 +317,6 @@ EOF
     fi
     ;;
 esac
-
-# Session skill marker. When a ByTheSlice skill runs (typed command or Skill
-# tool), record which one in last-precheck.json for the session-id-guarded
-# Write/Edit guards, compact-snapshot and record-library-approval. This only
-# records state; nothing in ByTheSlice ever blocks a prompt.
-KL_SKILL=$(printf '%s' "$ROW" | sed -n 's/.*"skill":"\([^"]*\)".*/\1/p')
-[ -n "$KL_SKILL" ] && KL_SKILL=$(bts_detect_skill "/$KL_SKILL")
-if [ -n "$KL_SKILL" ]; then
-  KL_SID=$(printf '%s' "$ROW" | sed -n 's/.*"sid":"\([^"]*\)".*/\1/p')
-  printf '{\n  "session_id": "%s",\n  "skill": "%s",\n  "timestamp": "%s",\n  "branch": "%s",\n  "tree": "%s"\n}\n' \
-    "$KL_SID" "$KL_SKILL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(bts_branch)" "$(bts_tree_state)" \
-    > "$(bts_state_dir)/last-precheck.json" 2>/dev/null || true
-fi
 
 LOG_DIR="$(bts_state_dir)/kitchen"
 mkdir -p "$LOG_DIR" 2>/dev/null || exit 0

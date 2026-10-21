@@ -133,7 +133,7 @@ bts_branch_class() {
 # Expand one shell word the way bash would for a path argument: remove
 # quotes and backslash escapes, expand a leading `~` or `~/`. Returns 1 for
 # a word that needs expansion this parser does not model ($VAR, `cmd`,
-# globs, ~user), so the caller can fail closed.
+# globs, ~user), so the caller can report the target as unknown.
 _bts_shell_word() {
   local w="$1" out="" c q="" i=0
   case "$w" in
@@ -184,33 +184,37 @@ _bts_resolve_dir() {
   (cd "$p" 2>/dev/null && pwd -P)
 }
 
-# Every directory whose branch decides whether a Bash command's `git commit`
-# lands on main. Args: command string, base dir (the hook input's .cwd;
-# falls back to pwd). Prints one directory per line (a git toplevel, or a
-# git dir for `--git-dir` / `GIT_DIR`). Returns 1 with no output when the
-# command contains no `git commit`. The guard blocks if any line is on main.
+# Every target whose branch decides which branch a Bash command's `git commit`
+# lands on. Args: command string, base dir (the hook input's .cwd; falls back
+# to pwd). Prints one line per commit: a git toplevel (or a git dir for
+# `--git-dir` / `GIT_DIR`), or `?` when the target cannot be told from the
+# command text. Returns 1 with no output when the command has no `git commit`.
 #
 # Each `git commit` in the command is judged on its own, so a later commit
 # cannot hide behind an earlier worktree commit. For each one:
 #   1. `cd` / `pushd` steps before it, applied in order (`cd -` included)
 #   2. `git -C <dir>` and `--git-dir` on the commit invocation itself
-#   3. the base dir (hook cwd) when it sits inside a git repo
-#   4. bts_root when none of the above is inside a repo
-# The parser fails closed: when a step cannot be modeled (a cd inside a
-# subshell or quoted child shell that ends before the commit, `popd`, a
-# `$VAR` path, `GIT_DIR=`), every directory the command visits is printed,
-# plus bts_root for an unexpandable path, so a main checkout among them
-# still blocks.
+#   3. the base dir (hook cwd)
+# The target is `?` (branch unknown) when a step cannot be modeled (a cd
+# inside a subshell or quoted child shell that ends before the commit,
+# `popd`, a `$VAR` or `$(...)` path, a `git checkout` / `git switch` earlier
+# in the command), when a path does not exist yet, or when the directory is
+# not inside a git repo. It never falls back to bts_root: the project dir is
+# not where the command runs, and reading it there named a scratch repo's
+# commit as a commit on the primary checkout's main.
 bts_commit_dirs() {
   local cmd="$1" base="${2:-}"
   local start rest consumed match opts r a rc next flag verb between t
-  local dir prev amb unres seen gitdir top out="" uniq="" line found=1
+  local dir prev amb gitdir top out="" uniq="" line found=1
   local nl='
 '
   local q="'"
   local word="(\"[^\"]*\"|${q}[^${q}]*${q}|\\\\.|[^[:space:];&|()<>\"${q}\\\\])+"
   local opt="([[:space:]]+(-C|-c|--git-dir|--work-tree|--namespace|--super-prefix|--config-env)[[:space:]]+${word}|[[:space:]]+--?[[:alnum:]][[:alnum:]-]*(=${word})?)"
-  local git_re="(^|[[:space:];&|(){}!\`\"${q}/\\\\])git(${opt}*)[[:space:]]+commit([[:space:];&|)}\`\"${q}]|$)"
+  local lead="(^|[[:space:];&|(){}!\`\"${q}/\\\\])git(${opt}*)[[:space:]]+"
+  local tail="([[:space:];&|)}\`\"${q}]|$)"
+  local git_re="${lead}commit${tail}"
+  local switch_re="${lead}(checkout|switch)${tail}"
   local cd_re="(^|[[:space:];&|(){!\`\"${q}])(cd|pushd|popd)(([[:space:]]+(-[LPe@]+|--))*)([[:space:]]+${word})?([[:space:];&|)}<>\`\"${q}]|$)"
   local c_re="(^|[[:space:]])(-C|--git-dir)(=|[[:space:]]+)(${word})"
   local gd_re="(^|[[:space:];&|(){!\`\"${q}])(export[[:space:]]+)?GIT_DIR=(${word})"
@@ -230,7 +234,10 @@ bts_commit_dirs() {
     consumed="$consumed${rest%%"$match"*}"
     rest=${rest#*"$match"}
 
-    dir=$start prev="" amb=0 unres=0 seen=$start gitdir=""
+    dir=$start prev="" amb=0 gitdir=""
+
+    # A branch switch earlier in the command moves HEAD before the commit runs.
+    [[ $consumed =~ $switch_re ]] && amb=1
 
     # 1. cd / pushd / popd steps before this commit
     r=$consumed
@@ -240,7 +247,7 @@ bts_commit_dirs() {
       a=${a#"${a%%[![:space:]]*}"}
       r=${r#*"${BASH_REMATCH[0]}"}
       # A cd inside a subshell, backticks, or a quoted `bash -c` that closes
-      # before the commit does not move it. Detect the close and fail closed.
+      # before the commit does not move it: the target is unknown.
       between=$r
       t=${between//[^(]/}; next=${#t}
       t=${between//[^)]/}
@@ -262,11 +269,10 @@ bts_commit_dirs() {
         continue
       fi
       [ -n "$a" ] || a='~'
-      next=$(_bts_resolve_dir "$a" "$dir"); rc=$?
-      if [ "$rc" = 0 ]; then
-        prev=$dir; dir=$next; seen="$seen$nl$dir"
-      elif [ "$rc" = 2 ]; then
-        amb=1; unres=1
+      if next=$(_bts_resolve_dir "$a" "$dir"); then
+        prev=$dir; dir=$next
+      else
+        amb=1
       fi
     done
 
@@ -276,43 +282,34 @@ bts_commit_dirs() {
       flag=${BASH_REMATCH[2]}
       a=${BASH_REMATCH[4]}
       r=${r#*"${BASH_REMATCH[0]}"}
-      next=$(_bts_resolve_dir "$a" "$dir"); rc=$?
-      if [ "$rc" = 0 ]; then
+      if next=$(_bts_resolve_dir "$a" "$dir"); then
         if [ "$flag" = "-C" ]; then dir=$next; else gitdir=$next; fi
-      elif [ "$rc" = 2 ]; then
-        amb=1; unres=1
+      else
+        amb=1
       fi
     done
 
-    # GIT_DIR=<dir> anywhere before the commit is checked as well
+    # GIT_DIR=<dir> anywhere before the commit is a target as well
     r=$consumed
     while [[ $r =~ $gd_re ]]; do
       a=${BASH_REMATCH[3]}
       r=${r#*"${BASH_REMATCH[0]}"}
-      next=$(_bts_resolve_dir "$a" "$start"); rc=$?
-      if [ "$rc" = 0 ]; then
+      if next=$(_bts_resolve_dir "$a" "$start"); then
         out="$out$next$nl"
-      elif [ "$rc" = 2 ]; then
-        amb=1; unres=1
+      else
+        amb=1
       fi
     done
 
-    # 3 and 4. the modeled directory, else bts_root
-    if [ -n "$gitdir" ]; then
-      out="$out$gitdir$nl"
-    else
-      top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || top=$(bts_root)
-      out="$out$top$nl"
-    fi
-
+    # 3. the modeled directory, or `?` when it cannot be told
     if [ "$amb" = 1 ]; then
-      while IFS= read -r line; do
-        top=$(git -C "$line" rev-parse --show-toplevel 2>/dev/null) && out="$out$top$nl"
-      done <<EOF
-$seen
-$dir
-EOF
-      [ "$unres" = 1 ] && out="$out$(bts_root)$nl"
+      out="$out?$nl"
+    elif [ -n "$gitdir" ]; then
+      out="$out$gitdir$nl"
+    elif top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) && [ -n "$top" ]; then
+      out="$out$top$nl"
+    else
+      out="$out?$nl"
     fi
     consumed="$consumed$match"
   done
@@ -330,44 +327,10 @@ EOF
   printf '%s' "$uniq"
 }
 
-# "clean" or "dirty" based on git working tree state.
-bts_tree_state() {
-  local out
-  out=$(git -C "$(bts_root)" status --porcelain 2>/dev/null)
-  [ -z "$out" ] && printf 'clean' || printf 'dirty'
-}
-
 # Ensure the state directory exists and echo its absolute path.
 bts_state_dir() {
   local dir
   dir="$(bts_root)/.claude/.bytheslice-state"
   mkdir -p "$dir" 2>/dev/null
   printf '%s' "$dir"
-}
-
-# Extract .session_id from a hook input JSON envelope. Tolerates missing jq.
-# Pass the raw stdin JSON as the first argument. Empty output if absent.
-bts_session_id() {
-  local input="$1"
-  local id=""
-  if command -v jq >/dev/null 2>&1; then
-    id=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null)
-  fi
-  if [ -z "$id" ]; then
-    id=$(printf '%s' "$input" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-  fi
-  printf '%s' "$id"
-}
-
-# Detect the first /bytheslice slash command in a string. kitchen-log.sh
-# uses it to canonicalize the session skill marker (it passes "/<name>").
-# Prints the canonical short name (e.g. "sell-slice") or nothing.
-# `sell-pie` precedes `sell-slice` in the alternation so the longer, more
-# specific v5 command wins when both could match a prefix.
-bts_detect_skill() {
-  local prompt="$1"
-  # Match /sell-pie, /sell-slice, /bytheslice:sell-pie, etc. Pick the first hit.
-  printf '%s\n' "$prompt" | grep -oE '/(bytheslice:)?(sell-pie|sell-slice|box-it-up|cook-pizzas|special-order|run-the-day|inspect-display|close-shop|setup-shop|set-display-case|open-the-shop|create-menu|final-quality-check)\b' \
-    | head -1 \
-    | sed -E 's#^/(bytheslice:)?##'
 }

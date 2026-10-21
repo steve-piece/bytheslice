@@ -16,10 +16,6 @@ set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SHOP_STATUS="$HERE/shop-status.sh"
 COMMIT_GUARD="$HERE/pre-commit-guard.sh"
-STAGE_PLAN_GUARD="$HERE/stage-plan-guard.sh"
-LIBRARY_GATE="$HERE/library-gate-guard.sh"
-COMPACT_SNAPSHOT="$HERE/compact-snapshot.sh"
-RECORDER="$HERE/record-library-approval.sh"
 KITCHEN_LOG="$HERE/kitchen-log.sh"
 
 PASS=0
@@ -142,53 +138,6 @@ assert_not_contains() {
   esac
 }
 
-# Run the approval recorder with CLI args (not a stdin envelope).
-# Sets globals: LAST_EXIT, LAST_OUT.
-run_recorder() {
-  LAST_OUT=$(bash "$RECORDER" "$@" 2>&1)
-  LAST_EXIT=$?
-}
-
-# Assert a file exists. Args: name, path.
-assert_file_exists() {
-  local name="$1" path="$2"
-  if [ -f "$path" ]; then
-    PASS=$((PASS+1))
-    printf '  ✓ %s (file exists)\n' "$name"
-  else
-    FAIL=$((FAIL+1))
-    FAILED_NAMES+=("$name (missing file: $path)")
-    printf '  ✗ %s missing file %s\n' "$name" "$path"
-  fi
-}
-
-# Assert a file's content holds a substring. Args: name, path, needle.
-assert_file_contains() {
-  local name="$1" path="$2" needle="$3" content
-  content=$(cat "$path" 2>/dev/null)
-  case "$content" in
-    *"$needle"*)
-      PASS=$((PASS+1))
-      printf '  ✓ %s contains %q\n' "$name" "$needle"
-      ;;
-    *)
-      FAIL=$((FAIL+1))
-      FAILED_NAMES+=("$name (file missing: $needle)")
-      printf '  ✗ %s missing %q in %s\n    content: %s\n' "$name" "$needle" "$path" "$content"
-      ;;
-  esac
-}
-
-# Write a last-precheck.json state file into a fixture.
-# Args: fixture-dir, session_id, skill, [timestamp].
-write_state() {
-  local d="$1" sid="$2" skill="$3" ts="${4:-2099-01-01T00:00:00Z}"
-  mkdir -p "$d/.claude/.bytheslice-state"
-  cat > "$d/.claude/.bytheslice-state/last-precheck.json" <<EOF
-{"session_id":"$sid","skill":"$skill","timestamp":"$ts"}
-EOF
-}
-
 ####################################################################
 # pre-commit-guard.sh
 ####################################################################
@@ -196,34 +145,78 @@ EOF
 echo
 echo "## pre-commit-guard.sh"
 
-# git commit on main → BLOCK
+# Assert the guard warned: exit 0, a WARN line, and Claude Code hook JSON
+# whose additionalContext (model) and systemMessage (person) carry the text.
+# Args: name, needle the warning must contain.
+assert_warn() {
+  local name="$1" needle="$2"
+  assert_exit "$name exits 0" 0
+  assert_contains "$name warns" "WARN [bytheslice]"
+  assert_contains "$name names" "$needle"
+  if printf '%s' "$LAST_OUT" | "$JSON_NODE" -e '
+    let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+      const o = JSON.parse(s), h = o.hookSpecificOutput || {}
+      process.exit(h.hookEventName === "PreToolUse" && /^WARN /.test(h.additionalContext) && o.systemMessage === h.additionalContext ? 0 : 1)
+    })' 2>/dev/null; then
+    PASS=$((PASS+1)); printf '  ✓ %s is hook JSON for the model and the person\n' "$name"
+  else
+    FAIL=$((FAIL+1)); FAILED_NAMES+=("$name (not hook JSON)"); printf '  ✗ %s is not hook JSON: %s\n' "$name" "$LAST_OUT"
+  fi
+}
+JSON_NODE=$(command -v node || printf 'node')
+
+# git commit on main → WARN naming main, exit 0, staged files listed
 FIX=$(mk_fixture)
+echo x > "$FIX/a.txt" && git -C "$FIX" add a.txt
 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
-assert_exit "commit on main blocked" 2
-assert_contains "commit-on-main message" "refusing git commit on main"
+assert_warn "commit on main" "git commit on main"
+assert_contains "commit on main keeps the staged summary" "a.txt"
 rm -rf "$FIX"
 
-# git commit on master → BLOCK
+# git commit on master → WARN naming master
 FIX=$(mk_fixture)
 git -C "$FIX" branch -q -m master
 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
-assert_exit "commit on master blocked" 2
-assert_contains "commit-on-master message" "refusing git commit on master"
+assert_warn "commit on master" "git commit on master"
 rm -rf "$FIX"
 
-# git commit on feature branch → PASS (with possible WARN if staged files)
+# git commit on feature branch → NOTE: staged file list, no warning
 FIX=$(mk_fixture)
 git -C "$FIX" checkout -q -b feat/x
+echo x > "$FIX/a.txt" && git -C "$FIX" add a.txt
 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
 assert_exit "commit on feature branch" 0
+assert_contains "commit on feature branch staged summary" "staged files on branch feat/x"
+assert_not_contains "commit on feature branch no warning" "WARN"
 rm -rf "$FIX"
 
-# hook cwd outside any repo → falls back to CLAUDE_PROJECT_DIR (on main) → BLOCK
+# hook cwd outside any repo → branch unknown; the project dir's main is never
+# named (the 5.3 false positive read CLAUDE_PROJECT_DIR here)
 FIX=$(mk_fixture)
 NOREPO=$(mktemp -d)
 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$NOREPO" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
-assert_exit "commit falls back to CLAUDE_PROJECT_DIR" 2
+assert_warn "commit outside any repo" "branch unknown"
+assert_not_contains "commit outside any repo never names the project dir" "on main"
 rm -rf "$FIX" "$NOREPO"
+
+# scratch repo created in the same command, project dir on main → branch
+# unknown, not main (the false positive the operator reported in 5.3)
+FIX=$(mk_fixture)
+SCRATCH=$(mktemp -d)
+run_guard "$FIX" "$FIX" "S=$SCRATCH/new; mkdir -p \$S && cd \$S && git init -q && git commit -m x"
+assert_warn "scratch repo via \$VAR" "branch unknown"
+assert_not_contains "scratch repo via \$VAR never names the primary" "on main"
+run_guard "$FIX" "$FIX" "mkdir -p $SCRATCH/lit && cd $SCRATCH/new2 && git init -q && git commit -m x"
+assert_warn "scratch repo path that does not exist yet" "branch unknown"
+rm -rf "$FIX" "$SCRATCH"
+
+# a branch switch earlier in the command moves HEAD → branch unknown
+FIX=$(mk_fixture)
+run_guard "$FIX" "$FIX" "git switch -c feat/y && git commit -m x"
+assert_warn "switch before commit" "branch unknown"
+run_guard "$FIX" "$FIX" "git checkout -q feat/y && git commit -m x"
+assert_warn "checkout before commit" "branch unknown"
+rm -rf "$FIX"
 
 # non-git-commit → PASS
 FIX=$(mk_fixture)
@@ -236,6 +229,7 @@ rm -rf "$FIX"
 FIX=$(mk_fixture)
 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit-tree HEAD^{tree} -m x"}}'
 assert_exit "commit-tree is not a commit" 0
+assert_empty "commit-tree silent"
 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git -C $FIX status\"}}"
 assert_exit "git -C status is not a commit" 0
 assert_empty "git -C status silent"
@@ -245,6 +239,7 @@ rm -rf "$FIX"
 FIX=$(mk_fixture)
 BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
 assert_exit "commit-guard disabled" 0
+assert_empty "commit-guard disabled silent"
 rm -rf "$FIX"
 
 # Worktree regression (2026-10-05): CLAUDE_PROJECT_DIR is the primary checkout
@@ -254,106 +249,106 @@ FIX=$(mk_worktree_fixture)
 WT="$FIX/.claude/worktrees/wt"
 WTS="$FIX/.claude/worktrees/wt space"
 
-# git -C <worktree> commit → PASS
+# Each worktree form: exit 0 and no warning.
+assert_no_warn() {
+  assert_exit "$1" 0
+  assert_not_contains "$1 no warning" "WARN"
+}
+
 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git -C $WT commit -m test\"},\"cwd\":\"$FIX\"}"
-assert_exit "worktree: git -C <wt> commit allowed" 0
-
-# cd <worktree> && git commit → PASS
+assert_no_warn "worktree: git -C <wt> commit"
 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd $WT && git add -A && git commit -m test\"},\"cwd\":\"$FIX\"}"
-assert_exit "worktree: cd <wt> && git commit allowed" 0
-
-# relative cd from the primary checkout → PASS
+assert_no_warn "worktree: cd <wt> && git commit"
 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd .claude/worktrees/wt; git commit -m test\"},\"cwd\":\"$FIX\"}"
-assert_exit "worktree: relative cd allowed" 0
-
-# quoted path with a space, via both cd and git -C → PASS
+assert_no_warn "worktree: relative cd"
 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd \\\"$WTS\\\" && git commit -m test\"},\"cwd\":\"$FIX\"}"
-assert_exit "worktree: quoted cd with space allowed" 0
+assert_no_warn "worktree: quoted cd with space"
 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git -C '$WTS' commit -m test\"},\"cwd\":\"$FIX\"}"
-assert_exit "worktree: single-quoted git -C with space allowed" 0
-
-# ~-relative cd → PASS
+assert_no_warn "worktree: single-quoted git -C with space"
 HOME=$FIX CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd ~/.claude/worktrees/wt && git commit -m test\"},\"cwd\":\"$FIX\"}"
-assert_exit "worktree: tilde cd allowed" 0
-
-# hook cwd inside the worktree, plain git commit → PASS
+assert_no_warn "worktree: tilde cd"
 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$WT" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
-assert_exit "worktree: hook process cwd in wt allowed" 0
-
-# input .cwd is the worktree even though the process cwd is the primary → PASS
+assert_no_warn "worktree: hook process cwd in wt"
 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git commit -m test\"},\"cwd\":\"$WT\"}"
-assert_exit "worktree: input cwd in wt allowed" 0
+assert_no_warn "worktree: input cwd in wt"
 
-# Still blocks real main commits: from inside the worktree, target the primary
+# Still warns on real main commits: from inside the worktree, target the primary
 CLAUDE_PROJECT_DIR=$WT run_hook_in "$WT" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git -C $FIX commit -m test\"},\"cwd\":\"$WT\"}"
-assert_exit "worktree: git -C <primary on main> commit blocked" 2
-assert_contains "worktree: git -C primary message" "refusing git commit on main"
+assert_warn "worktree: git -C <primary on main> commit" "git commit on main"
 CLAUDE_PROJECT_DIR=$WT run_hook_in "$WT" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd $FIX && git commit -m test\"},\"cwd\":\"$WT\"}"
-assert_exit "worktree: cd <primary on main> && git commit blocked" 2
+assert_warn "worktree: cd <primary on main> && git commit" "git commit on main"
 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git commit -m test\"},\"cwd\":\"$FIX\"}"
-assert_exit "worktree: plain commit in primary on main blocked" 2
+assert_warn "worktree: plain commit in primary on main" "git commit on main"
 
 # jq-less fallback parses escaped quotes and cwd the same way
 mkdir -p "$FIX/nojq-bin"
-for b in bash git sed cat head dirname mktemp pwd printf; do
+for b in bash git sed cat head dirname mktemp pwd printf tr; do
   p=$(command -v "$b") && ln -sf "$p" "$FIX/nojq-bin/$b"
 done
 LAST_OUT=$(cd "$FIX" && printf '%s' "{\"tool_input\":{\"command\":\"cd \\\"$WTS\\\" && git commit -m test\"},\"cwd\":\"$FIX\"}" \
   | PATH="$FIX/nojq-bin" CLAUDE_PROJECT_DIR=$FIX "$FIX/nojq-bin/bash" "$COMMIT_GUARD" 2>&1)
 LAST_EXIT=$?
-assert_exit "worktree: jq-less quoted cd allowed" 0
+assert_no_warn "worktree: jq-less quoted cd"
 LAST_OUT=$(cd "$FIX" && printf '%s' "{\"tool_input\":{\"command\":\"git commit -m \\\"msg\\\"\"},\"cwd\":\"$FIX\"}" \
   | PATH="$FIX/nojq-bin" CLAUDE_PROJECT_DIR=$FIX "$FIX/nojq-bin/bash" "$COMMIT_GUARD" 2>&1)
 LAST_EXIT=$?
-assert_exit "worktree: jq-less commit on main blocked" 2
+assert_warn "worktree: jq-less commit on main" "git commit on main"
 LAST_OUT=$(cd "$WT" && printf '%s' "{\"tool_input\":{\"command\":\"git -C ../wt\\\\ space/../../.. commit -m x\"},\"cwd\":\"$WT\"}" \
   | PATH="$FIX/nojq-bin" CLAUDE_PROJECT_DIR=$WT "$FIX/nojq-bin/bash" "$COMMIT_GUARD" 2>&1)
 LAST_EXIT=$?
-assert_exit "worktree: jq-less backslash-escaped -C path to main blocked" 2
+assert_warn "worktree: jq-less backslash-escaped -C path to main" "git commit on main"
 
-# Shell forms that must not let a main commit through. Each one fooled the
-# first cut of the resolver, which modeled only the first commit in the
+# Shell forms that must not let a main commit pass unwarned. Each one fooled
+# the first cut of the resolver, which modeled only the first commit in the
 # command and only a plain `cd <dir>` sequence before it.
 run_guard "$FIX" "$FIX" "git -C $WT commit -m a && git -C $FIX commit -m b"
-assert_exit "worktree: second commit on main blocked" 2
+assert_warn "worktree: second commit on main" "git commit on main"
 run_guard "$FIX" "$FIX" "cd $WT && git commit -m a && cd $FIX && git commit -m b"
-assert_exit "worktree: cd back to main for a second commit blocked" 2
-run_guard "$FIX" "$FIX" "(cd $WT && make) && git commit -m x"
-assert_exit "worktree: subshell cd does not move the commit" 2
+assert_warn "worktree: cd back to main for a second commit" "git commit on main"
 run_guard "$FIX" "$FIX" "cd $WT && cd - && git commit -m x"
-assert_exit "worktree: cd - back to main blocked" 2
+assert_warn "worktree: cd - back to main" "git commit on main"
 run_guard "$WT" "$WT" "pushd $FIX && git commit -m x"
-assert_exit "worktree: pushd to main blocked" 2
+assert_warn "worktree: pushd to main" "git commit on main"
 run_guard "$WT" "$WT" "cd -P $FIX && git commit -m x"
-assert_exit "worktree: cd -P to main blocked" 2
+assert_warn "worktree: cd -P to main" "git commit on main"
 run_guard "$WT" "$WT" "git --git-dir=$FIX/.git --work-tree=$FIX commit -m x"
-assert_exit "worktree: --git-dir=<main> blocked" 2
+assert_warn "worktree: --git-dir=<main>" "git commit on main"
 run_guard "$WT" "$WT" "git --git-dir $FIX/.git --work-tree $FIX commit -m x"
-assert_exit "worktree: --git-dir <main> (space form) blocked" 2
+assert_warn "worktree: --git-dir <main> (space form)" "git commit on main"
 run_guard "$WT" "$WT" "GIT_DIR=$FIX/.git git commit -m x"
-assert_exit "worktree: GIT_DIR=<main> blocked" 2
-run_guard "$WT" "$FIX" "cd \"\$MAIN\" && git commit -m x"
-assert_exit "worktree: unresolvable cd also checks the project dir" 2
+assert_warn "worktree: GIT_DIR=<main>" "git commit on main"
 run_guard "$FIX" "$FIX" "/usr/bin/git commit -m x"
-assert_exit "worktree: path-qualified git on main blocked" 2
+assert_warn "worktree: path-qualified git on main" "git commit on main"
 run_guard "$FIX" "$FIX" "echo \`git commit -m x\`"
-assert_exit "worktree: backtick commit on main blocked" 2
+assert_warn "worktree: backtick commit on main" "git commit on main"
 run_guard "$WT" "$WT" "bash -c 'cd $FIX && git commit -m x'"
-assert_exit "worktree: bash -c cd to main blocked" 2
+assert_warn "worktree: bash -c cd to main" "git commit on main"
 run_guard "$WT" "$WT" "git -C ../wt\\ space/../../.. commit -m x"
-assert_exit "worktree: backslash-escaped -C path to main blocked" 2
+assert_warn "worktree: backslash-escaped -C path to main" "git commit on main"
 
-# ...without blocking the ordinary worktree forms next to them
+# Forms the guard cannot follow warn "branch unknown" (formerly fail-closed
+# blocks), and never name a directory the commit does not run in.
+run_guard "$FIX" "$FIX" "(cd $WT && make) && git commit -m x"
+assert_warn "worktree: subshell cd is not followed" "branch unknown"
+run_guard "$WT" "$FIX" "cd \"\$MAIN\" && git commit -m x"
+assert_warn "worktree: unresolvable cd" "branch unknown"
+assert_not_contains "worktree: unresolvable cd never names the project dir" "on main"
+run_guard "$WT" "$WT" "git -C \"\$(git rev-parse --show-toplevel)\" commit -m x"
+assert_warn "worktree: \$(...) -C path" "branch unknown"
+run_guard "$WT" "$WT" "pushd $FIX && popd && git commit -m x"
+assert_warn "worktree: popd" "branch unknown"
+
+# ...without warning on the ordinary worktree forms next to them
 run_guard "$FIX" "$FIX" "pushd $WT && git commit -m x"
-assert_exit "worktree: pushd to wt allowed" 0
+assert_no_warn "worktree: pushd to wt"
 run_guard "$FIX" "$FIX" "cd .claude/worktrees/wt\\ space && git commit -m x"
-assert_exit "worktree: backslash-escaped cd to wt allowed" 0
+assert_no_warn "worktree: backslash-escaped cd to wt"
 run_guard "$FIX" "$FIX" "git --git-dir=$FIX/.git/worktrees/wt --work-tree=$WT commit -m x"
-assert_exit "worktree: --git-dir=<wt gitdir> allowed" 0
+assert_no_warn "worktree: --git-dir=<wt gitdir>"
 run_guard "$FIX" "$FIX" "(cd $WT && git commit -m x)"
-assert_exit "worktree: commit inside a subshell cd allowed" 0
+assert_no_warn "worktree: commit inside a subshell cd"
 run_guard "$FIX" "$FIX" "cd $WT && git commit -m \"\$(printf 'a\\nb')\" && git log -1"
-assert_exit "worktree: \$(...) message after the commit allowed" 0
+assert_no_warn "worktree: \$(...) message after the commit"
 rm -rf "$FIX"
 
 ####################################################################
@@ -445,6 +440,13 @@ assert_contains "shop-status nested pie counts" "pies: 2 total, 1 completed / 1 
 assert_contains "shop-status nested slice counts" "slices: 4 total, 3 completed / 1 open"
 assert_contains "shop-status nested next open pie" "next open pie: Pie 3 - Publish Flow"
 assert_not_contains "shop-status nested no awk noise" "syntax error"
+# After compaction (or a resume) the same summary is injected: the hook has no
+# source matcher, and this is how a compacted session re-orients.
+for SRC in compact resume; do
+  CLAUDE_PROJECT_DIR=$FIX run_hook "$SHOP_STATUS" "{\"hook_event_name\":\"SessionStart\",\"source\":\"$SRC\"}"
+  assert_exit "shop-status $SRC exit 0" 0
+  assert_contains "shop-status $SRC re-injects the summary" "next open pie: Pie 3 - Publish Flow"
+done
 rm -rf "$FIX"
 
 # BTS_HOOKS_DISABLED → PASS silent
@@ -454,330 +456,6 @@ echo "# x" > "$FIX/docs/plans/00_master_checklist.md"
 BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_hook "$SHOP_STATUS" '{}'
 assert_exit "shop-status disabled" 0
 assert_empty "shop-status disabled silent"
-rm -rf "$FIX"
-
-####################################################################
-# stage-plan-guard.sh
-####################################################################
-
-echo
-echo "## stage-plan-guard.sh"
-
-# stage plan path + sell-slice current session → WARN (downgraded from BLOCK in v5, C4)
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$STAGE_PLAN_GUARD" \
-  "{\"session_id\":\"current\",\"tool_input\":{\"file_path\":\"$FIX/docs/plans/stage_1_foo.md\"}}"
-assert_exit "stage-plan-guard warns during sell-slice" 0
-assert_contains "stage-plan-guard warn message" "plans are normally static"
-rm -rf "$FIX"
-
-# stage plan path + relative path form + sell-slice → WARN
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$STAGE_PLAN_GUARD" \
-  '{"session_id":"current","tool_input":{"file_path":"docs/plans/stage_2_bar.md"}}'
-assert_exit "stage-plan-guard warns relative path" 0
-assert_contains "stage-plan-guard warn relative path message" "plans are normally static"
-rm -rf "$FIX"
-
-# stage plan path + non-sell-slice skill → PASS
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "special-order"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$STAGE_PLAN_GUARD" \
-  "{\"session_id\":\"current\",\"tool_input\":{\"file_path\":\"$FIX/docs/plans/stage_1_foo.md\"}}"
-assert_exit "stage-plan-guard non-sell-slice passes" 0
-assert_empty "stage-plan-guard non-sell-slice silent"
-rm -rf "$FIX"
-
-# master checklist (not a stage_* file) + sell-slice → PASS
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$STAGE_PLAN_GUARD" \
-  "{\"session_id\":\"current\",\"tool_input\":{\"file_path\":\"$FIX/docs/plans/00_master_checklist.md\"}}"
-assert_exit "stage-plan-guard master checklist passes" 0
-assert_empty "stage-plan-guard master checklist silent"
-rm -rf "$FIX"
-
-# non-plan path + sell-slice → PASS
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$STAGE_PLAN_GUARD" \
-  '{"session_id":"current","tool_input":{"file_path":"src/app/page.tsx"}}'
-assert_exit "stage-plan-guard non-plan path passes" 0
-assert_empty "stage-plan-guard non-plan path silent"
-rm -rf "$FIX"
-
-# stage plan path + stale session → PASS (never block cross-session)
-FIX=$(mk_fixture)
-write_state "$FIX" "old-session" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$STAGE_PLAN_GUARD" \
-  '{"session_id":"current","tool_input":{"file_path":"docs/plans/stage_1_foo.md"}}'
-assert_exit "stage-plan-guard stale session passes" 0
-rm -rf "$FIX"
-
-# stage plan path + no state file → PASS (fail open)
-FIX=$(mk_fixture)
-CLAUDE_PROJECT_DIR=$FIX run_hook "$STAGE_PLAN_GUARD" \
-  '{"session_id":"current","tool_input":{"file_path":"docs/plans/stage_1_foo.md"}}'
-assert_exit "stage-plan-guard no state passes" 0
-rm -rf "$FIX"
-
-# BTS_HOOKS_DISABLED → PASS
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_hook "$STAGE_PLAN_GUARD" \
-  '{"session_id":"current","tool_input":{"file_path":"docs/plans/stage_1_foo.md"}}'
-assert_exit "stage-plan-guard disabled" 0
-assert_empty "stage-plan-guard disabled silent"
-rm -rf "$FIX"
-
-####################################################################
-# library-gate-guard.sh
-####################################################################
-
-echo
-echo "## library-gate-guard.sh"
-
-# watched path, NO approvals file → PASS (dormant)
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
-  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
-assert_exit "library-gate dormant without approvals file" 0
-assert_empty "library-gate dormant silent"
-rm -rf "$FIX"
-
-# watched path, approvals file present, NO approval, sell-slice → WARN
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-cat > "$FIX/.claude/.bytheslice-state/library-approvals.json" <<'EOF'
-{"approvals":[],"watched_paths":["app/**","src/app/**","components/**","src/components/**"]}
-EOF
-CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
-  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
-assert_exit "library-gate warns no approval" 0
-assert_contains "library-gate warn message" "no library approval is recorded"
-rm -rf "$FIX"
-
-# watched path, approval recorded, sell-slice → PASS
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-cat > "$FIX/.claude/.bytheslice-state/library-approvals.json" <<'EOF'
-{"approvals":[{"component_id":"dashboard","status":"approved","at":"2026-05-20T00:00:00Z"}],"watched_paths":["app/**"]}
-EOF
-CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
-  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
-assert_exit "library-gate approved passes" 0
-assert_empty "library-gate approved silent"
-rm -rf "$FIX"
-
-# non-watched path, approvals present, no approval, sell-slice → PASS
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-cat > "$FIX/.claude/.bytheslice-state/library-approvals.json" <<'EOF'
-{"approvals":[],"watched_paths":["app/**","src/app/**","components/**","src/components/**"]}
-EOF
-CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
-  '{"session_id":"current","tool_input":{"file_path":"lib/util.ts"}}'
-assert_exit "library-gate non-watched passes" 0
-assert_empty "library-gate non-watched silent"
-rm -rf "$FIX"
-
-# watched path, approvals present, no approval, non-sell-slice → PASS
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "cook-pizzas"
-cat > "$FIX/.claude/.bytheslice-state/library-approvals.json" <<'EOF'
-{"approvals":[],"watched_paths":["app/**"]}
-EOF
-CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
-  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
-assert_exit "library-gate non-sell-slice passes" 0
-assert_empty "library-gate non-sell-slice silent"
-rm -rf "$FIX"
-
-# watched path, approvals present, stale session → PASS
-FIX=$(mk_fixture)
-write_state "$FIX" "old-session" "sell-slice"
-cat > "$FIX/.claude/.bytheslice-state/library-approvals.json" <<'EOF'
-{"approvals":[],"watched_paths":["app/**"]}
-EOF
-CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
-  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
-assert_exit "library-gate stale session passes" 0
-assert_empty "library-gate stale session silent"
-rm -rf "$FIX"
-
-# BTS_HOOKS_DISABLED → PASS
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-cat > "$FIX/.claude/.bytheslice-state/library-approvals.json" <<'EOF'
-{"approvals":[],"watched_paths":["app/**"]}
-EOF
-BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
-  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
-assert_exit "library-gate disabled" 0
-assert_empty "library-gate disabled silent"
-rm -rf "$FIX"
-
-####################################################################
-# record-library-approval.sh (library gate end-to-end)
-####################################################################
-
-echo
-echo "## record-library-approval.sh"
-
-# arm writes the state file (session, slice, zero approvals) and wakes the
-# gate: the very next watched-path write WARNs.
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_recorder arm --slice 3.2
-assert_exit "recorder arm exits 0" 0
-AF="$FIX/.claude/.bytheslice-state/library-approvals.json"
-assert_file_exists "recorder arm writes approvals file" "$AF"
-assert_file_contains "recorder arm records session from last-precheck" "$AF" '"session_id":"current"'
-assert_file_contains "recorder arm records slice" "$AF" '"slice":"3.2"'
-assert_file_contains "recorder arm starts with zero approvals" "$AF" '"approvals":[]'
-assert_file_contains "recorder arm writes default watched paths" "$AF" '"watched_paths":["app/**"'
-assert_file_contains "recorder arm stamps armed_at" "$AF" '"armed_at":"20'
-CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
-  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
-assert_exit "gate fires once armed" 0
-assert_contains "gate warns after arm, before approval" "no library approval is recorded"
-rm -rf "$FIX"
-
-# approve appends one approved entry per component; the gate then passes the
-# same watched-path write silently.
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_recorder arm --slice 3.2
-CLAUDE_PROJECT_DIR=$FIX run_recorder approve --slice 3.2 --components "order-table,stat-card"
-assert_exit "recorder approve exits 0" 0
-AF="$FIX/.claude/.bytheslice-state/library-approvals.json"
-assert_file_contains "approve records first component" "$AF" '"component_id":"order-table"'
-assert_file_contains "approve records second component" "$AF" '"component_id":"stat-card"'
-assert_file_contains "approve records approved status with timestamp" "$AF" '"status":"approved","at":"20'
-assert_file_contains "approve entries carry session and slice" "$AF" '"session_id":"current","slice":"3.2"}'
-CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
-  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
-assert_exit "gate passes after approval recorded" 0
-assert_empty "gate silent after approval recorded"
-rm -rf "$FIX"
-
-# approve without a prior arm auto-initializes the file; gate passes.
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_recorder approve --slice 1.1 --components "buttons"
-assert_exit "recorder approve without arm exits 0" 0
-CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
-  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
-assert_exit "gate passes after no-arm approval" 0
-assert_empty "gate silent after no-arm approval"
-rm -rf "$FIX"
-
-# Re-arming for the next slice resets approvals: the gate warns again.
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_recorder arm --slice 3.2
-CLAUDE_PROJECT_DIR=$FIX run_recorder approve --slice 3.2 --components "buttons"
-CLAUDE_PROJECT_DIR=$FIX run_recorder arm --slice 3.3
-AF="$FIX/.claude/.bytheslice-state/library-approvals.json"
-assert_file_contains "re-arm updates the slice" "$AF" '"slice":"3.3"'
-assert_file_contains "re-arm resets approvals" "$AF" '"approvals":[]'
-CLAUDE_PROJECT_DIR=$FIX run_hook "$LIBRARY_GATE" \
-  '{"session_id":"current","tool_input":{"file_path":"app/dashboard/page.tsx"}}'
-assert_exit "gate re-armed for next slice" 0
-assert_contains "gate warns again after re-arm" "no library approval is recorded"
-rm -rf "$FIX"
-
-# approve without --components → usage error, nothing written.
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_recorder approve --slice 3.2
-assert_exit "recorder approve without components exits 2" 2
-if [ -f "$FIX/.claude/.bytheslice-state/library-approvals.json" ]; then
-  FAIL=$((FAIL+1)); FAILED_NAMES+=("recorder usage error writes nothing"); printf '  ✗ recorder wrote a file on usage error\n'
-else
-  PASS=$((PASS+1)); printf '  ✓ recorder usage error writes nothing\n'
-fi
-rm -rf "$FIX"
-
-# BTS_HOOKS_DISABLED → no-op, nothing written.
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_recorder arm --slice 3.2
-assert_exit "recorder disabled exits 0" 0
-if [ -f "$FIX/.claude/.bytheslice-state/library-approvals.json" ]; then
-  FAIL=$((FAIL+1)); FAILED_NAMES+=("recorder disabled writes nothing"); printf '  ✗ recorder wrote despite disable\n'
-else
-  PASS=$((PASS+1)); printf '  ✓ recorder disabled writes nothing\n'
-fi
-rm -rf "$FIX"
-
-####################################################################
-# compact-snapshot.sh
-####################################################################
-
-echo
-echo "## compact-snapshot.sh"
-
-# State present → PASS silent + snapshot written carrying skill over
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-CLAUDE_PROJECT_DIR=$FIX run_hook "$COMPACT_SNAPSHOT" '{"session_id":"current"}'
-assert_exit "compact-snapshot with state exits 0" 0
-assert_empty "compact-snapshot silent"
-if [ -f "$FIX/.claude/.bytheslice-state/compact-snapshot.json" ]; then
-  PASS=$((PASS+1)); printf '  ✓ compact-snapshot wrote snapshot file\n'
-else
-  FAIL=$((FAIL+1)); FAILED_NAMES+=("compact-snapshot wrote snapshot file"); printf '  ✗ compact-snapshot did not write file\n'
-fi
-SNAP=$(cat "$FIX/.claude/.bytheslice-state/compact-snapshot.json" 2>/dev/null)
-case "$SNAP" in
-  *'"skill": "sell-slice"'*) PASS=$((PASS+1)); printf '  ✓ compact-snapshot carries skill\n' ;;
-  *) FAIL=$((FAIL+1)); FAILED_NAMES+=("compact-snapshot carries skill"); printf '  ✗ compact-snapshot missing skill: %s\n' "$SNAP" ;;
-esac
-rm -rf "$FIX"
-
-# No state file → still writes a minimal snapshot, exit 0
-FIX=$(mk_fixture)
-CLAUDE_PROJECT_DIR=$FIX run_hook "$COMPACT_SNAPSHOT" '{"session_id":"current"}'
-assert_exit "compact-snapshot no state exits 0" 0
-if [ -f "$FIX/.claude/.bytheslice-state/compact-snapshot.json" ]; then
-  PASS=$((PASS+1)); printf '  ✓ compact-snapshot writes minimal snapshot without state\n'
-else
-  FAIL=$((FAIL+1)); FAILED_NAMES+=("compact-snapshot minimal snapshot"); printf '  ✗ compact-snapshot wrote nothing without state\n'
-fi
-rm -rf "$FIX"
-
-# Checklist with unfinished lines → summary populated
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-mkdir -p "$FIX/docs/plans"
-cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
-# Master
-
-| 1 | foo | Status: Not Started |
-| 2 | bar | Status: Not Started |
-EOF
-CLAUDE_PROJECT_DIR=$FIX run_hook "$COMPACT_SNAPSHOT" '{"session_id":"current"}'
-SNAP=$(cat "$FIX/.claude/.bytheslice-state/compact-snapshot.json" 2>/dev/null)
-case "$SNAP" in
-  *'Status: Not Started'*) PASS=$((PASS+1)); printf '  ✓ compact-snapshot summary holds unfinished lines\n' ;;
-  *) FAIL=$((FAIL+1)); FAILED_NAMES+=("compact-snapshot summary lines"); printf '  ✗ compact-snapshot summary empty: %s\n' "$SNAP" ;;
-esac
-rm -rf "$FIX"
-
-# BTS_HOOKS_DISABLED → no snapshot, exit 0
-FIX=$(mk_fixture)
-write_state "$FIX" "current" "sell-slice"
-BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_hook "$COMPACT_SNAPSHOT" '{"session_id":"current"}'
-assert_exit "compact-snapshot disabled exits 0" 0
-if [ -f "$FIX/.claude/.bytheslice-state/compact-snapshot.json" ]; then
-  FAIL=$((FAIL+1)); FAILED_NAMES+=("compact-snapshot disabled no write"); printf '  ✗ compact-snapshot wrote despite disable\n'
-else
-  PASS=$((PASS+1)); printf '  ✓ compact-snapshot disabled writes nothing\n'
-fi
 rm -rf "$FIX"
 
 ####################################################################
@@ -865,35 +543,6 @@ else
     else
       kitchen_assert "kitchen jq/Node field parity" "JSON.stringify((({t,...r}) => r)(rows[0])) === $(json_str "${KITCHEN_PARITY:-}")"
     fi
-
-    # Session skill marker: a ByTheSlice command or Skill call writes
-    # last-precheck.json (session id + canonical skill); anything else writes
-    # nothing. The hook stays silent and exits 0 either way.
-    MARK="$FIX/.claude/.bytheslice-state/last-precheck.json"
-    MARK_READ='JSON.parse(read(dir + "/.claude/.bytheslice-state/last-precheck.json"))'
-    for CASE in expansion skill bare; do
-      case "$CASE" in
-        expansion) PAYLOAD='{"session_id":"marker-upe","hook_event_name":"UserPromptExpansion","command_name":"bytheslice:sell-slice","command_source":"plugin","command_args":"PRIVATE_ARGS"}'; WANT_SID=marker-upe; WANT_SKILL=sell-slice ;;
-        skill) PAYLOAD='{"session_id":"marker-skill","hook_event_name":"PreToolUse","tool_name":"Skill","tool_input":{"skill":"bytheslice:box-it-up","args":"PRIVATE_ARGS"}}'; WANT_SID=marker-skill; WANT_SKILL=box-it-up ;;
-        bare) PAYLOAD='{"session_id":"marker-bare","hook_event_name":"PreToolUse","tool_name":"Skill","tool_input":{"skill":"sell-pie"}}'; WANT_SID=marker-bare; WANT_SKILL=sell-pie ;;
-      esac
-      rm -f "$LOG" "$MARK"
-      LAST_OUT=$(printf '%s' "$PAYLOAD" | PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" "$KITCHEN_BASH" "$KITCHEN_LOG" 2>&1)
-      LAST_EXIT=$?
-      assert_exit "kitchen $ENGINE marker $CASE exits 0" 0
-      assert_empty "kitchen $ENGINE marker $CASE silent"
-      kitchen_assert "kitchen $ENGINE marker $CASE session and skill" "const m = $MARK_READ; m.session_id === '$WANT_SID' && m.skill === '$WANT_SKILL' && m.branch === 'main' && ['clean','dirty'].includes(m.tree) && /^\\d{4}-\\d{2}-\\d{2}T/.test(m.timestamp)"
-      kitchen_assert "kitchen $ENGINE marker $CASE keeps args private" "!read(dir + '/.claude/.bytheslice-state/last-precheck.json').includes('PRIVATE_') && rows.length === 1"
-    done
-    for PAYLOAD in '{"session_id":"marker-other","hook_event_name":"UserPromptExpansion","command_name":"commit","command_source":"builtin"}' '{"session_id":"marker-other","hook_event_name":"PreToolUse","tool_name":"Skill","tool_input":{"skill":"other-plugin:sell-slice"}}' '{"session_id":"marker-other","hook_event_name":"SessionStart"}'; do
-      rm -f "$LOG" "$MARK"
-      LAST_OUT=$(printf '%s' "$PAYLOAD" | PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" "$KITCHEN_BASH" "$KITCHEN_LOG" 2>&1)
-      LAST_EXIT=$?
-      assert_exit "kitchen $ENGINE non-ByTheSlice marker exits 0" 0
-      assert_empty "kitchen $ENGINE non-ByTheSlice marker silent"
-      kitchen_assert "kitchen $ENGINE non-ByTheSlice writes no marker" "rows.length === 1 && !fs.existsSync(dir + '/.claude/.bytheslice-state/last-precheck.json')"
-    done
-    rm -f "$MARK"
 
     mkdir -p "$FIX/docs/plans"
     cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
@@ -1149,6 +798,45 @@ EOF
   assert_exit "kitchen registered Stop row exists before command returns" 0
   assert_empty "kitchen registered synchronous Stop stays silent"
   rm -rf "$FIX"
+fi
+
+####################################################################
+# hooks.json wiring
+####################################################################
+
+echo
+echo "## hooks.json wiring"
+
+# Every command path in hooks.json names a script that exists, and no wired
+# script can block a tool call: no `exit 2`, no block or deny decision.
+WIRED=$(sed -nE 's#.*\$\{CLAUDE_PLUGIN_ROOT\}/hooks/([^"\\]+)\\?".*#\1#p' "$HERE/hooks.json" | sort -u)
+COMMANDS=$(grep -cE '"command"[[:space:]]*:' "$HERE/hooks.json")
+REFS=$(grep -c 'CLAUDE_PLUGIN_ROOT}/hooks/' "$HERE/hooks.json")
+if [ -n "$WIRED" ] && [ "$COMMANDS" = "$REFS" ]; then
+  PASS=$((PASS+1)); printf '  ✓ every hooks.json command runs a script under hooks/ (%s commands)\n' "$COMMANDS"
+else
+  FAIL=$((FAIL+1)); FAILED_NAMES+=("hooks.json command outside hooks/"); printf '  ✗ %s commands, %s under hooks/\n' "$COMMANDS" "$REFS"
+fi
+while IFS= read -r script; do
+  [ -n "$script" ] || continue
+  if [ -f "$HERE/$script" ]; then
+    PASS=$((PASS+1)); printf '  ✓ wired script exists: %s\n' "$script"
+  else
+    FAIL=$((FAIL+1)); FAILED_NAMES+=("wired script missing: $script"); printf '  ✗ wired script missing: %s\n' "$script"
+  fi
+  if grep -nE '(^|[^[:alnum:]_])exit[[:space:]]+2([^[:digit:]]|$)|"decision"[[:space:]]*:[[:space:]]*\\?"block|"permissionDecision"[[:space:]]*:[[:space:]]*\\?"deny' "$HERE/$script" >/dev/null 2>&1; then
+    FAIL=$((FAIL+1)); FAILED_NAMES+=("wired script can block: $script"); printf '  ✗ wired script can block: %s\n' "$script"
+  else
+    PASS=$((PASS+1)); printf '  ✓ wired script never blocks: %s\n' "$script"
+  fi
+done <<EOF
+$WIRED
+EOF
+# The shared helpers are sourced by every wired script, so they count too.
+if grep -nE '(^|[^[:alnum:]_])exit[[:space:]]+2([^[:digit:]]|$)' "$HERE/lib/checklist.sh" >/dev/null 2>&1; then
+  FAIL=$((FAIL+1)); FAILED_NAMES+=("lib/checklist.sh can block"); printf '  ✗ lib/checklist.sh can block\n'
+else
+  PASS=$((PASS+1)); printf '  ✓ sourced lib/checklist.sh never blocks\n'
 fi
 
 ####################################################################
