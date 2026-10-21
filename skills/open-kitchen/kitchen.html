@@ -100,6 +100,18 @@ button{font:inherit;color:inherit}
 button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 
 /* side sheet */
+#pfWrap{position:fixed;inset:0;z-index:9;display:grid;grid-template-columns:minmax(0,340px);justify-content:center;align-items:center;padding:16px;background:rgba(40,28,20,.28)}
+#pfWrap[hidden]{display:none}
+#profile{position:relative;width:100%;min-width:0;box-sizing:border-box;max-height:calc(100vh - 32px);overflow:auto;background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:14px 16px 18px}
+#profile .sh-close{position:absolute;top:12px;right:12px;z-index:1}
+#pfCanvas{display:block;width:100%;aspect-ratio:1/1;max-height:300px;border-radius:14px;background:radial-gradient(circle at 50% 40%,#fff8ec 0,#f3e5cf 70%,#ead6b8 100%)}
+#profile h4{font-family:var(--display);font-weight:600;font-size:21px;margin:12px 0 2px}
+#profile .sub{color:var(--ink-soft);font-weight:700;font-size:12.5px;margin:0 0 10px}
+#profile dl{display:grid;grid-template-columns:auto 1fr;gap:7px 12px;margin:0;font-size:13px}
+#profile dt{color:var(--ink-soft);font-weight:700;font-size:12px}
+#profile dd{margin:0;font-weight:700;min-width:0;overflow-wrap:anywhere}
+#profile dd .pname{font-size:13px;margin-right:10px}
+#profile code{font-size:12px}
 #sheet{position:fixed;z-index:6;top:calc(68px + env(safe-area-inset-top,0px));right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));width:360px;max-width:calc(100vw - 32px);background:var(--card);border-radius:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden}
 .sh-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 10px}
 .sh-head h3{font-family:var(--display);font-weight:600;font-size:20px;margin:0}
@@ -117,6 +129,8 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .tabs [role="tab"]:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 .pname{background:none;border:0;padding:0;font:inherit;font-weight:800;font-size:13.5px;color:inherit;cursor:pointer;text-align:left}
 .pname:hover,.pname:focus-visible{text-decoration:underline;text-underline-offset:3px;outline:none}
+.pname .hav{display:block}
+.pname:focus-visible .hav{box-shadow:0 0 0 2px var(--accent)}
 .town h4{font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--ink-soft);margin:16px 0 4px}
 .town h4 small{font-weight:700;letter-spacing:0;text-transform:none;margin-left:6px}
 .tperson{display:grid;grid-template-columns:36px 1fr;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
@@ -281,6 +295,7 @@ button.orow:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
   <button id="bPause" data-i="pause" data-l="Pause"></button>
 </nav>
 
+<div id="pfWrap" hidden><div id="profile" role="dialog" aria-modal="true" aria-labelledby="pfName"><button type="button" class="sh-close" id="pfClose" aria-label="Close profile" data-i="close"></button><canvas id="pfCanvas" width="600" height="600" role="img" aria-label="Character portrait"></canvas><div id="pfBody"></div></div></div>
 <aside id="sheet" hidden><div class="sh-head"><h3 id="shTitle">Crew</h3><button class="sh-close" id="shClose" aria-label="Close" data-i="close"></button></div><div class="sh-body" id="shBody"></div></aside>
 <div id="tip" hidden></div>
 
@@ -426,6 +441,7 @@ window.kitchenWords = (() => {
     'prd-reviewer': 'critic, reviews the product plan', 'retrospective-reviewer': 'reviewer, looks back on the day',
     'proposal-drafter': 'drafts house-rule changes', 'block-composer': 'builds screens from stock blocks',
     'component-crafter': 'pastry artist, crafts custom components', 'state-illustrator': 'paints empty, loading and error states',
+    orchestrator: 'head chef, leads the session', 'box-it-up': 'front of house, hands off finished pies',
   };
   const CREW = { setup: 'opening crew, sets up the project', menu: 'test kitchen, plans the work', case: 'display case crew, builds the UI kit',
     line: 'line crew, builds code', pass: 'pass crew, checks the work', door: 'back door crew, runs final checks and delivery',
@@ -3557,7 +3573,7 @@ function personOf(n) {
 function homeCard(e) {
   const rows = e.who.map(n => {
     const p = personOf(n); if (!p) return '';
-    return `<div class="fm${p.home ? ' in' : ''}">${avatar(p.look, p.kid)}<div><b>${n}</b><small>${p.home ? 'Home' : p.status}</small></div></div>`;
+    return `<div class="fm${p.home ? ' in' : ''}"><button type="button" class="pname" data-person="${escapeCard(personKey(n))}" aria-label="Open ${escapeCard(n)}'s profile">${avatar(p.look, p.kid)}</button><div><b><button type="button" class="pname" data-person="${escapeCard(personKey(n))}">${n}</button></b><small>${p.home ? 'Home' : p.status}</small></div></div>`;
   }).join('');
   const home = e.who.filter(n => personOf(n)?.home).length;
   return `<h5>${e.name}</h5><div class="sub">${e.street} · ${home ? `${home} of ${e.who.length} home` : 'Everyone is out'}</div><div class="fam">${rows}</div>`;
@@ -3567,6 +3583,123 @@ function tapTarget(obj, fn) { obj.traverse(o => { if (o.isMesh) o.userData.card 
 stationObjs.forEach((g, i) => tapTarget(g, () => { const s = cur && cur.slices.find(s => s.st === i); return `<h5>${STATION[i].name} station</h5><div class="sub">One aspect of every pie</div><dl><dt>Cook</dt><dd>${COOKS[i].meta.name} · <code>${COOKS[i].meta.id.replace('#2', '')}</code></dd><dt>Slice</dt><dd>${s ? escapeCard(s.id + ' ' + s.name) : 'Nothing firing'}</dd><dt>Status</dt><dd>${s ? (s.status === 'cooking' ? Math.round(s.pct * 100) + '% cooked' : CHIP[s.status][1]) : 'Idle'}</dd></dl>`; }));
 { const o = root.getObjectByName('board86'); o.userData.card = () => `<h5>Shop status</h5><div class="sub">The same status your session prints when it starts</div><dl>${liveShopStatus ? `<dt>Prep</dt><dd>${liveShopStatus.prep.done}/${liveShopStatus.prep.total} boxes checked</dd><dt>Pies</dt><dd>${liveShopStatus.pies.total} total, ${liveShopStatus.pies.done} completed / ${liveShopStatus.pies.open} open</dd><dt>Slices</dt><dd>${liveShopStatus.slices.total} total, ${liveShopStatus.slices.done} completed / ${liveShopStatus.slices.open} open</dd>` : `<dt>Prep</dt><dd>${STATUS.prep} done</dd><dt>Served</dt><dd>${STATUS.served} pies</dd><dt>In line</dt><dd>${STATUS.line} orders</dd>${parked.map(p => `<dt>86'd</dt><dd>Pie ${p.n}, ${p.title}: ${p.why}</dd>`).join('')}`}</dl>`; clickables.push(o); }
 { const o = root.getObjectByName('scooter'); tapTarget(o, () => `<h5>Dex's scooter</h5><div class="sub"><code>ci-fix-attempter</code> · off shift</div><dl><dt>Job</dt><dd>Rides out when CI goes red after the window and fixes it on the way.</dd></dl>`); }
+// ---------- person profiles: a portrait of the actual character model, doing what suits them, and who they are ----------
+const LIKE_WORDS = { cafe: 'Coffee at a sidewalk cafe', bakery: 'The bakery', diner: 'Lunch at the diner', florist: 'Picking out flowers', window: 'Window shopping',
+  barber: 'A trim at the barber', bench: 'A quiet bench', fountain: 'The fountain', gazebo: 'Music at the gazebo', pond: 'The duck pond', icecream: 'Ice cream',
+  playground: 'The playground', toys: 'The toy shop', ballgame: 'Watching the ballgame', chat: 'A good chat', wander: 'A wander around town', hardware: 'The hardware store',
+  cinema: 'The movies', bank: 'Errands at the bank', statue: 'The statue in the park', listen: 'Live music', yardsale: 'Yard sales', cookout: 'Cookouts', grill: 'Grilling',
+  yoga: 'Yoga on the lawn', water: 'Watering the flowers', carwash: 'Washing the car', lawnchairs: 'Lawn chairs in the sun', lawnread: 'Reading on the lawn',
+  yardplay: 'Tag in the yard', sprinkler: 'The sprinkler', busk: 'Busking', picnic: 'Picnics', porch: 'The front porch', garden: 'Gardening', swing: 'The swings', fiddle: 'The fiddle', ducks: 'The ducks' };
+const KID_LIKES = ['playground', 'icecream', 'pond', 'fountain', 'toys', 'sprinkler', 'swing'];
+const cap1 = text => text ? text[0].toUpperCase() + text.slice(1) : '';
+const crewActorById = id => castActors.get(id);
+function personKey(name) {
+  const crew = [...castActors.values()].find(a => a.meta.name === name && !a.isCustomer);
+  if (crew && !crew.townie?.member) return 'crew:' + crew.meta.id;
+  if (ROSTER.some(r => r.name === name)) return 'crew:' + ROSTER.find(r => r.name === name).id;
+  return 'town:' + name;
+}
+function personKeyOf(a) {
+  if (a.townie && !a.townie.crew) return 'town:' + a.townie.name;
+  if (!a.isCustomer && castActors.get(a.meta.id) === a) return 'crew:' + a.meta.id;
+  return null;
+}
+function crewCharacter(id) { return id === 'orchestrator' ? byId.chef : id === 'box-it-up' ? byId.lead : byId[id]; }
+function personInfo(key) {
+  const [kind, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)];
+  if (kind === 'crew') {
+    const ch = crewCharacter(id); if (!ch) return null;
+    const a = crewActorById(id), e = HOME_OF[ch.name];
+    const look = a?.look || { ...UNI[ch.tier], skin: skins[ch.name.length % skins.length], hair: 'toque', hairC: 0x3b2a22, apron: CREW_APRONS[ch.crew] };
+    const agent = id === 'orchestrator' ? 'the lead session (orchestrator)' : id === 'box-it-up' ? 'the box-it-up skill' : `bytheslice:${id.replace(/#\d+$/, '')}`;
+    const now = !a ? 'Off shift' : a.isTownCrew ? (a.hidden ? 'Off duty at home' : a.task) : a.hidden ? 'Off shift' : a.task;
+    return { key, name: ch.name, kind, look, kid: false, actor: a, role: cap1(window.kitchenWords.role({ id, type: id, crew: ch.crew, plugin: true })), agent, crewLabel: crewName(ch.crew),
+      family: e ? e.who.filter(n => n !== ch.name) : [], home: e ? `${e.name}, ${e.street}` : 'Lives out of town', likes: Object.keys(CREW_LIKES[id] || {}), now, pose: { crew: id, prop: look.prop } };
+  }
+  const a = townies.find(q => q.townie.name === id && !q.townie.crew), bike = bikes.find(b => b.name === id); if (!a && !bike) return null;
+  const t = a?.townie || {}, e = HOME_OF[id], lead = t.member && townies.find(q => q.townie.name === t.member);
+  const team = t.bb?.t != null ? BBTEAMS[t.bb.t].name : t.bb?.coach != null ? BBTEAMS[t.bb.coach].name : null;
+  const role = bike ? 'Neighborhood kid, always on a bike' : t.mail ? 'Mail carrier' : t.mower ? 'Keeps the lawns trim' : t.bb?.t != null ? `Plays ${POSNAME[a.kid?.pos] || 'ball'} for the ${team}`
+    : t.bb?.coach != null ? `Coaches the ${team}` : t.bb?.ump ? 'Umpire at the ballfield' : t.fan ? 'Ballgame regular' : t.name === 'Tess' ? 'Runs the lemonade stand'
+    : t.busk || /fiddle/i.test(t.what || '') ? 'Street musician' : t.kid ? 'Kid in town' : e?.store ? `Lives above the ${e.store}` : 'Neighbor';
+  const likesFrom = t.brain?.likes || (lead ? Object.fromEntries(Object.entries(lead.townie.brain?.likes || {}).filter(([k]) => KID_LIKES.includes(k))) : {});
+  let likes = Object.entries(likesFrom).sort((p, q) => q[1] - p[1]).map(([k]) => k).filter(k => LIKE_WORDS[k]);
+  if (!likes.length) likes = t.bb ? ['ballgame'] : bike ? ['wander'] : t.kid ? ['playground', 'icecream'] : ['chat'];
+  const p = personOf(id);
+  return { key, name: id, kind, look: a?.look || bike.look, kid: !!(t.kid || bike), actor: a, role, family: e ? e.who.filter(n => n !== id) : [], home: e ? `${e.name}, ${e.street}` : 'Around town',
+    likes, now: p ? (p.home ? 'At home' : p.status) : '', pose: { town: t, bike: !!bike } };
+}
+const PF = { renderer: null, scene: null, cam: null, model: null, raf: 0, t: 0, opener: null };
+function poseModel(c, info) {
+  const g = c.g, arms = c.arms, legs = c.legs, P0 = info.pose, t = P0.town || {}, what = (t.what || '') + ' ' + (info.now || '');
+  const hold = obj => { obj.position.set(0, .5, .32); g.add(obj); arms.forEach(arm => arm.rotation.x = -1.35); };
+  if (P0.crew) {
+    if (c.news) c.news.visible = false;
+    if (['ticket', 'book', 'clip', 'probe', 'spoon', 'crate'].includes(P0.prop)) { arms[0].rotation.x = -1.0; arms[1].rotation.x = -1.2; c.head.rotation.x = .18; }
+    else { const pie = miniPie(); root.remove(pie); pie.scale.setScalar(1.2); hold(pie); }
+    return 'At work';
+  }
+  if (P0.bike) { arms[1].rotation.z = 2.7; return 'Waving from the bike path'; }
+  if (t.mower) { const mw = mower.clone(true); mw.position.set(0, 0, .75); mw.visible = true; g.add(mw); arms.forEach(arm => arm.rotation.x = -.9); return 'Mowing'; }
+  if (t.mail) { const letter = P(rbox(.2, .14, .02, .01), M.paper, .12, .62, .3, g); letter.rotation.y = -.3; arms[0].rotation.x = -1.2; return 'Out with the mail'; }
+  if (t.name === 'Tess') { const box = G(0, 0, .55, g); P(rbox(.9, .6, .4, .03), M.creamW, 0, .3, 0, box); P(rbox(1.0, .05, .5, .02), m('lemonTop', 0xf3cf72), 0, .62, 0, box); P(cyl(.07, .07, .2, 12), m('pitcher', 0xf6e58a, { op: .8 }), -.25, .75, 0, box); arms.forEach(arm => arm.rotation.x = -.9); return 'Selling lemonade'; }
+  if (/run/i.test(t.what || '')) { legs[0].rotation.x = .6; legs[1].rotation.x = -.6; arms[0].rotation.x = -.7; arms[1].rotation.x = .6; c.body.rotation.x = .12; return 'Out for a run'; }
+  if (t.bb?.t != null) { const b = bat.clone(true); b.visible = true; b.position.set(.2, .55, -.05); b.rotation.set(-.4, 0, -.5); g.add(b); arms[0].rotation.x = -2.2; arms[1].rotation.x = -2.0; return 'Up to bat'; }
+  if (t.bb || t.fan) { arms[0].rotation.x = -2.8; arms[1].rotation.x = -2.8; return t.fan ? 'Cheering' : 'Calling the game'; }
+  if (c.news) { c.news.visible = true; arms.forEach(arm => arm.rotation.x = -1.18); c.head.rotation.x = .2; return 'Reading the paper'; }
+  if (/fiddle|music/i.test(what)) { arms[0].rotation.x = -2.0; arms[1].rotation.x = -1.4; c.head.rotation.z = .2; return 'Playing a tune'; }
+  if (/garden/i.test(what)) { legs.forEach(l => l.rotation.x = -1.5); g.position.y = -.1; arms.forEach(arm => arm.rotation.x = -1.0); return 'Gardening'; }
+  if (/swing|slide/i.test(what)) { arms[0].rotation.x = -2.8; arms[1].rotation.x = -2.8; return 'Wheee'; }
+  arms[1].rotation.z = 2.7; return 'Saying hi';
+}
+function renderProfileModel(info) {
+  if (!PF.renderer) {
+    PF.renderer = new THREE.WebGLRenderer({ canvas: $('#pfCanvas'), antialias: true, alpha: true, preserveDrawingBuffer: true });
+    PF.renderer.setPixelRatio(1); PF.renderer.setSize(600, 600, false); PF.renderer.setClearColor(0x000000, 0);
+    PF.renderer.outputColorSpace = THREE.SRGBColorSpace; PF.renderer.toneMapping = THREE.ACESFilmicToneMapping; PF.renderer.toneMappingExposure = 1.08;
+    PF.scene = new THREE.Scene();
+    PF.scene.add(new THREE.HemisphereLight(0xfff0d8, 0x8a5a44, 1.25)); PF.scene.add(new THREE.AmbientLight(0xffffff, .25));
+    const key = new THREE.DirectionalLight(0xffe0c0, 2.4); key.position.set(2, 4, 3.5); PF.scene.add(key);
+    const rim = new THREE.DirectionalLight(0xcfe0f0, .7); rim.position.set(-3, 2, -2); PF.scene.add(rim);
+    PF.cam = new THREE.PerspectiveCamera(26, 1, .1, 50);
+  }
+  if (PF.model) { PF.scene.remove(PF.model); PF.model = null; }
+  const c = makeChar({ id: 'profile', ...info.look }); root.remove(c.g); c.g.position.set(0, 0, 0); c.g.rotation.y = .35;
+  PF.pose = poseModel(c, info); if (info.kid) c.g.scale.setScalar(.72);
+  PF.scene.add(c.g); PF.model = c.g;
+  // frame the whole character, hat included: center on half their height and back off in proportion
+  const sc = info.kid ? .72 : 1, top = (1.35 + (c.topH || 0)) * sc, center = top / 2 + .05, dist = top * 1.95 + .7;
+  PF.cam.position.set(dist * .27, center + .35, dist); PF.cam.lookAt(0, center, .1);
+  PF.renderer.render(PF.scene, PF.cam);
+}
+function profileLoop() {
+  if ($('#pfWrap').hidden || !PF.model) { PF.raf = 0; return; }
+  PF.t += 1 / 60; PF.model.rotation.y = .35 + Math.sin(PF.t * .8) * .25; PF.renderer.render(PF.scene, PF.cam);
+  PF.raf = requestAnimationFrame(profileLoop);
+}
+const personButton = n => `<button type="button" class="pname" data-person="${escapeCard(personKey(n))}">${escapeCard(n)}</button>`;
+function openProfile(key) {
+  const info = personInfo(key); if (!info) return false;
+  const wrap = $('#pfWrap'); if (wrap.hidden) PF.opener = document.activeElement;
+  renderProfileModel(info);
+  $('#pfCanvas').setAttribute('aria-label', `${info.name}: ${PF.pose.toLowerCase()}`);
+  $('#pfBody').innerHTML = `<h4 id="pfName">${escapeCard(info.name)}</h4><div class="sub">${escapeCard(info.kind === 'crew' ? `${info.crewLabel || 'Kitchen crew'} · ${PF.pose}` : PF.pose)}</div><dl>
+    <dt>Role</dt><dd>${escapeCard(info.role)}${info.agent ? `<br><code>${escapeCard(info.agent)}</code>` : ''}</dd>
+    <dt>Family</dt><dd>${info.family.length ? info.family.map(personButton).join('') : 'Lives on their own'}</dd>
+    <dt>Home</dt><dd>${escapeCard(info.home)}</dd>
+    <dt>Loves</dt><dd>${escapeCard(info.likes.slice(0, 3).map(k => LIKE_WORDS[k] || cap1(k)).join(', '))}</dd>
+    <dt>Now</dt><dd>${escapeCard(info.now || 'Somewhere in town')}</dd></dl>`;
+  wrap.hidden = false; wrap.dataset.person = key; tip.hidden = true; tipFor = null;
+  $('#pfClose').focus({ preventScroll: true });
+  if (!PF.raf) PF.raf = requestAnimationFrame(profileLoop);
+  return true;
+}
+function closeProfile() { const wrap = $('#pfWrap'); if (wrap.hidden) return; wrap.hidden = true; delete wrap.dataset.person; PF.opener?.focus?.({ preventScroll: true }); PF.opener = null; }
+$('#pfClose').onclick = closeProfile;
+$('#pfWrap').addEventListener('click', event => { if (event.target === $('#pfWrap')) closeProfile(); const b = event.target.closest('[data-person]'); if (b) openProfile(b.dataset.person); });
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('#pfWrap').hidden) { event.preventDefault(); closeProfile(); } });
+$('#shBody').addEventListener('click', event => { const b = event.target.closest('[data-person]'); if (b) openProfile(b.dataset.person); });
+tip.addEventListener('click', event => { const b = event.target.closest('[data-person]'); if (b) openProfile(b.dataset.person); });
 function actorCard(a) {
   if (a.kid) return kidCard(a.kid);
   if (a.townie && !a.townie.crew) {
@@ -3588,8 +3721,8 @@ function tap(x, y) {
   ndc.set(x / W * 2 - 1, -(y / H) * 2 + 1); ray.setFromCamera(ndc, cam);
   const hits = ray.intersectObjects([...actors.filter(a => !a.hidden).map(a => a.c.hit), ...bikes.filter(b => b.g.visible).map(b => b.kid.hit), ...clickables], true);
   for (const h of hits) {
-    const a = h.object.userData.actor; if (a) { tipFor = a; showTip(actorCard(a), headPos(a)); return; }
-    const bk = h.object.userData.bike; if (bk) { tipFor = null; showTip(`<h5>${bk.name}</h5><div class="sub">Neighbor kid on a bike</div><dl><dt>Now</dt><dd>${bk.what}</dd></dl>`, () => tmpV.set(bk.pos.x, 1.35, bk.pos.z)); return; }
+    const a = h.object.userData.actor; if (a) { const key = personKeyOf(a); if (key && openProfile(key)) return; tipFor = a; showTip(actorCard(a), headPos(a)); return; }
+    const bk = h.object.userData.bike; if (bk && openProfile('town:' + bk.name)) return; if (bk) { tipFor = null; showTip(`<h5>${bk.name}</h5><div class="sub">Neighbor kid on a bike</div><dl><dt>Now</dt><dd>${bk.what}</dd></dl>`, () => tmpV.set(bk.pos.x, 1.35, bk.pos.z)); return; }
     let o = h.object; while (o && !o.userData.card) o = o.parent; if (o) { tipFor = null; const pt = h.point.clone(); pt.y += .5; showTip(o.userData.card(), () => pt); return; }
   }
   tip.hidden = true; tipFor = null; tipAnchor = null;
@@ -4300,6 +4433,14 @@ Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
   get baseCrew() { return BASE_CREW().map(({ actor }) => ({ character: actor.meta.id, name: actor.meta.name, ambient: ambient.has(actor.meta.id),
     task: actor.task, mode: actor.mode, hidden: !!actor.hidden, position: [actor.pos.x, actor.pos.z], tag: actor.workTagO?.on ? actor.workTagO.el.textContent : null })); },
   get oven() { return { on: ovenOn, verifying: liveVerifying }; },
+  get profile() { const wrap = $('#pfWrap'); return wrap.hidden ? null : { person: wrap.dataset.person, name: $('#pfName')?.textContent, pose: PF.pose }; },
+  screenOf(target) {
+    const house = /^house:(\d+)$/.exec(target), obj = house ? HS(+house[1]).g : null;
+    const a = obj ? null : [...castActors.values(), ...townies].find(q => !q.hidden && (q.townie?.name === target || q.meta?.name === target));
+    if (!obj && !a) return null;
+    if (obj) new THREE.Box3().setFromObject(obj).getCenter(tmpV); else tmpV.set(a.pos.x, a.pos.y + .7 * (a.g.scale.y || 1), a.pos.z);
+    tmpV.project(cam); const r = glc.getBoundingClientRect(); return { x: r.left + (tmpV.x * .5 + .5) * r.width, y: r.top + (-tmpV.y * .5 + .5) * r.height };
+  },
   get townPopulation() { return new Set([...TOWNIES.map(t => t.name), ...bikes.map(b => b.name)]).size; },
   get townCrew() { return TOWN_CREW().map(a => ({ name: a.meta.name, character: a.meta.id, inTown: !!a.isTownCrew, hidden: !!a.hidden, task: a.task, mode: a.mode,
     speed: a.speed, x: a.pos.x, z: a.pos.z, home: crewHome(a).door, saying: a._say?.el.textContent || null, inKitchen: a.pos.x > -5.2 && a.pos.x < 5.2 && a.pos.z > -4.2 && a.pos.z < 4.2 })); },

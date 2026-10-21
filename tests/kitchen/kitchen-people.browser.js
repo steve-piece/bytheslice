@@ -58,6 +58,61 @@ async function main() {
     await page.keyboard.press('End'); assert.equal(await page.evaluate(() => document.activeElement.id), 'tab-town');
     await page.keyboard.press('Home'); assert.equal(await page.evaluate(() => document.activeElement.id), 'tab-crew');
     console.log('PASS tabs: arrow keys, Home and End move between tabs');
+
+    // profiles: entry point 1, a name in the Crew list
+    const profile = () => page.evaluate(() => window.__kitchenScene.profile);
+    await page.click('#panel-crew [data-person="crew:implementer"]');
+    let card = await profile(); assert.equal(card.name, 'Ren');
+    let text = await page.textContent('#profile');
+    assert.match(text, /Line cook, builds code/); assert.match(text, /bytheslice:implementer/); assert.match(text, /The line crew flat, Upstairs on Main Street/);
+    assert.match(text, /Family.*Chef Nico.*Dom/s); assert.match(text, /Loves.*Lunch at the diner/s); assert.match(text, /Now/);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'pfClose');
+    assert.ok(await page.evaluate(() => { const c = document.getElementById('pfCanvas'), x = c.getContext('webgl2') || c.getContext('webgl'); const px = new Uint8Array(4); x.readPixels(300, 300, 1, 1, x.RGBA, x.UNSIGNED_BYTE, px); return px[3] > 0; }), 'the portrait renders the character');
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}-profile-crew.png` });
+    await page.click('#pfClose'); assert.equal(await profile(), null);
+    console.log('PASS profiles: a Crew list name opens the profile (role, agent, family, home, loves, now) and X closes it');
+
+    // entry point 2, a name in the Town list, and a family link to another profile
+    await page.click('#tab-town'); await page.click('#panel-town [data-person="town:Tess"]');
+    card = await profile(); assert.equal(card.name, 'Tess'); assert.equal(card.pose, 'Selling lemonade');
+    assert.match(await page.textContent('#profile'), /Runs the lemonade stand/);
+    await page.click('#profile [data-person="town:Lena"]');
+    card = await profile(); assert.equal(card.name, 'Lena'); assert.equal(card.pose, 'Out for a run');
+    assert.match(await page.textContent('#profile'), /The Okafor home, Elm Street/);
+    await page.keyboard.press('Escape'); assert.equal(await profile(), null);
+    await page.click('#panel-town [data-person="town:Hank"]'); assert.equal((await profile()).pose, 'Mowing'); await page.keyboard.press('Escape');
+    console.log('PASS profiles: a Town list name opens a fitting pose, a family link opens that profile, Escape closes');
+
+    // entry point 3, a person in the 3D scene
+    await page.click('#shClose');
+    await page.evaluate(() => { window.__kitchenScene.pause(true); window.__kitchenScene.look(.2, .4, 2.2); });
+    await page.waitForTimeout(300);
+    let spot = await page.evaluate(() => window.__kitchenScene.screenOf('Chef Nico'));
+    await page.mouse.click(spot.x, spot.y);
+    card = await profile(); assert.ok(card, 'tapping a person opens a profile'); assert.equal(card.name, 'Chef Nico');
+    assert.match(await page.textContent('#profile'), /Head chef, leads the session/);
+    await page.keyboard.press('Escape');
+    console.log('PASS profiles: tapping Chef Nico in the scene opens his profile');
+
+    // entry point 4, an avatar head in a house card's popover
+    await page.evaluate(() => window.__kitchenScene.look(2, -13.5, 1.6)); await page.waitForTimeout(300);
+    spot = await page.evaluate(() => window.__kitchenScene.screenOf('house:4'));
+    await page.mouse.click(spot.x, spot.y);
+    await page.waitForSelector('#tip:not([hidden]) .fam [data-person]');
+    await page.click('#tip .fam .hav >> nth=0');
+    card = await profile(); assert.ok(['Lena', 'Tess', 'Ricky'].includes(card.name), `the avatar opens a household member (${card.name})`);
+    await page.keyboard.press('Escape');
+    console.log(`PASS profiles: an avatar head in the Okafor house card opens ${card.name}'s profile`);
+
+    // phone width: the card fits and still closes
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.evaluate(() => window.__kitchenScene.pause(false));
+    await page.click('#bCrew'); await page.click('#panel-town [data-person="town:Carl"]');
+    const box = await page.$eval('#profile', el => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, scroll: document.documentElement.scrollWidth }; });
+    assert.ok(box.left >= 0 && box.right <= 375 && box.top >= 0 && box.bottom <= 812 && box.scroll <= 375, `fits a phone (${JSON.stringify(box)})`);
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}-profile-phone.png` });
+    await page.click('#pfClose'); assert.equal(await profile(), null);
+    console.log('PASS profiles: the card fits a 375 px phone viewport');
     assert.deepEqual(errors, []);
   } finally {
     await browser.close(); server.close();
