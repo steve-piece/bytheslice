@@ -90,9 +90,10 @@ On-demand, no particular order:
 
 > [!IMPORTANT]
 > **Shop rules** the plugin enforces, no exceptions:
-> 1. **Every slice passes the quality line** (lint, type, build + UI test review). A bad pie doesn't go on the display.
+> 1. **Every slice passes the quality line, in tiers.** Quick checks while coding, the slice's own tests and build before each commit, the full local suite once at slice end, and the full suite again in CI at the PR, plus the independent UI and data review. After a fix, only the checks that fix could change re-run. A bad pie doesn't go on the display.
 > 2. **Selling and boxing are decoupled.** Slices commit + push to the pie branch with no PR or CI; `/box-it-up` opens the single `Pie N` PR and merges at the **pie boundary** - so CI fires once per pie, and you can taste-test between slices. (That is the default. Opt-in merge-per-slice delivery, via `delivery.mode` or an explicit "merge each slice" instruction, gives every slice its own PR, merged on green CI.)
-> 3. **Every skill is independently invocable.** Drop `/set-display-case` onto any project to bolt on a design system, or `/box-it-up` onto any branch to push it. The full workflow is opt-in.
+> 3. **Only the conductor touches git.** Agents hand back the files they changed; the conductor stages exactly those, commits at every task boundary, and pushes. `--no-verify` is never the answer.
+> 4. **Every skill is independently invocable.** Drop `/set-display-case` onto any project to bolt on a design system, or `/box-it-up` onto any branch to push it. The full workflow is opt-in.
 
 ---
 
@@ -290,7 +291,7 @@ The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once*
 - **`/run-the-day`** - thin chainer that drives `/sell-pie` across **every** Pie until the checklist is green.
 - **`/close-shop`** - after-service retrospective that drafts plugin improvements back to disk.
 
-Running in **Cursor or any host without `/loop`, `Workflow`, or `/goal`?** The skills don't silently drop the logic - they fall back to in-context self-pacing with manual schema validation. See the [Cursor / non-Claude-Code fallback](docs/architecture.md#cursor--non-claude-code-fallback) section.
+Running in **Cursor or any host without `/loop`, `Workflow`, or `/goal`?** The skills don't silently drop the logic - they fall back to in-context self-pacing with manual schema validation, and every agent prompt carries its own model tier, effort and tool limits as a header. See the [Cursor / non-Claude-Code fallback](docs/architecture.md#cursor--non-claude-code-fallback) section.
 
 ---
 
@@ -321,6 +322,27 @@ Technically yes (the orchestrator will accept a HITL override with `destructive_
 <summary><b>How many times will it try to fix a failure?</b></summary>
 
 At most **3 local fix loops per slice** (a loop is one fix plus its re-check: a targeted fix, then debug logging plus a fix, then a fix with all the evidence) and, separately, **3 CI fix rounds per PR**. After that the kitchen stops and asks you, with the full evidence. Telling it "continue until verified", "never stop" or "fully automated" does not raise the cap; only your explicit reply at that question can grant more attempts.
+
+</details>
+
+<details>
+<summary><b>Will it check in if a slice runs long?</b></summary>
+
+Yes. Each slice has a soft time budget, `delivery.sliceBudgetHours` (3 hours by default, `0` turns it off). The clock includes CI time but not time spent waiting on you. When it runs out, the kitchen lets the current agent finish, then asks you once whether to extend or stop, with the progress and the blocker. It never kills an agent or fails a slice on time alone.
+
+</details>
+
+<details>
+<summary><b>Can it merge each slice to main without me?</b></summary>
+
+Only if you ask. Say so in the run instruction ("merge each slice") or set `delivery.mode: "merge-per-slice"`. Each slice then gets its own branch, worktree and PR, merges with a merge commit once CI is green, and the next slice starts from the fresh `main`. You get one notice when the pie is done. `review: continuous` pies always stay on the default one PR per pie.
+
+</details>
+
+<details>
+<summary><b>What does it leave behind as evidence?</b></summary>
+
+Very little, on purpose: the agents' verdicts, Playwright traces for failures, one 768px and one 1280px screenshot per new UI surface, a short checklist note per slice, and one run log. No hashes, fingerprints, leases or per-step proof files. The one exception is the planned Pass mod ledger, the single record of project progress over time ([spec](docs/pass-mod-spec.md)).
 
 </details>
 
