@@ -71,6 +71,17 @@ export const DEFAULT_ROLES: Readonly<Record<string, readonly string[]>> = {
   'workflow-writer': ['sonnet'],
 }
 
+/**
+ * The role a teammate's model is judged by: not an agent file, so it sits
+ * beside DEFAULT_ROLES rather than in it. A teammate bakes a whole pie, so it
+ * may run on opus or sonnet; `pass.spawnPolicy.roles.teammate` overrides it.
+ */
+export const TEAMMATE_ROLE = 'teammate'
+export const DEFAULT_TEAMMATE_TIERS: readonly string[] = ['opus', 'sonnet']
+
+/** The verify-once gates and reviewers, which stay one-shot subagents: started as a teammate, each is `gate-teamified`. */
+export const GATE_ROLES: ReadonlySet<string> = new Set(['implementer', 'slice-tester', 'slice-verifier', 'spec-reviewer', 'quality-reviewer'])
+
 /** Strings that mark builder context in a reviewer's prompt (verify-once keeps it out). */
 export const DEFAULT_MARKERS: readonly string[] = ['files_changed', 'diff --git', 'implementer returned', 'builder transcript']
 
@@ -95,7 +106,10 @@ const copyWatchdog = (w: PassWatchdog): PassWatchdog => ({ enabled: w.enabled, i
 export const DEFAULT_POLICY: PassPolicy = {
   enabled: true,
   requireTester: 'ui-slices',
-  roles: Object.fromEntries(Object.entries(DEFAULT_ROLES).map(([role, tiers]) => [role, [...tiers]])),
+  roles: {
+    ...Object.fromEntries(Object.entries(DEFAULT_ROLES).map(([role, tiers]) => [role, [...tiers]])),
+    [TEAMMATE_ROLE]: [...DEFAULT_TEAMMATE_TIERS],
+  },
   contextMarkers: [...DEFAULT_MARKERS],
   watchdog: copyWatchdog(DEFAULT_WATCHDOG),
 }

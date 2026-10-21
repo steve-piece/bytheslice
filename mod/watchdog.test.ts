@@ -46,13 +46,14 @@ test('idle but under its budget does not flag', () => {
   expect(scanAgents([agent('i1', 'bytheslice:implementer')], { i1: seenAt(0, 0, 'implementer') }, now, CFG)).toEqual([])
 })
 
-test('completed and failed agents never flag; a teammate is skipped', () => {
+test('completed and failed agents never flag; an idle or held teammate is waiting, not stalled', () => {
   const now = 60 * MIN
-  const seen = { a: seenAt(0, 0, 'discovery'), b: seenAt(0, 0, 'discovery'), t: seenAt(0, 0, 'discovery') }
+  const seen = { a: seenAt(0, 0, 'discovery'), b: seenAt(0, 0, 'discovery'), t: seenAt(0, 0, 'teammate'), w: seenAt(0, 0, 'teammate') }
   const list = [
     agent('a', 'bytheslice:discovery', 'completed'),
     agent('b', 'bytheslice:discovery', 'failed'),
-    agent('t', 'bytheslice:discovery', 'running', { teammateId: 'baker@team' }),
+    agent('t', 'teammate', 'idle', { teammateId: 'baker@team' }),
+    agent('w', 'teammate', 'waiting', { teammateId: 'oven@team' }),
   ]
   expect(scanAgents(list, seen, now, CFG)).toEqual([])
 })
@@ -122,7 +123,6 @@ test('a subagent tool call stamps its loop and returns what next gave; the main 
 test('a subagent turn start stamps its loop too', async ($, on) => {
   const { world, clock, start } = stage(on, { checklist: CHECKLIST_FIXTURE, files: { [CONFIG]: FAST } })
   engineLoops(on, ['d1'])
-  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
   await start($)
   await spawn($, 'bytheslice:discovery', 'P5 S5.5 discover: think')
   world.agents = [agent('d1', 'bytheslice:discovery')]
@@ -175,4 +175,29 @@ test('with the watchdog turned off in the config the scan writes nothing', async
   world.agents = [agent('d1', 'bytheslice:discovery')]
   await clock.advance(5 * SCAN_MS)
   expect(stalledRows(world)).toEqual([])
+})
+
+// The 5.5 live run whose stall row landed 88.7 s after its budget: the agent's
+// last tool call was a backgrounded `sleep` 8.7 s in, after which it sat in
+// `waiting` (held on its own background shell, no child agent). That run's
+// code judged `running` agents only; the waiting rule was hot-loaded mid-run
+// and its first scan flagged it. Replayed here, the stall lands one scan
+// (30 s) after the budget, inside the spec's 60 s.
+test('a discovery agent waiting on its own backgrounded shell flags within one scan of its budget', async ($, on) => {
+  const { world, clock, start } = stage(on, { checklist: CHECKLIST_FIXTURE, files: { [CONFIG]: FAST } })
+  engineLoops(on, ['d1'])
+  on('tool.call', () => ({ result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b0s5swuvy' } }))
+  await start($)
+  await spawn($, 'bytheslice:discovery', 'P5 S5.5 discover: sleep')
+  world.agents = [agent('d1', 'bytheslice:discovery')]
+  await clock.advance(8700)
+  await agentCall($, 'd1', { tool: 'Bash', command: 'sleep 150', run_in_background: true })
+  await clock.advance(2300)
+  world.agents = [agent('d1', 'bytheslice:discovery', 'waiting')]
+  await clock.set(START_MS + 4 * SCAN_MS)
+  const rows = stalledRows(world)
+  expect(rows).toHaveLength(1)
+  const late = Number(rows[0]?.t) - (START_MS + 30000)
+  expect(late).toBe(30000)
+  expect(rows[0]?.data).toEqual({ aid: 'd1', role: 'discovery', runningMs: 60000, idleMs: 51300, n: 1 })
 })

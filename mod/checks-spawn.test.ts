@@ -92,7 +92,7 @@ test('an unset model warns only at turn.complete, when the run landed on the wro
   expect(warnsOf(world)).toHaveLength(1)
 })
 
-test('workflow agents are checked; teammates, resumed runs and other plugins are left to later slices', async ($, on) => {
+test('workflow agents and teammates are checked; resumed runs and other plugins are left alone', async ($, on) => {
   const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
   engineLoops(on, ['w1', 't1', 'r1', 'o1'])
   await start($)
@@ -100,7 +100,12 @@ test('workflow agents are checked; teammates, resumed runs and other plugins are
   await spawn($, 'bytheslice:slice-verifier', 'team verify', { model: 'haiku', isTeammate: true })
   await spawn($, 'bytheslice:slice-tester', 'resumed', { prompt: 'files_changed', resume: { agentId: 'old' } })
   await spawn($, 'other:slice-verifier', 'not ours', { model: 'haiku' })
-  expect(warnsOf(world)).toEqual([['model-policy', null]])
+  // The teamified verifier on haiku: a gate started as a teammate, on a tier no teammate runs on (5.6).
+  expect(warnsOf(world)).toEqual([
+    ['model-policy', null],
+    ['gate-teamified', null],
+    ['model-policy', null],
+  ])
 })
 
 test('the pure parts: roles, given models, markers and the judgment', () => {

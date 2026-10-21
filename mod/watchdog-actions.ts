@@ -29,25 +29,33 @@ export function minutes(ms: number): string {
   return `${m} minute${m === 1 ? '' : 's'}`
 }
 
+type StallFacts = Pick<Stall, 'aid' | 'role' | 'runningMs' | 'idleMs'> & { teammateId?: string | undefined }
+
+/** Who stalled, as the texts name it: `agent <role> <id>`, or `teammate <name>@<team> (<id>)`. */
+export function stallWho(stall: StallFacts): string {
+  return stall.teammateId ? `teammate ${stall.teammateId} (${stall.aid})` : `agent ${stall.role} ${stall.aid}`
+}
+
 /** The hidden note the main conversation reads on a first stall. It names role, id and minutes. */
-export function stallNote(stall: Pick<Stall, 'aid' | 'role' | 'runningMs' | 'idleMs'>): string {
+export function stallNote(stall: StallFacts): string {
   return (
-    `The Pass watchdog: agent ${stall.role} ${stall.aid} has been running ${minutes(stall.runningMs)} with no tool activity for ` +
+    `The Pass watchdog: ${stallWho(stall)} has been running ${minutes(stall.runningMs)} with no tool activity for ` +
     `${minutes(stall.idleMs)}; consider checking it, sending it a message, or stopping it. Nothing was stopped.`
   )
 }
 
 /** The toast a first stall shows. */
-export function stallToast(stall: Pick<Stall, 'aid' | 'role' | 'runningMs' | 'idleMs'>, slice: string | null): string {
+export function stallToast(stall: StallFacts, slice: string | null): string {
   const where = slice === null ? '' : ` · Slice ${slice}`
-  return `Pass watchdog${where}: ${stall.role} ${stall.aid} stalled, running ${minutes(stall.runningMs)}, idle ${minutes(stall.idleMs)}. Nothing was stopped.`
+  const who = stall.teammateId ? `teammate ${stall.teammateId}` : `${stall.role} ${stall.aid}`
+  return `Pass watchdog${where}: ${who} stalled, running ${minutes(stall.runningMs)}, idle ${minutes(stall.idleMs)}. Nothing was stopped.`
 }
 
 /** The HITL question a repeat stall raises. */
-export function stallQuestion(stall: Pick<Stall, 'aid' | 'role' | 'runningMs' | 'idleMs'>, slice: string | null, n: number): string {
+export function stallQuestion(stall: StallFacts, slice: string | null, n: number): string {
   const where = slice === null ? '' : ` on Slice ${slice}`
   return (
-    `Stall ${n}${where}: agent ${stall.role} ${stall.aid} has run ${minutes(stall.runningMs)} with no tool activity for ` +
+    `Stall ${n}${where}: ${stallWho(stall)} has run ${minutes(stall.runningMs)} with no tool activity for ` +
     `${minutes(stall.idleMs)}. Check it, send it a message or stop it? The Pass stopped nothing.`
   )
 }
@@ -125,7 +133,14 @@ export async function respondToStalls($: EngineInterface, stalls: readonly Stall
       ...(slice === null ? {} : { slice }),
       aid: stall.aid,
       ...(mark?.type ? { agent: mark.type } : {}),
-      data: { aid: stall.aid, role: stall.role, runningMs: stall.runningMs, idleMs: stall.idleMs, n: step.n },
+      data: {
+        aid: stall.aid,
+        role: stall.role,
+        runningMs: stall.runningMs,
+        idleMs: stall.idleMs,
+        n: step.n,
+        ...(stall.teammateId ? { teammateId: stall.teammateId } : {}),
+      },
     })
     if (step.act === 'note') {
       toast($, stallToast(stall, slice))

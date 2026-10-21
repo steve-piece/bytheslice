@@ -1,5 +1,5 @@
 // mod/checks-spawn.ts
-// The Pass spawn policy as warnings: a model outside the role's tiers, a reviewer prompt carrying builder context, and a run that drifted to another tier.
+// The Pass spawn policy as warnings: a model outside the role's tiers, a reviewer prompt carrying builder context, a gate started as a teammate, and a run that drifted to another tier.
 
 import { atom, read, update } from 'claude-code'
 import type { AgentSpawnInput, EngineInterface, TurnCompleteInput } from 'claude-code'
@@ -7,7 +7,7 @@ import type { AgentSpawnInput, EngineInterface, TurnCompleteInput } from 'claude
 import { labelOf } from './capture.ts'
 import { checksOn } from './checks.ts'
 import type { Finding } from './checks.ts'
-import { CONTEXT_ROLES, PROMPT_MAX, tierAllowed } from './policy.ts'
+import { CONTEXT_ROLES, GATE_ROLES, PROMPT_MAX, TEAMMATE_ROLE, tierAllowed } from './policy.ts'
 import type { PassPolicy, PassSpawnTrack } from './types'
 
 const spawnsAtom = atom({ plugin: 'bytheslice', key: 'pass.spawns' } as const, {})
@@ -47,17 +47,57 @@ export type SpawnJudgment = { findings: Finding[]; track: Omit<PassSpawnTrack, '
 type SpawnFacts = Pick<
   AgentSpawnInput,
   'tool_use_id' | 'prompt' | 'subagentType' | 'model' | 'parentAgentId' | 'isTeammate' | 'resume' | 'workflow'
-> & { description?: string }
+> & { description?: string; name?: string }
+
+/**
+ * A teammate's spawn: `gate-teamified` when the role it was started as is a
+ * verify-once gate or reviewer (they stay one-shot subagents), and
+ * `model-policy` when it names a model outside the `teammate` role's tiers;
+ * one that names none or an allowed one is tracked for the drift check. Pure.
+ */
+export function judgeTeammate(e: SpawnFacts, policy: Pick<PassPolicy, 'roles'>): SpawnJudgment {
+  const role = roleOf(e.subagentType)
+  const key = spawnKey(e)
+  const slice = labelOf(e.description)?.slice ?? null
+  const where = slice === null ? {} : { slice }
+  const who = typeof e.name === 'string' && e.name !== '' ? `teammate ${e.name}` : 'a teammate'
+  const findings: Finding[] = []
+  if (GATE_ROLES.has(role)) {
+    findings.push({
+      code: 'gate-teamified',
+      ...where,
+      key,
+      text: `${role} was started as ${who}; gates and reviewers stay one-shot subagents (verify-once), so dispatch it with the Agent tool and no team name. The teammate still started.`,
+    })
+  }
+  const allowed = policy.roles[TEAMMATE_ROLE]
+  const given = givenModel(e.model)
+  let track: SpawnJudgment['track'] = null
+  if (allowed !== undefined && allowed.length > 0) {
+    if (given !== null && !tierAllowed(given, allowed)) {
+      findings.push({
+        code: 'model-policy',
+        ...where,
+        key,
+        text: `${who} was spawned on ${given}; the role table allows ${tiers(allowed)} for a teammate. The spawn went ahead on the model it named.`,
+      })
+    } else {
+      track = { role: TEAMMATE_ROLE, given, parent: e.parentAgentId ?? null, slice }
+    }
+  }
+  return { findings, track }
+}
 
 /**
  * Judges a spawn against the role table: `model-policy` when it names a model
  * outside the role's tiers, `builder-context` when a tester, verifier or
  * reviewer prompt carries a marker or runs past 20,000 characters. A spawn
  * that names no model (or an allowed one) is tracked for the drift check.
- * Teammates (5.6) and resumed runs are left alone. Pure.
+ * A teammate is judged by judgeTeammate; resumed runs are left alone. Pure.
  */
 export function judgeSpawn(e: SpawnFacts, policy: Pick<PassPolicy, 'roles' | 'contextMarkers'>): SpawnJudgment {
-  if (e.isTeammate === true || e.resume !== undefined) return { findings: [], track: null }
+  if (e.resume !== undefined) return { findings: [], track: null }
+  if (e.isTeammate === true) return judgeTeammate(e, policy)
   const role = roleOf(e.subagentType)
   const key = spawnKey(e)
   const slice = labelOf(e.description)?.slice ?? null
