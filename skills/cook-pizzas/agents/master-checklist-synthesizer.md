@@ -14,7 +14,7 @@ You do not make creative decisions. You do not modify slice files. You do not in
 
 The orchestrator provides:
 1. **Writer returns**: one envelope per slice, each carrying `path`, `stage`, `pie`, `slice` (dotted id such as `"7.1"`), `review`, `name`, `type`, `depends_on`, `tasks_count`, `completion_criteria`, `exit_criteria`, `hitl_required`
-2. **Pie roadmap**: the approved Phase 2 tree, giving each pie's number, name, one-line scope, `review` value, `mvp` flag, and pie-level `depends_on`
+2. **Pie roadmap**: the approved Phase 2 tree, giving each pie's number, name, one-line scope, `review` value, `mvp` flag, pie-level `depends_on`, and its optional `user_flow` (from `stage-decomposer`: ordered `{step, slice}` entries)
 3. **Project name** and one-sentence description: from the PRD
 4. **MVP/Phase 2 split**: Q1 answer (whether to separate MVP and Phase 2 summary tables)
 5. **Database in scope**: Q3 answer (whether the Prep gate lists Slice 1.4)
@@ -24,7 +24,7 @@ The orchestrator provides:
 
 1. Sort the returns by `pie`, then by the numeric part of `slice` after the dot. The `stage` integer is stable for dual-read but does not drive ordering; a slice added later by `/special-order` may carry a high `stage` and a low `slice`.
 2. Write the `## Prep` gate for Pie 1 (Foundations) exactly as the template below shows. Drop the Slice 1.4 line if Q3 = No.
-3. For every feature pie (2 onward), write the `## Pie N: <name>` heading with its `<!-- review: ... -->` annotation, the pie scope line, and then one `### Slice N.M: <name>` block per return.
+3. For every feature pie (2 onward), write the `## Pie N: <name>` heading with its `<!-- review: ... -->` annotation, the pie scope line, the `**User flow:**` block when the pie has a `user_flow` (see "User flow block" below), and then one `### Slice N.M: <name>` block per return.
 4. Inside each slice block, write the Completion criteria list from `completion_criteria` plus the universal checks, then the Exit criteria list from `exit_criteria` verbatim.
 5. Write the MVP Summary table and, if Q1 chose a split, the Phase 2 table.
 6. Write `docs/plans/00_master_checklist.md`, re-read it, and confirm every `### Slice` heading has a matching return and vice versa.
@@ -59,6 +59,10 @@ This is **Pie 1, Foundations**. `/sell-slice` checks every box below before acce
 **Pie scope:** [one line] | **MVP:** Yes | **Depends on:** Pie 1
 **Review:** boundary (autonomous; one HITL at the pie boundary)
 **Linear milestone:** [id, or omit the line]
+**User flow:**
+1. [step from user_flow[0]] - Slice 2.1
+2. [step from user_flow[1]] - Slice 2.2
+3. [step from user_flow[2]] - Slice 2.3
 
 ### Slice 2.1: [Slice Name]
 **Type:** [type] | **Depends on:** Slices [list]
@@ -92,6 +96,16 @@ Exit criteria:
 |-----|-------|------|------|--------|
 ```
 
+## User flow block
+
+Write it exactly per the Master Checklist Template in `references/templates.md`, and only for a pie whose roadmap entry carries a `user_flow`; a pie without one gets no block and no placeholder.
+
+- The line `**User flow:**` sits in the pie block after the pie's header lines (scope, review, Linear milestone) and before its first `### Slice` heading.
+- One numbered item per `user_flow` entry, in the given order: `1. <step> - Slice N.M`, where `N.M` is the entry's `slice`. The separator is a plain hyphen with a space on each side.
+- An entry whose `slice` is `null` (the operator approved the roadmap with an unowned step) is written as `N. <step> - no owning slice`, so the gap stays visible.
+- Copy each `step` verbatim. Never add, drop, merge or reorder steps.
+- **Never emit a `###` heading for a step.** `hooks/lib/checklist.sh` counts slices from `### Slice N.M` headings, so a step written as a heading double-counts every slice in the pie. Steps are numbered list items, never headings and never checkboxes.
+
 ## Checkbox format rules
 
 - Every checkbox is a GitHub task-list item: `- [ ]` open, `- [x]` done. The list marker is what makes GitHub and every CommonMark renderer draw a vertical list; a bare `[ ]` with no marker is plain text, and consecutive bare boxes fold into one paragraph that reads as a horizontal blob.
@@ -112,6 +126,7 @@ Exit criteria:
 - **One file only**: `docs/plans/00_master_checklist.md`
 - **Headings are the contract the hooks parse.** `## Prep` must be the first word of the Prep heading. Pie headings are `## Pie N: <name>` and slice headings are `### Slice N.M: <name>`; `hooks/lib/checklist.sh` keys on `## Pie <digits>` and `### Slice <digits>.<digits>`, so keep the number immediately after the word.
 - **Order is pie, then slice**, never the `stage` integer.
+- **User flow steps are list items, never headings.** Refuse to write any `###` heading (or any `### Slice` line) for a `user_flow` step; the only `### Slice` headings are the slice blocks, one per return.
 - **No invented criteria**: only the return envelopes plus the universal checks. The universal checks follow the gate tiers (`../references/templates.md` "Gate tiers"): the full local suite is tier 3, once per slice; never add a per-task full-ladder row or a CI-only (tier 4) row to a slice.
 - **No narrative.** The checklist is a status tracker. Decisions, corrections, and delivery notes belong in the slice plan files or a separate journal, not above the `## Prep` gate; every line above the gate is loaded into context by every `/sell-slice` and `/sell-pie` run.
 - **No platform-specific references**: write "project rules file", not "cursor rules" or "claude rules".
