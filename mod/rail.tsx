@@ -1,18 +1,22 @@
 // mod/rail.tsx
-// The Pass pane: pie header, slice rail with live status and last verdict, live agents, gates and check warnings, drawn from atoms only, plus the pass command's toggle and checks text.
+// The Pass pane: pie header, slice rail with live status and last verdict, live agents with stall flags, gates and check warnings, the HITL inbox, drawn from atoms only, plus the pass command's toggle and checks text.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
+import { markAnswered } from './hitl.ts'
 import { FIX_CAP, findSlice } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, counts } from './projection.ts'
-import type { PassChecklist, PassFinding, PassLive, PassProjection, PassSliceView } from './types'
+import type { PassChecklist, PassFinding, PassHitlItem, PassLive, PassProjection, PassSliceView } from './types'
+import { stalledIds } from './watchdog-actions.ts'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
 const loadedAtAtom = atom({ plugin: 'bytheslice', key: 'pass.loadedAt' } as const, 0)
 const branchAtom = atom({ plugin: 'bytheslice', key: 'pass.branch' } as const, null)
 const ledgerAtom = atom({ plugin: 'bytheslice', key: 'pass.ledger' } as const, null)
 const liveAtom = atom({ plugin: 'bytheslice', key: 'pass.live' } as const, { at: 0, agents: [] })
+const seenAtom = atom({ plugin: 'bytheslice', key: 'pass.seen' } as const, {})
+const stallsAtom = atom({ plugin: 'bytheslice', key: 'pass.stalls' } as const, { agents: {}, counts: {} })
 
 export const PANE_ID = 'pass'
 export const PANE_TITLE = 'The Pass'
@@ -20,7 +24,11 @@ export const COMMAND = 'pass'
 /** Fix targets the gates section lists under a failed verdict. */
 export const PANE_TARGETS = 3
 
-export type PaneLine = { text: string; dim?: boolean; bold?: boolean; warn?: boolean }
+/** The label of each inbox item's button; the real answer stays in chat. */
+export const ANSWER_LABEL = 'Mark answered'
+
+/** One pane row: a line of text, or with `answer` the button that marks that HITL id answered. */
+export type PaneLine = { text: string; dim?: boolean; bold?: boolean; warn?: boolean; answer?: string }
 
 export type PaneView = {
   checklist: PassChecklist | null
@@ -28,6 +36,8 @@ export type PaneView = {
   branch: string | null
   ledger?: PassProjection | null
   live?: PassLive
+  /** Agents the watchdog flags as stalled right now. */
+  stalled?: ReadonlySet<string>
   /** The time ages are counted to; the projection's own time when left out. */
   now?: number
 }
@@ -85,14 +95,16 @@ function sliceRows(c: PassChecklist, ledger: PassProjection | null, columns: num
   })
 }
 
-function agentRows(live: PassLive | undefined, columns: number): PaneLine[] {
+function agentRows(live: PassLive | undefined, stalled: ReadonlySet<string>, columns: number): PaneLine[] {
   const running = (live?.agents ?? []).filter(agent => ACTIVE.has(agent.status))
   if (running.length === 0) return [fit({ text: 'No live agents', dim: true }, columns)]
   return [
     fit({ text: `Agents · ${running.length} live`, bold: true }, columns),
-    ...running.map(agent =>
-      fit({ text: `  ${agent.role} · ${agent.status} · ${runningFor((live?.at ?? 0) - agent.startedAt)}` }, columns),
-    ),
+    ...running.map(agent => {
+      const flag = stalled.has(agent.id) ? ' · stalled' : ''
+      const text = `  ${agent.role} · ${agent.status} · ${runningFor((live?.at ?? 0) - agent.startedAt)}${flag}`
+      return fit({ text, ...(flag === '' ? {} : { warn: true }) }, columns)
+    }),
   ]
 }
 
@@ -124,6 +136,24 @@ function findingRows(ledger: PassProjection | null, now: number, columns: number
     fit({ text: `Warnings · ${findings.length} latest`, bold: true }, columns),
     ...findings.map(finding => fit({ text: `  ${findingLine(finding, now)}`, warn: true }, columns)),
   ]
+}
+
+/** One inbox item's heading: category, slice and age. */
+export function hitlLine(item: PassHitlItem, now: number): string {
+  return `${item.category}${item.slice === null ? '' : ` · ${item.slice}`} · ${runningFor(now - item.t)} ago`
+}
+
+/** The HITL inbox: open items oldest first, each its heading, its question cut to the width, and its button. */
+function inboxRows(ledger: PassProjection | null, now: number, columns: number): PaneLine[] {
+  const open = ledger?.hitl?.open ?? []
+  if (open.length === 0) return []
+  const rows: PaneLine[] = [fit({ text: `HITL inbox · ${open.length} open`, bold: true, warn: true }, columns)]
+  for (const item of open) {
+    rows.push(fit({ text: `  ${hitlLine(item, now)}`, warn: true }, columns))
+    rows.push(fit({ text: `  ${item.question.replace(/\s+/g, ' ').trim()}` }, columns))
+    rows.push({ text: ANSWER_LABEL, answer: item.id })
+  }
+  return rows
 }
 
 /**
@@ -162,6 +192,7 @@ export function paneLines(view: PaneView, columns: number): PaneLine[] {
       ...(where ? [where] : []),
       fit({ text: '/box-it-up ready' }, width),
       ...findingRows(ledger, now, width),
+      ...inboxRows(ledger, now, width),
     ]
   }
   const pie = activePie(c)
@@ -173,20 +204,26 @@ export function paneLines(view: PaneView, columns: number): PaneLine[] {
     fit({ text: mode, dim: true }, width),
     fit({ text: `${done} of ${total} slices done` }, width),
     ...sliceRows(c, ledger, width),
-    ...agentRows(view.live, width),
+    ...agentRows(view.live, view.stalled ?? new Set(), width),
     ...gateRows(findSlice(ledger, activeSlice(c)?.id), width),
     ...findingRows(ledger, now, width),
+    ...inboxRows(ledger, now, width),
   ]
 }
 
-/** Draws the pane from the atoms alone: it never writes and never touches the disk. */
+/**
+ * Draws the pane from the atoms alone: it never writes and never touches the
+ * disk. An inbox item's button records the answer from its press, not here.
+ */
 export async function drawPane($: EngineInterface, e: RenderInput<'Pane'>): Promise<RenderElement> {
-  const [checklist, loadedAt, branch, ledger, live] = await Promise.all([
+  const [checklist, loadedAt, branch, ledger, live, seen, stalls] = await Promise.all([
     read($, checklistAtom),
     read($, loadedAtAtom),
     read($, branchAtom),
     read($, ledgerAtom),
     read($, liveAtom),
+    read($, seenAtom),
+    read($, stallsAtom),
   ])
   let now = ledger?.at ?? 0
   try {
@@ -194,12 +231,21 @@ export async function drawPane($: EngineInterface, e: RenderInput<'Pane'>): Prom
   } catch {
     // Ages count to the projection's time.
   }
-  const lines = paneLines({ checklist, loadedAt, branch, ledger, live, now }, e.props.bodyColumns)
-  const { Box, Text } = $.ui.resolve(e)
+  const stalled = stalledIds(stalls, seen)
+  const lines = paneLines({ checklist, loadedAt, branch, ledger, live, stalled, now }, e.props.bodyColumns)
+  const { Box, Text, Button } = $.ui.resolve(e)
   return (
     <Box flexDirection="column">
       {lines.map(line =>
-        line.warn === true ? (
+        line.answer !== undefined ? (
+          <Button
+            key={`answer-${line.answer}`}
+            label={ANSWER_LABEL}
+            onPress={() => {
+              void markAnswered($, line.answer ?? '').catch(() => undefined)
+            }}
+          />
+        ) : line.warn === true ? (
           <Text color="warning" bold={line.bold === true}>
             {line.text}
           </Text>

@@ -1,5 +1,5 @@
 // mod/band.tsx
-// The Pass band above the prompt (live slice status, agents, fix loop, warning style on a failed verdict or a check warning), the pinned status line and the prompt hint.
+// The Pass band above the prompt (live slice status, agents, fix loop, open HITL count, warning style on a failed verdict, a check warning or an open HITL), the pinned status line and the prompt hint.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput, RenderPropsOf } from 'claude-code'
@@ -22,11 +22,15 @@ export type BandLine = { text: string; dim: boolean; warn?: boolean }
 
 const ACTIVE = new Set(['pending', 'running', 'waiting'])
 
+/** Open HITL items the projection holds. */
+export const openHitl = (ledger: PassProjection | null): number => ledger?.hitl?.open.length ?? 0
+
 /**
  * The band's one line for a checklist at a width, or null to leave the band to
  * the engine. With the ledger it reads `Pie 5 · Slice 5.2 verifying · 3 agents
- * · fix 1/3`, in the warning style while the slice's latest verdict failed,
- * and for five minutes after a check warning, which it then names.
+ * · fix 1/3 · HITL 1`, in the warning style while the slice's latest verdict
+ * failed, while any HITL item is open, and for five minutes after a check
+ * warning, which it then names.
  */
 export function bandLine(
   c: PassChecklist | null,
@@ -37,8 +41,10 @@ export function bandLine(
 ): BandLine | null {
   if (!c) return null
   const narrow = bodyColumns < NARROW_COLUMNS
-  if (c.layout === 'stage') return { text: 'v4 checklist', dim: true }
-  if (allDone(c)) return { text: narrow ? 'all done' : `All pies done · ${READY}`, dim: false }
+  const hitl = openHitl(ledger)
+  const asks = hitl > 0 ? (narrow ? ` HITL ${hitl}` : ` · HITL ${hitl}`) : ''
+  if (c.layout === 'stage') return hitl > 0 ? { text: `v4 checklist${asks}`, dim: false, warn: true } : { text: 'v4 checklist', dim: true }
+  if (allDone(c)) return { text: `${narrow ? 'all done' : `All pies done · ${READY}`}${asks}`, dim: false, ...(hitl > 0 ? { warn: true } : {}) }
   const pie = activePie(c)
   const slice = activeSlice(c)
   if (!pie || !slice) return null
@@ -52,14 +58,15 @@ export function bandLine(
   const status = view?.status ?? 'queued'
   const agents = (live?.agents ?? []).filter(agent => ACTIVE.has(agent.status)).length
   const fix = view?.fixLoop ?? 0
-  const warn = lastVerdict(view)?.overall === 'fail' || warning !== null
+  const warn = lastVerdict(view)?.overall === 'fail' || warning !== null || hitl > 0
   if (narrow) {
     const tail = fix > 0 ? ` fix ${fix}/${FIX_CAP}` : ''
-    return { text: `P${pie.n} S${slice.id} ${status}${tail}`, dim: false, warn }
+    return { text: `P${pie.n} S${slice.id} ${status}${tail}${asks}`, dim: false, warn }
   }
   const parts = [`Pie ${pie.n} · Slice ${slice.id} ${status}`]
   if (agents > 0) parts.push(`${agents} agent${agents === 1 ? '' : 's'}`)
   if (fix > 0) parts.push(`fix ${fix}/${FIX_CAP}`)
+  if (hitl > 0) parts.push(`HITL ${hitl}`)
   if (warning !== null) parts.push(`warn ${warning.code}`)
   return { text: parts.join(' · '), dim: false, warn }
 }
