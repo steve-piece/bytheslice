@@ -5,11 +5,11 @@ user-invocable: true
 triggers: ["/bytheslice:inspect-display", "/inspect-display", "walk the display", "case walk", "/bytheslice:walk-platform", "/walk-platform", "walk the platform", "walk the app", "audit the app", "audit the platform", "pre-uat walk", "smoke test the whole app", "platform-wide visual audit"]
 ---
 <!-- skills/inspect-display/SKILL.md -->
-<!-- On-demand, platform-wide visual walkthrough. Pizza-shop framing: walk past the display tray, eyes on every pie that's already up. Complements (does not replace) /sell-slice's per-slice visual-reviewer: that agent reviews ONE slice against its declared states; this skill walks EVERY route to catch unrelated regressions, mock-data leaks, dead links, and dynamic-route validation gaps. Read-only. -->
+<!-- On-demand, platform-wide visual walkthrough. Pizza-shop framing: walk past the display tray, eyes on every pie that's already up. Complements (does not replace) /sell-slice's per-slice slice-tester: that agent tests ONE slice against its manifest and Exit criteria; this skill walks EVERY route to catch unrelated regressions, mock-data leaks, dead links, and dynamic-route validation gaps. Read-only. -->
 
 # /inspect-display
 
-`/sell-slice`'s frontend pipeline already runs a sophisticated **per-slice** visual reviewer (Phase 4.7) that checks the just-built slice against the design system at 4 viewports. That's the right gate when shipping a single slice.
+`/sell-slice` already runs a **per-slice** rendered review: `slice-tester` (Workflow B) checks the just-built slice against the design system, exercises every declared affordance and runs the rendered accessibility pass at each width in `verification.viewports`. That's the right gate when shipping a single slice.
 
 `/inspect-display` is a **different shape**: a cross-cutting, on-demand walkthrough of the *whole running app*. It answers questions the per-slice review can't: "did this slice break an unrelated page?", "what's mock vs real across the product?", "are there 404s on footer links?", "do my dynamic routes actually validate the id?". Run it when checklist claims and runtime reality might have drifted.
 
@@ -33,7 +33,7 @@ If the running app has a `docs/plans/00_master_checklist.md`, the skill will inc
 - **When the master checklist disagrees with reality**: drift detection is exactly this skill's job.
 
 Not the right tool for:
-- Per-slice spec compliance; that's the existing `visual-reviewer` in `sell-slice` Phase 4.7.
+- Per-slice spec compliance; that's `slice-tester` in `sell-slice` Workflow B.
 - Static code analysis; this skill needs the app actually running.
 - Accessibility deep-dives; use the `accessibility-review` design skill.
 
@@ -149,7 +149,7 @@ Follow this skill whenever the user:
 - asks "what's actually working in <app>" / "what's mock vs real" / "what would a real user notice"
 - has just finished a batch of `/box-it-up` runs and wants a cross-cutting verification
 
-If the user wants per-slice spec compliance (4-viewport screenshots against the design system for one slice), redirect to `/sell-slice`'s Phase 4.7; that's `visual-reviewer`, not this skill.
+If the user wants per-slice spec compliance (one slice's rendered design-system match and affordances), redirect to `/sell-slice`, whose `slice-tester` owns it, not this skill.
 
 ---
 
@@ -227,9 +227,9 @@ hitl_context: null | "<what triggered this>"
 | Skill | Scope | Triggered by | Output |
 |---|---|---|---|
 | `inspect-display` (this) | Whole product, every route | Operator on demand | Ranked-gap report across all apps |
-| `visual-reviewer` (in `sell-slice` Phase 4.7) | One slice, its declared states | `sell-slice` automatically | Pass/fail verdict + causative-agent attribution for one slice |
+| `slice-tester` (in `sell-slice` Workflow B) | One slice, its manifest and Exit criteria | `sell-slice` and `sell-pie` automatically | Per-affordance pass/fail verdict with evidence for one slice |
 | `accessibility-review` (design plugin) | One design or page | Operator on demand | WCAG 2.1 AA audit |
 
-These do not overlap. `visual-reviewer` answers "did this slice meet spec." `inspect-display` answers "what's the state of the whole product right now."
+These do not overlap. `slice-tester` answers "did this slice meet spec." `inspect-display` answers "what's the state of the whole product right now."
 
 See `references/integration-points.md` for proposed integrations with `/run-the-day` (periodic checkpoint) and `/close-shop` (retrospective augmentation).

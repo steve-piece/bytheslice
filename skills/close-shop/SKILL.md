@@ -137,7 +137,7 @@ The analysis step is delegated entirely to `bytheslice:retrospective-reviewer` (
 Friction signals the agent looks for:
 
 - Stages that required more than 2 implementer passes
-- Stages where visual-reviewer rejected output more than 1 time
+- Slices where `slice-tester` failed the rendered review more than 1 time
 - HITL escalations clustered in one category (suggests a systematic gap in the skill)
 - Token budget overruns
 - User corrections to agent output (commits authored by the user shortly after agent-authored commits, detected via `git log --author` comparison)

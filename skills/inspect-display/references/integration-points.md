@@ -1,5 +1,5 @@
 <!-- skills/inspect-display/references/integration-points.md -->
-<!-- Forward-looking reference: where /inspect-display should integrate with the rest of the ByTheSlice pipeline once this skill stabilizes. Not implemented yet — captured here so future PRs have context. -->
+<!-- Forward-looking reference: where /inspect-display should integrate with the rest of the ByTheSlice pipeline once this skill stabilizes. Not implemented yet; captured here so future PRs have context. -->
 
 # Integration points for `/inspect-display`
 
@@ -7,9 +7,9 @@ This skill ships as a **standalone, operator-invoked** command in its first slic
 
 ---
 
-## 1. `/run-the-day` periodic checkpoint (proposed — next slice)
+## 1. `/run-the-day` periodic checkpoint (proposed: next slice)
 
-**Problem:** `/run-the-day` runs in autonomous multi-stage mode without a human in the loop. A regression introduced in stage 7 might not be noticed until stage 15 — by which point the autonomous run has racked up 8 commits that all build on the broken foundation.
+**Problem:** `/run-the-day` runs in autonomous multi-stage mode without a human in the loop. A regression introduced in stage 7 might not be noticed until stage 15, by which point the autonomous run has racked up 8 commits that all build on the broken foundation.
 
 **Proposal:** Add a configurable checkpoint that dispatches `inspect-display` every N stages.
 
@@ -26,30 +26,30 @@ This skill ships as a **standalone, operator-invoked** command in its first slic
 ```
 
 **Skill changes:**
-- `skills/run-the-day/SKILL.md` — add Phase 2.5 between stage dispatches that dispatches `inspect-display` if `stageIndex % platformWalkEvery == 0`
-- `skills/run-the-day/agents/stage-runner.md` — pass through the inspect-display return contract to the orchestrator so it can decide whether to halt
-- `skills/setup-shop/references/bytheslice-config-schema.md` — document the new `runPipeline.platformWalkEvery` etc. keys
+- `skills/run-the-day/SKILL.md`: add Phase 2.5 between stage dispatches that dispatches `inspect-display` if `stageIndex % platformWalkEvery == 0`
+- `skills/run-the-day/agents/stage-runner.md`: pass through the inspect-display return contract to the orchestrator so it can decide whether to halt
+- `skills/setup-shop/references/bytheslice-config-schema.md`: document the new `runPipeline.platformWalkEvery` etc. keys
 
 **Halt rules:**
-- `haltOn: "broken"` (default) — pause for user input if `verdict: broken`
-- `haltOn: "drifted"` — pause if `verdict: drifted` OR `broken`
-- `haltOn: "never"` — log the report but never pause (truly autonomous)
+- `haltOn: "broken"` (default), pause for user input if `verdict: broken`
+- `haltOn: "drifted"`: pause if `verdict: drifted` OR `broken`
+- `haltOn: "never"`: log the report but never pause (truly autonomous)
 
 **File scope:** ~4 files, well under the slice cap. Eligible for its own slice once this slice (the standalone skill) is merged and proven.
 
 ---
 
-## 2. `/close-shop` retrospective augmentation (proposed — future)
+## 2. `/close-shop` retrospective augmentation (proposed: future)
 
-**Problem:** `/close-shop` currently analyzes workflow friction (commits, PR records, HITL escalations) but has no visibility into *product state*. If the per-stage gates passed but the product is half-mocked, the retrospective won't surface that — it's a meta-friction signal.
+**Problem:** `/close-shop` currently analyzes workflow friction (commits, PR records, HITL escalations) but has no visibility into *product state*. If the per-stage gates passed but the product is half-mocked, the retrospective won't surface that; it's a meta-friction signal.
 
 **Proposal:** Add `inspect-display` to Step 2 of `/close-shop` (the "read execution data" phase). Pass the walk's drift counts to the `retrospective-reviewer` agent as input.
 
 **Skill changes:**
-- `skills/close-shop/SKILL.md` — add inspect-display invocation in Step 2 (or make it an opt-in flag)
-- `skills/close-shop/agents/retrospective-reviewer.md` — extend the input contract to include `platform_walk_findings` and add an "are the per-stage gates catching what they should?" pattern to the analysis
+- `skills/close-shop/SKILL.md`: add inspect-display invocation in Step 2 (or make it an opt-in flag)
+- `skills/close-shop/agents/retrospective-reviewer.md`: extend the input contract to include `platform_walk_findings` and add an "are the per-stage gates catching what they should?" pattern to the analysis
 
-**Why this matters:** if the retrospective sees that `inspect-display` is finding mock-data leaks on slices that already passed `visual-reviewer`, that's evidence the per-slice gate has a blind spot — and the retrospective can propose a Phase 6.5 mock-data check to plug it.
+**Why this matters:** if the retrospective sees that `inspect-display` is finding mock-data leaks on slices that already passed `slice-tester`, that's evidence the per-slice gate has a blind spot, and the retrospective can propose a Phase 6.5 mock-data check to plug it.
 
 **File scope:** ~2-3 files. Eligible for its own slice after #1 lands.
 
@@ -61,9 +61,9 @@ These integrations were considered and rejected:
 
 | Integration | Why skip |
 |---|---|
-| `/box-it-up --with-platform-walk` flag | Slice-level CI + the existing `visual-reviewer` already gate the diff. A full platform walk on every push burns time on unchanged surfaces. If an operator wants this, they can invoke `/inspect-display` manually before `/box-it-up`. |
-| `/special-order` baseline snapshot | `/special-order` already does discovery. Adding a platform walk before every feature adds time without proportional signal — the operator can invoke `/inspect-display` separately if they suspect rot. |
-| Replacing `visual-reviewer` | `visual-reviewer` does per-slice 4-viewport design-spec review; `inspect-display` does cross-cutting route coverage. Different scopes, both valuable. Keep both. |
+| `/box-it-up --with-platform-walk` flag | Slice-level CI + `slice-tester` already gate the diff. A full platform walk on every push burns time on unchanged surfaces. If an operator wants this, they can invoke `/inspect-display` manually before `/box-it-up`. |
+| `/special-order` baseline snapshot | `/special-order` already does discovery. Adding a platform walk before every feature adds time without proportional signal; the operator can invoke `/inspect-display` separately if they suspect rot. |
+| Replacing `slice-tester` | `slice-tester` does the per-slice rendered review against the manifest and Exit criteria; `inspect-display` does cross-cutting route coverage. Different scopes, both valuable. Keep both. |
 
 ---
 
