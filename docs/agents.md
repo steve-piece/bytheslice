@@ -17,11 +17,11 @@ Bold rows mark the skill each group of agents belongs to. The six agents at the 
 | `consistency-checker` | Constance | Proofreads the draft PRD against itself, making sure every feature, requirement, and answer you gave actually shows up in the right section. |
 | `prd-reviewer` | Prue | Final quality check on the finished PRD: compares it against your original materials and returns pass or revise. |
 | **🍕 /cook-pizzas** | | |
-| `stage-decomposer` | Stan | Reads the PRD and proposes how to cut the project into Pies and Slices, then shows you the roadmap for approval before anything is written. |
+| `stage-decomposer` | Stan | Reads the PRD and proposes how to cut the project into Pies and Slices, then shows you the roadmap for approval before anything is written. For each pie with a user-facing flow it also proposes 3 to 7 user steps, each owned by one slice; a step no slice owns shows up as a warning in that same approval. |
 | `rules-assembler` | Russ | Builds the project rules file (CLAUDE.md or AGENTS.md) by layering house rules, your own imports, and design-system rules in the right priority order. |
-| `phased-plan-writer` | Phil | Writes the detailed plan file for one feature slice. Many copies run in parallel, one per slice, and it also handles new slices added later by /special-order. |
+| `phased-plan-writer` | Phil | Writes the detailed plan file for one feature slice. Many copies run in parallel, one per slice, and it also handles new slices added later by /special-order. A frontend or full-stack slice that owns a user-flow step gets exactly one user-outcome Exit line, which `slice-tester` checks end to end. |
 | `db-schema-stage-writer` | Deb | Writes the plan for the database-schema slice, adapted to your database tooling (Supabase, Prisma, Drizzle). Only runs if your project has a database. |
-| `master-checklist-synthesizer` | Max | Collects what every plan writer produced and assembles the single master checklist that drives all future work. Pure bookkeeping, no creative decisions. |
+| `master-checklist-synthesizer` | Max | Collects what every plan writer produced and assembles the single master checklist that drives all future work, including each pie's short User flow list. Pure bookkeeping, no creative decisions. |
 | **🍕 /set-display-case** | | |
 | `bundle-validator` | Val | Checks a design bundle exported from claude.ai/design: right folder shape, all design tokens present, nothing missing. Reports specific gaps. |
 | `compliance-pre-check` | Coco | The design-system gatekeeper: refuses to call the design system done until every required token category (colors, spacing, type, and so on) is filled in. |
