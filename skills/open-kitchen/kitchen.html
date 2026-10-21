@@ -47,6 +47,9 @@ button{font:inherit;color:inherit}
 .seg{display:flex;padding:4px;gap:2px}
 .seg button{width:34px;height:34px;border-radius:50%;border:0;background:transparent;display:grid;place-items:center;cursor:pointer}
 .seg button.on{background:var(--mustard);color:#fff;box-shadow:0 2px 6px rgba(160,110,30,.35)}
+.seg button:disabled{cursor:not-allowed;opacity:.4}
+.seg button.on:disabled{opacity:.8}
+.seg.locked{cursor:not-allowed}
 .seg svg{width:18px;height:18px}
 
 /* live baking tracker: one horizontal pill in the top bar */
@@ -97,6 +100,18 @@ button{font:inherit;color:inherit}
 button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 
 /* side sheet */
+#pfWrap{position:fixed;inset:0;z-index:9;display:grid;grid-template-columns:minmax(0,340px);justify-content:center;align-items:center;padding:16px;background:rgba(40,28,20,.28)}
+#pfWrap[hidden]{display:none}
+#profile{position:relative;width:100%;min-width:0;box-sizing:border-box;max-height:calc(100vh - 32px);overflow:auto;background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:14px 16px 18px}
+#profile .sh-close{position:absolute;top:12px;right:12px;z-index:1}
+#pfCanvas{display:block;width:100%;aspect-ratio:1/1;max-height:300px;border-radius:14px;background:radial-gradient(circle at 50% 40%,#fff8ec 0,#f3e5cf 70%,#ead6b8 100%)}
+#profile h4{font-family:var(--display);font-weight:600;font-size:21px;margin:12px 0 2px}
+#profile .sub{color:var(--ink-soft);font-weight:700;font-size:12.5px;margin:0 0 10px}
+#profile dl{display:grid;grid-template-columns:auto 1fr;gap:7px 12px;margin:0;font-size:13px}
+#profile dt{color:var(--ink-soft);font-weight:700;font-size:12px}
+#profile dd{margin:0;font-weight:700;min-width:0;overflow-wrap:anywhere}
+#profile dd .pname{font-size:13px;margin-right:10px}
+#profile code{font-size:12px}
 #sheet{position:fixed;z-index:6;top:calc(68px + env(safe-area-inset-top,0px));right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));width:360px;max-width:calc(100vw - 32px);background:var(--card);border-radius:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden}
 .sh-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 10px}
 .sh-head h3{font-family:var(--display);font-weight:600;font-size:20px;margin:0}
@@ -108,6 +123,18 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .crew h4{font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--ink-soft);margin:16px 0 6px}
 .crew p.cdesc{margin:-2px 0 8px;font-size:12.5px;color:var(--ink-soft)}
 .member{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:20px;border-bottom:1px solid var(--line);margin:0 0 10px}
+.tabs [role="tab"]{background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:4px 2px 8px;font:inherit;font-size:14px;font-weight:800;color:var(--ink-soft);cursor:pointer}
+.tabs [role="tab"][aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs [role="tab"]:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.pname{background:none;border:0;padding:0;font:inherit;font-weight:800;font-size:13.5px;color:inherit;cursor:pointer;text-align:left}
+.pname:hover,.pname:focus-visible{text-decoration:underline;text-underline-offset:3px;outline:none}
+.pname .hav{display:block}
+.pname:focus-visible .hav{box-shadow:0 0 0 2px var(--accent)}
+.town h4{font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--ink-soft);margin:16px 0 4px}
+.town h4 small{font-weight:700;letter-spacing:0;text-transform:none;margin-left:6px}
+.tperson{display:grid;grid-template-columns:36px 1fr;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.tperson small{display:block;color:var(--ink-soft);font-weight:600;font-size:12px}
 .member:last-child{border-bottom:0}
 .av{width:30px;height:30px;border-radius:50%;position:relative;border:1px solid rgba(0,0,0,.08)}
 .av::after{content:"";position:absolute;inset:6px 7px 9px;border-radius:50% 50% 45% 45%;background:var(--skin,#f2c9a8)}
@@ -120,6 +147,17 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .lrow time{font-size:11.5px;font-weight:800;color:var(--ink-soft);font-variant-numeric:tabular-nums;padding-top:1px}
 .lrow small{display:block;font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--accent)}
 .orow{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+button.orow{width:100%;background:none;border:0;border-bottom:1px solid var(--line);font:inherit;color:inherit;text-align:left;cursor:pointer;border-radius:0}
+button.orow:hover,button.orow:focus-visible{background:rgba(74,52,38,.04);outline:none}
+button.orow:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
+.sh-back{border:0;background:rgba(74,52,38,.07);border-radius:999px;padding:5px 12px;font:inherit;font-size:12.5px;font-weight:800;color:var(--ink-soft);cursor:pointer;margin:0 0 10px}
+.od .eyebrow{font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--accent)}
+.od h4{font-family:var(--display);font-weight:600;font-size:18px;margin:2px 0 6px}
+.od .cdesc{margin:0 0 8px;color:var(--ink-soft);font-size:13px}
+.od .facts{font-size:12px;font-weight:700;color:var(--ink-soft);margin:0 0 12px;display:flex;flex-wrap:wrap;gap:6px 12px}
+.od .facts code{font-size:11.5px}
+.od h5{font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--ink-soft);margin:12px 0 6px}
+.slices li small{display:block;grid-column:2/4;font-size:11.5px;font-weight:600;color:var(--ink-soft);white-space:normal;margin-top:-4px}
 .orow b{font-size:14px}.orow small{display:block;color:var(--ink-soft);font-weight:600;font-size:12px}
 .orow .pn{font-family:var(--display);font-weight:600;font-size:15px;color:var(--ink-soft)}
 
@@ -239,7 +277,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
   <div class="pill stat" title="Pies that passed inspection on the first try"><span data-i="check"></span><b id="stGate">67%</b><span>first try</span></div>
 </div>
 <div class="hud tr">
-  <div class="pill seg" role="group" aria-label="Lighting"><button id="bDawn" aria-label="Before opening" title="Before opening" data-i="dawn"></button><button id="bDay" class="on" aria-label="Daytime" title="Open" data-i="sun"></button><button id="bNight" aria-label="Evening" title="Evening" data-i="moon"></button><button id="bLate" aria-label="After hours" title="After hours" data-i="late"></button></div>
+  <span id="todLock" hidden>Time follows the real session</span><div class="pill seg" id="todGroup" role="group" aria-label="Lighting"><button id="bDawn" aria-label="Before opening" title="Before opening" data-i="dawn"></button><button id="bDay" class="on" aria-label="Daytime" title="Open" data-i="sun"></button><button id="bNight" aria-label="Evening" title="Evening" data-i="moon"></button><button id="bLate" aria-label="After hours" title="After hours" data-i="late"></button></div>
   <button class="pill iconbtn" id="bHome" aria-label="Recenter camera" data-i="target"></button>
   <button class="pill iconbtn" id="bOpen" type="button" aria-label="Open this kitchen in your default browser (new tab)" title="Waiting for the local kitchen address" data-i="ext" disabled></button>
 </div>
@@ -257,6 +295,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
   <button id="bPause" data-i="pause" data-l="Pause"></button>
 </nav>
 
+<div id="pfWrap" hidden><div id="profile" role="dialog" aria-modal="true" aria-labelledby="pfName"><button type="button" class="sh-close" id="pfClose" aria-label="Close profile" data-i="close"></button><canvas id="pfCanvas" width="600" height="600" role="img" aria-label="Character portrait"></canvas><div id="pfBody"></div></div></div>
 <aside id="sheet" hidden><div class="sh-head"><h3 id="shTitle">Crew</h3><button class="sh-close" id="shClose" aria-label="Close" data-i="close"></button></div><div class="sh-body" id="shBody"></div></aside>
 <div id="tip" hidden></div>
 
@@ -384,6 +423,64 @@ window.createKitchenCastDriver = function ({ roster, emit, demo, live }) {
   }
   return Object.freeze({ apply, get mode() { return mode; } });
 };
+</script>
+
+<script id="kitchen-words">
+// Plain-words log lines for agents starting and finishing. Built only from the dispatch label, the roster role,
+// the step in the label and the slice name in the checklist; never from prompts or final messages.
+window.kitchenWords = (() => {
+  const ROLE = {
+    implementer: 'line cook, builds code', plater: 'plater, assembles the slices', 'fix-attempter': 'fixer, repairs what failed',
+    'debug-instrumenter': 'debugger, adds probes to find a bug', 'checklist-curator': 'expediter, picks the next slice',
+    'rules-loader': 'reads the house rules', discovery: 'runner, maps the code first', 'slice-tester': 'taster, tries every feature',
+    'slice-verifier': 'inspector, runs the checks', 'spec-reviewer': 'reviewer, checks it matches the plan',
+    'quality-reviewer': 'reviewer, checks the craft', 'local-gates-runner': 'oven tender, runs the full test suite',
+    'ci-fix-attempter': 'driver, fixes CI on the way out', 'platform-walker': 'secret shopper, walks the app',
+    'phased-plan-writer': 'recipe writer, writes slice plans', 'stage-decomposer': 'pie cutter, splits work into slices',
+    'master-checklist-synthesizer': 'ticket printer, writes the checklist', 'brief-analyzer': 'reads the brief and asks questions',
+    'prd-reviewer': 'critic, reviews the product plan', 'retrospective-reviewer': 'reviewer, looks back on the day',
+    'proposal-drafter': 'drafts house-rule changes', 'block-composer': 'builds screens from stock blocks',
+    'component-crafter': 'pastry artist, crafts custom components', 'state-illustrator': 'paints empty, loading and error states',
+    orchestrator: 'head chef, leads the session', 'box-it-up': 'front of house, hands off finished pies',
+  };
+  const CREW = { setup: 'opening crew, sets up the project', menu: 'test kitchen, plans the work', case: 'display case crew, builds the UI kit',
+    line: 'line crew, builds code', pass: 'pass crew, checks the work', door: 'back door crew, runs final checks and delivery',
+    board: 'review board, reviews the day', front: 'front of house' };
+  const STEP = { build: 'building', test: 'testing', verify: 'verifying', fix: 'fixing', commit: 'committing', review: 'reviewing', plan: 'planning' };
+  const STEP_OF_TYPE = { implementer: 'build', plater: 'build', 'block-composer': 'build', 'component-crafter': 'build', 'layout-architect': 'build',
+    'state-illustrator': 'build', 'slice-tester': 'test', 'slice-verifier': 'verify', 'local-gates-runner': 'verify', 'fix-attempter': 'fix',
+    'debug-instrumenter': 'fix', 'spec-reviewer': 'review', 'quality-reviewer': 'review', 'phased-plan-writer': 'plan' };
+  const clean = value => String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 120);
+  const soft = title => /^[A-Z][a-z]/.test(title) ? title[0].toLowerCase() + title.slice(1) : title;
+  function role(character) {
+    const type = String(character.type || character.id || '').replace(/^bytheslice:/, '').replace(/#\d+$/, '');
+    if (character.plugin === false) return `temp helper for ${clean(type) || 'odd jobs'}`;
+    return ROLE[type] || ROLE[String(character.id || '').replace(/#\d+$/, '')] || CREW[character.crew] || 'crew';
+  }
+  function parts({ character = {}, row = {}, pies = [] }) {
+    const label = clean(row.label), tag = /\bP(\d+)\s+S(\d+\.\d+)\s+([a-z]+)\b/i.exec(label);
+    const type = String(row.type || character.type || '').replace(/^bytheslice:/, '');
+    const step = STEP[tag?.[3]?.toLowerCase()] ? tag[3].toLowerCase() : STEP_OF_TYPE[type] || null;
+    const sliceId = tag?.[2] || (typeof row.slice === 'string' ? row.slice : null);
+    const pieId = Number(tag?.[1] || row.pie) || null;
+    const pie = (pies || []).find(item => item?.slices?.some(sl => sl.number === sliceId)) || (pies || []).find(item => item?.pie === pieId && !item.single) || null;
+    const sl = pie?.slices?.find(item => item.number === sliceId);
+    const target = sliceId ? `slice ${sliceId}${sl?.title ? `: ${soft(clean(sl.title))}` : ''}` : pieId ? `pie ${pieId}${pie?.title ? `: ${clean(pie.title)}` : ''}` : '';
+    return { who: `${clean(character.name) || 'A helper'} (${role(character)})`, step, target, label, pie: pieId };
+  }
+  function start(input) {
+    const { who, step, target, label } = parts(input);
+    if (target) return `${who} started ${step ? STEP[step] : 'working on'} ${target}`;
+    return label ? `${who} started: ${label}` : `${who} started work`;
+  }
+  function finish(input) {
+    const { who, step, target, label } = parts(input), ok = input.ok !== false;
+    if (target) return ok ? `${who} finished ${step ? STEP[step] : 'work on'} ${target}` : `${who} was sent back while ${step ? STEP[step] : 'working on'} ${target}`;
+    if (label) return ok ? `${who} finished: ${label}` : `${who} was sent back: ${label}`;
+    return ok ? `${who} finished work` : `${who} was sent back`;
+  }
+  return Object.freeze({ start, finish, role, pieOf: input => parts(input).pie });
+})();
 </script>
 
 <script id="kitchen-build-out">
@@ -1389,23 +1486,71 @@ const actors = [];
 let simT = 0;
 // pedestrians look both ways: never step onto a crosswalk with a car close and coming
 const inCross = (cw, x, z) => { const along = cw.axis === 'x' ? x : z, across = cw.axis === 'x' ? z : x; return Math.abs(along - cw.at) < .75 && across > cw.lo - .1 && across < cw.hi + .1; };
+// Right of way, so the town can never lock up: walkers only ever wait on the curb (never in a lane or a crosswalk),
+// cars only wait behind a crosswalk or inside the box for a walker who is already out in the road, and a walker on the curb
+// yields to a car stranded in the box. Every wait points one way, so no circle of waits can form.
 function curbSafe(a, ux, uz) {
   if (typeof CROSS === 'undefined' || typeof cars === 'undefined') return true;
-  const ax = a.pos.x + ux * .5, az = a.pos.z + uz * .5;
+  const ax = a.pos.x + ux * .5, az = a.pos.z + uz * .5, pass = a.curbPass > simT;
+  // already out in the street: keep going, never wait for the light inside a lane. The one thing nobody walks through is a car:
+  // a beat behind its bumper, then a sidestep out of its lane, so a walker and a waiting car never stare each other down.
+  if (roadAt(a.pos.x, a.pos.z)) {
+    if (!(a instanceof Actor)) return true;
+    // never into a car, and never into the path just ahead of a moving one
+    const car = cars.find(c => c.active !== false && ((carGap(c, ax, az) < .3 && carGap(c, ax, az) < carGap(c, a.pos.x, a.pos.z)) || (c.v > .3 && inCarPath(c, ax, az) && !inCarPath(c, a.pos.x, a.pos.z))));
+    if (!car) { a.bodySince = null; return true; }
+    a.bodySince ??= simT;
+    if (car.v <= .3 && simT - a.bodySince > 1.2) {
+      // around the waiting car: past its bumper when in front of or behind it, out of its lane when beside it
+      const along = ((car.ln.axis === 'x' ? a.pos.x : a.pos.z) - car.pos) * car.ln.dir, side = (car.ln.axis === 'x' ? a.pos.z : a.pos.x) - car.ln.lane;
+      const to = Math.abs(along) > .95 ? [car.pos + Math.sign(along) * car.ln.dir * 1.7, (car.ln.axis === 'x' ? a.pos.z : a.pos.x)] : [(car.ln.axis === 'x' ? a.pos.x : a.pos.z), car.ln.lane + (side >= 0 ? 1 : -1) * 1.3];
+      const pt = car.ln.axis === 'x' ? [to[0], to[1]] : [to[1], to[0]];
+      if (!cars.some(c => c.active !== false && inCarBody(c, pt[0], pt[1], .2))) { a.detour = pt; a.detourUntil = simT + 2.5; }
+      a.bodySince = null;
+    }
+    a.why = `stepping around car ${car.key}`; return false;
+  }
+  // stepping off the curb anywhere: look both ways, a car on that spot or rolling toward it goes first
+  if (roadAt(ax, az)) for (const c of cars) {
+    if (c.active === false) continue;
+    const toP = ((c.ln.axis === 'x' ? ax : az) - c.pos) * c.ln.dir, side = Math.abs((c.ln.axis === 'x' ? az : ax) - c.ln.lane);
+    if (side < 1.0 && ((c.v > .4 && toP > -1.6 && toP < 7) || inCarBody(c, ax, az, .15))) { a.why = `car ${c.key} near`; return false; }
+  }
   for (const cw of CROSS) {
-    if (inCross(cw, a.pos.x, a.pos.z) || !inCross(cw, ax, az)) continue;
-    if (cw.ctrl && !pedGo(cw.ctrl)) return false;
-    for (const c of cars) { if (c.active === false || c.ln.axis !== cw.axis || c.ln.lane < cw.lo || c.ln.lane > cw.hi) continue; const toCw = (cw.at - c.pos) * c.ln.dir; if (toCw > -1.6 && toCw < 7 && (c.v > .4 || toCw < 1.0)) return false; }
+    // the curb strip beside a crosswalk is still the curb: wait there like anywhere else on the sidewalk.
+    // Only the crosswalk you are heading across counts, so a corner where two meet never asks for both lights at once.
+    if (!inCross(cw, ax, az) || Math.abs(cw.axis === 'x' ? uz : ux) < .5) continue;
+    if (cw.ctrl && !pedGo(cw.ctrl) && !pass) { a.why = 'signal'; return false; }
+    for (const c of cars) {
+      if (c.active === false || c.ln.axis !== cw.axis || c.ln.lane < cw.lo || c.ln.lane > cw.hi) continue;
+      const toCw = (cw.at - c.pos) * c.ln.dir;
+      // a car on the crosswalk, or one rolling toward it, goes first
+      if (toCw > -1.6 && toCw < 7 && ((c.v > .4 && !willStop(c, cw.at)) || toCw < 1.0)) { a.why = `car ${c.key} at crosswalk`; return false; }
+      // a car inside the box (moving or waiting) gets to clear it first
+      if (!pass && c.inBox && toCw > -1.6 && toCw < 4.5) { a.why = `car ${c.key} in the box`; return false; }
+    }
   }
   return true;
 }
+// a rolling car that will stop short of a spot anyway: queued behind another car, or braking for its red light before it
+function willStop(c, at) {
+  const L = c.ln, ahead = (at - c.pos) * L.dir; if (ahead <= 0) return false;
+  if (cars.some(o => o !== c && o.key === c.key && o.active !== false && (o.pos - c.pos) * L.dir > 0 && (at - o.pos) * L.dir > 0)) return true;
+  return (L.stops || []).some(([ctrl, line]) => { const toLine = (line - c.pos) * L.dir; return lightState(ctrl) === 'r' && toLine < ahead && toLine > c.v * c.v / 10 + .1; });
+}
+// a car's body (1.9 by 0.92) plus a little room
+const inCarBody = (c, x, z, pad = .3) => Math.abs((c.ln.axis === 'x' ? x : z) - c.pos) < .95 + pad && Math.abs((c.ln.axis === 'x' ? z : x) - c.ln.lane) < .46 + pad;
+// how far a point is from a car's body (negative inside it); a step that closes the gap near a car is a step into it
+const carGap = (c, x, z) => Math.max(Math.abs((c.ln.axis === 'x' ? x : z) - c.pos) - .95, Math.abs((c.ln.axis === 'x' ? z : x) - c.ln.lane) - .46);
+// the strip a moving car is about to drive over
+const inCarPath = (c, x, z) => { const along = ((c.ln.axis === 'x' ? x : z) - c.pos) * c.ln.dir; return along > .9 && along < 1.4 + c.v * .8 && Math.abs((c.ln.axis === 'x' ? z : x) - c.ln.lane) < .76; };
 const roadAt = (x, z) => (z > 6.4 && z < 11.0) || (x > 7.6 && x < 11.6) || (z > -10.6 && z < -6.6) || (z > 41.4 && z < 45.4);
 // the building site's slab: anyone standing on it stands on top of it
 class Actor {
   constructor(agentId, look, x, z, yaw = 0, isCustomer = false) {
     const meta = isCustomer ? { id: 'customer', name: 'Customer', crew: null, tier: null, role: '' } : byId[agentId];
     const u = isCustomer ? {} : UNI[meta.tier];
-    this.meta = meta; this.isCustomer = isCustomer;
+    this.meta = meta; this.isCustomer = isCustomer; this.look = { ...u, ...look };
     this.c = makeChar({ id: agentId, ...u, ...look }); this.g = this.c.g;
     this.pos = new THREE.Vector3(x, .06, z); this.yaw = yaw; this.goalYaw = yaw;
     this.path = []; this.speed = 1.55; this.mode = 'idle'; this.t = rnd() * 10; this.carry = null; this.res = null;
@@ -1421,22 +1566,37 @@ class Actor {
   // scripted move along a straight line with a height change (ladders, slides); ease 1 = speeds up
   glide(x, z, lift, sec, mode = 'climb', ease = 0) { this.path = []; this.mode = mode; this.gl = { fx: this.pos.x, fz: this.pos.z, fl: this.lift || 0, x, z, lift, sec, t: 0, ease }; return new Promise(r => this.gl.r = r); }
   doing(task, mode = 'work') { this.task = task; this.mode = mode; this.since = simT; }
-  show(v) { this.g.visible = v; this.hidden = !v; if (this.tagO) this.tagO.on = v; if (this.carry) this.carry.visible = v; }
+  show(v) { this.g.visible = v; this.hidden = !v; if (this.tagO) this.tagO.on = v; if (this.workTagO && !v) this.workTagO.on = false; if (this.carry) this.carry.visible = v; }
   update(dt) {
     this.t += dt;
     if (this.gl) { const q = this.gl; q.t += dt; let k = Math.min(1, q.t / q.sec); k = q.ease ? k * k : k; this.pos.x = lerp(q.fx, q.x, k); this.pos.z = lerp(q.fz, q.z, k); this.lift = lerp(q.fl, q.lift, k); if (q.t >= q.sec) { this.gl = null; q.r(); } }
     if (this.follow && !this.follow.hidden && !this.gl) {
       // keep beside the leader: a step behind and to the side, like a kid walking with a parent
-      const L = this.follow, onCw = CROSS.some(cw => inCross(cw, L.pos.x, L.pos.z) || inCross(cw, this.pos.x, this.pos.z)), sd = (this.followSide ?? 1) * (onCw ? .12 : .5), bk = onCw ? ((this.followSide ?? 1) < 0 ? 1.5 : .85) : .55, bx = L.pos.x - Math.sin(L.yaw) * bk + Math.cos(L.yaw) * sd, bz = L.pos.z - Math.cos(L.yaw) * bk - Math.sin(L.yaw) * sd, dx = bx - this.pos.x, dz = bz - this.pos.z, dd = Math.hypot(dx, dz);
+      const L = this.follow, onCw = CROSS.some(cw => inCross(cw, L.pos.x, L.pos.z) || inCross(cw, this.pos.x, this.pos.z)), sd = (this.followSide ?? 1) * (onCw ? .12 : .5), bk = onCw ? ((this.followSide ?? 1) < 0 ? 1.5 : .85) : .55;
+      let bx = L.pos.x - Math.sin(L.yaw) * bk + Math.cos(L.yaw) * sd, bz = L.pos.z - Math.cos(L.yaw) * bk - Math.sin(L.yaw) * sd;
+      // beside a parent on the curb means the curb side, never out in the street
+      if (roadAt(bx, bz) && !roadAt(L.pos.x, L.pos.z)) { bx = L.pos.x - Math.sin(L.yaw) * bk; bz = L.pos.z - Math.cos(L.yaw) * bk; if (roadAt(bx, bz)) { bx = L.pos.x; bz = L.pos.z; } }
+      // on a crosswalk the kid walks the stripes right behind the parent, never beside them out in the lane
+      const lcw = CROSS.find(cw => inCross(cw, L.pos.x, L.pos.z));
+      if (lcw && roadAt(L.pos.x, L.pos.z)) { const off = (this.followSide ?? 1) * .2; if (lcw.axis === 'x') { bx = lcw.at + off; bz = L.pos.z - Math.cos(L.yaw) * bk; } else { bz = lcw.at + off; bx = L.pos.x - Math.sin(L.yaw) * bk; } }
+      const dx = bx - this.pos.x, dz = bz - this.pos.z, dd = Math.hypot(dx, dz);
       if (dd > .12) { this.mode = 'walk'; this.path = [new THREE.Vector3(bx, .06, bz)]; } else if (L.mode !== 'walk') { this.path = []; this.mode = 'idle'; this.goalYaw = L.yaw; }
     }
-    if (this.mode === 'walk' && this.path.length) {
+    // a sidestep out of a waiting car's lane comes before anything else on the path
+    if (this.detour && (this.mode !== 'walk' || this.detourUntil < simT || Math.hypot(this.detour[0] - this.pos.x, this.detour[1] - this.pos.z) < .08)) this.detour = null;
+    if (this.detour) { const dx = this.detour[0] - this.pos.x, dz = this.detour[1] - this.pos.z, dd = Math.hypot(dx, dz), st = Math.min(dd, this.speed * dt); this.pos.x += dx / dd * st; this.pos.z += dz / dd * st; this.goalYaw = Math.atan2(dx, dz); this.waitingCurb = false; }
+    else if (this.mode === 'walk' && this.path.length) {
       const tgt = this.path[0], d = tgt.clone().sub(this.pos); d.y = 0; const dist = d.length(), step = this.speed * dt;
       // no progress toward a nearby waypoint for over a second (someone else is standing on it): count it as reached and carry on
       if (tgt !== this.stT) { this.stT = tgt; this.stBest = dist; this.stall = 0; } else if (dist < this.stBest - .05) { this.stBest = dist; this.stall = 0; } else if (!this.waitingCurb) this.stall += dt;
       if (this.stall > 1.2 && dist < .9) { this.stall = 0; if (tgt.node) this.node = tgt.node; this.path.shift(); if (!this.path.length) { this.mode = this.carry ? 'hold' : 'idle'; const r = this.res; this.res = null; r && r(); } }
       else
-      if (dist > .01 && !curbSafe(this, d.x / dist, d.z / dist)) { this.waitingCurb = true; this.goalYaw = Math.atan2(d.x, d.z); }
+      if (dist > .01 && !curbSafe(this, d.x / dist, d.z / dist)) {
+        // a full light cycle on the curb means something is wrong: wave them across the next safe gap
+        if (!this.curbSpot || Math.hypot(this.pos.x - this.curbSpot[0], this.pos.z - this.curbSpot[1]) > .6) { this.curbSpot = [this.pos.x, this.pos.z]; this.curbSince = simT; }
+        else if (simT - this.curbSince > 40) { this.curbPass = simT + 4; this.curbSince = simT; }
+        this.waitingCurb = true; this.goalYaw = Math.atan2(d.x, d.z);
+      }
       // a waypoint on the way counts as reached a little early, so a crowd squeezing through one spot never deadlocks
       else if (dist <= Math.max(step, this.path.length > 1 ? .3 : 0)) { this.waitingCurb = false; this.pos.copy(tgt); if (tgt.node) this.node = tgt.node; this.path.shift(); if (!this.path.length) { this.mode = this.carry ? 'hold' : 'idle'; const r = this.res; this.res = null; r && r(); } }
       else { this.waitingCurb = false; this.pos.addScaledVector(d, step / dist); this.goalYaw = Math.atan2(d.x, d.z); }
@@ -1449,7 +1609,9 @@ class Actor {
         if (d2 < .56 && d2 > 1e-4) {
           const d = Math.sqrt(d2), k = Math.min(.05, (.75 - d) / .75 * dt * 2.2); let px = dx / d * k, pz = dz / d * k; const back = px * hx + pz * hz;
           if (back < 0) { const side = dx * hz - dz * hx >= 0 ? 1 : -1; px += -back * hx + hz * side * k; pz += -back * hz - hx * side * k; }
-          if (roadAt(this.pos.x, this.pos.z) || !roadAt(this.pos.x + px, this.pos.z + pz)) { this.pos.x += px; this.pos.z += pz; }
+          // nobody gets nudged off the curb into the street, or out of the crosswalk they are on
+          const nx = this.pos.x + px, nz = this.pos.z + pz;
+          if ((roadAt(this.pos.x, this.pos.z) ? !roadAt(nx, nz) || CROSS.some(cw => inCross(cw, nx, nz)) || !CROSS.some(cw => inCross(cw, this.pos.x, this.pos.z)) : !roadAt(nx, nz)) && !cars.some(c => c.active !== false && inCarBody(c, nx, nz, .15))) { this.pos.x = nx; this.pos.z = nz; }
         }
       }
     }
@@ -1732,6 +1894,10 @@ const HOMES = [
   { store: 'florist', via: 'flor', name: 'The Moreau apartment', who: ['Felix', 'Hugo'] },
   { store: 'bank', via: 'bank', name: "Walt's apartment", who: ['Walt'] },
   { store: 'bakery', via: 'bake', name: "Carl's apartment", who: ['Carl'] },
+  // the kitchen crew live in town too, in flats above the shops on Main Street
+  { store: 'hardware', via: 'hard', name: 'The line crew flat', crew: true, who: ['Chef Nico', 'Ren', 'Dom', 'Kit', 'Lu'] },
+  { store: 'cinema', via: 'cine', name: 'The pass crew flat', crew: true, who: ['Tay', 'Inez', 'Ollie', 'Pia'] },
+  { store: 'diner', via: 'diner', name: 'Above the diner', crew: true, who: ['Ezra', 'Bea', 'Pip', 'Sal'] },
 ];
 const HOME_OF = {}; HOMES.forEach(e => { e.street = e.h == null ? 'Upstairs on Main Street' : HS(e.h).z ? 'Maple Street' : 'Elm Street'; if (e.store) e.door = [STORES.find(q => q.kind === e.store).x, 4.15]; e.who.forEach(n => HOME_OF[n] = e); });
 // the walk home from a sidewalk stop: along the town's paths to the gate, up the front walk and in the door
@@ -1917,6 +2083,8 @@ const BBPEOPLE = [
   { name: 'Priya', what: 'Cheering in the stands', look: { hair: 'bun', hairC: 0x1f1813, top: 0xc0392b }, fan: true, still: [STANDS.x(0), 20.6], face: Math.PI / 2, pose: 'sit', seatY: -.14, lift: .38, home: standsHome('Priya', 20.6) },
   { name: 'Marcus', what: 'Cheering in the stands', look: { hair: 'beard', hairC: 0x2a1d17, top: 0xc0392b }, fan: true, still: [STANDS.x(0), 21.3], face: Math.PI / 2, pose: 'sit', seatY: -.14, lift: .38, home: standsHome('Marcus', 21.3) },
 ];
+// Tess stands behind her counter (the house side, away from the sidewalk), facing the customers on the sidewalk
+const LEMON_SPOT = [HS(4).gate[0] + 1.6, -13.68];
 const TOWNIES = [
   { name: 'Marge', what: 'Out on Main Street', look: { hair: 'bob', hairC: 0x8a5a3a, top: 0xc98f86, pants: 0x5f7d93 }, brain: { start: 'flor', home: { via: 'barb', door: [-19.3, 4.15] }, likes: { florist: 1.5, window: 1.2, barber: .4, chat: .5 } } },
   { name: 'Theo', what: 'Out and about', look: { hair: 'cap', hatC: 0x5f7d93, hairC: 0x2a1d17, top: 0xd8a23c }, brain: { start: 'g6', home: { house: 6 }, likes: { bakery: 2, diner: .5 } } },
@@ -1952,7 +2120,7 @@ const TOWNIES = [
   { name: 'Martha', what: 'Gardening in her front yard', look: { hair: 'sunhat', hairC: 0xdcd2c3, hatC: 0xe6cf98, top: 0xb9a7c9, pants: 0x6c8a52 }, waver: true, brain: { start: 'g2', begin: 'garden', home: { house: 2 }, likes: { garden: 4, florist: 1.2, window: .5 } } },
   { name: 'Earl', what: 'Coffee and the morning paper on the porch', look: { hair: 'baldGlasses', hairC: 0xdcd2c3, top: 0x7e9db5, pants: 0x5a4a40, prop: 'newspaper' }, rock: true, brain: { start: 'g3', begin: 'porch', home: { house: 3 }, likes: { porch: 4, bakery: 1, bench: .6, cafe: .8 }, early: true } },
   { name: 'Hank', what: 'Mowing the lawn', look: { hair: 'cap', hatC: 0xc9533b, hairC: 0x8a5a3a, top: 0x9fae8c }, loop: [[HS(5).x - .8, -14.0], [HS(5).x + 1.6, -14.0]], speed: .7, mower: true, home: doorPath(5).slice(1) },
-  { name: 'Tess', what: 'Selling lemonade, 50 cents', look: { hair: 'puffs', hairC: 0x2a1d17, top: 0xf3cf72 }, still: [HS(4).gate[0] + 1.6, -13.35], face: 0, kid: true, home: [[HS(4).gate[0] + 1.2, -13.85], [HS(4).gate[0], -13.85], HS(4).porch, HS(4).door] },
+  { name: 'Tess', what: 'Selling lemonade, 50 cents', look: { hair: 'puffs', hairC: 0x2a1d17, top: 0xf3cf72 }, still: LEMON_SPOT, face: 0, kid: true, home: [[HS(4).gate[0] + 1.2, -13.85], [HS(4).gate[0], -13.85], HS(4).porch, HS(4).door] },
   { name: 'Carl', what: 'Delivering the mail', look: { hair: 'cap', hatC: 0x3f5f8a, hairC: 0x2a1d17, top: 0x8fa9c0, pants: 0x3f5f8a, prop: 'satchel' }, mail: true, home: [[15.75, 4.15]], navHome: true },
 ];
 const townies = TOWNIES.map((t, i) => {
@@ -1987,7 +2155,7 @@ const bouquet = (() => {
 const iceCone = (() => { const g = G(0, 0, 0, root, 'cone'); g.userData.oneHand = { tilt: -.15 }; P(cyl(.05, .012, .17, 10), m('waffle', 0xd9a35a, { b: 1.2 }), 0, .04, 0, g); P(sph(.056, 12, 8), m('scoop', 0xf2b8c6, { nobump: true }), 0, .14, 0, g); P(sph(.02, 8, 6), m('cherry', 0xc0101a, { nobump: true }), 0, .2, 0, g); g.visible = false; return g; })();
 const mug = P(cyl(.06, .05, .12, 12), m('mug', 0xfbf6ec), HS(3).x + 1.9, .87, HZ + .45); P(rbox(.4, .5, .4, .03), M.walnut, HS(3).x + 1.88, .55, HZ + .45);
 const steam = [0, 1, 2].map(i => { const p = P(sph(.04, 8, 6), m('steam', 0xffffff, { op: .5, nobump: true }), HS(3).x + 1.9, 1.0, HZ + .45); p.castShadow = false; return p; });
-{ const ls = G(HS(4).gate[0] + 1.6, 0, -13.0); P(rbox(1.1, .7, .5, .03), M.creamW, 0, .35, 0, ls); P(rbox(1.2, .05, .6, .02), m('lemonTop', 0xf3cf72), 0, .72, 0, ls); P(cyl(.08, .08, .22, 12), m('pitcher', 0xf6e58a, { op: .8 }), -.3, .86, 0, ls); [0, .2].forEach(x => P(cyl(.04, .035, .1, 10), M.creamW, x, .8, .05, ls)); [-.5, .5].forEach(x => P(cyl(.025, .025, 1.0, 6), M.walnutL, x, 1.0, -.2, ls)); P(rbox(1.1, .3, .04, .01), m('lemonSign', 0xf3cf72), 0, 1.45, -.2, ls); }
+{ const ls = G(HS(4).gate[0] + 1.6, 0, -13.0, root, 'lemonadeStand'); P(rbox(1.1, .7, .5, .03), M.creamW, 0, .35, 0, ls); P(rbox(1.2, .05, .6, .02), m('lemonTop', 0xf3cf72), 0, .72, 0, ls); P(cyl(.08, .08, .22, 12), m('pitcher', 0xf6e58a, { op: .8 }), -.3, .86, 0, ls); [0, .2].forEach(x => P(cyl(.04, .035, .1, 10), M.creamW, x, .8, .05, ls)); [-.5, .5].forEach(x => P(cyl(.025, .025, 1.0, 6), M.walnutL, x, 1.0, -.2, ls)); P(rbox(1.1, .3, .04, .01), m('lemonSign', 0xf3cf72), 0, 1.45, -.2, ls); }
 async function life(a) {
   const t = a.townie, gen = ++a.gen, alive = () => a.gen === gen;
   a.tballReady = false;
@@ -2525,7 +2693,40 @@ async function pregame() {
 async function postgame() {
   const w = GM.winner;
   if (w >= 0) { const champs = TEAMS[w].kids; champs.forEach((k, i) => { park(k, fieldAt(2.2 + (i % 3) * .6, 30 + i * 4), faceTo(...fieldAt(2.2 + (i % 3) * .6, 30 + i * 4), ...BB.M)); k.a.task = 'Celebrating the win'; settle(k); }); TEAMS[1 - w].kids.forEach(toDugout); await bw(5); say(champs[0].a, 'We won!', 1.8); await bw(1.2); say(COACH[1 - w], 'Good game, everybody!', 2); }
-  await bw(10); KIDS.forEach(toDugout); await bw(18); newGame();
+  await bw(10);
+  // one game a day: the field empties and everyone heads home before rejoining the town
+  GM.status = 'done'; GM.last = `${GM.last}. That's the game for today`; drawBoard();
+  for (const a of [...BBALL, ...FANS]) headHomeThenTown(a);
+}
+// ---------- after the final out: home to change and rest, then out into town like everyone else ----------
+const BB_ROLE = new Map();
+const BB_LIKES = { kid: { playground: 2.5, icecream: 2, fountain: 1.2, pond: 1.2, toys: 1.5, wander: .4, chat: .3 }, adult: { cafe: 1.5, bench: 1, bakery: 1, fountain: .6, chat: .8, wander: .5 } };
+function homeFor(name) { const e = HOME_OF[name]; return e.h != null ? { via: 'g' + e.h, path: doorPath(e.h), door: HS(e.h).door } : { via: e.via, path: [e.door], door: e.door }; }
+async function headHomeThenTown(a) {
+  const t = a.townie, gen = ++a.gen, alive = () => a.gen === gen;
+  if (!BB_ROLE.has(a)) BB_ROLE.set(a, { still: t.still, face: t.face, pose: t.pose, what: t.what });
+  a.tballReady = false; a.gl = null; a.lift = 0; a.pose = null; a.rock = false; a.mode = 'idle'; if (TB.holder === a) batDown();
+  a.task = t.kid ? 'Heading home after the game' : 'Walking home after the game';
+  await wait(.5 + rnd() * 3); if (!alive()) return;
+  if (!a.hidden) { const hp = t.home; await a.walk(hp); if (!alive()) return; await goInside(a, hp[hp.length - 1]); if (!alive()) return; }
+  a.atHome = true; a.homeAfterGame = true; a.task = t.kid ? 'Home, changing out of the uniform' : 'Home, resting after the game';
+  await wait(18 + rnd() * 22); if (!alive()) return;
+  // from here on the same brain as every neighbor: needs, likes, places, chats
+  a.home = homeFor(t.name); a.members = []; a.node = a.home.via; a.pace ??= a.speed;
+  a.needs ??= Object.fromEntries(NEEDS.map(k => [k, .3 + rnd() * .5]));
+  t.brain = { start: a.home.via, likes: { ...BB_LIKES[t.kid ? 'kid' : 'adult'] } }; t.what = t.kid ? 'Out after the game' : 'Out and about';
+  if (!BRAIN.includes(a)) BRAIN.push(a);
+  brain(a);
+}
+// the next morning the players and coaches are ballplayers again, and a new game can start
+function bbNewDay() {
+  if (GM.status !== 'done' && GM.status !== 'final') return;
+  for (const [a, role] of BB_ROLE) {
+    const t = a.townie; a.gen++; release(a); a.place = null; delete t.brain; Object.assign(t, role);
+    const at = BRAIN.indexOf(a); if (at >= 0) BRAIN.splice(at, 1);
+    if (!a.hidden) a.show(false); a.atHome = true; a.homeAfterGame = false;
+  }
+  BB_ROLE.clear(); newGame();
 }
 async function ballgame() {
   newGame(); batDown();
@@ -2535,6 +2736,7 @@ async function ballgame() {
     try {
       if (GM.status === 'pre') await pregame();
       else if (GM.status === 'final') await postgame();
+      else if (GM.status === 'done') continue;
       else {
         const bt = GM.top ? 0 : 1;
         if (GM.needField) { await changeover(bt); GM.needField = false; }
@@ -2593,9 +2795,10 @@ const cars = [];
 // the two intersections as boxes, with the crosswalk each lane drives across on its way out
 const BOXES = [{ x: [7.6, 11.6], z: [6.4, 11.0], cw: { mainE: 1, mainW: 0, oakS: 3, oakN: 2 } }, { x: [7.55, 11.65], z: [-10.6, -6.6], cw: { elmE: 4, elmW: 5, oakS: 7, oakN: 6 } }, { x: [7.55, 11.65], z: [MZ - 10.6, MZ - 6.6], cw: {}, yieldX: true, stopX: true }];
 const LANES = {
-  mainE: { axis: 'x', dir: 1, lane: 9.85, stops: [['main', 5.4]], a: -70, b: 70 }, mainW: { axis: 'x', dir: -1, lane: 7.55, stops: [['main', 13.8]], a: -70, b: 70 },
-  oakS: { axis: 'z', dir: 1, lane: 8.6, stops: [['oak', -13.55], ['oak', 4.4]], a: -62, b: 70 }, oakN: { axis: 'z', dir: -1, lane: 10.6, stops: [['oak', 13.0], ['oak', -4.6]], a: -62, b: 70 },
-  elmE: { axis: 'x', dir: 1, lane: -7.6, stops: [['main', 4.9]], a: -70, b: 70 }, elmW: { axis: 'x', dir: -1, lane: -9.6, stops: [['main', 14.25]], a: -70, b: 70 },
+  // stop lines sit a car's half length plus a step behind each crosswalk, so a stopped bumper never reaches the stripes
+  mainE: { axis: 'x', dir: 1, lane: 9.85, stops: [['main', 5.05]], a: -70, b: 70 }, mainW: { axis: 'x', dir: -1, lane: 7.55, stops: [['main', 14.15]], a: -70, b: 70 },
+  oakS: { axis: 'z', dir: 1, lane: 8.6, stops: [['oak', -13.9], ['oak', 4.05]], a: -62, b: 70 }, oakN: { axis: 'z', dir: -1, lane: 10.6, stops: [['oak', 13.35], ['oak', -4.25]], a: -62, b: 70 },
+  elmE: { axis: 'x', dir: 1, lane: -7.6, stops: [['main', 4.55]], a: -70, b: 70 }, elmW: { axis: 'x', dir: -1, lane: -9.6, stops: [['main', 14.6]], a: -70, b: 70 },
   mapleE: { axis: 'x', dir: 1, lane: MZ - 7.6, a: -70, b: 70 }, mapleW: { axis: 'x', dir: -1, lane: MZ - 9.6, a: -70, b: 70 },
 };
 [['mainE', -52, 0x6f8fb0], ['mainW', 50, 0xc9533b], ['mainE', -30, 0xc9533b], ['mainE', -16, 0xfbf6ec], ['mainE', 20, 0x7e9db5], ['mainW', 30, 0xf3cf72], ['mainW', 22, 0x9fae8c], ['mainW', -8, 0xe8978a],
@@ -2639,7 +2842,14 @@ function greetings() {
 const CROSS = [{ axis: 'x', at: 6.95, lo: 6.4, hi: 11.0, ctrl: 'main' }, { axis: 'x', at: 12.25, lo: 6.4, hi: 11.0, ctrl: 'main' }, { axis: 'z', at: 5.95, lo: 7.6, hi: 11.6, ctrl: 'oak' }, { axis: 'z', at: 11.45, lo: 7.6, hi: 11.6, ctrl: 'oak' }, { axis: 'x', at: 12.7, lo: -10.6, hi: -6.6, ctrl: 'main' }, { axis: 'x', at: 6.45, lo: -10.6, hi: -6.6, ctrl: 'main' }, { axis: 'z', at: -12.0, lo: 7.6, hi: 11.6, ctrl: 'oak' }, { axis: 'z', at: -6.15, lo: 7.6, hi: 11.6, ctrl: 'oak' }];
 // walk signal: cross only well inside the red for the street being crossed
 function pedGo(k) { const ph = simT % 48; return k === 'main' ? ph > 24.5 && ph < 40 : ph > .5 && ph < 16.5; }
-function crosswalkBusy(cw) { for (const a of [...actors, ...bikes]) { if (a.hidden || !a.g.visible) continue; const along = cw.axis === 'x' ? a.pos.x : a.pos.z, across = cw.axis === 'x' ? a.pos.z : a.pos.x; if (Math.abs(along - cw.at) < 1.1 && across > cw.lo - .2 && across < cw.hi + .2) return true; } return false; }
+// busy means someone is out in the road on it; people waiting on the curb do not hold traffic
+function crosswalkBusy(cw) { for (const a of [...actors, ...bikes]) { if (a.hidden || !a.g.visible) continue; const along = cw.axis === 'x' ? a.pos.x : a.pos.z, across = cw.axis === 'x' ? a.pos.z : a.pos.x; if (Math.abs(along - cw.at) < 1.0 && across > cw.lo && across < cw.hi) return true; } return false; }
+// where a lane meets a box: the car waits behind the entry crosswalk, never on it
+function boxEntry(B, L) {
+  const own = L.axis === 'x' ? B.x : B.z, edgeIn = L.dir > 0 ? own[0] : own[1], edgeOut = L.dir > 0 ? own[1] : own[0];
+  const cwIn = CROSS.find(cw => cw.axis === L.axis && L.lane > cw.lo && L.lane < cw.hi && (edgeIn - cw.at) * L.dir > 0 && (edgeIn - cw.at) * L.dir < 2);
+  return { edgeIn, edgeOut, hold: cwIn ? cwIn.at - L.dir * 1.9 : edgeIn - L.dir * 1.0 };
+}
 let greetTick = 0;
 function townUpdate(dt, now) {
   swingUpdate(dt); doorsUpdate(dt);
@@ -2651,6 +2861,9 @@ function townUpdate(dt, now) {
   // traffic thins out in the evening and all but stops after hours
   const want = tod === 'day' ? cars.length : tod === 'night' ? 5 : tod === 'dawn' ? 3 : 1;
   let active = cars.filter(c => c.active !== false).length;
+  // everyone out in the road, for the cars' last-resort look ahead
+  const inRoad = [...actors.filter(a => !a.hidden && a.g.visible).map(a => a.pos), ...bikes.filter(b => b.mode !== 'away' && b.g.visible).map(b => b.pos)].filter(p => roadAt(p.x, p.z));
+  for (const c of cars) c.inBox = c.active !== false && BOXES.some(B => { const own = c.ln.axis === 'x' ? B.x : B.z, cross = c.ln.axis === 'x' ? B.z : B.x; return c.ln.lane > cross[0] && c.ln.lane < cross[1] && c.pos > own[0] - .9 && c.pos < own[1] + .9; });
   for (const c of cars) {
     const L = c.ln;
     if (c.active === false) {
@@ -2660,22 +2873,31 @@ function townUpdate(dt, now) {
     let target = c.vmax, gap = Infinity;
     for (const o of cars) if (o !== c && o.key === c.key && o.active !== false) { const d = (o.pos - c.pos) * L.dir; if (d > 0 && d < gap) gap = d; }
     if (gap < 3.2) target = Math.min(target, Math.max(0, gap - 2.3) * 2);
-    for (const [ctrl, at] of L.stops || []) { const st = lightState(ctrl), toLine = (at - c.pos) * L.dir; if ((st === 'r' || (st === 'y' && toLine > 1.2)) && toLine > -.3 && toLine < 5) target = Math.min(target, Math.max(0, toLine) * 1.1); }
-    CROSS.forEach((cw, k) => { if (!busy[k] || cw.axis !== L.axis) return; const laneIn = L.lane > cw.lo && L.lane < cw.hi; if (!laneIn) return; const toCw = (cw.at - c.pos) * L.dir - 2.2; if (toCw > -.4 && toCw < 5) target = Math.min(target, Math.max(0, toCw) * 1.1); });
+    let lightHold = false;
+    for (const [ctrl, at] of L.stops || []) { const st = lightState(ctrl), toLine = (at - c.pos) * L.dir; if ((st === 'r' || (st === 'y' && toLine > 1.2)) && toLine > -.3 && toLine < 5) { target = Math.min(target, Math.max(0, toLine) * 1.1); lightHold = true; } }
+    // stuck detector: stopped for a while with no red light to explain it, so let it roll on (it still never drives into anyone)
+    const freed = c.release > simT;
+    if (!freed) CROSS.forEach((cw, k) => { if (!busy[k] || cw.axis !== L.axis) return; const laneIn = L.lane > cw.lo && L.lane < cw.hi; if (!laneIn) return; const toCw = (cw.at - c.pos) * L.dir - 2.2; if (toCw > -.4 && toCw < 5) target = Math.min(target, Math.max(0, toCw) * 1.1); });
     // never enter an intersection you cannot clear: hold at its edge while a cross-street car is inside or the exit crosswalk is busy;
     // Elm has no lights, so it also gives way to any Oak car near the box
     for (const B of BOXES) {
-      const own = L.axis === 'x' ? B.x : B.z, cross = L.axis === 'x' ? B.z : B.x; if (L.lane < cross[0] || L.lane > cross[1]) continue;
-      const entry = ((L.dir > 0 ? own[0] : own[1]) - c.pos) * L.dir - 1.0;
+      const cross = L.axis === 'x' ? B.z : B.x; if (L.lane < cross[0] || L.lane > cross[1]) continue;
+      const E = boxEntry(B, L), entry = (E.hold - c.pos) * L.dir;
       // a stop sign: come to a full stop at the line for a beat, then go when it is clear
       if (B.stopX && L.axis === 'x') { if (entry < -6 && c.stopB === B) c.stopB = null; if (c.stopB !== B && entry > -.2 && entry < 4.5) { target = Math.min(target, Math.max(0, entry) * 1.1); if (c.v < .06 && entry < .5) { c.stopT = (c.stopT || 0) + dt; if (c.stopT > 1.1) { c.stopB = B; c.stopT = 0; } } } }
-      if (entry < -.2 || entry > 4.5) continue;
+      if (entry < -.2 || entry > 4.5 || freed) continue;
       // a cross car counts if it is in the box, or already rolling into it (a car waiting at the edge does not)
       const inside = cars.some(o => { if (o.active === false || o.ln.axis === L.axis) return false; const mg = o.v > .5 ? 1.3 : .6, r = o.ln.axis === 'x' ? B.x : B.z, c2 = o.ln.axis === 'x' ? B.z : B.x; return o.ln.lane > c2[0] && o.ln.lane < c2[1] && o.pos > r[0] - mg && o.pos < r[1] + mg; });
       const exitBusy = B.cw[c.key] != null && busy[B.cw[c.key]];
       const yieldOak = B.yieldX && L.axis === 'x' && cars.some(o => o.active !== false && o.ln.axis === 'z' && o.ln.lane > B.x[0] && o.ln.lane < B.x[1] && o.pos > B.z[0] - 5.5 && o.pos < B.z[1] + 5.5);
-      if (inside || exitBusy || yieldOak) target = Math.min(target, Math.max(0, entry) * 1.1);
+      // don't block the box: go only when the whole car fits past the far crosswalk
+      let lead = null; for (const o of cars) if (o !== c && o.key === c.key && o.active !== false && (o.pos - c.pos) * L.dir > 0 && (!lead || (o.pos - lead.pos) * L.dir < 0)) lead = o;
+      const noRoom = lead && lead.v < 1.5 && (lead.pos - E.edgeOut) * L.dir < 4.7;
+      if (inside || exitBusy || yieldOak || noRoom) target = Math.min(target, Math.max(0, entry) * 1.1);
     }
+    // the last word: never drive into anyone out in the road
+    for (const p of inRoad) { const along = ((L.axis === 'x' ? p.x : p.z) - c.pos) * L.dir, side = Math.abs((L.axis === 'x' ? p.z : p.x) - L.lane); if (side < .8 && along > 0 && along < 4.5) target = Math.min(target, Math.sqrt(2 * 5 * Math.max(0, along - 1.35))); }
+    if (c.v < .1 && !lightHold) { c.still = (c.still || 0) + dt; if (c.still > 8) { c.release = simT + 4; c.still = 0; } } else c.still = 0;
     c.v += clamp(target - c.v, -6 * dt, 2.5 * dt); c.pos += c.v * dt * L.dir;
     if ((L.dir > 0 && c.pos > L.b) || (L.dir < 0 && c.pos < L.a)) { if (active > want) { c.active = false; c.g.visible = false; active--; continue; } c.pos = L.dir > 0 ? L.a : L.b; }
     if (L.axis === 'x') { c.g.position.set(c.pos, 0, L.lane); c.g.rotation.y = L.dir > 0 ? 0 : Math.PI; }
@@ -2686,7 +2908,9 @@ function townUpdate(dt, now) {
     if (b.mode === 'away') continue;
     const tgt = b.mode === 'loop' ? b.loop[(b.i + 1) % b.loop.length] : b.path[0];
     const dx = tgt[0] - b.pos.x, dz = tgt[1] - b.pos.z, dist = Math.hypot(dx, dz);
-    let blocked = false; if (dist > .01) { const ux = dx / dist, uz = dz / dist; if (!curbSafe(b, ux, uz)) blocked = true; for (const a of actors) { if (a.hidden) continue; const rx = a.pos.x - b.pos.x, rz = a.pos.z - b.pos.z, ahead = rx * ux + rz * uz, side = Math.abs(rx * uz - rz * ux); if (ahead > 0 && ahead < 1.3 && side < .55) { blocked = true; break; } } }
+    let blocked = false; if (dist > .01) { const ux = dx / dist, uz = dz / dist, onRoad = roadAt(b.pos.x, b.pos.z), reach = onRoad ? .7 : 1.3; if (!curbSafe(b, ux, uz)) blocked = true; if (!(b.squeeze > simT)) for (const a of actors) { if (a.hidden) continue; const rx = a.pos.x - b.pos.x, rz = a.pos.z - b.pos.z, ahead = rx * ux + rz * uz, side = Math.abs(rx * uz - rz * ux); if (ahead > 0 && ahead < reach && side < .55) { blocked = true; break; } } }
+    // stuck detector: a bike held up by a walker for a few seconds squeezes past
+    if (blocked) { b.blockedT = (b.blockedT || 0) + dt; if (b.blockedT > 4) { b.squeeze = simT + 2; b.blockedT = 0; } } else b.blockedT = 0;
     b.v = lerp(b.v ?? b.speed, blocked ? 0 : b.speed, Math.min(1, dt * 5)); const step = b.v * dt;
     if (dist <= step) {
       b.pos.set(tgt[0], 0, tgt[1]);
@@ -2914,12 +3138,19 @@ parked = [{ n: 6, title: 'Stripe webhooks', why: 'Needs STRIPE_WEBHOOK_SECRET in
 let cur = null, cost = 0;
 const STEP = ['Ticket', 'Line', 'Plate', 'Oven', 'Pass', 'Window'];
 const CHIP = { waiting: ['c-wait', 'Waiting'], cooking: ['c-cook', ''], ready: ['c-ready', 'Ready'], carrying: ['c-ready', 'To the pass'], plated: ['c-plated', 'Plated'], sent: ['c-sent', 'Sent back'], passed: ['c-pass', 'Passed'] };
-function sliceLabel(sl) { return sl.status === 'cooking' ? `On the line ${Math.round(sl.pct * 100)}%` : CHIP[sl.status][1]; }
+// Live slices only ever show measured progress: tasks committed of the plan's tasks, plus the step the agents are on.
+const taskNote = sl => sl.progress ? `${sl.progress.done} of ${sl.progress.total} tasks committed` : '';
+function sliceLabel(sl) {
+  if (sl.status !== 'cooking') return CHIP[sl.status][1];
+  if (!sl.live) return `On the line ${Math.round(sl.pct * 100)}%`;
+  const pct = sl.progress ? ` ${Math.round(sl.progress.done / sl.progress.total * 100)}%` : '';
+  return `${STEP_WORD[sl.step] || 'On the line'}${pct}`;
+}
 function renderOrder() {
   if (!cur) return;
   $('#tkTitle').textContent = `${nm(cur.o)} · ${cur.o.title}`;
   $('#tkSteps').innerHTML = STEP.map((st, i) => `<i class="${i < cur.stage ? 'done' : i === cur.stage ? 'now' : ''}" title="${st}"></i>`).join('');
-  $('#tkNow').textContent = cur.stage >= STEP.length ? 'Served' : STEP[cur.stage];
+  $('#tkNow').textContent = cur.stage >= STEP.length ? 'Served' : sceneMode === 'live' ? STEP_WORD[cur.slices.find(sl => sl.status === 'cooking')?.step] || STEP[cur.stage] : STEP[cur.stage];
   $('#tkSlices').innerHTML = cur.slices.map(sl => `<i class="d-${sl.status}" title="${escapeCard(sl.id)} ${escapeCard(sl.name)}: ${sliceLabel(sl)}"></i>`).join('');
   $('#tracker').setAttribute('aria-label', `${nm(cur.o)}, ${cur.o.title}: ${cur.stage >= STEP.length ? 'served' : STEP[cur.stage]}. Open the order.`);
   if (!sheet.hidden && sheet.dataset.kind === 'orders') renderOrdersSheet();
@@ -2929,9 +3160,9 @@ function renderStats() {
   $('#stGate').textContent = sceneMode === 'live' ? 'n/a' : pies.length ? Math.round(pies.filter(s => s.first).length / pies.length * 100) + '%' : 'n/a';
 }
 const feedEl = $('#feed'), LOG = [];
-function feed(text) {
+function feed(text, pie) {
   const mm = Math.floor(simT / 60), ss = Math.floor(simT % 60), stamp = `${mm}:${String(ss).padStart(2, '0')}`;
-  LOG.push({ stamp, text, pie: cur ? cur.o.n : null });
+  LOG.push({ stamp, text, pie: pie !== undefined ? pie : cur ? cur.o.n : null });
   const el = document.createElement('div'); el.className = 'ev'; el.innerHTML = `<time>${stamp}</time><span></span>`; el.lastChild.textContent = text;
   feedEl.prepend(el); [...feedEl.children].forEach((c, i) => { c.classList.toggle('old', i > 0); if (i > 2) c.remove(); });
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 650); }, 7000);
@@ -2991,7 +3222,11 @@ function lineUpdate() {
 }
 
 // Snapshot order data is normalized separately so malformed polls cannot clear a known line.
+// Step words and progress shapes the live line accepts (sliceLabel reads STEP_WORD at render time).
+const STEP_WORD = { build: 'Building', test: 'Testing', verify: 'Verifying', fix: 'Fixing', commit: 'Committing', review: 'Reviewing', plan: 'Planning' };
+const validProgress = p => p && Number.isSafeInteger(p.done) && Number.isSafeInteger(p.total) && p.total > 0 && p.done >= 0 && p.done <= p.total ? { done: p.done, total: p.total } : null;
 function snapshotOrders(snapshot) {
+  const factText = (value, max = 240) => typeof value === 'string' ? value.slice(0, max) : '';
   if (!Array.isArray(snapshot.pies)) return null;
   const ids = new Set(), orders = [];
   for (const pie of snapshot.pies) {
@@ -3003,6 +3238,7 @@ function snapshotOrders(snapshot) {
     const single = pie.single === true || pie.slices.length === 1;
     orders.push({ key: pie.id, n: pie.pie, sid: pie.slices[0]?.number || `${pie.pie}.1`, slice: single,
       title: String(pie.title || ''), desc: String(pie.title || ''), status: pie.status,
+      summary: factText(pie.summary), commit: factText(pie.commit, 90), date: factText(pie.date, 10),
       slices: pie.slices.map((slice, i) => [String(slice.title || ''), i % COOKS.length]),
       sliceRows: pie.slices.map(slice => ({ ...slice })) });
   }
@@ -3085,7 +3321,8 @@ function syncOrderLine(snapshot) {
   }
   const previous = cur?.o.key;
   cur = active ? { o: active.order, stage: 1, failed: false,
-    slices: active.order.sliceRows.map((slice, index) => ({ id: slice.number, name: slice.title,
+    slices: active.order.sliceRows.map((slice, index) => ({ id: slice.number, name: slice.title, live: true,
+      step: STEP_WORD[slice.step] ? slice.step : null, progress: validProgress(slice.progress),
       st: index % COOKS.length, status: slice.status === 'done' ? 'passed' : slice.status === 'active' ? 'cooking' : 'waiting', pct: 0 })) } : null;
   if (previous !== cur?.o.key || (pizza && pizza.wedges.length !== cur?.slices.length)) {
     if (pizza) root.remove(pizza.g); pizza = null;
@@ -3329,13 +3566,14 @@ const hex6 = c => '#' + (c ?? 0x7e9db5).toString(16).padStart(6, '0');
 function personOf(n) {
   const a = townies.find(q => q.townie.name === n);
   if (a) { const L = a.townie.member ? townies.find(q => q.townie.name === a.townie.member) : a, home = a.hidden && (tod !== 'day' || L.atHome || (!L.townie.brain && !L.townie.member)); return { look: a.look, kid: !!a.townie.kid, home, status: a.task }; }
+  const crew = [...castActors.values()].find(q => q.meta.name === n);
+  if (crew) return { look: crew.look, kid: false, home: !!crew.hidden, status: crew.hidden ? 'Off duty at home' : crew.task, crew: true };
   const b = bikes.find(q => q.name === n); return b && { look: b.look, kid: true, home: b.mode === 'away', status: b.what };
 }
 function homeCard(e) {
   const rows = e.who.map(n => {
-    const p = personOf(n); if (!p) return ''; const L = p.look, hat = ['cap', 'sunhat', 'beanie'].includes(L.hair);
-    const hair = hex6(hat ? (L.hatC ?? L.hairC) : L.hair === 'baldGlasses' ? L.skin : L.hairC ?? 0x3b2a22);
-    return `<div class="fm${p.home ? ' in' : ''}"><span class="hav${p.kid ? ' kid' : ''}" style="--sk:${hex6(L.skin)};--hr:${hair};--tp:${hex6(L.top)}"></span><div><b>${n}</b><small>${p.home ? 'Home' : p.status}</small></div></div>`;
+    const p = personOf(n); if (!p) return '';
+    return `<div class="fm${p.home ? ' in' : ''}"><button type="button" class="pname" data-person="${escapeCard(personKey(n))}" aria-label="Open ${escapeCard(n)}'s profile">${avatar(p.look, p.kid)}</button><div><b><button type="button" class="pname" data-person="${escapeCard(personKey(n))}">${n}</button></b><small>${p.home ? 'Home' : p.status}</small></div></div>`;
   }).join('');
   const home = e.who.filter(n => personOf(n)?.home).length;
   return `<h5>${e.name}</h5><div class="sub">${e.street} · ${home ? `${home} of ${e.who.length} home` : 'Everyone is out'}</div><div class="fam">${rows}</div>`;
@@ -3345,9 +3583,126 @@ function tapTarget(obj, fn) { obj.traverse(o => { if (o.isMesh) o.userData.card 
 stationObjs.forEach((g, i) => tapTarget(g, () => { const s = cur && cur.slices.find(s => s.st === i); return `<h5>${STATION[i].name} station</h5><div class="sub">One aspect of every pie</div><dl><dt>Cook</dt><dd>${COOKS[i].meta.name} · <code>${COOKS[i].meta.id.replace('#2', '')}</code></dd><dt>Slice</dt><dd>${s ? escapeCard(s.id + ' ' + s.name) : 'Nothing firing'}</dd><dt>Status</dt><dd>${s ? (s.status === 'cooking' ? Math.round(s.pct * 100) + '% cooked' : CHIP[s.status][1]) : 'Idle'}</dd></dl>`; }));
 { const o = root.getObjectByName('board86'); o.userData.card = () => `<h5>Shop status</h5><div class="sub">The same status your session prints when it starts</div><dl>${liveShopStatus ? `<dt>Prep</dt><dd>${liveShopStatus.prep.done}/${liveShopStatus.prep.total} boxes checked</dd><dt>Pies</dt><dd>${liveShopStatus.pies.total} total, ${liveShopStatus.pies.done} completed / ${liveShopStatus.pies.open} open</dd><dt>Slices</dt><dd>${liveShopStatus.slices.total} total, ${liveShopStatus.slices.done} completed / ${liveShopStatus.slices.open} open</dd>` : `<dt>Prep</dt><dd>${STATUS.prep} done</dd><dt>Served</dt><dd>${STATUS.served} pies</dd><dt>In line</dt><dd>${STATUS.line} orders</dd>${parked.map(p => `<dt>86'd</dt><dd>Pie ${p.n}, ${p.title}: ${p.why}</dd>`).join('')}`}</dl>`; clickables.push(o); }
 { const o = root.getObjectByName('scooter'); tapTarget(o, () => `<h5>Dex's scooter</h5><div class="sub"><code>ci-fix-attempter</code> · off shift</div><dl><dt>Job</dt><dd>Rides out when CI goes red after the window and fixes it on the way.</dd></dl>`); }
+// ---------- person profiles: a portrait of the actual character model, doing what suits them, and who they are ----------
+const LIKE_WORDS = { cafe: 'Coffee at a sidewalk cafe', bakery: 'The bakery', diner: 'Lunch at the diner', florist: 'Picking out flowers', window: 'Window shopping',
+  barber: 'A trim at the barber', bench: 'A quiet bench', fountain: 'The fountain', gazebo: 'Music at the gazebo', pond: 'The duck pond', icecream: 'Ice cream',
+  playground: 'The playground', toys: 'The toy shop', ballgame: 'Watching the ballgame', chat: 'A good chat', wander: 'A wander around town', hardware: 'The hardware store',
+  cinema: 'The movies', bank: 'Errands at the bank', statue: 'The statue in the park', listen: 'Live music', yardsale: 'Yard sales', cookout: 'Cookouts', grill: 'Grilling',
+  yoga: 'Yoga on the lawn', water: 'Watering the flowers', carwash: 'Washing the car', lawnchairs: 'Lawn chairs in the sun', lawnread: 'Reading on the lawn',
+  yardplay: 'Tag in the yard', sprinkler: 'The sprinkler', busk: 'Busking', picnic: 'Picnics', porch: 'The front porch', garden: 'Gardening', swing: 'The swings', fiddle: 'The fiddle', ducks: 'The ducks' };
+const KID_LIKES = ['playground', 'icecream', 'pond', 'fountain', 'toys', 'sprinkler', 'swing'];
+const cap1 = text => text ? text[0].toUpperCase() + text.slice(1) : '';
+const crewActorById = id => castActors.get(id);
+function personKey(name) {
+  const crew = [...castActors.values()].find(a => a.meta.name === name && !a.isCustomer);
+  if (crew && !crew.townie?.member) return 'crew:' + crew.meta.id;
+  if (ROSTER.some(r => r.name === name)) return 'crew:' + ROSTER.find(r => r.name === name).id;
+  return 'town:' + name;
+}
+function personKeyOf(a) {
+  if (a.townie && !a.townie.crew) return 'town:' + a.townie.name;
+  if (!a.isCustomer && castActors.get(a.meta.id) === a) return 'crew:' + a.meta.id;
+  return null;
+}
+function crewCharacter(id) { return id === 'orchestrator' ? byId.chef : id === 'box-it-up' ? byId.lead : byId[id]; }
+function personInfo(key) {
+  const [kind, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)];
+  if (kind === 'crew') {
+    const ch = crewCharacter(id); if (!ch) return null;
+    const a = crewActorById(id), e = HOME_OF[ch.name];
+    const look = a?.look || { ...UNI[ch.tier], skin: skins[ch.name.length % skins.length], hair: 'toque', hairC: 0x3b2a22, apron: CREW_APRONS[ch.crew] };
+    const agent = id === 'orchestrator' ? 'the lead session (orchestrator)' : id === 'box-it-up' ? 'the box-it-up skill' : `bytheslice:${id.replace(/#\d+$/, '')}`;
+    const now = !a ? 'Off shift' : a.isTownCrew ? (a.hidden ? 'Off duty at home' : a.task) : a.hidden ? 'Off shift' : a.task;
+    return { key, name: ch.name, kind, look, kid: false, actor: a, role: cap1(window.kitchenWords.role({ id, type: id, crew: ch.crew, plugin: true })), agent, crewLabel: crewName(ch.crew),
+      family: e ? e.who.filter(n => n !== ch.name) : [], home: e ? `${e.name}, ${e.street}` : 'Lives out of town', likes: Object.keys(CREW_LIKES[id] || {}), now, pose: { crew: id, prop: look.prop } };
+  }
+  const a = townies.find(q => q.townie.name === id && !q.townie.crew), bike = bikes.find(b => b.name === id); if (!a && !bike) return null;
+  const t = a?.townie || {}, e = HOME_OF[id], lead = t.member && townies.find(q => q.townie.name === t.member);
+  const team = t.bb?.t != null ? BBTEAMS[t.bb.t].name : t.bb?.coach != null ? BBTEAMS[t.bb.coach].name : null;
+  const role = bike ? 'Neighborhood kid, always on a bike' : t.mail ? 'Mail carrier' : t.mower ? 'Keeps the lawns trim' : t.bb?.t != null ? `Plays ${POSNAME[a.kid?.pos] || 'ball'} for the ${team}`
+    : t.bb?.coach != null ? `Coaches the ${team}` : t.bb?.ump ? 'Umpire at the ballfield' : t.fan ? 'Ballgame regular' : t.name === 'Tess' ? 'Runs the lemonade stand'
+    : t.busk || /fiddle/i.test(t.what || '') ? 'Street musician' : t.kid ? 'Kid in town' : e?.store ? `Lives above the ${e.store}` : 'Neighbor';
+  const likesFrom = t.brain?.likes || (lead ? Object.fromEntries(Object.entries(lead.townie.brain?.likes || {}).filter(([k]) => KID_LIKES.includes(k))) : {});
+  let likes = Object.entries(likesFrom).sort((p, q) => q[1] - p[1]).map(([k]) => k).filter(k => LIKE_WORDS[k]);
+  if (!likes.length) likes = t.bb ? ['ballgame'] : bike ? ['wander'] : t.kid ? ['playground', 'icecream'] : ['chat'];
+  const p = personOf(id);
+  return { key, name: id, kind, look: a?.look || bike.look, kid: !!(t.kid || bike), actor: a, role, family: e ? e.who.filter(n => n !== id) : [], home: e ? `${e.name}, ${e.street}` : 'Around town',
+    likes, now: p ? (p.home ? 'At home' : p.status) : '', pose: { town: t, bike: !!bike } };
+}
+const PF = { renderer: null, scene: null, cam: null, model: null, raf: 0, t: 0, opener: null };
+function poseModel(c, info) {
+  const g = c.g, arms = c.arms, legs = c.legs, P0 = info.pose, t = P0.town || {}, what = (t.what || '') + ' ' + (info.now || '');
+  const hold = obj => { obj.position.set(0, .5, .32); g.add(obj); arms.forEach(arm => arm.rotation.x = -1.35); };
+  if (P0.crew) {
+    if (c.news) c.news.visible = false;
+    if (['ticket', 'book', 'clip', 'probe', 'spoon', 'crate'].includes(P0.prop)) { arms[0].rotation.x = -1.0; arms[1].rotation.x = -1.2; c.head.rotation.x = .18; }
+    else { const pie = miniPie(); root.remove(pie); pie.scale.setScalar(1.2); hold(pie); }
+    return 'At work';
+  }
+  if (P0.bike) { arms[1].rotation.z = 2.7; return 'Waving from the bike path'; }
+  if (t.mower) { const mw = mower.clone(true); mw.position.set(0, 0, .75); mw.visible = true; g.add(mw); arms.forEach(arm => arm.rotation.x = -.9); return 'Mowing'; }
+  if (t.mail) { const letter = P(rbox(.2, .14, .02, .01), M.paper, .12, .62, .3, g); letter.rotation.y = -.3; arms[0].rotation.x = -1.2; return 'Out with the mail'; }
+  if (t.name === 'Tess') { const box = G(0, 0, .55, g); P(rbox(.9, .6, .4, .03), M.creamW, 0, .3, 0, box); P(rbox(1.0, .05, .5, .02), m('lemonTop', 0xf3cf72), 0, .62, 0, box); P(cyl(.07, .07, .2, 12), m('pitcher', 0xf6e58a, { op: .8 }), -.25, .75, 0, box); arms.forEach(arm => arm.rotation.x = -.9); return 'Selling lemonade'; }
+  if (/run/i.test(t.what || '')) { legs[0].rotation.x = .6; legs[1].rotation.x = -.6; arms[0].rotation.x = -.7; arms[1].rotation.x = .6; c.body.rotation.x = .12; return 'Out for a run'; }
+  if (t.bb?.t != null) { const b = bat.clone(true); b.visible = true; b.position.set(.2, .55, -.05); b.rotation.set(-.4, 0, -.5); g.add(b); arms[0].rotation.x = -2.2; arms[1].rotation.x = -2.0; return 'Up to bat'; }
+  if (t.bb || t.fan) { arms[0].rotation.x = -2.8; arms[1].rotation.x = -2.8; return t.fan ? 'Cheering' : 'Calling the game'; }
+  if (c.news) { c.news.visible = true; arms.forEach(arm => arm.rotation.x = -1.18); c.head.rotation.x = .2; return 'Reading the paper'; }
+  if (/fiddle|music/i.test(what)) { arms[0].rotation.x = -2.0; arms[1].rotation.x = -1.4; c.head.rotation.z = .2; return 'Playing a tune'; }
+  if (/garden/i.test(what)) { legs.forEach(l => l.rotation.x = -1.5); g.position.y = -.1; arms.forEach(arm => arm.rotation.x = -1.0); return 'Gardening'; }
+  if (/swing|slide/i.test(what)) { arms[0].rotation.x = -2.8; arms[1].rotation.x = -2.8; return 'Wheee'; }
+  arms[1].rotation.z = 2.7; return 'Saying hi';
+}
+function renderProfileModel(info) {
+  if (!PF.renderer) {
+    PF.renderer = new THREE.WebGLRenderer({ canvas: $('#pfCanvas'), antialias: true, alpha: true, preserveDrawingBuffer: true });
+    PF.renderer.setPixelRatio(1); PF.renderer.setSize(600, 600, false); PF.renderer.setClearColor(0x000000, 0);
+    PF.renderer.outputColorSpace = THREE.SRGBColorSpace; PF.renderer.toneMapping = THREE.ACESFilmicToneMapping; PF.renderer.toneMappingExposure = 1.08;
+    PF.scene = new THREE.Scene();
+    PF.scene.add(new THREE.HemisphereLight(0xfff0d8, 0x8a5a44, 1.25)); PF.scene.add(new THREE.AmbientLight(0xffffff, .25));
+    const key = new THREE.DirectionalLight(0xffe0c0, 2.4); key.position.set(2, 4, 3.5); PF.scene.add(key);
+    const rim = new THREE.DirectionalLight(0xcfe0f0, .7); rim.position.set(-3, 2, -2); PF.scene.add(rim);
+    PF.cam = new THREE.PerspectiveCamera(26, 1, .1, 50);
+  }
+  if (PF.model) { PF.scene.remove(PF.model); PF.model = null; }
+  const c = makeChar({ id: 'profile', ...info.look }); root.remove(c.g); c.g.position.set(0, 0, 0); c.g.rotation.y = .35;
+  PF.pose = poseModel(c, info); if (info.kid) c.g.scale.setScalar(.72);
+  PF.scene.add(c.g); PF.model = c.g;
+  // frame the whole character, hat included: center on half their height and back off in proportion
+  const sc = info.kid ? .72 : 1, top = (1.35 + (c.topH || 0)) * sc, center = top / 2 + .05, dist = top * 1.95 + .7;
+  PF.cam.position.set(dist * .27, center + .35, dist); PF.cam.lookAt(0, center, .1);
+  PF.renderer.render(PF.scene, PF.cam);
+}
+function profileLoop() {
+  if ($('#pfWrap').hidden || !PF.model) { PF.raf = 0; return; }
+  PF.t += 1 / 60; PF.model.rotation.y = .35 + Math.sin(PF.t * .8) * .25; PF.renderer.render(PF.scene, PF.cam);
+  PF.raf = requestAnimationFrame(profileLoop);
+}
+const personButton = n => `<button type="button" class="pname" data-person="${escapeCard(personKey(n))}">${escapeCard(n)}</button>`;
+function openProfile(key) {
+  const info = personInfo(key); if (!info) return false;
+  const wrap = $('#pfWrap'); if (wrap.hidden) PF.opener = document.activeElement;
+  renderProfileModel(info);
+  $('#pfCanvas').setAttribute('aria-label', `${info.name}: ${PF.pose.toLowerCase()}`);
+  $('#pfBody').innerHTML = `<h4 id="pfName">${escapeCard(info.name)}</h4><div class="sub">${escapeCard(info.kind === 'crew' ? `${info.crewLabel || 'Kitchen crew'} · ${PF.pose}` : PF.pose)}</div><dl>
+    <dt>Role</dt><dd>${escapeCard(info.role)}${info.agent ? `<br><code>${escapeCard(info.agent)}</code>` : ''}</dd>
+    <dt>Family</dt><dd>${info.family.length ? info.family.map(personButton).join('') : 'Lives on their own'}</dd>
+    <dt>Home</dt><dd>${escapeCard(info.home)}</dd>
+    <dt>Loves</dt><dd>${escapeCard(info.likes.slice(0, 3).map(k => LIKE_WORDS[k] || cap1(k)).join(', '))}</dd>
+    <dt>Now</dt><dd>${escapeCard(info.now || 'Somewhere in town')}</dd></dl>`;
+  wrap.hidden = false; wrap.dataset.person = key; tip.hidden = true; tipFor = null;
+  $('#pfClose').focus({ preventScroll: true });
+  if (!PF.raf) PF.raf = requestAnimationFrame(profileLoop);
+  return true;
+}
+function closeProfile() { const wrap = $('#pfWrap'); if (wrap.hidden) return; wrap.hidden = true; delete wrap.dataset.person; PF.opener?.focus?.({ preventScroll: true }); PF.opener = null; }
+$('#pfClose').onclick = closeProfile;
+$('#pfWrap').addEventListener('click', event => { if (event.target === $('#pfWrap')) closeProfile(); const b = event.target.closest('[data-person]'); if (b) openProfile(b.dataset.person); });
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('#pfWrap').hidden) { event.preventDefault(); closeProfile(); } });
+$('#shBody').addEventListener('click', event => { const b = event.target.closest('[data-person]'); if (b) openProfile(b.dataset.person); });
+tip.addEventListener('click', event => { const b = event.target.closest('[data-person]'); if (b) openProfile(b.dataset.person); });
 function actorCard(a) {
   if (a.kid) return kidCard(a.kid);
-  if (a.townie) {
+  if (a.townie && !a.townie.crew) {
     const top = a.needs && NEEDS.reduce((x, k) => a.needs[k] > a.needs[x] ? k : x, NEEDS[0]);
     const log = (a.log || []).filter(x => x !== a.task).slice(-3).reverse();
     const mood = a.needs && MOOD[clamp(Math.floor((1 - NEEDS.reduce((t, k) => t + a.needs[k], 0) / NEEDS.length) * 5), 0, 4)];
@@ -3366,8 +3721,8 @@ function tap(x, y) {
   ndc.set(x / W * 2 - 1, -(y / H) * 2 + 1); ray.setFromCamera(ndc, cam);
   const hits = ray.intersectObjects([...actors.filter(a => !a.hidden).map(a => a.c.hit), ...bikes.filter(b => b.g.visible).map(b => b.kid.hit), ...clickables], true);
   for (const h of hits) {
-    const a = h.object.userData.actor; if (a) { tipFor = a; showTip(actorCard(a), headPos(a)); return; }
-    const bk = h.object.userData.bike; if (bk) { tipFor = null; showTip(`<h5>${bk.name}</h5><div class="sub">Neighbor kid on a bike</div><dl><dt>Now</dt><dd>${bk.what}</dd></dl>`, () => tmpV.set(bk.pos.x, 1.35, bk.pos.z)); return; }
+    const a = h.object.userData.actor; if (a) { const key = personKeyOf(a); if (key && openProfile(key)) return; tipFor = a; showTip(actorCard(a), headPos(a)); return; }
+    const bk = h.object.userData.bike; if (bk && openProfile('town:' + bk.name)) return; if (bk) { tipFor = null; showTip(`<h5>${bk.name}</h5><div class="sub">Neighbor kid on a bike</div><dl><dt>Now</dt><dd>${bk.what}</dd></dl>`, () => tmpV.set(bk.pos.x, 1.35, bk.pos.z)); return; }
     let o = h.object; while (o && !o.userData.card) o = o.parent; if (o) { tipFor = null; const pt = h.point.clone(); pt.y += .5; showTip(o.userData.card(), () => pt); return; }
   }
   tip.hidden = true; tipFor = null; tipAnchor = null;
@@ -3380,27 +3735,102 @@ function openSheet(kind) {
   const btn = { crew: $('#bCrew'), orders: $('#bOrders'), log: $('#bLog') }[kind]; const was = !sheet.hidden && sheet.dataset.kind === kind;
   ['#bCrew', '#bOrders', '#bLog'].forEach(id => $(id).classList.remove('on'));
   if (was) { sheet.hidden = true; return; }
-  sheet.hidden = false; sheet.dataset.kind = kind; btn.classList.add('on'); tip.hidden = true;
-  if (kind === 'crew') {
-    $('#shTitle').textContent = 'Crew';
-    const active = new Set(actors.filter(a => !a.hidden && !a.isCustomer).map(a => a.meta.id));
-    $('#shBody').innerHTML = `<div class="legend"><span><i style="background:#3a3532"></i>Opus: charcoal jacket</span><span><i style="background:#f3ead6"></i>Sonnet: cream jacket</span><span><i style="background:#d8a23c"></i>Haiku: mustard apron</span></div>` +
-      `<div class="crew"><h4>Front of house</h4><div class="member"><span class="av" style="background:#fbf6ec;--skin:#c68863"></span><div><b>Chef Nico<span class="on-shift" title="On shift"></span></b><code>orchestrator</code></div><span class="tier t-opus">Opus</span></div><div class="member"><span class="av" style="background:#c9643f;--skin:#e0a982"></span><div><b>Sal<span class="on-shift" title="On shift"></span></b><code>box-it-up</code></div><span class="tier t-sonnet">Sonnet</span></div></div>` +
-      CREWS.map(([id, name, desc]) => `<div class="crew"><h4>${name}</h4><p class="cdesc">${desc}</p>${ROSTER.filter(r => r.crew === id).map(r => `<div class="member"><span class="av" style="background:${r.tier === 'opus' ? '#3a3532' : r.tier === 'sonnet' ? '#efe6d6' : '#d8a23c'}"></span><div><b>${r.name}${active.has(r.id) ? '<span class="on-shift" title="On shift"></span>' : ''}</b><code>${r.id.replace('#2', '')}</code></div><span class="tier t-${r.tier}">${TIER[r.tier]}</span></div>`).join('')}</div>`).join('');
-  } else if (kind === 'log') renderLogSheet();
+  sheet.hidden = false; sheet.dataset.kind = kind; delete sheet.dataset.detail; btn.classList.add('on'); tip.hidden = true;
+  if (kind === 'crew') renderPeopleSheet();
+  else if (kind === 'log') renderLogSheet();
   else renderOrdersSheet();
 }
-function renderOrdersSheet() {
-  {
-    $('#shTitle').textContent = 'Orders';
-    const row = (pn, t, sub, chip) => `<div class="orow"><span class="pn">${escapeCard(pn)}</span><div><b>${escapeCard(t)}</b><small>${escapeCard(sub)}</small></div>${chip}</div>`;
-    $('#shBody').innerHTML =
-      (cur ? `<div class="sh-now"><div class="eyebrow">Now baking · ${STEP[Math.min(cur.stage, 5)]}</div><h4>${nm(cur.o)} · ${escapeCard(cur.o.title)}</h4><ul class="slices">${cur.slices.map(sl => `<li><span class="sid">${sl.id}</span><span class="sname">${escapeCard(sl.name)}</span><span class="chip ${CHIP[sl.status][0]}">${sliceLabel(sl)}</span></li>`).join('')}</ul><p class="sh-meta">${Math.max(0, custQueue.length - 1)} more in line · ${parked.length} parked on the status board</p></div>` : '') +
-      custQueue.filter(c => c.order && (!cur || c.order !== cur.o)).map(c => row(nm(c.order), c.order.title, c.order.slice ? 'One slice, no split' : `${c.order.slices.length} slices`, '<span class="chip c-wait">Planned</span>')).join('') +
-      parked.map(p => row('Pie ' + p.n, p.title, p.why, '<span class="chip c-sent">86\'d</span>')).join('') +
-      [...served].reverse().map(s => row(s.slice ? 'Slice ' + s.sid : 'Pie ' + s.n, s.title, sceneMode === 'live' ? 'Completed in the plan' : s.slice ? 'Committed and pushed' : s.first ? 'Passed on the first inspection' : 'Sent back once, then passed', '<span class="chip c-pass">Served</span>')).join('');
-  }
+// ---------- the people sheet: Crew and Town tabs ----------
+// a tiny head-and-shoulders avatar from a character's look, shared by the Town tab and house cards
+function avatar(look, kid = false) {
+  const L = look || {}, hat = ['cap', 'sunhat', 'beanie'].includes(L.hair);
+  const hair = hex6(hat ? (L.hatC ?? L.hairC) : L.hair === 'baldGlasses' ? L.skin : L.hairC ?? 0x3b2a22);
+  return `<span class="hav${kid ? ' kid' : ''}" style="--sk:${hex6(L.skin ?? 0xf2c9a8)};--hr:${hair};--tp:${hex6(L.top ?? 0xfbf6ec)}"></span>`;
 }
+// everyone who lives in town (not the kitchen crew), each once, grouped by household
+function townFolk() {
+  const names = [...new Set([...TOWNIES.map(t => t.name), ...bikes.map(b => b.name)])];
+  const groups = HOMES.filter(e => !e.crew).map(e => ({ name: e.name, street: e.street, who: e.who.filter(n => names.includes(n)) }));
+  const housed = new Set(groups.flatMap(g => g.who)), loose = names.filter(n => !housed.has(n));
+  if (loose.length) groups.push({ name: 'Around town', street: 'Visitors and regulars', who: loose });
+  return groups.filter(g => g.who.length);
+}
+function townActivity(n) { const p = personOf(n); return !p ? '' : p.home ? 'At home' : p.status; }
+function renderPeopleSheet() {
+  $('#shTitle').textContent = 'People';
+  const tab = sheet.dataset.tab === 'town' ? 'town' : 'crew';
+  const active = new Set(actors.filter(a => !a.hidden && !a.isCustomer).map(a => a.meta.id));
+  const crewHtml = `<div class="legend"><span><i style="background:#3a3532"></i>Opus: charcoal jacket</span><span><i style="background:#f3ead6"></i>Sonnet: cream jacket</span><span><i style="background:#d8a23c"></i>Haiku: mustard apron</span></div>` +
+      `<div class="crew"><h4>Front of house</h4><div class="member"><span class="av" style="background:#fbf6ec;--skin:#c68863"></span><div><b><button type="button" class="pname" data-person="crew:orchestrator">Chef Nico</button><span class="on-shift" title="On shift"></span></b><code>orchestrator</code></div><span class="tier t-opus">Opus</span></div><div class="member"><span class="av" style="background:#c9643f;--skin:#e0a982"></span><div><b><button type="button" class="pname" data-person="crew:box-it-up">Sal</button><span class="on-shift" title="On shift"></span></b><code>box-it-up</code></div><span class="tier t-sonnet">Sonnet</span></div></div>` +
+    CREWS.map(([id, name, desc]) => `<div class="crew"><h4>${name}</h4><p class="cdesc">${desc}</p>${ROSTER.filter(r => r.crew === id).map(r => `<div class="member"><span class="av" style="background:${r.tier === 'opus' ? '#3a3532' : r.tier === 'sonnet' ? '#efe6d6' : '#d8a23c'}"></span><div><b><button type="button" class="pname" data-person="crew:${r.id}">${r.name}</button>${active.has(r.id) ? '<span class="on-shift" title="On shift"></span>' : ''}</b><code>${r.id.replace('#2', '')}</code></div><span class="tier t-${r.tier}">${TIER[r.tier]}</span></div>`).join('')}</div>`).join('');
+  const townHtml = `<div class="town">${townFolk().map(g => `<h4>${escapeCard(g.name)}<small>${escapeCard(g.street)}</small></h4>${g.who.map(n => { const p = personOf(n);
+    return `<div class="tperson">${avatar(p?.look, p?.kid)}<div><button type="button" class="pname" data-person="town:${escapeCard(n)}">${escapeCard(n)}</button><small data-activity="${escapeCard(n)}">${escapeCard(townActivity(n))}</small></div></div>`; }).join('')}`).join('')}</div>`;
+  const tabBtn = (id, label) => `<button type="button" role="tab" id="tab-${id}" aria-controls="panel-${id}" aria-selected="${tab === id}" tabindex="${tab === id ? 0 : -1}">${label}</button>`;
+  $('#shBody').innerHTML = `<div class="tabs" role="tablist" aria-label="People">${tabBtn('crew', 'Crew')}${tabBtn('town', 'Town')}</div>
+    <div role="tabpanel" id="panel-crew" aria-labelledby="tab-crew"${tab === 'crew' ? '' : ' hidden'}>${crewHtml}</div>
+    <div role="tabpanel" id="panel-town" aria-labelledby="tab-town"${tab === 'town' ? '' : ' hidden'}>${townHtml}</div>`;
+}
+function selectPeopleTab(tab, focus = true) {
+  sheet.dataset.tab = tab; renderPeopleSheet();
+  if (focus) $('#tab-' + tab).focus({ preventScroll: true });
+}
+$('#shBody').addEventListener('click', event => { const t = event.target.closest('[role="tab"]'); if (t && sheet.dataset.kind === 'crew') selectPeopleTab(t.id.slice(4)); });
+$('#shBody').addEventListener('keydown', event => {
+  const t = event.target.closest('[role="tab"]'); if (!t || sheet.dataset.kind !== 'crew') return;
+  const order = ['crew', 'town'], at = order.indexOf(t.id.slice(4));
+  const next = { ArrowRight: order[(at + 1) % 2], ArrowLeft: order[(at + 1) % 2], Home: 'crew', End: 'town' }[event.key];
+  if (next) { event.preventDefault(); selectPeopleTab(next); }
+});
+// keep the Town tab's activities current without rebuilding the list under the reader
+function refreshTownActivity() {
+  if (sheet.hidden || sheet.dataset.kind !== 'crew' || sheet.dataset.tab !== 'town') return;
+  for (const el of $('#shBody').querySelectorAll('[data-activity]')) { const text = townActivity(el.dataset.activity); if (el.textContent !== text) el.textContent = text; }
+}
+function renderOrdersSheet() {
+  $('#shTitle').textContent = 'Orders'; orderIndex.clear();
+  if (sheet.dataset.detail) { const pick = findOrder(sheet.dataset.detail); if (pick) return renderOrderDetail(pick); delete sheet.dataset.detail; }
+  const row = (o, state, sub, chip) => { orderIndex.set(orderKey(o), { o, state }); return `<button type="button" class="orow" data-order="${escapeCard(orderKey(o))}" aria-label="${escapeCard(`${nm(o)}, ${o.title}: open details`)}"><span class="pn">${escapeCard(nm(o))}</span><div><b>${escapeCard(o.title)}</b><small>${escapeCard(sub)}</small></div>${chip}</button>`; };
+  const nowStep = cur && sceneMode === 'live' ? STEP_WORD[cur.slices.find(sl => sl.status === 'cooking')?.step] || 'Line' : cur ? STEP[Math.min(cur.stage, 5)] : '';
+  if (cur) orderIndex.set(orderKey(cur.o), { o: cur.o, state: 'baking' });
+  $('#shBody').innerHTML =
+    (cur ? `<div class="sh-now"><div class="eyebrow">Now baking · ${escapeCard(nowStep)}</div><h4>${nm(cur.o)} · ${escapeCard(cur.o.title)}</h4><ul class="slices">${cur.slices.map(sl => `<li title="${escapeCard(taskNote(sl))}"><span class="sid">${sl.id}</span><span class="sname">${escapeCard(sl.name)}</span><span class="chip ${CHIP[sl.status][0]}">${sliceLabel(sl)}</span>${sl.live && sl.progress && sl.status === 'cooking' ? `<small>${escapeCard(taskNote(sl))}</small>` : ''}</li>`).join('')}</ul><p class="sh-meta">${Math.max(0, custQueue.length - 1)} more in line · ${parked.length} parked on the status board</p></div>` : '') +
+    custQueue.filter(c => c.order && (!cur || c.order !== cur.o)).map(c => row(c.order, 'planned', c.order.slice ? 'One slice, no split' : `${c.order.slices.length} slices`, '<span class="chip c-wait">Planned</span>')).join('') +
+    parked.map(p => `<div class="orow"><span class="pn">Pie ${p.n}</span><div><b>${escapeCard(p.title)}</b><small>${escapeCard(p.why)}</small></div><span class="chip c-sent">86'd</span></div>`).join('') +
+    [...served].reverse().map(s => row(s, 'served', sceneMode === 'live' ? s.date ? `Completed in the plan · ${s.date}` : 'Completed in the plan' : s.slice ? 'Committed and pushed' : s.first ? 'Passed on the first inspection' : 'Sent back once, then passed', '<span class="chip c-pass">Served</span>')).join('');
+}
+// every order row in the sheet opens its details; the index is rebuilt on each render so it follows the live line
+const orderIndex = new Map();
+const orderKey = o => o.key || nm(o);
+const sliceItem = (id, name, chip, note = '') => `<li><span class="sid">${escapeCard(id)}</span><span class="sname">${escapeCard(name)}</span>${chip}${note ? `<small>${escapeCard(note)}</small>` : ''}</li>`;
+function findOrder(key) {
+  if (cur && orderKey(cur.o) === key) return { o: cur.o, state: 'baking' };
+  const waiting = custQueue.find(c => c.order && orderKey(c.order) === key); if (waiting) return { o: waiting.order, state: 'planned' };
+  const done = served.find(s => orderKey(s) === key); return done ? { o: done, state: 'served' } : null;
+}
+// One pie in full: every slice with its status, and for a served pie the commits and date its checklist row states.
+function renderOrderDetail({ o, state }) {
+  const live = sceneMode === 'live' && Array.isArray(o.sliceRows);
+  const rows = live ? o.sliceRows : (o.slices || []).map((sl, i) => ({ number: o.slice ? o.sid : `${o.n}.${i + 1}`, title: sl[0], status: state === 'served' ? 'done' : 'open' }));
+  const curRow = id => cur && cur.o === o ? cur.slices.find(sl => sl.id === id) : null;
+  const chip = row => { const c = curRow(row.number); if (c) return `<span class="chip ${CHIP[c.status][0]}">${escapeCard(sliceLabel(c))}</span>`;
+    return row.status === 'done' ? '<span class="chip c-pass">Served</span>' : row.status === 'active' ? `<span class="chip c-cook">${escapeCard(STEP_WORD[row.step] || 'In progress')}</span>` : '<span class="chip c-wait">Waiting</span>'; };
+  const note = row => [row.summary, state === 'served' && row.commit ? `Commit ${row.commit}` : '', curRow(row.number) ? taskNote(curRow(row.number)) : row.progress && row.status !== 'done' ? taskNote(row) : ''].filter(Boolean).join(' · ');
+  const facts = state === 'served' ? [o.commit ? `<span>Commits <code>${escapeCard(o.commit)}</code></span>` : '', o.date ? `<span>Dated ${escapeCard(o.date)} in the plan</span>` : ''].filter(Boolean).join('') : '';
+  const label = { served: 'Served', planned: 'Planned', baking: 'Now baking' }[state];
+  $('#shBody').innerHTML = `<div class="od"><button type="button" class="sh-back" data-back>‹ All orders</button>
+    <div class="eyebrow">${escapeCard(nm(o))} · ${label}</div><h4>${escapeCard(o.title)}</h4>
+    ${o.summary || (!live && o.desc) ? `<p class="cdesc">${escapeCard(o.summary || o.desc)}</p>` : ''}
+    ${facts ? `<p class="facts">${facts}</p>` : ''}
+    <h5>${state === 'served' ? 'What it shipped' : 'Slices'}</h5>
+    ${rows.length ? `<ul class="slices">${rows.map(row => sliceItem(row.number, row.title, chip(row), note(row))).join('')}</ul>` : '<p class="cdesc">No slice list was recorded for this order.</p>'}</div>`;
+  $('#shBody').querySelector('[data-back]').focus({ preventScroll: true });
+}
+$('#shBody').addEventListener('click', event => {
+  const back = event.target.closest('[data-back]');
+  if (back) { delete sheet.dataset.detail; renderOrdersSheet(); $('#shBody').querySelector(`[data-order]`)?.focus({ preventScroll: true }); return; }
+  const pick = event.target.closest('[data-order]');
+  if (pick && sheet.dataset.kind === 'orders' && orderIndex.has(pick.dataset.order)) { sheet.dataset.detail = pick.dataset.order; renderOrdersSheet(); }
+});
 $('#bLog').onclick = () => openSheet('log'); $('#bCrew').onclick = () => openSheet('crew'); $('#bOrders').onclick = () => openSheet('orders'); $('#tracker').onclick = () => openSheet('orders');
 $('#shClose').onclick = () => { sheet.hidden = true; ['#bCrew', '#bOrders', '#bLog'].forEach(id => $(id).classList.remove('on')); };
 $('#bFit').onclick = () => animTo(FIT); $('#bHome').onclick = () => animTo(HOME);
@@ -3418,6 +3848,55 @@ const ledger = G(0, 0, 0, root, 'ledger');
   P(cyl(.008, .008, .2, 6), M.mustard, -1.1, .945, .35, ledger).rotation.z = Math.PI / 2; ledger.visible = false; }
 const REVIEW = [[0, 'Pie 4 came back once from the pass.'], [1, 'Proposal: contrast check before plating.'], [2, 'Approved. Add it to the house rules.'], [0, 'Pie 7 missed the org filter.'], [1, 'Every rollup slice gets a tenant test.'], [2, 'Good. Brief the line in the morning.'], [0, 'First-try rate is up this week.'], [2, 'Tell the crew. Nice work today.']];
 const CREW_OUT = () => [A.sal, A.ezra, A.bea, A.pip, A.pia, A.ollie, A.tay, A.inez, ...COOKS];
+// ---------- off duty in town (live only): crew whose agent is not running live their own day around town ----------
+// They use the same brain as every neighbor (a home above a shop, needs, likes). When their agent starts they run to the
+// kitchen by the sidewalks and crosswalks (the same right-of-way rules as everyone), and head back out once they are done.
+const CREW_LIKES = {
+  implementer: { diner: 2, hardware: 1.5, cafe: 1 }, 'implementer#2': { bakery: 1.5, diner: 1.5, bench: .8 }, 'component-crafter': { florist: 2, cafe: 1.5, window: 1 },
+  'state-illustrator': { gazebo: 1.5, fountain: 1.5, cinema: 1 }, plater: { bakery: 2, cafe: 1, pond: 1 }, 'checklist-curator': { bench: 1.5, cafe: 1.5, chat: 1 },
+  'rules-loader': { bench: 2, statue: 1, listen: 1 }, discovery: { wander: 1.5, pond: 1, icecream: 1 }, 'slice-tester': { icecream: 2, bakery: 1.5, diner: 1 },
+  'slice-verifier': { bank: 1, florist: 1.5, bench: 1 }, 'local-gates-runner': { hardware: 2, diner: 1 }, 'box-it-up': { chat: 1.5, cafe: 1, window: 1 },
+  orchestrator: { cafe: 1.5, florist: .8, chat: 1 },
+};
+const TOWN_CREW = () => [A.ezra, A.bea, A.pip, A.ren, A.kit, A.lu, A.pia, A.tay, A.inez];
+const BACK = [-4.95, -5.4], BACK_IN = [[-4.95, -4.2], DOOR];
+const crewHome = a => homeFor(a.meta.name);
+function joinTown(a) {
+  const home = crewHome(a);
+  a.townie = { name: a.meta.name, what: 'Off duty around town', look: a.look, brain: { start: home.via, likes: { ...(CREW_LIKES[a.meta.id] || {}) } }, crew: true };
+  a.home = home; a.members = []; a.pace = 1.15; a.speed = a.pace; a.gen ??= 0; a.isTownCrew = true; a.task = 'Off duty around town';
+  a.needs ??= Object.fromEntries(NEEDS.map(k => [k, .25 + rnd() * .45]));
+  if (!townies.includes(a)) townies.push(a);
+  if (!BRAIN.includes(a)) BRAIN.push(a);
+  if (a.hidden) { a.node = home.via; brain(a); return; }
+  // still in the kitchen: out through the back door to the Elm Street sidewalk first
+  const gen = ++a.gen;
+  a.walk([...exitRoute(a).slice(0, -1), DOOR, BACK_IN[0], BACK]).then(() => { if (a.gen === gen && a.isTownCrew) { a.node = 'ENW'; brain(a); } });
+}
+function dropTownCrew(a) {
+  if (!a.isTownCrew) return;
+  a.gen = (a.gen || 0) + 1; release(a); a.place = null; a.pending = null; a.pose = null; a.lift = 0; a.gl = null; a.rock = false; a.follow = null;
+  a.lingerUntil = 0; a.chatting = null; a.detour = null; a.exploring = false; if (a.carry) { a.carry.visible = false; a.carry = null; }
+  for (const list of [townies, BRAIN]) { const at = list.indexOf(a); if (at >= 0) list.splice(at, 1); }
+  delete a.townie; a.isTownCrew = false; a.atHome = false; a.speed = 1.55;
+}
+// called the moment a town crew member's agent starts: the run back to work, from home or from wherever they are
+function runToWork(a) {
+  const inside = a.hidden, door = a.place?.door || a.home?.door; dropTownCrew(a);
+  if (inside && door) { a.pos.set(door[0], .06, door[1] + .15); a.show(true); a.sync(); }
+  a.speed = 3.2;
+  return [...navPts(nearNode(a.pos.x, a.pos.z), 'ENW'), BACK, ...BACK_IN];
+}
+function syncTownCrew() {
+  if (sceneMode !== 'live') return;
+  if (livePhase !== 'open' || tod !== 'day') return;
+  for (const a of TOWN_CREW()) {
+    if (a.isTownCrew || claimedByAgent(a) || phaseActors.has(a.meta.id)) continue;
+    // someone who just finished stays a moment before heading out; their idle timer sends them
+    if ([...liveAssignments.values()].some(entry => entry.actor === a && !entry.active && !entry.offDuty)) continue;
+    joinTown(a);
+  }
+}
 function exitRoute(a) {
   const x = a.pos.x, z = a.pos.z;
   if (z < -1.9) return [[x, -2.6], [-4.2, -2.75], DOOR];
@@ -3530,7 +4009,8 @@ async function boardMeeting(gen) {
 let night = 0, nightGoal = 0, dawnK = 0, dawnGoal = 0;
 function setTod(mode, fromSnapshot = false) {
   if (sceneMode === 'live' && !fromSnapshot) return;
-  if (mode === tod) return; const was = tod; tod = mode; nightGoal = { dawn: 0, day: 0, night: 1, late: 1.35 }[mode]; dawnGoal = mode === 'dawn' ? 1 : 0;
+  if (mode === tod) return; const was = tod; tod = mode;
+  if ((mode === 'dawn' || mode === 'day') && (was === 'night' || was === 'late')) bbNewDay(); nightGoal = { dawn: 0, day: 0, night: 1, late: 1.35 }[mode]; dawnGoal = mode === 'dawn' ? 1 : 0;
   if (sceneMode === 'demo') {
     if (mode === 'late') closeShop(); else if (mode === 'dawn') prepShop(); else if (was === 'late' || was === 'dawn') openShop();
     chefRounds();
@@ -3553,6 +4033,7 @@ function startAtDawn() {
 const castHomes = new Map([...Object.values(A), ...BOARD].map(a => [a, { pos: a.pos.clone(), goal: a.goalYaw, hidden: !!a.hidden }]));
 const castActors = new Map([...castHomes.keys()].map(a => [a.meta.id, a]));
 const liveAssignments = new Map(), liveSkills = new Map(), castEvents = [];
+let liveSnapshot = null;
 let livePhase = null, liveSessionKey = null, reviewActive = false, phaseActorGen = 0;
 const phaseActors = new Map();
 const constructionWorkers = new Map();
@@ -3573,7 +4054,9 @@ function cancelActor(a) {
   a.doing('Off duty', 'idle');
 }
 function clearAssignments() {
-  phaseActorGen++; phaseActors.clear(); reviewActive = false; livePhase = null; liveSessionKey = null;
+  phaseActorGen++; phaseActors.clear(); ambient.clear(); liveVerifying = false; reviewActive = false; livePhase = null; liveSessionKey = null;
+  for (const a of castActors.values()) clearWorkTag(a);
+  for (const a of TOWN_CREW()) dropTownCrew(a);
   for (const entry of constructionWorkers.values()) { cancelActor(entry.actor); entry.actor.show(false); }
   constructionWorkers.clear();
   if (shopper.actor) { cancelActor(shopper.actor); shopper.actor.show(false); }
@@ -3605,10 +4088,21 @@ function clearDemo() {
   if (!sheet.hidden) { sheet.hidden = true; ['#bCrew', '#bOrders', '#bLog'].forEach(id => $(id).classList.remove('on')); }
   tip.hidden = true; tipFor = null;
 }
+// A real project drives the clock: the time buttons only work in the sample shop.
+const TIME_LOCK = 'Time follows the real session';
+function lockTime(on) {
+  const group = $('#todGroup'); group.classList.toggle('locked', on);
+  if (on) { group.title = TIME_LOCK; group.setAttribute('aria-describedby', 'todLock'); } else { group.removeAttribute('title'); group.removeAttribute('aria-describedby'); }
+  ['bDawn', 'bDay', 'bNight', 'bLate'].forEach(id => {
+    const button = $('#' + id); button.dataset.title ??= button.title; button.dataset.label ??= button.getAttribute('aria-label');
+    button.disabled = on; button.title = on ? TIME_LOCK : button.dataset.title;
+    button.setAttribute('aria-label', on ? `${button.dataset.label}. ${TIME_LOCK}` : button.dataset.label);
+  });
+}
 function demoDriver() {
   if (sceneMode === 'demo') return;
   clearAssignments(); clearDemo(); sceneMode = 'demo';
-  ['bDawn', 'bDay', 'bNight', 'bLate'].forEach(id => { $('#' + id).disabled = false; });
+  lockTime(false);
   for (const [a, home] of castHomes) { a.pos.copy(home.pos); a.goalYaw = home.goal; a.show(!home.hidden); a.sync(); }
   served = [...SERVED0]; parked = [{ n: 6, title: 'Stripe webhooks', why: 'Needs STRIPE_WEBHOOK_SECRET in .env' }];
   for (let i = 0; i < 3; i++) addServed();
@@ -3618,7 +4112,7 @@ function demoDriver() {
 }
 function startLive() {
   sceneMode = 'live'; clearAssignments(); clearDemo();
-  ['bDawn', 'bDay', 'bNight', 'bLate'].forEach(id => { $('#' + id).disabled = true; $('#' + id).title = 'Lighting follows the live kitchen phase'; });
+  lockTime(true);
   A.chef.pos.set(1.2, .06, 1.6); A.chef.show(true); A.chef.sync(); A.chef.doing('Leading the session', 'idle');
 }
 function castActor(character) {
@@ -3651,12 +4145,16 @@ function agentOn(event) {
   if (entry?.active) {
     entry.row = event.row;
     if (sceneOwnsActor(entry.actor)) return;
+    workTag(entry.actor, event.row);
     if (entry.actor.mode !== 'walk') entry.actor.doing(event.row.label || event.character.type, 'work');
     else entry.actor.task = event.row.label || event.character.type;
     return;
   }
   const actor = castActor(event.character);
+  // a regular on ambient duty drops it the moment their real agent starts
+  if (ambient.has(actor.meta.id)) releaseAmbient(actor);
   for (const [key, old] of liveAssignments) if (old.actor === actor) { clearTimeout(old.idleTimer); old.version++; liveAssignments.delete(key); }
+  const townRoute = actor.isTownCrew && !sceneOwnsActor(actor) ? runToWork(actor) : null;
   const wasHidden = actor.hidden, owned = sceneOwnsActor(actor);
   if (!owned) cancelActor(actor);
   entry = { ...event, actor, version: 1, active: true, offDuty: false };
@@ -3664,33 +4162,39 @@ function agentOn(event) {
   liveAssignments.set(event.key, entry);
   if (owned) return;
   if (wasHidden) actor.pos.set(DOOR[0], .06, DOOR[1]);
-  actor.show(true); actor.sync(); actor.task = event.row.label || event.character.type;
+  actor.show(true); actor.sync(); actor.task = event.row.label || event.character.type; workTag(actor, event.row);
   const version = entry.version;
   let path = [[station[0], station[1]]];
   if (event.character.crew === 'line') path = [[-4.2, -2.75], [station[0], station[1]]];
   if (event.character.type === 'discovery') path = [[1.35, -2.75], [1.75, -2.6], [1.75, -.82], [-3.25, -.82]];
   if (event.character.crew === 'menu') path = [[-4.2, -.85], [-5.3, -.6], [station[0], station[1]]];
+  if (townRoute) { path = [...townRoute, ...path]; say(actor, 'On my way!', 1.8); }
   actor.walk(path, station[2]).then(() => {
+    actor.speed = 1.55;
     if (sceneMode === 'live' && entry.active && entry.version === version && !sceneOwnsActor(actor)) actor.doing(entry.row.label || event.character.type, 'work');
   });
-  feed(`${event.character.name}: ${event.row.label || event.character.type}`);
+  const words = { character: event.character, row: event.row, pies: liveSnapshot?.pies };
+  feed(window.kitchenWords.start(words), window.kitchenWords.pieOf(words));
 }
 function agentOff(event) {
   const entry = liveAssignments.get(event.key); if (!entry) return;
-  entry.active = false; entry.version++;
+  entry.active = false; entry.version++; clearWorkTag(entry.actor);
   if (sceneOwnsActor(entry.actor)) return;
   cancelActor(entry.actor);
   const line = event.ok ? 'Done' : 'Sent back';
-  entry.actor.doing(line, 'idle'); say(entry.actor, line); feed(`${entry.character.name}: ${line}`);
-  const version = entry.version;
+  entry.actor.doing(line, 'idle'); say(entry.actor, line);
+  const words = { character: entry.character, row: entry.row, ok: event.ok, pies: liveSnapshot?.pies };
+  feed(window.kitchenWords.finish(words), window.kitchenWords.pieOf(words));
+  const version = entry.version, toTown = TOWN_CREW().includes(entry.actor);
   entry.idleTimer = setTimeout(() => {
     if (sceneMode !== 'live' || entry.active || entry.version !== version || sceneOwnsActor(entry.actor)) return;
     const actor = entry.actor;
+    if (toTown && livePhase === 'open' && tod === 'day') { entry.offDuty = true; joinTown(actor); return; }
     actor.stash = stashFor(actor, exitRoute(actor)); actor.task = 'Heading off duty';
     actor.walk(actor.stash.route).then(() => {
       if (sceneMode === 'live' && !entry.active && entry.version === version && !sceneOwnsActor(actor)) { actor.show(false); actor.doing('Off duty', 'idle'); entry.offDuty = true; }
     });
-  }, 90000);
+  }, toTown ? 12000 : 90000);
 }
 function castEvent(type, event) {
   castEvents.push({ type, key: event.key, aid: event.row.aid, name: event.row.name, ok: event.ok });
@@ -3785,6 +4289,7 @@ function walkShopper() {
   });
 }
 function updateConstruction(dt) {
+  updateAmbient(dt);
   if (shopper.active && shopper.arrived) {
     shopper.wait -= dt;
     if (shopper.wait <= 0) { shopper.index = (shopper.index + 1) % PUBLIC_ROUTE.length; walkShopper(); }
@@ -3804,6 +4309,61 @@ function phaseActor(actor, station, task) {
       actor.doing(task, 'inspect');
   });
 }
+// ---------- the base crew: while a pie is open, a few regulars stay on duty doing ambient work at their stations ----------
+// They are the backdrop. Agents actually running get the gold work tag and the 'work' animation; the regulars never do,
+// except Ollie, who runs the oven whenever a slice is being verified (the slice-verifier or the full suite).
+const BASE_CREW = () => [
+  { actor: A.dom, spots: [[SX[3], -2.45, F.S], [SX[2], -2.45, F.S]], tasks: ['Prepping toppings at the line', 'Wiping down the line'] },
+  { actor: A.ollie, spots: [[4.55, -1.55, -2.3], [3.45, -1.65, F.N]], tasks: ['Keeping the oven hot', 'Feeding the oven'] },
+  { actor: A.sal, spots: [[-3.1, 3.25, F.S], [-2.4, 2.9, F.S]], tasks: ['Minding the window', 'Tidying the counter'] },
+];
+const ambient = new Map();
+let liveVerifying = false;
+const verifyingIn = snapshot => (snapshot.active || []).some(row => /:(slice-verifier|local-gates-runner)$/.test(row.type || '') || /\bS\d+\.\d+\s+verify\b/i.test(row.label || ''));
+function claimedByAgent(actor) { return [...liveAssignments.values()].some(entry => entry.active && entry.actor === actor) || constructionWorkers.has(actor.meta.id) || (shopper.active && shopper.actor === actor); }
+function releaseAmbient(actor) { const entry = ambient.get(actor.meta.id); if (!entry) return; ambient.delete(actor.meta.id); if (phaseActors.get(actor.meta.id) === entry) phaseActors.delete(actor.meta.id); cancelActor(actor); }
+function ambientGo(entry) {
+  const { actor } = entry, spot = entry.spots[entry.at], verify = actor === A.ollie && liveVerifying;
+  const task = verify ? 'Running the full suite in the oven' : entry.tasks[entry.at], version = ++entry.version;
+  entry.task = task; entry.arrived = false; actor.task = task;
+  actor.walk([[spot[0], spot[1]]], spot[2]).then(() => {
+    if (sceneMode !== 'live' || ambient.get(actor.meta.id) !== entry || entry.version !== version) return;
+    entry.arrived = true; entry.dwell = verify ? 1e9 : 10 + rnd() * 8; actor.doing(task, verify ? 'work' : 'inspect');
+  });
+}
+function syncBaseCrew(snapshot) {
+  if (sceneMode !== 'live') return;
+  const open = livePhase === 'open' && !reviewActive;
+  const verifying = open && verifyingIn(snapshot);
+  if (verifying !== liveVerifying) { liveVerifying = verifying; const ollie = ambient.get(A.ollie.meta.id); if (ollie) { ollie.at = 0; ambientGo(ollie); } }
+  ovenOn = verifying;
+  for (const member of BASE_CREW()) {
+    const { actor } = member, id = actor.meta.id, entry = ambient.get(id);
+    if (!open || claimedByAgent(actor)) { if (entry) { ambient.delete(id); if (phaseActors.get(id) === entry) phaseActors.delete(id); } continue; }
+    if (entry) continue;
+    const last = [...liveAssignments.values()].find(item => item.actor === actor);
+    if (last) { clearTimeout(last.idleTimer); last.version++; }
+    cancelActor(actor); if (actor.hidden) { actor.pos.set(DOOR[0], .06, DOOR[1]); actor.show(true); actor.sync(); }
+    const fresh = { ...member, ambient: true, actor, at: 0, version: 0, gen: phaseActorGen, task: member.tasks[0], arrived: false, dwell: 0 };
+    ambient.set(id, fresh); phaseActors.set(id, fresh); ambientGo(fresh);
+  }
+}
+function updateAmbient(dt) {
+  for (const entry of ambient.values()) {
+    if (!entry.arrived) continue;
+    entry.dwell -= dt;
+    if (entry.dwell <= 0) { entry.at = (entry.at + 1) % entry.spots.length; ambientGo(entry); }
+  }
+}
+// the gold tag over an agent that is actually running: who, and the step and slice from its label
+function workTag(actor, row) {
+  const tag = /\bS(\d+\.\d+)\s+([a-z]+)\b/i.exec(row?.label || ''), step = STEP_WORD[tag?.[2]?.toLowerCase()];
+  const text = `${actor.meta.name} · ${step ? `${step} ${tag[1]}` : 'Working'}`;
+  if (!actor.workTagO) { const el = document.createElement('div'); el.className = 'tag active'; actor.workTagO = overlay(el, () => tmpV.set(actor.pos.x, actor.pos.y + 1.75 + (actor.c.topH || 0), actor.pos.z)); }
+  actor.workTagO.el.textContent = text; actor.workTagO.on = !actor.hidden;
+}
+function clearWorkTag(actor) { if (actor.workTagO) actor.workTagO.on = false; }
+
 function syncLivePhase(snapshot) {
   if (sceneMode !== 'live') return;
   const session = snapshot.session ? JSON.stringify([snapshot.project.root, snapshot.session.id, snapshot.session.startedAt]) : snapshot.project.root;
@@ -3814,7 +4374,7 @@ function syncLivePhase(snapshot) {
   if (changed) {
     phaseActorGen++; chefGen++;
     for (const { actor } of phaseActors.values()) { cancelActor(actor); if (actor !== A.chef) actor.show(false); }
-    phaseActors.clear(); livePhase = next; liveSessionKey = session; reviewActive = reviewing;
+    phaseActors.clear(); ambient.clear(); livePhase = next; liveSessionKey = session; reviewActive = reviewing;
     if (next === 'dawn') startAtDawn();
     else if (next === 'open') { setTod('day', true); openShop(); setSign(true); }
     else { closeShop(); setTod('night', true); setSign(false); }
@@ -3836,6 +4396,7 @@ function syncLivePhase(snapshot) {
 }
 const castDriver = window.createKitchenCastDriver({ roster: { ...byId, 'box-it-up': byId.lead }, emit: castEvent, demo: demoDriver, live: startLive });
 function liveDriver(snapshot) {
+  liveSnapshot = snapshot;
   buildDriver.apply(snapshot);
   const castSnapshot = snapshot.project.setup === 'none' && setupWork(snapshot)
     ? { ...snapshot, project: { ...snapshot.project, setup: 'partial' } } : snapshot;
@@ -3843,7 +4404,7 @@ function liveDriver(snapshot) {
   for (const [id, entry] of phaseActors) if ((snapshot.active || []).some(row => row.type === `bytheslice:${id}`)) {
     phaseActors.delete(id); cancelActor(entry.actor);
   }
-  castDriver.apply(castSnapshot); syncBuildCrews(snapshot); syncLivePhase(snapshot); syncOrderLine(snapshot);
+  castDriver.apply(castSnapshot); syncBuildCrews(snapshot); syncLivePhase(snapshot); syncBaseCrew(snapshot); syncTownCrew(); syncOrderLine(snapshot);
 }
 window.liveDriver = liveDriver;
 Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
@@ -3867,8 +4428,28 @@ Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
     position: shopper.actor ? [shopper.actor.pos.x, shopper.actor.pos.z] : null, mode: shopper.actor?.mode || null }; },
   get actors() { return [...liveAssignments.values()].map(entry => ({ key: entry.key, aid: entry.row.aid, type: entry.row.type,
     character: entry.character.id, name: entry.actor.meta.name, crew: entry.actor.meta.crew, task: entry.actor.task,
-    active: entry.active, offDuty: entry.offDuty, hidden: !!entry.actor.hidden, mode: entry.actor.mode,
+    active: entry.active, offDuty: entry.offDuty, hidden: !!entry.actor.hidden, mode: entry.actor.mode, tag: entry.actor.workTagO?.on ? entry.actor.workTagO.el.textContent : null,
     position: [entry.actor.pos.x, entry.actor.pos.z], renderedPosition: [entry.actor.g.position.x, entry.actor.g.position.z], station: [...entry.station] })); },
+  get baseCrew() { return BASE_CREW().map(({ actor }) => ({ character: actor.meta.id, name: actor.meta.name, ambient: ambient.has(actor.meta.id),
+    task: actor.task, mode: actor.mode, hidden: !!actor.hidden, position: [actor.pos.x, actor.pos.z], tag: actor.workTagO?.on ? actor.workTagO.el.textContent : null })); },
+  get oven() { return { on: ovenOn, verifying: liveVerifying }; },
+  get profile() { const wrap = $('#pfWrap'); return wrap.hidden ? null : { person: wrap.dataset.person, name: $('#pfName')?.textContent, pose: PF.pose }; },
+  screenOf(target) {
+    const house = /^house:(\d+)$/.exec(target), obj = house ? HS(+house[1]).g : null;
+    const a = obj ? null : [...castActors.values(), ...townies].find(q => !q.hidden && (q.townie?.name === target || q.meta?.name === target));
+    if (!obj && !a) return null;
+    if (obj) new THREE.Box3().setFromObject(obj).getCenter(tmpV); else tmpV.set(a.pos.x, a.pos.y + .7 * (a.g.scale.y || 1), a.pos.z);
+    tmpV.project(cam); const r = glc.getBoundingClientRect(); return { x: r.left + (tmpV.x * .5 + .5) * r.width, y: r.top + (-tmpV.y * .5 + .5) * r.height };
+  },
+  get townPopulation() { return new Set([...TOWNIES.map(t => t.name), ...bikes.map(b => b.name)]).size; },
+  get townCrew() { return TOWN_CREW().map(a => ({ name: a.meta.name, character: a.meta.id, inTown: !!a.isTownCrew, hidden: !!a.hidden, task: a.task, mode: a.mode,
+    speed: a.speed, x: a.pos.x, z: a.pos.z, home: crewHome(a).door, saying: a._say?.el.textContent || null, inKitchen: a.pos.x > -5.2 && a.pos.x < 5.2 && a.pos.z > -4.2 && a.pos.z < 4.2 })); },
+  get ballgame() { return { status: GM.status, game: GM.no, last: GM.last,
+    people: [...BBALL, ...FANS].map(a => ({ name: a.townie.name, role: a.townie.bb?.coach != null ? 'coach' : a.townie.bb?.ump ? 'umpire' : a.townie.fan ? 'fan' : 'player',
+      hidden: !!a.hidden, homeAfterGame: !!a.homeAfterGame, brain: !!a.townie.brain, task: a.task, x: a.pos.x, z: a.pos.z })) }; },
+  finishGame() { if (GM.status === 'live') endGame(); return GM.status; },
+  get lemonade() { const stand = root.getObjectByName('lemonadeStand'), box = new THREE.Box3().setFromObject(stand.children[0]), tess = townies.find(a => a.townie.name === 'Tess');
+    return { counter: { x: [box.min.x, box.max.x], z: [box.min.z, box.max.z] }, sidewalkZ: HS(4).gate[1], tess: { x: tess.pos.x, z: tess.pos.z, yaw: tess.goalYaw, task: tess.task, hidden: !!tess.hidden, mode: tess.mode } }; },
   get chef() { return { name: A.chef.meta.name, task: A.chef.task, hidden: !!A.chef.hidden, mode: A.chef.mode, position: [A.chef.pos.x, A.chef.pos.z] }; },
   get orders() { return { ready: liveLineReady, queue: custQueue.map((customer, index) => ({ key: customer.order.key || nm(customer.order),
     label: nm(customer.order), title: customer.order.title, single: !!customer.order.slice, added: !!customer.added,
@@ -3884,6 +4465,15 @@ Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
   get demoCustomers() { return actors.filter(a => a.isCustomer && a.order && !a.liveOrder && !a.hidden).length; },
   get demoPies() { return shelfPies.filter(object => object.userData.orderSource !== 'live').length + root.children.filter(object => ['pizza', 'box', 'token'].includes(object.name) && object.userData.orderSource !== 'live').length; },
   get events() { return castEvents.map(event => ({ ...event })); },
+  // Test seam: advance the world without rendering, and read the street for the traffic soak.
+  step(dt = .1) { simulate(dt, simT * 1000); return simT; },
+  pause(on = true) { paused = !!on; return paused; },
+  look(tx, tz, zoom) { view.anim = null; view.vx = view.vz = 0; Object.assign(view, { tx, tz, zoom }); applyCam(); },
+  get traffic() { return { simT, tod,
+    cars: cars.map((c, i) => ({ i, key: c.key, axis: c.ln.axis, dir: c.ln.dir, lane: c.ln.lane, pos: c.pos, v: c.v, active: c.active !== false, freed: c.release > simT, inBox: !!c.inBox })),
+    people: actors.filter(a => !a.hidden && a.g.visible).map((a, i) => ({ i: actors.indexOf(a), name: a.townie?.name || a.meta?.name || 'person',
+      x: a.pos.x, z: a.pos.z, mode: a.mode, path: a.path.length, curb: !!a.waitingCurb, why: a.waitingCurb ? a.why : '', pass: a.curbPass > simT, light: Math.round(simT % 48), task: a.task, next: a.path.slice(0, 3).map(p => [+p.x.toFixed(2), +p.z.toFixed(2)]) })),
+    bikes: bikes.filter(b => b.mode !== 'away').map(b => ({ name: b.name, x: b.pos.x, z: b.pos.z, v: b.v ?? b.speed })) }; },
 }) });
 
 // ---------- frame loop ----------
@@ -3892,20 +4482,25 @@ const RATE = { opus: 0.0042, sonnet: 0.0014, haiku: 0.0004 }, TOK = { opus: 380,
 const cDay = new THREE.Color(0x9fb27a), cNight = new THREE.Color(0x4a5a52), cLate = new THREE.Color(0x323e3e), cTmp = new THREE.Color(), lawnNight = new THREE.Color(0x66765a), lawnLate = new THREE.Color(0x4c5a48);
 // dawn: a low, warm sun with long shadows, a peach sky wash, street lamps still on and the kitchen lit inside
 const cDawn = new THREE.Color(0x9a9c78), lawnDawn = new THREE.Color(0x91a26f), SUN_DAY = new THREE.Color(0xffc285), SUN_DAWN = new THREE.Color(0xff9466), SKY_DAY = new THREE.Color(0xfff0d8), SKY_DAWN = new THREE.Color(0xffc4b8), GR_DAY = new THREE.Color(0x8a5a44), GR_DAWN = new THREE.Color(0x5a5480), FILL_DAY = new THREE.Color(0xcfe0f0), FILL_NIGHT = new THREE.Color(0x8fa6d8), FILL_DAWN = new THREE.Color(0xa8b2e8), dawnEl = $('#dawn');
-function frame(now) {
-  requestAnimationFrame(frame);
-  if (!glc.width || !glc.height || W < 2 || H < 2) { resize(); last = now; return; }
-  const rdt = clamp((now - last) / 1000, 0, .05); last = now;
-  const dt = paused ? 0 : rdt * speed; simT += dt;
+// one step of the world clock: timers, the town, the line and every actor (rendering stays in frame)
+function simulate(dt, now) {
+  simT += dt;
   for (let i = waits.length - 1; i >= 0; i--) if (simT >= waits[i].at) { const w = waits.splice(i, 1)[0]; w.r(); }
   if (!closed) { svcT += dt; for (let i = swaits.length - 1; i >= 0; i--) if (svcT >= swaits[i].at) { const w = swaits.splice(i, 1)[0]; w.r(); } }
   if (!closed) for (let i = tweens.length - 1; i >= 0; i--) { const tw = tweens[i]; tw.t += dt; const k = Math.min(1, tw.t / tw.dur); tw.obj.position.lerpVectors(tw.from, tw.to, k); tw.obj.position.y += Math.sin(k * Math.PI) * .25; if (k >= 1) { tweens.splice(i, 1); tw.r(); } }
-  updateBuildPieces(rdt); updateConstruction(dt);
+  updateConstruction(dt);
   townUpdate(dt, now); lineUpdate();
   for (const a of actors) {
     a.update(dt);
     if (sceneMode === 'demo' && !a.isCustomer && !a.hidden && a.mode === 'work') { cost += RATE[a.meta.tier] * dt; a.tokens += TOK[a.meta.tier] * dt * 4; }
   }
+}
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (!glc.width || !glc.height || W < 2 || H < 2) { resize(); last = now; return; }
+  const rdt = clamp((now - last) / 1000, 0, .05); last = now;
+  const dt = paused ? 0 : rdt * speed;
+  updateBuildPieces(rdt); simulate(dt, now);
   if (pizza) pizza.wedges.forEach(wd => { const s = wd.w.scale.x, t = wd.target ?? .001; if (Math.abs(s - t) > .001) wd.w.scale.setScalar(lerp(s, t, Math.min(1, dt * 8))); });
   // oven glow + night
   ovenHeat = lerp(ovenHeat, ovenOn && !closed ? 1 : 0, Math.min(1, rdt * 1.2));
@@ -3935,6 +4530,7 @@ function frame(now) {
   if (!tip.hidden && tipFor && Math.floor(now / 500) !== Math.floor((now - rdt * 1000) / 500)) { if (tipFor.hidden) { tip.hidden = true; tipFor = null; } else showTip(actorCard(tipFor)); }
   placeTip();
   if (Math.floor(now / 250) !== Math.floor((now - rdt * 1000) / 250)) renderStats();
+  if (Math.floor(now / 1000) !== Math.floor((now - rdt * 1000) / 1000)) refreshTownActivity();
 }
 resize(); renderStats();
 document.fonts && document.fonts.ready.then(() => { ticketTex.redraw(); chalkTex.redraw(); afterFonts.forEach(f => f()); });

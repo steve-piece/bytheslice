@@ -132,11 +132,12 @@ async function sceneAdapters() {
   }));
   const timers = [];
   const context = vm.createContext({
-    window: { dispatchEvent() {} }, sceneMode: 'live', byId, castHomes: new Map(),
+    window: { dispatchEvent() {}, kitchenWords: { start: () => '', finish: () => '', pieOf: () => null } }, sceneMode: 'live', byId, castHomes: new Map(),
     castActors: new Map(actors.map(actor => [actor.meta.id, actor])),
     buildPieces: new Map(names.map(name => [name, { state: 'gutted', install: false }])),
     STATION: [{ name: 'Make line' }], SX: [0], F: { N: 0, S: 1, W: 2, E: 3 }, DOOR: [0, 0],
     root: { remove() {} }, OV: [], feed() {}, say() {}, clearTimeout() {},
+    STEP_WORD: {}, TOWN_CREW: () => [], dropTownCrew() {}, document: { createElement: () => ({}) }, overlay: el => ({ el, on: true }), tmpV: { set() { return this; } },
     setTimeout(callback) { timers.push(callback); return timers.length; },
   });
   vm.runInContext(code, context);
