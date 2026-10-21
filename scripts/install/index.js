@@ -48,6 +48,8 @@ function installPluginMode({ repoRoot, args, targets, pluginMetadata }) {
       "skills",
       "commands",
       "mcp",
+      // The Pass ledger fold: the kitchen server's progress tab and the mod both run it.
+      "scripts/ledger-summary.js",
       "hooks",
       ...(target.host === "claude" ? ["mod"] : []),
       "assets/brand",
