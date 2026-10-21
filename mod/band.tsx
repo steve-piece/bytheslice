@@ -1,5 +1,5 @@
 // mod/band.tsx
-// The Pass band above the prompt (live slice status, agents, fix loop, open HITL count, warning style on a failed verdict, a check warning or an open HITL), the pinned status line and the prompt hint.
+// The Pass band above the prompt (live slice status, agents, fix loop, open HITL count, the team's bakers, warning style on a failed verdict, a check warning or an open HITL), the pinned status line and the prompt hint.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput, RenderPropsOf } from 'claude-code'
@@ -7,12 +7,14 @@ import type { EngineInterface, RenderElement, RenderInput, RenderPropsOf } from 
 import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, counts } from './projection.ts'
 import { PANE_ID } from './rail.tsx'
-import type { PassChecklist, PassLive, PassProjection, PassWarning } from './types'
+import { bakersWord } from './team.ts'
+import type { PassChecklist, PassLive, PassProjection, PassTeam, PassWarning } from './types'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
 const ledgerAtom = atom({ plugin: 'bytheslice', key: 'pass.ledger' } as const, null)
 const liveAtom = atom({ plugin: 'bytheslice', key: 'pass.live' } as const, { at: 0, agents: [] })
 const warningAtom = atom({ plugin: 'bytheslice', key: 'pass.warning' } as const, null)
+const teamAtom = atom({ plugin: 'bytheslice', key: 'pass.team' } as const, { at: 0, bakers: [] })
 
 export const NARROW_COLUMNS = 60
 export const DOCK_COLUMNS = 110
@@ -30,7 +32,7 @@ export const openHitl = (ledger: PassProjection | null): number => ledger?.hitl?
  * the engine. With the ledger it reads `Pie 5 · Slice 5.2 verifying · 3 agents
  * · fix 1/3 · HITL 1`, in the warning style while the slice's latest verdict
  * failed, while any HITL item is open, and for five minutes after a check
- * warning, which it then names.
+ * warning, which it then names. While the team has bakers it adds `· 2 bakers`.
  */
 export function bandLine(
   c: PassChecklist | null,
@@ -38,11 +40,14 @@ export function bandLine(
   ledger: PassProjection | null = null,
   live: PassLive | null = null,
   warning: PassWarning | null = null,
+  team: PassTeam | null = null,
 ): BandLine | null {
   if (!c) return null
   const narrow = bodyColumns < NARROW_COLUMNS
   const hitl = openHitl(ledger)
-  const asks = hitl > 0 ? (narrow ? ` HITL ${hitl}` : ` · HITL ${hitl}`) : ''
+  const bakers = team?.bakers.length ?? 0
+  const crew = bakers > 0 ? (narrow ? ` ${bakersWord(bakers)}` : ` · ${bakersWord(bakers)}`) : ''
+  const asks = (hitl > 0 ? (narrow ? ` HITL ${hitl}` : ` · HITL ${hitl}`) : '') + crew
   if (c.layout === 'stage') return hitl > 0 ? { text: `v4 checklist${asks}`, dim: false, warn: true } : { text: 'v4 checklist', dim: true }
   if (allDone(c)) return { text: `${narrow ? 'all done' : `All pies done · ${READY}`}${asks}`, dim: false, ...(hitl > 0 ? { warn: true } : {}) }
   const pie = activePie(c)
@@ -56,7 +61,7 @@ export function bandLine(
   }
   const view = findSlice(ledger, slice.id)
   const status = view?.status ?? 'queued'
-  const agents = (live?.agents ?? []).filter(agent => ACTIVE.has(agent.status)).length
+  const agents = (live?.agents ?? []).filter(agent => ACTIVE.has(agent.status) && agent.teammateId === undefined).length
   const fix = view?.fixLoop ?? 0
   const warn = lastVerdict(view)?.overall === 'fail' || warning !== null || hitl > 0
   if (narrow) {
@@ -67,6 +72,7 @@ export function bandLine(
   if (agents > 0) parts.push(`${agents} agent${agents === 1 ? '' : 's'}`)
   if (fix > 0) parts.push(`fix ${fix}/${FIX_CAP}`)
   if (hitl > 0) parts.push(`HITL ${hitl}`)
+  if (bakers > 0) parts.push(bakersWord(bakers))
   if (warning !== null) parts.push(`warn ${warning.code}`)
   return { text: parts.join(' · '), dim: false, warn }
 }
@@ -110,13 +116,14 @@ async function paneDocked($: EngineInterface, e: RenderInput<'AbovePrompt'>): Pr
  */
 export async function drawBand($: EngineInterface, e: RenderInput<'AbovePrompt'>): Promise<RenderElement | null> {
   if (e.props.hasSurvey) return null
-  const [c, ledger, live, warning] = await Promise.all([
+  const [c, ledger, live, warning, team] = await Promise.all([
     read($, checklistAtom),
     read($, ledgerAtom),
     read($, liveAtom),
     read($, warningAtom),
+    read($, teamAtom),
   ])
-  const line = bandLine(c, e.props.bodyColumns, ledger, live, warning)
+  const line = bandLine(c, e.props.bodyColumns, ledger, live, warning, team)
   if (!line) return null
   if (await paneDocked($, e)) return null
   const { Text } = $.ui.resolve(e)
