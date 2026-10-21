@@ -111,6 +111,16 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .crew h4{font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--ink-soft);margin:16px 0 6px}
 .crew p.cdesc{margin:-2px 0 8px;font-size:12.5px;color:var(--ink-soft)}
 .member{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:20px;border-bottom:1px solid var(--line);margin:0 0 10px}
+.tabs [role="tab"]{background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:4px 2px 8px;font:inherit;font-size:14px;font-weight:800;color:var(--ink-soft);cursor:pointer}
+.tabs [role="tab"][aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs [role="tab"]:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.pname{background:none;border:0;padding:0;font:inherit;font-weight:800;font-size:13.5px;color:inherit;cursor:pointer;text-align:left}
+.pname:hover,.pname:focus-visible{text-decoration:underline;text-underline-offset:3px;outline:none}
+.town h4{font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--ink-soft);margin:16px 0 4px}
+.town h4 small{font-weight:700;letter-spacing:0;text-transform:none;margin-left:6px}
+.tperson{display:grid;grid-template-columns:36px 1fr;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.tperson small{display:block;color:var(--ink-soft);font-weight:600;font-size:12px}
 .member:last-child{border-bottom:0}
 .av{width:30px;height:30px;border-radius:50%;position:relative;border:1px solid rgba(0,0,0,.08)}
 .av::after{content:"";position:absolute;inset:6px 7px 9px;border-radius:50% 50% 45% 45%;background:var(--skin,#f2c9a8)}
@@ -3546,9 +3556,8 @@ function personOf(n) {
 }
 function homeCard(e) {
   const rows = e.who.map(n => {
-    const p = personOf(n); if (!p) return ''; const L = p.look, hat = ['cap', 'sunhat', 'beanie'].includes(L.hair);
-    const hair = hex6(hat ? (L.hatC ?? L.hairC) : L.hair === 'baldGlasses' ? L.skin : L.hairC ?? 0x3b2a22);
-    return `<div class="fm${p.home ? ' in' : ''}"><span class="hav${p.kid ? ' kid' : ''}" style="--sk:${hex6(L.skin)};--hr:${hair};--tp:${hex6(L.top)}"></span><div><b>${n}</b><small>${p.home ? 'Home' : p.status}</small></div></div>`;
+    const p = personOf(n); if (!p) return '';
+    return `<div class="fm${p.home ? ' in' : ''}">${avatar(p.look, p.kid)}<div><b>${n}</b><small>${p.home ? 'Home' : p.status}</small></div></div>`;
   }).join('');
   const home = e.who.filter(n => personOf(n)?.home).length;
   return `<h5>${e.name}</h5><div class="sub">${e.street} · ${home ? `${home} of ${e.who.length} home` : 'Everyone is out'}</div><div class="fam">${rows}</div>`;
@@ -3594,14 +3603,55 @@ function openSheet(kind) {
   ['#bCrew', '#bOrders', '#bLog'].forEach(id => $(id).classList.remove('on'));
   if (was) { sheet.hidden = true; return; }
   sheet.hidden = false; sheet.dataset.kind = kind; delete sheet.dataset.detail; btn.classList.add('on'); tip.hidden = true;
-  if (kind === 'crew') {
-    $('#shTitle').textContent = 'Crew';
-    const active = new Set(actors.filter(a => !a.hidden && !a.isCustomer).map(a => a.meta.id));
-    $('#shBody').innerHTML = `<div class="legend"><span><i style="background:#3a3532"></i>Opus: charcoal jacket</span><span><i style="background:#f3ead6"></i>Sonnet: cream jacket</span><span><i style="background:#d8a23c"></i>Haiku: mustard apron</span></div>` +
-      `<div class="crew"><h4>Front of house</h4><div class="member"><span class="av" style="background:#fbf6ec;--skin:#c68863"></span><div><b>Chef Nico<span class="on-shift" title="On shift"></span></b><code>orchestrator</code></div><span class="tier t-opus">Opus</span></div><div class="member"><span class="av" style="background:#c9643f;--skin:#e0a982"></span><div><b>Sal<span class="on-shift" title="On shift"></span></b><code>box-it-up</code></div><span class="tier t-sonnet">Sonnet</span></div></div>` +
-      CREWS.map(([id, name, desc]) => `<div class="crew"><h4>${name}</h4><p class="cdesc">${desc}</p>${ROSTER.filter(r => r.crew === id).map(r => `<div class="member"><span class="av" style="background:${r.tier === 'opus' ? '#3a3532' : r.tier === 'sonnet' ? '#efe6d6' : '#d8a23c'}"></span><div><b>${r.name}${active.has(r.id) ? '<span class="on-shift" title="On shift"></span>' : ''}</b><code>${r.id.replace('#2', '')}</code></div><span class="tier t-${r.tier}">${TIER[r.tier]}</span></div>`).join('')}</div>`).join('');
-  } else if (kind === 'log') renderLogSheet();
+  if (kind === 'crew') renderPeopleSheet();
+  else if (kind === 'log') renderLogSheet();
   else renderOrdersSheet();
+}
+// ---------- the people sheet: Crew and Town tabs ----------
+// a tiny head-and-shoulders avatar from a character's look, shared by the Town tab and house cards
+function avatar(look, kid = false) {
+  const L = look || {}, hat = ['cap', 'sunhat', 'beanie'].includes(L.hair);
+  const hair = hex6(hat ? (L.hatC ?? L.hairC) : L.hair === 'baldGlasses' ? L.skin : L.hairC ?? 0x3b2a22);
+  return `<span class="hav${kid ? ' kid' : ''}" style="--sk:${hex6(L.skin ?? 0xf2c9a8)};--hr:${hair};--tp:${hex6(L.top ?? 0xfbf6ec)}"></span>`;
+}
+// everyone who lives in town (not the kitchen crew), each once, grouped by household
+function townFolk() {
+  const names = [...new Set([...TOWNIES.map(t => t.name), ...bikes.map(b => b.name)])];
+  const groups = HOMES.filter(e => !e.crew).map(e => ({ name: e.name, street: e.street, who: e.who.filter(n => names.includes(n)) }));
+  const housed = new Set(groups.flatMap(g => g.who)), loose = names.filter(n => !housed.has(n));
+  if (loose.length) groups.push({ name: 'Around town', street: 'Visitors and regulars', who: loose });
+  return groups.filter(g => g.who.length);
+}
+function townActivity(n) { const p = personOf(n); return !p ? '' : p.home ? 'At home' : p.status; }
+function renderPeopleSheet() {
+  $('#shTitle').textContent = 'People';
+  const tab = sheet.dataset.tab === 'town' ? 'town' : 'crew';
+  const active = new Set(actors.filter(a => !a.hidden && !a.isCustomer).map(a => a.meta.id));
+  const crewHtml = `<div class="legend"><span><i style="background:#3a3532"></i>Opus: charcoal jacket</span><span><i style="background:#f3ead6"></i>Sonnet: cream jacket</span><span><i style="background:#d8a23c"></i>Haiku: mustard apron</span></div>` +
+      `<div class="crew"><h4>Front of house</h4><div class="member"><span class="av" style="background:#fbf6ec;--skin:#c68863"></span><div><b><button type="button" class="pname" data-person="crew:orchestrator">Chef Nico</button><span class="on-shift" title="On shift"></span></b><code>orchestrator</code></div><span class="tier t-opus">Opus</span></div><div class="member"><span class="av" style="background:#c9643f;--skin:#e0a982"></span><div><b><button type="button" class="pname" data-person="crew:box-it-up">Sal</button><span class="on-shift" title="On shift"></span></b><code>box-it-up</code></div><span class="tier t-sonnet">Sonnet</span></div></div>` +
+    CREWS.map(([id, name, desc]) => `<div class="crew"><h4>${name}</h4><p class="cdesc">${desc}</p>${ROSTER.filter(r => r.crew === id).map(r => `<div class="member"><span class="av" style="background:${r.tier === 'opus' ? '#3a3532' : r.tier === 'sonnet' ? '#efe6d6' : '#d8a23c'}"></span><div><b><button type="button" class="pname" data-person="crew:${r.id}">${r.name}</button>${active.has(r.id) ? '<span class="on-shift" title="On shift"></span>' : ''}</b><code>${r.id.replace('#2', '')}</code></div><span class="tier t-${r.tier}">${TIER[r.tier]}</span></div>`).join('')}</div>`).join('');
+  const townHtml = `<div class="town">${townFolk().map(g => `<h4>${escapeCard(g.name)}<small>${escapeCard(g.street)}</small></h4>${g.who.map(n => { const p = personOf(n);
+    return `<div class="tperson">${avatar(p?.look, p?.kid)}<div><button type="button" class="pname" data-person="town:${escapeCard(n)}">${escapeCard(n)}</button><small data-activity="${escapeCard(n)}">${escapeCard(townActivity(n))}</small></div></div>`; }).join('')}`).join('')}</div>`;
+  const tabBtn = (id, label) => `<button type="button" role="tab" id="tab-${id}" aria-controls="panel-${id}" aria-selected="${tab === id}" tabindex="${tab === id ? 0 : -1}">${label}</button>`;
+  $('#shBody').innerHTML = `<div class="tabs" role="tablist" aria-label="People">${tabBtn('crew', 'Crew')}${tabBtn('town', 'Town')}</div>
+    <div role="tabpanel" id="panel-crew" aria-labelledby="tab-crew"${tab === 'crew' ? '' : ' hidden'}>${crewHtml}</div>
+    <div role="tabpanel" id="panel-town" aria-labelledby="tab-town"${tab === 'town' ? '' : ' hidden'}>${townHtml}</div>`;
+}
+function selectPeopleTab(tab, focus = true) {
+  sheet.dataset.tab = tab; renderPeopleSheet();
+  if (focus) $('#tab-' + tab).focus({ preventScroll: true });
+}
+$('#shBody').addEventListener('click', event => { const t = event.target.closest('[role="tab"]'); if (t && sheet.dataset.kind === 'crew') selectPeopleTab(t.id.slice(4)); });
+$('#shBody').addEventListener('keydown', event => {
+  const t = event.target.closest('[role="tab"]'); if (!t || sheet.dataset.kind !== 'crew') return;
+  const order = ['crew', 'town'], at = order.indexOf(t.id.slice(4));
+  const next = { ArrowRight: order[(at + 1) % 2], ArrowLeft: order[(at + 1) % 2], Home: 'crew', End: 'town' }[event.key];
+  if (next) { event.preventDefault(); selectPeopleTab(next); }
+});
+// keep the Town tab's activities current without rebuilding the list under the reader
+function refreshTownActivity() {
+  if (sheet.hidden || sheet.dataset.kind !== 'crew' || sheet.dataset.tab !== 'town') return;
+  for (const el of $('#shBody').querySelectorAll('[data-activity]')) { const text = townActivity(el.dataset.activity); if (el.textContent !== text) el.textContent = text; }
 }
 function renderOrdersSheet() {
   $('#shTitle').textContent = 'Orders'; orderIndex.clear();
@@ -4250,6 +4300,7 @@ Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
   get baseCrew() { return BASE_CREW().map(({ actor }) => ({ character: actor.meta.id, name: actor.meta.name, ambient: ambient.has(actor.meta.id),
     task: actor.task, mode: actor.mode, hidden: !!actor.hidden, position: [actor.pos.x, actor.pos.z], tag: actor.workTagO?.on ? actor.workTagO.el.textContent : null })); },
   get oven() { return { on: ovenOn, verifying: liveVerifying }; },
+  get townPopulation() { return new Set([...TOWNIES.map(t => t.name), ...bikes.map(b => b.name)]).size; },
   get townCrew() { return TOWN_CREW().map(a => ({ name: a.meta.name, character: a.meta.id, inTown: !!a.isTownCrew, hidden: !!a.hidden, task: a.task, mode: a.mode,
     speed: a.speed, x: a.pos.x, z: a.pos.z, home: crewHome(a).door, saying: a._say?.el.textContent || null, inKitchen: a.pos.x > -5.2 && a.pos.x < 5.2 && a.pos.z > -4.2 && a.pos.z < 4.2 })); },
   get ballgame() { return { status: GM.status, game: GM.no, last: GM.last,
@@ -4338,6 +4389,7 @@ function frame(now) {
   if (!tip.hidden && tipFor && Math.floor(now / 500) !== Math.floor((now - rdt * 1000) / 500)) { if (tipFor.hidden) { tip.hidden = true; tipFor = null; } else showTip(actorCard(tipFor)); }
   placeTip();
   if (Math.floor(now / 250) !== Math.floor((now - rdt * 1000) / 250)) renderStats();
+  if (Math.floor(now / 1000) !== Math.floor((now - rdt * 1000) / 1000)) refreshTownActivity();
 }
 resize(); renderStats();
 document.fonts && document.fonts.ready.then(() => { ticketTex.redraw(); chalkTex.redraw(); afterFonts.forEach(f => f()); });
