@@ -1389,16 +1389,62 @@ const actors = [];
 let simT = 0;
 // pedestrians look both ways: never step onto a crosswalk with a car close and coming
 const inCross = (cw, x, z) => { const along = cw.axis === 'x' ? x : z, across = cw.axis === 'x' ? z : x; return Math.abs(along - cw.at) < .75 && across > cw.lo - .1 && across < cw.hi + .1; };
+// Right of way, so the town can never lock up: walkers only ever wait on the curb (never in a lane or a crosswalk),
+// cars only wait behind a crosswalk or inside the box for a walker who is already out in the road, and a walker on the curb
+// yields to a car stranded in the box. Every wait points one way, so no circle of waits can form.
 function curbSafe(a, ux, uz) {
   if (typeof CROSS === 'undefined' || typeof cars === 'undefined') return true;
-  const ax = a.pos.x + ux * .5, az = a.pos.z + uz * .5;
+  const ax = a.pos.x + ux * .5, az = a.pos.z + uz * .5, pass = a.curbPass > simT;
+  // already out in the street: keep going, never wait for the light inside a lane. The one thing nobody walks through is a car:
+  // a beat behind its bumper, then a sidestep out of its lane, so a walker and a waiting car never stare each other down.
+  if (roadAt(a.pos.x, a.pos.z)) {
+    if (!(a instanceof Actor)) return true;
+    // never into a car, and never into the path just ahead of a moving one
+    const car = cars.find(c => c.active !== false && ((inCarBody(c, ax, az) && !inCarBody(c, a.pos.x, a.pos.z)) || (c.v > .3 && inCarPath(c, ax, az) && !inCarPath(c, a.pos.x, a.pos.z))));
+    if (!car) { a.bodySince = null; return true; }
+    a.bodySince ??= simT;
+    if (car.v <= .3 && simT - a.bodySince > 1.2) {
+      // around the waiting car: past its bumper when in front of or behind it, out of its lane when beside it
+      const along = ((car.ln.axis === 'x' ? a.pos.x : a.pos.z) - car.pos) * car.ln.dir, side = (car.ln.axis === 'x' ? a.pos.z : a.pos.x) - car.ln.lane;
+      const to = Math.abs(along) > .95 ? [car.pos + Math.sign(along) * car.ln.dir * 1.7, (car.ln.axis === 'x' ? a.pos.z : a.pos.x)] : [(car.ln.axis === 'x' ? a.pos.x : a.pos.z), car.ln.lane + (side >= 0 ? 1 : -1) * 1.3];
+      const pt = car.ln.axis === 'x' ? [to[0], to[1]] : [to[1], to[0]];
+      if (!cars.some(c => c.active !== false && inCarBody(c, pt[0], pt[1], .2))) { a.detour = pt; a.detourUntil = simT + 2.5; }
+      a.bodySince = null;
+    }
+    a.why = `stepping around car ${car.key}`; return false;
+  }
+  // stepping off the curb anywhere: look both ways, a car on that spot or rolling toward it goes first
+  if (roadAt(ax, az)) for (const c of cars) {
+    if (c.active === false) continue;
+    const toP = ((c.ln.axis === 'x' ? ax : az) - c.pos) * c.ln.dir, side = Math.abs((c.ln.axis === 'x' ? az : ax) - c.ln.lane);
+    if (side < 1.0 && ((c.v > .4 && toP > -1.6 && toP < 7) || inCarBody(c, ax, az, .15))) { a.why = `car ${c.key} near`; return false; }
+  }
   for (const cw of CROSS) {
-    if (inCross(cw, a.pos.x, a.pos.z) || !inCross(cw, ax, az)) continue;
-    if (cw.ctrl && !pedGo(cw.ctrl)) return false;
-    for (const c of cars) { if (c.active === false || c.ln.axis !== cw.axis || c.ln.lane < cw.lo || c.ln.lane > cw.hi) continue; const toCw = (cw.at - c.pos) * c.ln.dir; if (toCw > -1.6 && toCw < 7 && (c.v > .4 || toCw < 1.0)) return false; }
+    // the curb strip beside a crosswalk is still the curb: wait there like anywhere else on the sidewalk.
+    // Only the crosswalk you are heading across counts, so a corner where two meet never asks for both lights at once.
+    if (!inCross(cw, ax, az) || Math.abs(cw.axis === 'x' ? uz : ux) < .5) continue;
+    if (cw.ctrl && !pedGo(cw.ctrl) && !pass) { a.why = 'signal'; return false; }
+    for (const c of cars) {
+      if (c.active === false || c.ln.axis !== cw.axis || c.ln.lane < cw.lo || c.ln.lane > cw.hi) continue;
+      const toCw = (cw.at - c.pos) * c.ln.dir;
+      // a car on the crosswalk, or one rolling toward it, goes first
+      if (toCw > -1.6 && toCw < 7 && ((c.v > .4 && !willStop(c, cw.at)) || toCw < 1.0)) { a.why = `car ${c.key} at crosswalk`; return false; }
+      // a car inside the box (moving or waiting) gets to clear it first
+      if (!pass && c.inBox && toCw > -1.6 && toCw < 4.5) { a.why = `car ${c.key} in the box`; return false; }
+    }
   }
   return true;
 }
+// a rolling car that will stop short of a spot anyway: queued behind another car, or braking for its red light before it
+function willStop(c, at) {
+  const L = c.ln, ahead = (at - c.pos) * L.dir; if (ahead <= 0) return false;
+  if (cars.some(o => o !== c && o.key === c.key && o.active !== false && (o.pos - c.pos) * L.dir > 0 && (at - o.pos) * L.dir > 0)) return true;
+  return (L.stops || []).some(([ctrl, line]) => { const toLine = (line - c.pos) * L.dir; return lightState(ctrl) === 'r' && toLine < ahead && toLine > c.v * c.v / 10 + .1; });
+}
+// a car's body (1.9 by 0.92) plus a little room
+const inCarBody = (c, x, z, pad = .3) => Math.abs((c.ln.axis === 'x' ? x : z) - c.pos) < .95 + pad && Math.abs((c.ln.axis === 'x' ? z : x) - c.ln.lane) < .46 + pad;
+// the strip a moving car is about to drive over
+const inCarPath = (c, x, z) => { const along = ((c.ln.axis === 'x' ? x : z) - c.pos) * c.ln.dir; return along > .9 && along < 1.4 + c.v * .8 && Math.abs((c.ln.axis === 'x' ? z : x) - c.ln.lane) < .76; };
 const roadAt = (x, z) => (z > 6.4 && z < 11.0) || (x > 7.6 && x < 11.6) || (z > -10.6 && z < -6.6) || (z > 41.4 && z < 45.4);
 // the building site's slab: anyone standing on it stands on top of it
 class Actor {
@@ -1427,16 +1473,31 @@ class Actor {
     if (this.gl) { const q = this.gl; q.t += dt; let k = Math.min(1, q.t / q.sec); k = q.ease ? k * k : k; this.pos.x = lerp(q.fx, q.x, k); this.pos.z = lerp(q.fz, q.z, k); this.lift = lerp(q.fl, q.lift, k); if (q.t >= q.sec) { this.gl = null; q.r(); } }
     if (this.follow && !this.follow.hidden && !this.gl) {
       // keep beside the leader: a step behind and to the side, like a kid walking with a parent
-      const L = this.follow, onCw = CROSS.some(cw => inCross(cw, L.pos.x, L.pos.z) || inCross(cw, this.pos.x, this.pos.z)), sd = (this.followSide ?? 1) * (onCw ? .12 : .5), bk = onCw ? ((this.followSide ?? 1) < 0 ? 1.5 : .85) : .55, bx = L.pos.x - Math.sin(L.yaw) * bk + Math.cos(L.yaw) * sd, bz = L.pos.z - Math.cos(L.yaw) * bk - Math.sin(L.yaw) * sd, dx = bx - this.pos.x, dz = bz - this.pos.z, dd = Math.hypot(dx, dz);
+      const L = this.follow, onCw = CROSS.some(cw => inCross(cw, L.pos.x, L.pos.z) || inCross(cw, this.pos.x, this.pos.z)), sd = (this.followSide ?? 1) * (onCw ? .12 : .5), bk = onCw ? ((this.followSide ?? 1) < 0 ? 1.5 : .85) : .55;
+      let bx = L.pos.x - Math.sin(L.yaw) * bk + Math.cos(L.yaw) * sd, bz = L.pos.z - Math.cos(L.yaw) * bk - Math.sin(L.yaw) * sd;
+      // beside a parent on the curb means the curb side, never out in the street
+      if (roadAt(bx, bz) && !roadAt(L.pos.x, L.pos.z)) { bx = L.pos.x - Math.sin(L.yaw) * bk; bz = L.pos.z - Math.cos(L.yaw) * bk; if (roadAt(bx, bz)) { bx = L.pos.x; bz = L.pos.z; } }
+      // on a crosswalk the kid walks the stripes right behind the parent, never beside them out in the lane
+      const lcw = CROSS.find(cw => inCross(cw, L.pos.x, L.pos.z));
+      if (lcw && roadAt(L.pos.x, L.pos.z)) { const off = (this.followSide ?? 1) * .2; if (lcw.axis === 'x') { bx = lcw.at + off; bz = L.pos.z - Math.cos(L.yaw) * bk; } else { bz = lcw.at + off; bx = L.pos.x - Math.sin(L.yaw) * bk; } }
+      const dx = bx - this.pos.x, dz = bz - this.pos.z, dd = Math.hypot(dx, dz);
       if (dd > .12) { this.mode = 'walk'; this.path = [new THREE.Vector3(bx, .06, bz)]; } else if (L.mode !== 'walk') { this.path = []; this.mode = 'idle'; this.goalYaw = L.yaw; }
     }
-    if (this.mode === 'walk' && this.path.length) {
+    // a sidestep out of a waiting car's lane comes before anything else on the path
+    if (this.detour && (this.mode !== 'walk' || this.detourUntil < simT || Math.hypot(this.detour[0] - this.pos.x, this.detour[1] - this.pos.z) < .08)) this.detour = null;
+    if (this.detour) { const dx = this.detour[0] - this.pos.x, dz = this.detour[1] - this.pos.z, dd = Math.hypot(dx, dz), st = Math.min(dd, this.speed * dt); this.pos.x += dx / dd * st; this.pos.z += dz / dd * st; this.goalYaw = Math.atan2(dx, dz); this.waitingCurb = false; }
+    else if (this.mode === 'walk' && this.path.length) {
       const tgt = this.path[0], d = tgt.clone().sub(this.pos); d.y = 0; const dist = d.length(), step = this.speed * dt;
       // no progress toward a nearby waypoint for over a second (someone else is standing on it): count it as reached and carry on
       if (tgt !== this.stT) { this.stT = tgt; this.stBest = dist; this.stall = 0; } else if (dist < this.stBest - .05) { this.stBest = dist; this.stall = 0; } else if (!this.waitingCurb) this.stall += dt;
       if (this.stall > 1.2 && dist < .9) { this.stall = 0; if (tgt.node) this.node = tgt.node; this.path.shift(); if (!this.path.length) { this.mode = this.carry ? 'hold' : 'idle'; const r = this.res; this.res = null; r && r(); } }
       else
-      if (dist > .01 && !curbSafe(this, d.x / dist, d.z / dist)) { this.waitingCurb = true; this.goalYaw = Math.atan2(d.x, d.z); }
+      if (dist > .01 && !curbSafe(this, d.x / dist, d.z / dist)) {
+        // a full light cycle on the curb means something is wrong: wave them across the next safe gap
+        if (!this.curbSpot || Math.hypot(this.pos.x - this.curbSpot[0], this.pos.z - this.curbSpot[1]) > .6) { this.curbSpot = [this.pos.x, this.pos.z]; this.curbSince = simT; }
+        else if (simT - this.curbSince > 40) { this.curbPass = simT + 4; this.curbSince = simT; }
+        this.waitingCurb = true; this.goalYaw = Math.atan2(d.x, d.z);
+      }
       // a waypoint on the way counts as reached a little early, so a crowd squeezing through one spot never deadlocks
       else if (dist <= Math.max(step, this.path.length > 1 ? .3 : 0)) { this.waitingCurb = false; this.pos.copy(tgt); if (tgt.node) this.node = tgt.node; this.path.shift(); if (!this.path.length) { this.mode = this.carry ? 'hold' : 'idle'; const r = this.res; this.res = null; r && r(); } }
       else { this.waitingCurb = false; this.pos.addScaledVector(d, step / dist); this.goalYaw = Math.atan2(d.x, d.z); }
@@ -1449,7 +1510,9 @@ class Actor {
         if (d2 < .56 && d2 > 1e-4) {
           const d = Math.sqrt(d2), k = Math.min(.05, (.75 - d) / .75 * dt * 2.2); let px = dx / d * k, pz = dz / d * k; const back = px * hx + pz * hz;
           if (back < 0) { const side = dx * hz - dz * hx >= 0 ? 1 : -1; px += -back * hx + hz * side * k; pz += -back * hz - hx * side * k; }
-          if (roadAt(this.pos.x, this.pos.z) || !roadAt(this.pos.x + px, this.pos.z + pz)) { this.pos.x += px; this.pos.z += pz; }
+          // nobody gets nudged off the curb into the street, or out of the crosswalk they are on
+          const nx = this.pos.x + px, nz = this.pos.z + pz;
+          if ((roadAt(this.pos.x, this.pos.z) ? !roadAt(nx, nz) || CROSS.some(cw => inCross(cw, nx, nz)) || !CROSS.some(cw => inCross(cw, this.pos.x, this.pos.z)) : !roadAt(nx, nz)) && !cars.some(c => c.active !== false && inCarBody(c, nx, nz, .15))) { this.pos.x = nx; this.pos.z = nz; }
         }
       }
     }
@@ -2593,9 +2656,10 @@ const cars = [];
 // the two intersections as boxes, with the crosswalk each lane drives across on its way out
 const BOXES = [{ x: [7.6, 11.6], z: [6.4, 11.0], cw: { mainE: 1, mainW: 0, oakS: 3, oakN: 2 } }, { x: [7.55, 11.65], z: [-10.6, -6.6], cw: { elmE: 4, elmW: 5, oakS: 7, oakN: 6 } }, { x: [7.55, 11.65], z: [MZ - 10.6, MZ - 6.6], cw: {}, yieldX: true, stopX: true }];
 const LANES = {
-  mainE: { axis: 'x', dir: 1, lane: 9.85, stops: [['main', 5.4]], a: -70, b: 70 }, mainW: { axis: 'x', dir: -1, lane: 7.55, stops: [['main', 13.8]], a: -70, b: 70 },
-  oakS: { axis: 'z', dir: 1, lane: 8.6, stops: [['oak', -13.55], ['oak', 4.4]], a: -62, b: 70 }, oakN: { axis: 'z', dir: -1, lane: 10.6, stops: [['oak', 13.0], ['oak', -4.6]], a: -62, b: 70 },
-  elmE: { axis: 'x', dir: 1, lane: -7.6, stops: [['main', 4.9]], a: -70, b: 70 }, elmW: { axis: 'x', dir: -1, lane: -9.6, stops: [['main', 14.25]], a: -70, b: 70 },
+  // stop lines sit a car's half length plus a step behind each crosswalk, so a stopped bumper never reaches the stripes
+  mainE: { axis: 'x', dir: 1, lane: 9.85, stops: [['main', 5.05]], a: -70, b: 70 }, mainW: { axis: 'x', dir: -1, lane: 7.55, stops: [['main', 14.15]], a: -70, b: 70 },
+  oakS: { axis: 'z', dir: 1, lane: 8.6, stops: [['oak', -13.9], ['oak', 4.05]], a: -62, b: 70 }, oakN: { axis: 'z', dir: -1, lane: 10.6, stops: [['oak', 13.35], ['oak', -4.25]], a: -62, b: 70 },
+  elmE: { axis: 'x', dir: 1, lane: -7.6, stops: [['main', 4.55]], a: -70, b: 70 }, elmW: { axis: 'x', dir: -1, lane: -9.6, stops: [['main', 14.6]], a: -70, b: 70 },
   mapleE: { axis: 'x', dir: 1, lane: MZ - 7.6, a: -70, b: 70 }, mapleW: { axis: 'x', dir: -1, lane: MZ - 9.6, a: -70, b: 70 },
 };
 [['mainE', -52, 0x6f8fb0], ['mainW', 50, 0xc9533b], ['mainE', -30, 0xc9533b], ['mainE', -16, 0xfbf6ec], ['mainE', 20, 0x7e9db5], ['mainW', 30, 0xf3cf72], ['mainW', 22, 0x9fae8c], ['mainW', -8, 0xe8978a],
@@ -2639,7 +2703,14 @@ function greetings() {
 const CROSS = [{ axis: 'x', at: 6.95, lo: 6.4, hi: 11.0, ctrl: 'main' }, { axis: 'x', at: 12.25, lo: 6.4, hi: 11.0, ctrl: 'main' }, { axis: 'z', at: 5.95, lo: 7.6, hi: 11.6, ctrl: 'oak' }, { axis: 'z', at: 11.45, lo: 7.6, hi: 11.6, ctrl: 'oak' }, { axis: 'x', at: 12.7, lo: -10.6, hi: -6.6, ctrl: 'main' }, { axis: 'x', at: 6.45, lo: -10.6, hi: -6.6, ctrl: 'main' }, { axis: 'z', at: -12.0, lo: 7.6, hi: 11.6, ctrl: 'oak' }, { axis: 'z', at: -6.15, lo: 7.6, hi: 11.6, ctrl: 'oak' }];
 // walk signal: cross only well inside the red for the street being crossed
 function pedGo(k) { const ph = simT % 48; return k === 'main' ? ph > 24.5 && ph < 40 : ph > .5 && ph < 16.5; }
-function crosswalkBusy(cw) { for (const a of [...actors, ...bikes]) { if (a.hidden || !a.g.visible) continue; const along = cw.axis === 'x' ? a.pos.x : a.pos.z, across = cw.axis === 'x' ? a.pos.z : a.pos.x; if (Math.abs(along - cw.at) < 1.1 && across > cw.lo - .2 && across < cw.hi + .2) return true; } return false; }
+// busy means someone is out in the road on it; people waiting on the curb do not hold traffic
+function crosswalkBusy(cw) { for (const a of [...actors, ...bikes]) { if (a.hidden || !a.g.visible) continue; const along = cw.axis === 'x' ? a.pos.x : a.pos.z, across = cw.axis === 'x' ? a.pos.z : a.pos.x; if (Math.abs(along - cw.at) < 1.0 && across > cw.lo && across < cw.hi) return true; } return false; }
+// where a lane meets a box: the car waits behind the entry crosswalk, never on it
+function boxEntry(B, L) {
+  const own = L.axis === 'x' ? B.x : B.z, edgeIn = L.dir > 0 ? own[0] : own[1], edgeOut = L.dir > 0 ? own[1] : own[0];
+  const cwIn = CROSS.find(cw => cw.axis === L.axis && L.lane > cw.lo && L.lane < cw.hi && (edgeIn - cw.at) * L.dir > 0 && (edgeIn - cw.at) * L.dir < 2);
+  return { edgeIn, edgeOut, hold: cwIn ? cwIn.at - L.dir * 1.9 : edgeIn - L.dir * 1.0 };
+}
 let greetTick = 0;
 function townUpdate(dt, now) {
   swingUpdate(dt); doorsUpdate(dt);
@@ -2651,6 +2722,9 @@ function townUpdate(dt, now) {
   // traffic thins out in the evening and all but stops after hours
   const want = tod === 'day' ? cars.length : tod === 'night' ? 5 : tod === 'dawn' ? 3 : 1;
   let active = cars.filter(c => c.active !== false).length;
+  // everyone out in the road, for the cars' last-resort look ahead
+  const inRoad = [...actors.filter(a => !a.hidden && a.g.visible).map(a => a.pos), ...bikes.filter(b => b.mode !== 'away' && b.g.visible).map(b => b.pos)].filter(p => roadAt(p.x, p.z));
+  for (const c of cars) c.inBox = c.active !== false && BOXES.some(B => { const own = c.ln.axis === 'x' ? B.x : B.z, cross = c.ln.axis === 'x' ? B.z : B.x; return c.ln.lane > cross[0] && c.ln.lane < cross[1] && c.pos > own[0] - .9 && c.pos < own[1] + .9; });
   for (const c of cars) {
     const L = c.ln;
     if (c.active === false) {
@@ -2660,22 +2734,31 @@ function townUpdate(dt, now) {
     let target = c.vmax, gap = Infinity;
     for (const o of cars) if (o !== c && o.key === c.key && o.active !== false) { const d = (o.pos - c.pos) * L.dir; if (d > 0 && d < gap) gap = d; }
     if (gap < 3.2) target = Math.min(target, Math.max(0, gap - 2.3) * 2);
-    for (const [ctrl, at] of L.stops || []) { const st = lightState(ctrl), toLine = (at - c.pos) * L.dir; if ((st === 'r' || (st === 'y' && toLine > 1.2)) && toLine > -.3 && toLine < 5) target = Math.min(target, Math.max(0, toLine) * 1.1); }
-    CROSS.forEach((cw, k) => { if (!busy[k] || cw.axis !== L.axis) return; const laneIn = L.lane > cw.lo && L.lane < cw.hi; if (!laneIn) return; const toCw = (cw.at - c.pos) * L.dir - 2.2; if (toCw > -.4 && toCw < 5) target = Math.min(target, Math.max(0, toCw) * 1.1); });
+    let lightHold = false;
+    for (const [ctrl, at] of L.stops || []) { const st = lightState(ctrl), toLine = (at - c.pos) * L.dir; if ((st === 'r' || (st === 'y' && toLine > 1.2)) && toLine > -.3 && toLine < 5) { target = Math.min(target, Math.max(0, toLine) * 1.1); lightHold = true; } }
+    // stuck detector: stopped for a while with no red light to explain it, so let it roll on (it still never drives into anyone)
+    const freed = c.release > simT;
+    if (!freed) CROSS.forEach((cw, k) => { if (!busy[k] || cw.axis !== L.axis) return; const laneIn = L.lane > cw.lo && L.lane < cw.hi; if (!laneIn) return; const toCw = (cw.at - c.pos) * L.dir - 2.2; if (toCw > -.4 && toCw < 5) target = Math.min(target, Math.max(0, toCw) * 1.1); });
     // never enter an intersection you cannot clear: hold at its edge while a cross-street car is inside or the exit crosswalk is busy;
     // Elm has no lights, so it also gives way to any Oak car near the box
     for (const B of BOXES) {
-      const own = L.axis === 'x' ? B.x : B.z, cross = L.axis === 'x' ? B.z : B.x; if (L.lane < cross[0] || L.lane > cross[1]) continue;
-      const entry = ((L.dir > 0 ? own[0] : own[1]) - c.pos) * L.dir - 1.0;
+      const cross = L.axis === 'x' ? B.z : B.x; if (L.lane < cross[0] || L.lane > cross[1]) continue;
+      const E = boxEntry(B, L), entry = (E.hold - c.pos) * L.dir;
       // a stop sign: come to a full stop at the line for a beat, then go when it is clear
       if (B.stopX && L.axis === 'x') { if (entry < -6 && c.stopB === B) c.stopB = null; if (c.stopB !== B && entry > -.2 && entry < 4.5) { target = Math.min(target, Math.max(0, entry) * 1.1); if (c.v < .06 && entry < .5) { c.stopT = (c.stopT || 0) + dt; if (c.stopT > 1.1) { c.stopB = B; c.stopT = 0; } } } }
-      if (entry < -.2 || entry > 4.5) continue;
+      if (entry < -.2 || entry > 4.5 || freed) continue;
       // a cross car counts if it is in the box, or already rolling into it (a car waiting at the edge does not)
       const inside = cars.some(o => { if (o.active === false || o.ln.axis === L.axis) return false; const mg = o.v > .5 ? 1.3 : .6, r = o.ln.axis === 'x' ? B.x : B.z, c2 = o.ln.axis === 'x' ? B.z : B.x; return o.ln.lane > c2[0] && o.ln.lane < c2[1] && o.pos > r[0] - mg && o.pos < r[1] + mg; });
       const exitBusy = B.cw[c.key] != null && busy[B.cw[c.key]];
       const yieldOak = B.yieldX && L.axis === 'x' && cars.some(o => o.active !== false && o.ln.axis === 'z' && o.ln.lane > B.x[0] && o.ln.lane < B.x[1] && o.pos > B.z[0] - 5.5 && o.pos < B.z[1] + 5.5);
-      if (inside || exitBusy || yieldOak) target = Math.min(target, Math.max(0, entry) * 1.1);
+      // don't block the box: go only when the whole car fits past the far crosswalk
+      let lead = null; for (const o of cars) if (o !== c && o.key === c.key && o.active !== false && (o.pos - c.pos) * L.dir > 0 && (!lead || (o.pos - lead.pos) * L.dir < 0)) lead = o;
+      const noRoom = lead && lead.v < 1.5 && (lead.pos - E.edgeOut) * L.dir < 4.7;
+      if (inside || exitBusy || yieldOak || noRoom) target = Math.min(target, Math.max(0, entry) * 1.1);
     }
+    // the last word: never drive into anyone out in the road
+    for (const p of inRoad) { const along = ((L.axis === 'x' ? p.x : p.z) - c.pos) * L.dir, side = Math.abs((L.axis === 'x' ? p.z : p.x) - L.lane); if (side < .8 && along > 0 && along < 4.5) target = Math.min(target, Math.sqrt(2 * 5 * Math.max(0, along - 1.35))); }
+    if (c.v < .1 && !lightHold) { c.still = (c.still || 0) + dt; if (c.still > 8) { c.release = simT + 4; c.still = 0; } } else c.still = 0;
     c.v += clamp(target - c.v, -6 * dt, 2.5 * dt); c.pos += c.v * dt * L.dir;
     if ((L.dir > 0 && c.pos > L.b) || (L.dir < 0 && c.pos < L.a)) { if (active > want) { c.active = false; c.g.visible = false; active--; continue; } c.pos = L.dir > 0 ? L.a : L.b; }
     if (L.axis === 'x') { c.g.position.set(c.pos, 0, L.lane); c.g.rotation.y = L.dir > 0 ? 0 : Math.PI; }
@@ -2686,7 +2769,9 @@ function townUpdate(dt, now) {
     if (b.mode === 'away') continue;
     const tgt = b.mode === 'loop' ? b.loop[(b.i + 1) % b.loop.length] : b.path[0];
     const dx = tgt[0] - b.pos.x, dz = tgt[1] - b.pos.z, dist = Math.hypot(dx, dz);
-    let blocked = false; if (dist > .01) { const ux = dx / dist, uz = dz / dist; if (!curbSafe(b, ux, uz)) blocked = true; for (const a of actors) { if (a.hidden) continue; const rx = a.pos.x - b.pos.x, rz = a.pos.z - b.pos.z, ahead = rx * ux + rz * uz, side = Math.abs(rx * uz - rz * ux); if (ahead > 0 && ahead < 1.3 && side < .55) { blocked = true; break; } } }
+    let blocked = false; if (dist > .01) { const ux = dx / dist, uz = dz / dist, onRoad = roadAt(b.pos.x, b.pos.z), reach = onRoad ? .7 : 1.3; if (!curbSafe(b, ux, uz)) blocked = true; if (!(b.squeeze > simT)) for (const a of actors) { if (a.hidden) continue; const rx = a.pos.x - b.pos.x, rz = a.pos.z - b.pos.z, ahead = rx * ux + rz * uz, side = Math.abs(rx * uz - rz * ux); if (ahead > 0 && ahead < reach && side < .55) { blocked = true; break; } } }
+    // stuck detector: a bike held up by a walker for a few seconds squeezes past
+    if (blocked) { b.blockedT = (b.blockedT || 0) + dt; if (b.blockedT > 4) { b.squeeze = simT + 2; b.blockedT = 0; } } else b.blockedT = 0;
     b.v = lerp(b.v ?? b.speed, blocked ? 0 : b.speed, Math.min(1, dt * 5)); const step = b.v * dt;
     if (dist <= step) {
       b.pos.set(tgt[0], 0, tgt[1]);
@@ -3884,6 +3969,15 @@ Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
   get demoCustomers() { return actors.filter(a => a.isCustomer && a.order && !a.liveOrder && !a.hidden).length; },
   get demoPies() { return shelfPies.filter(object => object.userData.orderSource !== 'live').length + root.children.filter(object => ['pizza', 'box', 'token'].includes(object.name) && object.userData.orderSource !== 'live').length; },
   get events() { return castEvents.map(event => ({ ...event })); },
+  // Test seam: advance the world without rendering, and read the street for the traffic soak.
+  step(dt = .1) { simulate(dt, simT * 1000); return simT; },
+  pause(on = true) { paused = !!on; return paused; },
+  look(tx, tz, zoom) { view.anim = null; view.vx = view.vz = 0; Object.assign(view, { tx, tz, zoom }); applyCam(); },
+  get traffic() { return { simT, tod,
+    cars: cars.map((c, i) => ({ i, key: c.key, axis: c.ln.axis, dir: c.ln.dir, lane: c.ln.lane, pos: c.pos, v: c.v, active: c.active !== false, freed: c.release > simT, inBox: !!c.inBox })),
+    people: actors.filter(a => !a.hidden && a.g.visible).map((a, i) => ({ i: actors.indexOf(a), name: a.townie?.name || a.meta?.name || 'person',
+      x: a.pos.x, z: a.pos.z, mode: a.mode, path: a.path.length, curb: !!a.waitingCurb, why: a.waitingCurb ? a.why : '', pass: a.curbPass > simT, light: Math.round(simT % 48), task: a.task, next: a.path.slice(0, 3).map(p => [+p.x.toFixed(2), +p.z.toFixed(2)]) })),
+    bikes: bikes.filter(b => b.mode !== 'away').map(b => ({ name: b.name, x: b.pos.x, z: b.pos.z, v: b.v ?? b.speed })) }; },
 }) });
 
 // ---------- frame loop ----------
@@ -3892,20 +3986,25 @@ const RATE = { opus: 0.0042, sonnet: 0.0014, haiku: 0.0004 }, TOK = { opus: 380,
 const cDay = new THREE.Color(0x9fb27a), cNight = new THREE.Color(0x4a5a52), cLate = new THREE.Color(0x323e3e), cTmp = new THREE.Color(), lawnNight = new THREE.Color(0x66765a), lawnLate = new THREE.Color(0x4c5a48);
 // dawn: a low, warm sun with long shadows, a peach sky wash, street lamps still on and the kitchen lit inside
 const cDawn = new THREE.Color(0x9a9c78), lawnDawn = new THREE.Color(0x91a26f), SUN_DAY = new THREE.Color(0xffc285), SUN_DAWN = new THREE.Color(0xff9466), SKY_DAY = new THREE.Color(0xfff0d8), SKY_DAWN = new THREE.Color(0xffc4b8), GR_DAY = new THREE.Color(0x8a5a44), GR_DAWN = new THREE.Color(0x5a5480), FILL_DAY = new THREE.Color(0xcfe0f0), FILL_NIGHT = new THREE.Color(0x8fa6d8), FILL_DAWN = new THREE.Color(0xa8b2e8), dawnEl = $('#dawn');
-function frame(now) {
-  requestAnimationFrame(frame);
-  if (!glc.width || !glc.height || W < 2 || H < 2) { resize(); last = now; return; }
-  const rdt = clamp((now - last) / 1000, 0, .05); last = now;
-  const dt = paused ? 0 : rdt * speed; simT += dt;
+// one step of the world clock: timers, the town, the line and every actor (rendering stays in frame)
+function simulate(dt, now) {
+  simT += dt;
   for (let i = waits.length - 1; i >= 0; i--) if (simT >= waits[i].at) { const w = waits.splice(i, 1)[0]; w.r(); }
   if (!closed) { svcT += dt; for (let i = swaits.length - 1; i >= 0; i--) if (svcT >= swaits[i].at) { const w = swaits.splice(i, 1)[0]; w.r(); } }
   if (!closed) for (let i = tweens.length - 1; i >= 0; i--) { const tw = tweens[i]; tw.t += dt; const k = Math.min(1, tw.t / tw.dur); tw.obj.position.lerpVectors(tw.from, tw.to, k); tw.obj.position.y += Math.sin(k * Math.PI) * .25; if (k >= 1) { tweens.splice(i, 1); tw.r(); } }
-  updateBuildPieces(rdt); updateConstruction(dt);
+  updateConstruction(dt);
   townUpdate(dt, now); lineUpdate();
   for (const a of actors) {
     a.update(dt);
     if (sceneMode === 'demo' && !a.isCustomer && !a.hidden && a.mode === 'work') { cost += RATE[a.meta.tier] * dt; a.tokens += TOK[a.meta.tier] * dt * 4; }
   }
+}
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (!glc.width || !glc.height || W < 2 || H < 2) { resize(); last = now; return; }
+  const rdt = clamp((now - last) / 1000, 0, .05); last = now;
+  const dt = paused ? 0 : rdt * speed;
+  updateBuildPieces(rdt); simulate(dt, now);
   if (pizza) pizza.wedges.forEach(wd => { const s = wd.w.scale.x, t = wd.target ?? .001; if (Math.abs(s - t) > .001) wd.w.scale.setScalar(lerp(s, t, Math.min(1, dt * 8))); });
   // oven glow + night
   ovenHeat = lerp(ovenHeat, ovenOn && !closed ? 1 : 0, Math.min(1, rdt * 1.2));
