@@ -42,7 +42,8 @@ async function main() {
       await page.evaluate(next => window.__kitchenFeed(next), state);
     }
     const implementer = { aid: 'cook', sid: 'fixture-session', type: 'bytheslice:implementer', label: 'P4 S4.3 build: Real Cast', startedAt: 100 };
-    await feed(fixture([implementer]));
+    const pies = [{ id: 'pie-4', pie: 4, title: 'Live Kitchen', status: 'active', slices: [{ id: 'slice-4.3', number: '4.3', title: 'Real cast', status: 'active' }] }];
+    await feed(fixture([implementer], { pies }));
     await page.waitForFunction(() => {
       const actor = window.__kitchenScene.actors.find(item => item.aid === 'cook');
       return actor && actor.name === 'Ren' && actor.mode === 'work' && !actor.hidden &&
@@ -52,11 +53,19 @@ async function main() {
     assert.equal(await page.evaluate(() => window.__kitchenScene.actors.find(item => item.aid === 'cook').task), implementer.label);
     console.log('PASS implementer is at its station after agentOn');
 
-    await feed(fixture([], { recent: [{ aid: 'cook', sid: 'fixture-session', ev: 'PostToolUse', ok: true }] }));
+    await feed(fixture([], { pies, recent: [{ aid: 'cook', sid: 'fixture-session', ev: 'PostToolUse', ok: true }] }));
     const stopped = await page.evaluate(() => window.__kitchenScene.actors.find(item => item.aid === 'cook'));
     assert.equal(stopped.mode, 'idle'); assert.equal(stopped.active, false); assert.equal(stopped.hidden, false);
     assert.equal(stopped.task, 'Done');
     console.log('PASS implementer is idle after agentOff');
+
+    await page.click('#bLog');
+    const log = await page.$$eval('#shBody .lrow span', rows => rows.map(row => row.textContent));
+    assert.deepEqual(log.slice(0, 2), ['Ren (line cook, builds code) finished building slice 4.3: real cast',
+      'Ren (line cook, builds code) started building slice 4.3: real cast']);
+    assert.equal(log.some(line => /: Done$/.test(line)), false);
+    await page.click('#bLog');
+    console.log('PASS log lines say who, their role, the step and the slice');
 
     await feed(fixture([], { project: { root: '/fixture/project', setup: 'none' } }));
     await page.waitForFunction(() => [...document.querySelectorAll('.co.note')].some(node => node.textContent ===

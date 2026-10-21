@@ -397,6 +397,63 @@ window.createKitchenCastDriver = function ({ roster, emit, demo, live }) {
 };
 </script>
 
+<script id="kitchen-words">
+// Plain-words log lines for agents starting and finishing. Built only from the dispatch label, the roster role,
+// the step in the label and the slice name in the checklist; never from prompts or final messages.
+window.kitchenWords = (() => {
+  const ROLE = {
+    implementer: 'line cook, builds code', plater: 'plater, assembles the slices', 'fix-attempter': 'fixer, repairs what failed',
+    'debug-instrumenter': 'debugger, adds probes to find a bug', 'checklist-curator': 'expediter, picks the next slice',
+    'rules-loader': 'reads the house rules', discovery: 'runner, maps the code first', 'slice-tester': 'taster, tries every feature',
+    'slice-verifier': 'inspector, runs the checks', 'spec-reviewer': 'reviewer, checks it matches the plan',
+    'quality-reviewer': 'reviewer, checks the craft', 'local-gates-runner': 'oven tender, runs the full test suite',
+    'ci-fix-attempter': 'driver, fixes CI on the way out', 'platform-walker': 'secret shopper, walks the app',
+    'phased-plan-writer': 'recipe writer, writes slice plans', 'stage-decomposer': 'pie cutter, splits work into slices',
+    'master-checklist-synthesizer': 'ticket printer, writes the checklist', 'brief-analyzer': 'reads the brief and asks questions',
+    'prd-reviewer': 'critic, reviews the product plan', 'retrospective-reviewer': 'reviewer, looks back on the day',
+    'proposal-drafter': 'drafts house-rule changes', 'block-composer': 'builds screens from stock blocks',
+    'component-crafter': 'pastry artist, crafts custom components', 'state-illustrator': 'paints empty, loading and error states',
+  };
+  const CREW = { setup: 'opening crew, sets up the project', menu: 'test kitchen, plans the work', case: 'display case crew, builds the UI kit',
+    line: 'line crew, builds code', pass: 'pass crew, checks the work', door: 'back door crew, runs final checks and delivery',
+    board: 'review board, reviews the day', front: 'front of house' };
+  const STEP = { build: 'building', test: 'testing', verify: 'verifying', fix: 'fixing', commit: 'committing', review: 'reviewing', plan: 'planning' };
+  const STEP_OF_TYPE = { implementer: 'build', plater: 'build', 'block-composer': 'build', 'component-crafter': 'build', 'layout-architect': 'build',
+    'state-illustrator': 'build', 'slice-tester': 'test', 'slice-verifier': 'verify', 'local-gates-runner': 'verify', 'fix-attempter': 'fix',
+    'debug-instrumenter': 'fix', 'spec-reviewer': 'review', 'quality-reviewer': 'review', 'phased-plan-writer': 'plan' };
+  const clean = value => String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 120);
+  const soft = title => /^[A-Z][a-z]/.test(title) ? title[0].toLowerCase() + title.slice(1) : title;
+  function role(character) {
+    const type = String(character.type || character.id || '').replace(/^bytheslice:/, '').replace(/#\d+$/, '');
+    if (character.plugin === false) return `temp helper for ${clean(type) || 'odd jobs'}`;
+    return ROLE[type] || ROLE[String(character.id || '').replace(/#\d+$/, '')] || CREW[character.crew] || 'crew';
+  }
+  function parts({ character = {}, row = {}, pies = [] }) {
+    const label = clean(row.label), tag = /\bP(\d+)\s+S(\d+\.\d+)\s+([a-z]+)\b/i.exec(label);
+    const type = String(row.type || character.type || '').replace(/^bytheslice:/, '');
+    const step = STEP[tag?.[3]?.toLowerCase()] ? tag[3].toLowerCase() : STEP_OF_TYPE[type] || null;
+    const sliceId = tag?.[2] || (typeof row.slice === 'string' ? row.slice : null);
+    const pieId = Number(tag?.[1] || row.pie) || null;
+    const pie = (pies || []).find(item => item?.slices?.some(sl => sl.number === sliceId)) || (pies || []).find(item => item?.pie === pieId && !item.single) || null;
+    const sl = pie?.slices?.find(item => item.number === sliceId);
+    const target = sliceId ? `slice ${sliceId}${sl?.title ? `: ${soft(clean(sl.title))}` : ''}` : pieId ? `pie ${pieId}${pie?.title ? `: ${clean(pie.title)}` : ''}` : '';
+    return { who: `${clean(character.name) || 'A helper'} (${role(character)})`, step, target, label, pie: pieId };
+  }
+  function start(input) {
+    const { who, step, target, label } = parts(input);
+    if (target) return `${who} started ${step ? STEP[step] : 'working on'} ${target}`;
+    return label ? `${who} started: ${label}` : `${who} started work`;
+  }
+  function finish(input) {
+    const { who, step, target, label } = parts(input), ok = input.ok !== false;
+    if (target) return ok ? `${who} finished ${step ? STEP[step] : 'work on'} ${target}` : `${who} was sent back while ${step ? STEP[step] : 'working on'} ${target}`;
+    if (label) return ok ? `${who} finished: ${label}` : `${who} was sent back: ${label}`;
+    return ok ? `${who} finished work` : `${who} was sent back`;
+  }
+  return Object.freeze({ start, finish, role, pieOf: input => parts(input).pie });
+})();
+</script>
+
 <script id="kitchen-build-out">
 // Presence and install diffs are independent of rendering and retain actual file evidence.
 window.createKitchenBuildDriver = function ({ render }) {
@@ -3032,9 +3089,9 @@ function renderStats() {
   $('#stGate').textContent = sceneMode === 'live' ? 'n/a' : pies.length ? Math.round(pies.filter(s => s.first).length / pies.length * 100) + '%' : 'n/a';
 }
 const feedEl = $('#feed'), LOG = [];
-function feed(text) {
+function feed(text, pie) {
   const mm = Math.floor(simT / 60), ss = Math.floor(simT % 60), stamp = `${mm}:${String(ss).padStart(2, '0')}`;
-  LOG.push({ stamp, text, pie: cur ? cur.o.n : null });
+  LOG.push({ stamp, text, pie: pie !== undefined ? pie : cur ? cur.o.n : null });
   const el = document.createElement('div'); el.className = 'ev'; el.innerHTML = `<time>${stamp}</time><span></span>`; el.lastChild.textContent = text;
   feedEl.prepend(el); [...feedEl.children].forEach((c, i) => { c.classList.toggle('old', i > 0); if (i > 2) c.remove(); });
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 650); }, 7000);
@@ -3696,6 +3753,7 @@ function startAtDawn() {
 const castHomes = new Map([...Object.values(A), ...BOARD].map(a => [a, { pos: a.pos.clone(), goal: a.goalYaw, hidden: !!a.hidden }]));
 const castActors = new Map([...castHomes.keys()].map(a => [a.meta.id, a]));
 const liveAssignments = new Map(), liveSkills = new Map(), castEvents = [];
+let liveSnapshot = null;
 let livePhase = null, liveSessionKey = null, reviewActive = false, phaseActorGen = 0;
 const phaseActors = new Map();
 const constructionWorkers = new Map();
@@ -3816,7 +3874,8 @@ function agentOn(event) {
   actor.walk(path, station[2]).then(() => {
     if (sceneMode === 'live' && entry.active && entry.version === version && !sceneOwnsActor(actor)) actor.doing(entry.row.label || event.character.type, 'work');
   });
-  feed(`${event.character.name}: ${event.row.label || event.character.type}`);
+  const words = { character: event.character, row: event.row, pies: liveSnapshot?.pies };
+  feed(window.kitchenWords.start(words), window.kitchenWords.pieOf(words));
 }
 function agentOff(event) {
   const entry = liveAssignments.get(event.key); if (!entry) return;
@@ -3824,7 +3883,9 @@ function agentOff(event) {
   if (sceneOwnsActor(entry.actor)) return;
   cancelActor(entry.actor);
   const line = event.ok ? 'Done' : 'Sent back';
-  entry.actor.doing(line, 'idle'); say(entry.actor, line); feed(`${entry.character.name}: ${line}`);
+  entry.actor.doing(line, 'idle'); say(entry.actor, line);
+  const words = { character: entry.character, row: entry.row, ok: event.ok, pies: liveSnapshot?.pies };
+  feed(window.kitchenWords.finish(words), window.kitchenWords.pieOf(words));
   const version = entry.version;
   entry.idleTimer = setTimeout(() => {
     if (sceneMode !== 'live' || entry.active || entry.version !== version || sceneOwnsActor(entry.actor)) return;
@@ -3979,6 +4040,7 @@ function syncLivePhase(snapshot) {
 }
 const castDriver = window.createKitchenCastDriver({ roster: { ...byId, 'box-it-up': byId.lead }, emit: castEvent, demo: demoDriver, live: startLive });
 function liveDriver(snapshot) {
+  liveSnapshot = snapshot;
   buildDriver.apply(snapshot);
   const castSnapshot = snapshot.project.setup === 'none' && setupWork(snapshot)
     ? { ...snapshot, project: { ...snapshot.project, setup: 'partial' } } : snapshot;
