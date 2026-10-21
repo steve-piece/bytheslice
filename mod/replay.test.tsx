@@ -4,9 +4,10 @@
 import { expect, test } from 'claude-code/testing'
 
 import { CHECKLIST_FIXTURE } from './fixtures/checklist.fixture.ts'
-import { replaySteps, hunksOf } from './replay.tsx'
+import { REPLAY_DRAW_WAIT_MS, replaySteps, hunksOf } from './replay.tsx'
 import { LEDGER, ledgerLine, ledgerText, replayTarget, stage, typed } from './testing.tsx'
 import type { World } from './testing.tsx'
+import type { Engine } from 'claude-code/testing'
 import type { LedgerRow } from './types'
 
 const SURFACES = ['terminal', 'desktop'] as const
@@ -42,6 +43,16 @@ function seeded(world: World): void {
   }
 }
 
+/** Runs pass replay, moving the mock clock while the command waits for the pane's first draw. */
+async function replay($: Engine, clock: { advance: (ms: number) => Promise<void> }, arg: string) {
+  let isDone = false
+  const answer = $.command.run(typed(arg)).finally(() => {
+    isDone = true
+  })
+  for (let waited = 0; !isDone && waited <= REPLAY_DRAW_WAIT_MS * 2; waited += 100) await clock.advance(100)
+  return answer
+}
+
 const texts = async (ui: { findAll: (q: { type: 'Text' }) => Promise<{ text: string }[]> }) => (await ui.findAll({ type: 'Text' })).map(t => t.text)
 
 test('steps are the commit rows in order, a sha once, then the uncommitted changes', () => {
@@ -58,13 +69,14 @@ test('steps are the commit rows in order, a sha once, then the uncommitted chang
 
 for (const surface of SURFACES) {
   test(`pass replay opens a focused pane at the first commit, and Next walks to the uncommitted step (${surface})`, async ($, on) => {
-    const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+    const { world, clock, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
     seeded(world)
     await start($, surface)
-    const answer = await $.command.run(typed('replay 5.1'))
+    // Mounted first: the surface draws the pane as it opens.
+    const ui = await $.ui.mount(replayTarget(surface))
+    const answer = await replay($, clock, 'replay 5.1')
     expect(answer.text).toBe('Replay 5.1: step 1 of 3. Prev and Next step through it; Escape closes.')
     expect(world.panes.some(pane => pane.id === 'pass-replay')).toBe(true)
-    const ui = await $.ui.mount(replayTarget(surface))
     expect((await texts(ui)).slice(0, 2)).toEqual(['Replay 5.1 · step 1 of 3', 'c1c1c1c feat(pie-5): 5.1 task 1 pane'])
     const files = await ui.findAll({ type: 'Button' })
     expect(files.map(b => [b.key, b.props.label])).toEqual([
@@ -89,10 +101,10 @@ for (const surface of SURFACES) {
   })
 
   test(`Prev at the first step stays at the first step (${surface})`, async ($, on) => {
-    const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+    const { world, clock, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
     seeded(world)
     await start($, surface)
-    await $.command.run(typed('replay 5.1'))
+    await replay($, clock, 'replay 5.1')
     const ui = await $.ui.mount(replayTarget(surface))
     const before = world.runs.length
     await ui.press({ key: 'prev' })
@@ -103,10 +115,10 @@ for (const surface of SURFACES) {
   })
 
   test(`under 60 columns the pane is one band line and a hint to widen (${surface})`, async ($, on) => {
-    const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+    const { world, clock, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
     seeded(world)
     await start($, surface)
-    await $.command.run(typed('replay 5.1'))
+    await replay($, clock, 'replay 5.1')
     const ui = await $.ui.mount(replayTarget(surface, 50))
     await ui.press({ key: 'next' })
     expect(await texts(ui)).toEqual(['Replay 5.1: step 2 of 3', 'Widen to 60 columns to see files and diffs.'])
@@ -125,14 +137,29 @@ test('pass replay names a slice with no rows, and a bad id gets the usage line',
 })
 
 test('a replay reads git for diffs and stores nothing: the ledger holds no content after a replay', async ($, on) => {
-  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  const { world, clock, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
   seeded(world)
   await start($)
   const before = world.files[LEDGER]
-  await $.command.run(typed('replay 5.1'))
+  await replay($, clock, 'replay 5.1')
   const ui = await $.ui.mount(replayTarget('terminal'))
   await ui.press({ key: 'next' })
   await ui.unmount()
   expect(world.files[LEDGER]).toBe(before)
   expect((before ?? '').includes('+first')).toBe(false)
+})
+
+test('a pane the engine calls placed but never draws (its diff panel holds the dock) gets the way to show it', async ($, on) => {
+  const { world, clock, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  seeded(world)
+  await start($)
+  const answer = await replay($, clock, 'replay 5.1')
+  expect(answer.text).toBe(
+    "Replay 5.1: step 1 of 3. The replay pane is open behind another panel, such as Claude Code's diff panel: run /diff to hide that panel and the replay shows.",
+  )
+  expect(world.panes.some(pane => pane.id === 'pass-replay')).toBe(true)
+  // Once the panel is hidden the surface draws the replay at its first step.
+  const ui = await $.ui.mount(replayTarget('terminal'))
+  expect((await texts(ui))[0]).toBe('Replay 5.1 · step 1 of 3')
+  await ui.unmount()
 })

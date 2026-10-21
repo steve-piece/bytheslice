@@ -140,10 +140,28 @@ export async function openReplay($: EngineInterface, arg: string): Promise<strin
   if (!rows.some(row => row.slice === slice)) return `Replay ${slice}: the ledger has no rows for that slice yet.`
   const steps = replaySteps(rows, slice)
   const state = await loadStep($, rows, slice, steps, 0)
+  const seen = draws
   await update($, replayAtom, () => state)
-  const opened = await $.ui.open({ id: REPLAY_PANE, title: `Replay ${slice}`, focus: true, closeOnEscape: true }).catch(() => ({ isPlaced: false }))
+  const opened: { isPlaced: boolean; reason?: string } = await $.ui
+    .open({ id: REPLAY_PANE, title: `Replay ${slice}`, focus: true, closeOnEscape: true })
+    .catch(() => ({ isPlaced: false }))
   const line = `Replay ${slice}: step 1 of ${steps.length}`
-  return opened.isPlaced ? `${line}. Prev and Next step through it; Escape closes.` : `${line}. The pane waits for a wider window.`
+  if (!opened.isPlaced) return `${line}. The pane is open and waits to be drawn: ${opened.reason ?? 'no surface placed it'}.`
+  // The engine answers placed and shown even while its own diff panel holds the dock, and then never draws the pane.
+  if (!(await drawnSince($, seen).catch(() => true))) {
+    return `${line}. The replay pane is open behind another panel, such as Claude Code's diff panel: run /diff to hide that panel and the replay shows.`
+  }
+  return `${line}. Prev and Next step through it; Escape closes.`
+}
+
+/** Draws of the replay pane so far: the command reads whether the surface drew it after the open. */
+let draws = 0
+/** How long pass replay waits for the opened pane's first draw before saying it is covered. */
+export const REPLAY_DRAW_WAIT_MS = 1000
+
+async function drawnSince($: EngineInterface, seen: number): Promise<boolean> {
+  for (let waited = 0; draws === seen && waited < REPLAY_DRAW_WAIT_MS; waited += 100) await $.clock.sleep(100)
+  return draws !== seen
 }
 
 /** A Prev or Next press: moves one step (staying put at either end) and loads it. Resolves the new state. */
@@ -185,6 +203,7 @@ export function fileLine(file: PassReplayFile): string {
 
 /** Draws the replay pane from its atom alone; every press loads git data, the draw never does. */
 export async function drawReplay($: EngineInterface, e: RenderInput<'Pane'>): Promise<RenderElement> {
+  draws += 1
   const state = await read($, replayAtom)
   const elements = $.ui.resolve(e)
   const { Box, Text, Button } = elements
