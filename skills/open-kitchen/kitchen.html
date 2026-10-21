@@ -101,18 +101,14 @@ button{font:inherit;color:inherit}
 button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 
 /* side sheet */
-#pfWrap{position:fixed;inset:0;z-index:9;display:grid;grid-template-columns:minmax(0,340px);justify-content:center;align-items:center;padding:16px;background:rgba(40,28,20,.28)}
-#pfWrap[hidden]{display:none}
-#profile{position:relative;width:100%;min-width:0;box-sizing:border-box;max-height:calc(100vh - 32px);overflow:auto;background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:14px 16px 18px}
-#profile .sh-close{position:absolute;top:12px;right:12px;z-index:1}
 #pfCanvas{display:block;width:100%;aspect-ratio:1/1;max-height:300px;border-radius:14px;background:radial-gradient(circle at 50% 40%,#fff8ec 0,#f3e5cf 70%,#ead6b8 100%)}
-#profile h4{font-family:var(--display);font-weight:600;font-size:21px;margin:12px 0 2px}
-#profile .sub{color:var(--ink-soft);font-weight:700;font-size:12.5px;margin:0 0 10px}
-#profile dl{display:grid;grid-template-columns:auto 1fr;gap:7px 12px;margin:0;font-size:13px}
-#profile dt{color:var(--ink-soft);font-weight:700;font-size:12px}
-#profile dd{margin:0;font-weight:700;min-width:0;overflow-wrap:anywhere}
-#profile dd .pname{font-size:13px;margin-right:10px}
-#profile code{font-size:12px}
+.pf h4{font-family:var(--display);font-weight:600;font-size:21px;margin:12px 0 2px}
+.pf .sub{color:var(--ink-soft);font-weight:700;font-size:12.5px;margin:0 0 10px}
+.pf dl{display:grid;grid-template-columns:auto 1fr;gap:7px 12px;margin:0;font-size:13px}
+.pf dt{color:var(--ink-soft);font-weight:700;font-size:12px}
+.pf dd{margin:0;font-weight:700;min-width:0;overflow-wrap:anywhere}
+.pf dd .pname{font-size:13px;margin-right:10px}
+.pf code{font-size:12px}
 #sheet{position:fixed;z-index:6;top:calc(68px + env(safe-area-inset-top,0px));right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));width:360px;max-width:calc(100vw - 32px);background:var(--card);border-radius:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden}
 .sh-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 10px}
 .sh-head h3{font-family:var(--display);font-weight:600;font-size:20px;margin:0}
@@ -310,7 +306,7 @@ button.orow:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
   <button id="bPause" data-i="pause" data-l="Pause"></button>
 </nav>
 
-<div id="pfWrap" hidden><div id="profile" role="dialog" aria-modal="true" aria-labelledby="pfName"><button type="button" class="sh-close" id="pfClose" aria-label="Close profile" data-i="close"></button><canvas id="pfCanvas" width="600" height="600" role="img" aria-label="Character portrait"></canvas><div id="pfBody"></div></div></div>
+<template id="pfHold"><canvas id="pfCanvas" width="600" height="600" role="img" aria-label="Character portrait"></canvas></template>
 <aside id="sheet" hidden><div class="sh-head"><h3 id="shTitle">Crew</h3><button class="sh-close" id="shClose" aria-label="Close" data-i="close"></button></div><div class="sh-body" id="shBody"></div></aside>
 <div id="tip" hidden></div>
 
@@ -3645,7 +3641,7 @@ function personInfo(key) {
   return { key, name: id, kind, look: a?.look || bike.look, kid: !!(t.kid || bike), actor: a, role, family: e ? e.who.filter(n => n !== id) : [], home: e ? `${e.name}, ${e.street}` : 'Around town',
     likes, now: p ? (p.home ? 'At home' : p.status) : '', pose: { town: t, bike: !!bike } };
 }
-const PF = { renderer: null, scene: null, cam: null, model: null, raf: 0, t: 0, opener: null };
+const PF = { renderer: null, scene: null, cam: null, model: null, raf: 0, t: 0, canvas: document.adoptNode($('#pfHold').content.firstElementChild) };
 function poseModel(c, info) {
   const g = c.g, arms = c.arms, legs = c.legs, P0 = info.pose, t = P0.town || {}, what = (t.what || '') + ' ' + (info.now || '');
   const hold = obj => { obj.position.set(0, .5, .32); g.add(obj); arms.forEach(arm => arm.rotation.x = -1.35); };
@@ -3670,7 +3666,7 @@ function poseModel(c, info) {
 }
 function renderProfileModel(info) {
   if (!PF.renderer) {
-    PF.renderer = new THREE.WebGLRenderer({ canvas: $('#pfCanvas'), antialias: true, alpha: true, preserveDrawingBuffer: true });
+    PF.renderer = new THREE.WebGLRenderer({ canvas: PF.canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
     PF.renderer.setPixelRatio(1); PF.renderer.setSize(600, 600, false); PF.renderer.setClearColor(0x000000, 0);
     PF.renderer.outputColorSpace = THREE.SRGBColorSpace; PF.renderer.toneMapping = THREE.ACESFilmicToneMapping; PF.renderer.toneMappingExposure = 1.08;
     PF.scene = new THREE.Scene();
@@ -3689,32 +3685,46 @@ function renderProfileModel(info) {
   PF.renderer.render(PF.scene, PF.cam);
 }
 function profileLoop() {
-  if ($('#pfWrap').hidden || !PF.model) { PF.raf = 0; return; }
+  if (!profileShown() || !PF.model) { PF.raf = 0; return; }
   PF.t += 1 / 60; PF.model.rotation.y = .35 + Math.sin(PF.t * .8) * .25; PF.renderer.render(PF.scene, PF.cam);
   PF.raf = requestAnimationFrame(profileLoop);
 }
 const personButton = n => `<button type="button" class="pname" data-person="${escapeCard(personKey(n))}">${escapeCard(n)}</button>`;
+// a profile is a screen inside the People sheet, so the scene stays free to pan, zoom and click while it shows
+const profileShown = () => !sheet.hidden && sheet.dataset.kind === 'crew' && !!sheet.dataset.person;
 function openProfile(key) {
-  const info = personInfo(key); if (!info) return false;
-  const wrap = $('#pfWrap'); if (wrap.hidden) PF.opener = document.activeElement;
+  if (!personInfo(key)) return false;
+  if (sheet.hidden || sheet.dataset.kind !== 'crew') openSheet('crew');
+  sheet.dataset.tab = key.startsWith('town:') ? 'town' : 'crew'; sheet.dataset.person = key;
+  renderPeopleSheet(); tip.hidden = true; tipFor = null;
+  $('#shBody').querySelector('[data-pback]').focus({ preventScroll: true });
+  return true;
+}
+function renderProfile(key) {
+  const info = personInfo(key); if (!info) { delete sheet.dataset.person; return false; }
   renderProfileModel(info);
-  $('#pfCanvas').setAttribute('aria-label', `${info.name}: ${PF.pose.toLowerCase()}`);
-  $('#pfBody').innerHTML = `<h4 id="pfName">${escapeCard(info.name)}</h4><div class="sub">${escapeCard(info.kind === 'crew' ? `${info.crewLabel || 'Kitchen crew'} · ${PF.pose}` : PF.pose)}</div><dl>
+  PF.canvas.setAttribute('aria-label', `${info.name}: ${PF.pose.toLowerCase()}`);
+  $('#shBody').innerHTML = `<div class="pf"><button type="button" class="sh-back" data-pback>‹ All ${info.kind === 'crew' ? 'crew' : 'townsfolk'}</button><div data-pf-canvas></div>
+    <h4 id="pfName">${escapeCard(info.name)}</h4><div class="sub">${escapeCard(info.kind === 'crew' ? `${info.crewLabel || 'Kitchen crew'} · ${PF.pose}` : PF.pose)}</div><dl>
     <dt>Role</dt><dd>${escapeCard(info.role)}${info.agent ? `<br><code>${escapeCard(info.agent)}</code>` : ''}</dd>
     <dt>Family</dt><dd>${info.family.length ? info.family.map(personButton).join('') : 'Lives on their own'}</dd>
     <dt>Home</dt><dd>${escapeCard(info.home)}</dd>
     <dt>Loves</dt><dd>${escapeCard(info.likes.slice(0, 3).map(k => LIKE_WORDS[k] || cap1(k)).join(', '))}</dd>
-    <dt>Now</dt><dd>${escapeCard(info.now || 'Somewhere in town')}</dd></dl>`;
-  wrap.hidden = false; wrap.dataset.person = key; tip.hidden = true; tipFor = null;
-  $('#pfClose').focus({ preventScroll: true });
+    <dt>Now</dt><dd>${escapeCard(info.now || 'Somewhere in town')}</dd></dl></div>`;
+  $('#shBody').querySelector('[data-pf-canvas]').replaceWith(PF.canvas);
   if (!PF.raf) PF.raf = requestAnimationFrame(profileLoop);
   return true;
 }
-function closeProfile() { const wrap = $('#pfWrap'); if (wrap.hidden) return; wrap.hidden = true; delete wrap.dataset.person; PF.opener?.focus?.({ preventScroll: true }); PF.opener = null; }
-$('#pfClose').onclick = closeProfile;
-$('#pfWrap').addEventListener('click', event => { if (event.target === $('#pfWrap')) closeProfile(); const b = event.target.closest('[data-person]'); if (b) openProfile(b.dataset.person); });
-document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('#pfWrap').hidden) { event.preventDefault(); closeProfile(); } });
-$('#shBody').addEventListener('click', event => { const b = event.target.closest('[data-person]'); if (b) openProfile(b.dataset.person); });
+function closeProfile() {
+  const key = sheet.dataset.person; if (!key) return;
+  delete sheet.dataset.person; renderPeopleSheet();
+  $('#shBody').querySelector(`[data-person="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
+}
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && profileShown()) { event.preventDefault(); closeProfile(); } });
+$('#shBody').addEventListener('click', event => {
+  if (event.target.closest('[data-pback]')) return closeProfile();
+  const b = event.target.closest('[data-person]'); if (b) openProfile(b.dataset.person);
+});
 tip.addEventListener('click', event => { const b = event.target.closest('[data-person]'); if (b) openProfile(b.dataset.person); });
 function actorCard(a) {
   if (a.kid) return kidCard(a.kid);
@@ -3752,7 +3762,7 @@ function openSheet(kind) {
   const btn = { crew: $('#bCrew'), orders: $('#bOrders'), log: $('#bLog'), progress: $('#bProgress') }[kind]; const was = !sheet.hidden && sheet.dataset.kind === kind;
   SHEET_BUTTONS.forEach(id => $(id).classList.remove('on'));
   if (was) { sheet.hidden = true; return; }
-  sheet.hidden = false; sheet.dataset.kind = kind; delete sheet.dataset.detail; btn.classList.add('on'); tip.hidden = true;
+  sheet.hidden = false; sheet.dataset.kind = kind; delete sheet.dataset.detail; delete sheet.dataset.person; btn.classList.add('on'); tip.hidden = true;
   if (kind === 'crew') renderPeopleSheet();
   else if (kind === 'log') renderLogSheet();
   else if (kind === 'progress') renderProgressSheet();
@@ -3813,6 +3823,7 @@ function townFolk() {
 function townActivity(n) { const p = personOf(n); return !p ? '' : p.home ? 'At home' : p.status; }
 function renderPeopleSheet() {
   $('#shTitle').textContent = 'People';
+  if (sheet.dataset.person && renderProfile(sheet.dataset.person)) return;
   const tab = sheet.dataset.tab === 'town' ? 'town' : 'crew';
   const active = new Set(actors.filter(a => !a.hidden && !a.isCustomer).map(a => a.meta.id));
   const crewHtml = `<div class="legend"><span><i style="background:#3a3532"></i>Opus: charcoal jacket</span><span><i style="background:#f3ead6"></i>Sonnet: cream jacket</span><span><i style="background:#d8a23c"></i>Haiku: mustard apron</span></div>` +
@@ -3826,7 +3837,7 @@ function renderPeopleSheet() {
     <div role="tabpanel" id="panel-town" aria-labelledby="tab-town"${tab === 'town' ? '' : ' hidden'}>${townHtml}</div>`;
 }
 function selectPeopleTab(tab, focus = true) {
-  sheet.dataset.tab = tab; renderPeopleSheet();
+  sheet.dataset.tab = tab; delete sheet.dataset.person; renderPeopleSheet();
   if (focus) $('#tab-' + tab).focus({ preventScroll: true });
 }
 $('#shBody').addEventListener('click', event => { const t = event.target.closest('[role="tab"]'); if (t && sheet.dataset.kind === 'crew') selectPeopleTab(t.id.slice(4)); });
@@ -4488,7 +4499,7 @@ Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
   get baseCrew() { return BASE_CREW().map(({ actor }) => ({ character: actor.meta.id, name: actor.meta.name, ambient: ambient.has(actor.meta.id),
     task: actor.task, mode: actor.mode, hidden: !!actor.hidden, position: [actor.pos.x, actor.pos.z], tag: actor.workTagO?.on ? actor.workTagO.el.textContent : null })); },
   get oven() { return { on: ovenOn, verifying: liveVerifying }; },
-  get profile() { const wrap = $('#pfWrap'); return wrap.hidden ? null : { person: wrap.dataset.person, name: $('#pfName')?.textContent, pose: PF.pose }; },
+  get profile() { return profileShown() ? { person: sheet.dataset.person, name: $('#pfName')?.textContent, pose: PF.pose } : null; },
   screenOf(target) {
     const house = /^house:(\d+)$/.exec(target), obj = house ? HS(+house[1]).g : null;
     const a = obj ? null : [...castActors.values(), ...townies].find(q => !q.hidden && (q.townie?.name === target || q.meta?.name === target));
