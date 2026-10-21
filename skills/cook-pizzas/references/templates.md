@@ -8,7 +8,7 @@ Every stage/slice file produced by `cook-pizzas` must begin with this YAML front
 ---
 stage: <int>
 pie: <int>                # v5: which Pie this slice belongs to
-slice: "<N.M>"            # v5: dotted slice id, e.g. "2.6" — quoted string
+slice: "<N.M>"            # v5: dotted slice id, e.g. "2.6", a quoted string
 review: boundary | continuous   # v5: inherited from the pie (boundary = autonomous; continuous = forces /sell-slice mode)
 name: "<Title Case>"
 type: design-system | ci-cd | env-setup | db-schema | frontend | backend | full-stack | infrastructure
@@ -24,7 +24,7 @@ completion_criteria:
 ---
 ```
 
-> **Dual-read.** A v4 flat file omits `pie`/`slice`/`review` and uses `## Stage N` headings — still contract-valid (`references/stage-frontmatter-contract.md` → "Dual-read"). v5 nested files carry all three and use `## Pie N` / `### Slice N.M` headings. `/cook-pizzas` emits nested; `--repie` converts a flat checklist on explicit opt-in. Plan files are never silently rewritten.
+> **Dual-read.** A v4 flat file omits `pie`/`slice`/`review` and uses `## Stage N` headings; it is still contract-valid (`references/stage-frontmatter-contract.md` → "Dual-read"). v5 nested files carry all three and use `## Pie N` / `### Slice N.M` headings. `/cook-pizzas` emits nested; `--repie` converts a flat checklist on explicit opt-in. Plan files are never silently rewritten.
 
 ## Master Checklist Template
 
@@ -40,7 +40,7 @@ completion_criteria:
 
 ## Prep (Pie 1 Foundations, run once before any feature work)
 
-This is **Pie 1 — Foundations**: its four slices (1.1–1.4) are the run-once standalone skills the user invokes directly. The "Prep" gate IS Pie 1's completion tracker — not a separate concept. `/sell-slice` checks every box below before accepting any feature slice (feature work is Pie 2 onward). Each foundation skill flips its own checkbox on completion when invoked in sequential mode.
+This is **Pie 1, Foundations**: its four slices (1.1 to 1.4) are the run-once standalone skills the user invokes directly. The "Prep" gate IS Pie 1's completion tracker, not a separate concept. `/sell-slice` checks every box below before accepting any feature slice (feature work is Pie 2 onward). Each foundation skill flips its own checkbox on completion when invoked in sequential mode.
 
 - [ ] Slice 1.1, Display case built       : run `/bytheslice:set-display-case` (design system, tokens, /library route)
 - [ ] Slice 1.2, Quality line installed   : run `/bytheslice:final-quality-check` (CI/CD, E2E, design-system-compliance, visual-regression)
@@ -49,11 +49,15 @@ This is **Pie 1 — Foundations**: its four slices (1.1–1.4) are the run-once 
 
 ---
 
-<!-- Feature pies start at Pie 2 — Pie 1 is Foundations (the Prep gate above). -->
+<!-- Feature pies start at Pie 2; Pie 1 is Foundations (the Prep gate above). -->
 ## Pie N: [Pie Name]    <!-- review: boundary -->
-**Pie scope:** [one line — the coherent chapter this pie delivers] | **MVP:** Yes | No | **Depends on:** Pies [list]
+**Pie scope:** [one line: the coherent chapter this pie delivers] | **MVP:** Yes | No | **Depends on:** Pies [list]
 **Review:** boundary (autonomous; one HITL at the pie boundary) | continuous (forces /sell-slice mode for every slice)
-**Linear milestone:** [id or —]
+**Linear milestone:** [id, or omit the line]
+**User flow:**
+1. [what the user does first] - Slice N.1
+2. [the next thing the user does] - Slice N.2
+3. [the step that finishes the flow] - Slice N.3
 
 ### Slice N.1: [Slice Name]
 **Type:** [type] | **Depends on:** Slices [list]
@@ -68,9 +72,10 @@ Completion criteria:
 - [ ] HITL items resolved (only if hitl_required: true)
 
 Exit criteria:
-- [ ] [transcript-verifiable, binary, slice-specific — e.g. `pnpm test --filter @repo/x` exits 0]
+- [ ] [transcript-verifiable, binary, slice-specific, e.g. `pnpm test --filter @repo/x` exits 0]
 - [ ] [Route `/path` renders with no console errors (screenshot in transcript)]
-- [ ] [For each component this slice authored/modified: `/library/<slug>` approved at the Phase 4.5 gate before any production import — UI-touching slices only]
+- [ ] [Only if this slice owns a User flow step: slice-tester completed <flow step> end-to-end on /<route> with zero console errors (screenshot at 1280 in transcript)]
+- [ ] [For each component this slice authored/modified: `/library/<slug>` approved at the Phase 4.5 gate before any production import (UI-touching slices only)]
 
 ### Slice N.2: [Slice Name]
 **Type:** [type] | **Depends on:** Slices [list]
@@ -86,7 +91,7 @@ Exit criteria:
 
 ---
 
-<!-- Repeat ### Slice N.M for the pie's 3–8 slices, then repeat ## Pie N for each pie. -->
+<!-- Repeat ### Slice N.M for the pie's 3 to 8 slices, then repeat ## Pie N for each pie. -->
 <!-- The pie PR opens at the boundary (one PR per pie); per-slice work is commit + push only. -->
 
 ## MVP Summary
@@ -102,7 +107,9 @@ Exit criteria:
 | N | N.M | [Slice Name] | [type] | [ ] |
 ```
 
-> The `<!-- review: boundary -->` comment on the `## Pie N` heading mirrors the pie's `review` frontmatter and is what the dual-read parser and `/sell-pie` key off. A `## Stage N` heading (no pie) is the v4 flat shape — still valid; `/sell-pie` refuses it and points at `/cook-pizzas --repie`.
+> **User flow (optional, one block per pie).** The `**User flow:**` line sits in the pie block, after the pie's header lines and before its first `### Slice` heading, followed by 3 to 7 numbered items. Each item is one step the user takes and ends with ` - Slice N.M`, naming the slice that owns it (a plain hyphen with a space on each side, never an em or en dash). Steps are numbered list items and never `### Slice` headings: `hooks/lib/checklist.sh` counts slices from `### Slice N.M` headings, so a step written as a heading would double-count every slice in the pie. A pie with no user-facing flow (a backend-only pie) omits the block. The owning slice's plan carries the step as its one user-outcome Exit line (see "Exit-criteria contract" below).
+
+> The `<!-- review: boundary -->` comment on the `## Pie N` heading mirrors the pie's `review` frontmatter and is what the dual-read parser and `/sell-pie` key off. A `## Stage N` heading (no pie) is the v4 flat shape, still valid; `/sell-pie` refuses it and points at `/cook-pizzas --repie`.
 
 ## Feature Slice Plan Template (feature pies)
 
@@ -220,9 +227,9 @@ The **Exit criteria** block is the single source of truth for "what it means for
 
 Every line MUST be (a line marked `(date-gated, on or after YYYY-MM-DD)` is the one exception to "now"; see "Calendar-gated criteria" below):
 
-1. **Transcript-verifiable from the conversation.** The evaluator does not run commands or read files independently — only what Claude has already surfaced in the transcript counts as evidence. Write criteria that Claude's own output can demonstrate (a command's exit code that lands in the transcript, a subagent's structured `verdict: pass`, a file path Claude has read).
+1. **Transcript-verifiable from the conversation.** The evaluator does not run commands or read files independently: only what Claude has already surfaced in the transcript counts as evidence. Write criteria that Claude's own output can demonstrate (a command's exit code that lands in the transcript, a subagent's structured `verdict: pass`, a file path Claude has read).
 2. **Binary.** Each criterion is either met or not met. No partial credit, no "looks good."
-3. **Specific to this slice.** Avoid generic platitudes like "no regressions" — name the routes, files, or test suites that prove the slice's intent.
+3. **Specific to this slice.** Avoid generic platitudes like "no regressions"; name the routes, files, or test suites that prove the slice's intent.
 
 Good examples (transcript-verifiable, binary, specific):
 
@@ -233,6 +240,7 @@ Good examples (transcript-verifiable, binary, specific):
 - `quality-reviewer` and `spec-reviewer` agents both return `verdict: pass` for every in-scope task
 - `library-entry-writer` reports `production_imports_added: 0` until user approval; then user explicitly approved each entry at the Phase 4.5 gate
 - Route `/dashboard/billing` renders with no console errors (screenshot captured in transcript)
+- `slice-tester completed <flow step> end-to-end on /<route> with zero console errors (screenshot at 1280 in transcript)`: the one sanctioned user-outcome line, written only by a `frontend` or `full-stack` slice that owns a step in its pie's `User flow`, with `<flow step>` taken from that step. One line or none: a slice that owns no step writes none (`agents/phased-plan-writer.md` "User-outcome line")
 - `db/schema.sql` updated and `supabase db diff` shows the new `subscriptions` table with RLS policies present
 
 Bad examples (vague, non-transcript-verifiable, generic):
@@ -240,6 +248,7 @@ Bad examples (vague, non-transcript-verifiable, generic):
 - "Auth works correctly" → unmeasurable; what command proves it?
 - "No regressions" → too broad; which routes / suites?
 - "Code quality is high" → subjective; not binary
+- "Looks good", "feels intuitive" → taste, not a check; a user outcome uses the one sanctioned `slice-tester completed <flow step>` line above
 - "Ship-ready" → meta; not a criterion
 - "Tests pass" without naming the test command → too generic
 - "`gh pr checks` green", "`@regression-core` passes", "`db-schema-drift` CI job green" → CI-only (gate tier 4); CI runs at the PR, not per slice
@@ -262,7 +271,7 @@ Drop this line only for pure internal refactors with no rendered-output delta in
 
 ## Canned Stage Templates
 
-The four foundation stage templates live in `references/canned-stages/`. In v5 they are the slices of **Pie 1** (the foundations pie, `review: boundary` — slices `1.1`–`1.4`); their on-disk filenames are unchanged for dual-read back-compat. Do not duplicate them here — reference them directly:
+The four foundation stage templates live in `references/canned-stages/`. In v5 they are the slices of **Pie 1** (the foundations pie, `review: boundary`, slices `1.1` to `1.4`); their on-disk filenames are unchanged for dual-read back-compat. Do not duplicate them here; reference them directly:
 
 - `references/canned-stages/stage-1-design-system-gate.md`     (Slice 1.1)
 - `references/canned-stages/stage-2-ci-cd-scaffold.md`          (Slice 1.2)
@@ -286,7 +295,7 @@ Every generated plan file starts with two HTML comment lines:
 
 ```markdown
 <!-- docs/plans/stage_5_user_auth_shell.md -->
-<!-- Stage 5: auth shell — sign-in/sign-up routes, layout, loading and error states -->
+<!-- Stage 5: auth shell (sign-in/sign-up routes, layout, loading and error states) -->
 ```
 
 ## Checkbox format rule
