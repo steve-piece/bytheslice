@@ -55,7 +55,7 @@ Bold rows mark the skill each group of agents belongs to. The six agents at the 
 | `debug-instrumenter` | Dee | If the first fix did not take, adds temporary tagged logging around the failure so the next fix attempt has real data. The tags are stripped once everything is green. |
 | **🍕 /sell-slice frontend pipeline** | | |
 | `modern-ux-expert` | Mo | Researches how best-in-class products solve this screen and writes a short UX spec with the chosen patterns and a few visual references. |
-| `layout-architect` | Lyle | Writes the route files, page shells, and breakpoint plan (the skeleton of the screen), leaving the components' inner workings to others. |
+| `layout-architect` | Lyle | Runs after `modern-ux-expert`, never alongside it: reads its UX spec, writes the route files and page shells (the skeleton of the screen), and appends the breakpoint plan to that spec, leaving the components' inner workings to others. Stops to ask if the spec is missing. |
 | `block-composer` | Blake | Covers as much of the UI as possible with ready-made shadcn blocks before any custom code, and reports exactly what percent is covered and where the gaps are. |
 | `component-crafter` | Kit | Hand-builds only the pieces block-composer could not cover, using design tokens exclusively: no raw colors, fonts, or spacing values. |
 | `library-entry-writer` | Libby | Puts every new or visually changed component in the `/library` showroom with all its variants and states, so you approve the look before it touches production routes. Its tools stop at files, read-only shell commands and the shadcn registry, and it never stages or commits. |
