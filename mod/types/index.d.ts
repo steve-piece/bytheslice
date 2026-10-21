@@ -41,6 +41,7 @@ export type LedgerEvent =
   | 'usage'
   | 'slice.rollup'
   | 'warn'
+  | 'agent.stalled'
 
 /** One line of `.bytheslice/ledger.jsonl`: facts only, never a prompt, an answer or a secret. */
 export type LedgerRow = {
@@ -144,6 +145,29 @@ export type PassMismatch = {
   head: string | null
 }
 
+/** The four categories that halt a ByTheSlice loop, plus `other` for the Pass's own items. */
+export type PassHitlCategory = 'prd_ambiguity' | 'external_credentials' | 'destructive_operation' | 'creative_direction' | 'other'
+
+/** One HITL question the ledger shows raised and not yet answered. Raising it halted nothing. */
+export type PassHitlItem = {
+  id: string
+  category: PassHitlCategory
+  question: string
+  context: string | null
+  /** `agent`: the model raised it through bts_hitl. `pass`: the mod raised it (a stall, the fix cap). */
+  source: 'agent' | 'pass'
+  /** `chat`: the model was told to ask it in chat, so the operator's next reply answers it. `pane`: only the pane showed it. */
+  asked: 'chat' | 'pane'
+  /** What raised a Pass item (`agent-stalled`, `fix-loop-cap`), or null for the model's own. */
+  kind: string | null
+  pie: number | null
+  slice: string | null
+  t: number
+}
+
+/** The HITL inbox as the ledger shows it: open items oldest first, and how long each answered item waited. */
+export type PassHitl = { open: PassHitlItem[]; waitedMs: Record<string, number> }
+
 /** The whole ledger projection the pane, band and bts_status read. */
 export type PassProjection = {
   pies: PassPieView[]
@@ -154,11 +178,23 @@ export type PassProjection = {
   untracked: number
   /** The newest check warnings in the ledger, newest first, at most 10. */
   findings: PassFinding[]
+  /** The HITL inbox. */
+  hitl: PassHitl
   at: number
 }
 
 /** Whether a slice marked done needs a slice-tester pass too: UI slices only (the default), every slice, or none. */
 export type PassRequireTester = 'ui-slices' | 'always' | 'never'
+
+/** The watchdog's thresholds: `bytheslice.config.json` key `pass.watchdog` over the defaults in mod/policy.ts. */
+export type PassWatchdog = {
+  /** False stops the stall scan; nothing else changes. */
+  enabled: boolean
+  /** No tool activity for longer than this, past the role's budget, is a stall. */
+  idleMs: number
+  /** Role to how long it may run before idling counts; `default` for any role not listed. */
+  budgetsMs: Record<string, number>
+}
 
 /** The check and spawn policy: `bytheslice.config.json` key `pass` over the defaults in mod/policy.ts. */
 export type PassPolicy = {
@@ -169,7 +205,18 @@ export type PassPolicy = {
   roles: Record<string, string[]>
   /** Case-insensitive strings that mark builder context in a reviewer's prompt. */
   contextMarkers: string[]
+  /** The stall watchdog's thresholds. */
+  watchdog: PassWatchdog
 }
+
+/** When an agent loop last showed activity (a tool call or a turn start), when it started, and its role. */
+export type PassSeen = { lastT: number; role: string; startT: number }
+
+/** One agent's latest stall: which episode (its `lastT` then), the count it took, and the key counts are kept by. */
+export type PassStallMark = { n: number; lastT: number; at: number; key: string }
+
+/** Stalls this session flagged: per agent its latest episode, per slice (or lone agent) how many. */
+export type PassStalls = { agents: Record<string, PassStallMark>; counts: Record<string, number> }
 
 /** The band's warning style after a finding: which one, and until when. */
 export type PassWarning = { code: string; slice: string | null; t: number; until: number }
@@ -233,6 +280,12 @@ declare module 'claude-code' {
       'pass.spawns': Record<string, PassSpawnTrack>
       /** Fix spawns this session started, beside what the activity log counts. */
       'pass.fixCounts': PassFixCounts
+      /** Agent id to its last activity, start and role, as the tool.call and turn.start stamps and the watchdog scan keep them. */
+      'pass.seen': Record<string, PassSeen>
+      /** Stalls the watchdog flagged this session. */
+      'pass.stalls': PassStalls
+      /** Keys already sent as a native notification (a HITL id, `pie:<n>`), newest last. */
+      'pass.notified': string[]
     }
   }
 }

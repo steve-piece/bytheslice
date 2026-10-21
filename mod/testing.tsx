@@ -2,7 +2,7 @@
 // Test-only stand-ins for the engine beneath the Pass: answers the $ calls the mod makes from an in-memory world, plus mount targets.
 
 import { mock } from 'claude-code/testing'
-import type { AgentInfo, AgentSpawnInput, On, RenderSurface, UiPane } from 'claude-code'
+import type { AgentInfo, AgentSpawnInput, On, RenderSurface, UiNotifyResult, UiPane } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
 import { DEFAULT_ROLES } from './policy.ts'
@@ -17,6 +17,7 @@ export const SESSION = 'session-test'
 export const HEAD = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678'
 export const STATUS_TOOL = 'mcp__bytheslice__bts_status'
 export const NOTE_TOOL = 'mcp__bytheslice__bts_note'
+export const HITL_TOOL = 'mcp__bytheslice__bts_hitl'
 
 /** What the stand-ins answer from; a test changes it between steps. */
 export type World = {
@@ -51,6 +52,10 @@ export type World = {
   sessionId: string | null
   /** The session's working directory. */
   cwd: string
+  /** Every native notification a plugin raised, in order. */
+  notifies: { text: string; title?: string | undefined }[]
+  /** What `$.ui.notify` answers. */
+  notifyResult: UiNotifyResult
 }
 
 /** The rows a world file holds, parsed; a torn line is left out. */
@@ -112,6 +117,8 @@ export function stage(on: On, init: Partial<World> = {}) {
     costUsd: 0.25,
     sessionId: SESSION,
     cwd: CWD,
+    notifies: [],
+    notifyResult: { isSent: true, channel: 'iterm2' },
     ...init,
   }
   const abs = (path: string): string => (path.startsWith('/') ? path : `${world.cwd}/${path.replace(/^\.\//, '')}`)
@@ -223,6 +230,11 @@ export function stage(on: On, init: Partial<World> = {}) {
     world.logs.push(e.text)
     return { value: undefined }
   })
+  on('ui.notify', (_$, e) => {
+    world.notifies.push({ text: e.text, title: e.title })
+    return { value: world.notifyResult }
+  })
+  on('session.end', (_$, e) => ({ sessionId: e.sessionId }))
 
   const start = (
     $: Engine,
@@ -301,6 +313,26 @@ export function engineDraws(on: On): void {
 export async function note($: Engine, text: unknown, slice?: string): Promise<string> {
   const ran = await $.tool.call({ tool: NOTE_TOOL, text, ...(slice === undefined ? {} : { slice }) })
   return String(ran.result)
+}
+
+/** Calls bts_hitl the way the model does; resolves the text it answered. */
+export async function hitl($: Engine, input: Record<string, unknown>): Promise<string> {
+  const ran = await $.tool.call({ tool: HITL_TOOL, ...input })
+  return String(ran.result)
+}
+
+/**
+ * Calls a tool from inside a subagent's loop, as the engine raises a call that
+ * loop made: the input carries the loop's `agentId`, which a plugin's own call
+ * types leave out.
+ */
+export function agentCall($: Engine, agentId: string, input: { tool: string } & Record<string, unknown>) {
+  return $.tool.call({ ...input, agentId } as never)
+}
+
+/** Ends the session as the person leaving does (or with another reason). */
+export function endSession($: Engine, reason: 'prompt_input_exit' | 'clear' = 'prompt_input_exit') {
+  return $.session.end({ reason, sessionId: SESSION, resume: { id: SESSION } })
 }
 
 /** Calls bts_status the way the model does; resolves the text it answered. */

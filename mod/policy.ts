@@ -1,11 +1,11 @@
 // mod/policy.ts
-// The Pass check and spawn policy: role defaults mirroring each agent's model frontmatter, the bytheslice.config.json reader and override notes.
+// The Pass check, spawn and watchdog policy: role defaults mirroring each agent's model frontmatter, the watchdog thresholds, the bytheslice.config.json reader and override notes.
 
 import type { EngineInterface } from 'claude-code'
 
 import { stripJsonc } from './jsonc.ts'
 import { appendRow, readRows } from './ledger.ts'
-import type { PassPolicy, PassRequireTester } from './types'
+import type { PassPolicy, PassRequireTester, PassWatchdog } from './types'
 
 // No runtime import from 'claude-code' here: tests/pass/policy-parity.test.js
 // loads this file in plain Node to hold DEFAULT_ROLES to the agent frontmatter.
@@ -79,11 +79,30 @@ export const CONTEXT_ROLES: ReadonlySet<string> = new Set(['slice-tester', 'slic
 
 const TESTER_MODES: readonly PassRequireTester[] = ['ui-slices', 'always', 'never']
 
+/**
+ * The watchdog's defaults: three minutes with no tool activity counts as idle
+ * once a role has run past its budget (fifteen minutes, five for discovery,
+ * thirty for the implementer). `bytheslice.config.json` key `pass.watchdog` overrides.
+ */
+export const DEFAULT_WATCHDOG: PassWatchdog = {
+  enabled: true,
+  idleMs: 180000,
+  budgetsMs: { default: 900000, discovery: 300000, implementer: 1800000 },
+}
+
+const copyWatchdog = (w: PassWatchdog): PassWatchdog => ({ enabled: w.enabled, idleMs: w.idleMs, budgetsMs: { ...w.budgetsMs } })
+
 export const DEFAULT_POLICY: PassPolicy = {
   enabled: true,
   requireTester: 'ui-slices',
   roles: Object.fromEntries(Object.entries(DEFAULT_ROLES).map(([role, tiers]) => [role, [...tiers]])),
   contextMarkers: [...DEFAULT_MARKERS],
+  watchdog: copyWatchdog(DEFAULT_WATCHDOG),
+}
+
+/** How long a role may run before idling counts as a stall: its own budget, else `default`. */
+export function budgetMs(role: string, watchdog: PassWatchdog): number {
+  return watchdog.budgetsMs[role] ?? watchdog.budgetsMs.default ?? DEFAULT_WATCHDOG.budgetsMs.default ?? 900000
 }
 
 /** One setting a project's config moved off its default, as the ledger's `policy-override` note records it. */
@@ -103,6 +122,29 @@ const strings = (value: unknown): string[] | null => {
 
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
 
+const isSpan = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0
+
+/** Folds `pass.watchdog` over the watchdog's defaults: `enabled`, `idleMs`, and each role of `budgetsMs`. */
+function watchdogOver(policy: PassPolicy, raw: unknown, overrides: PolicyOverride[]): void {
+  if (!isObject(raw)) return
+  const dog = policy.watchdog
+  if (typeof raw.enabled === 'boolean' && raw.enabled !== dog.enabled) {
+    overrides.push({ setting: 'watchdog.enabled', value: raw.enabled, default: dog.enabled })
+    dog.enabled = raw.enabled
+  }
+  if (isSpan(raw.idleMs) && raw.idleMs !== dog.idleMs) {
+    overrides.push({ setting: 'watchdog.idleMs', value: raw.idleMs, default: dog.idleMs })
+    dog.idleMs = raw.idleMs
+  }
+  const budgets = isObject(raw.budgetsMs) ? raw.budgetsMs : {}
+  for (const [rawRole, value] of Object.entries(budgets)) {
+    const role = rawRole.replace(/^bytheslice:/, '').trim()
+    if (role === '' || !isSpan(value) || dog.budgetsMs[role] === value) continue
+    overrides.push({ setting: `watchdog.budgetsMs.${role}`, value, default: dog.budgetsMs[role] ?? null })
+    dog.budgetsMs[role] = value
+  }
+}
+
 /**
  * The policy from a parsed config's `pass` key over the defaults. A project
  * role list replaces that role's default (an empty list stops checking its
@@ -114,6 +156,7 @@ export function policyFrom(config: unknown): { policy: PassPolicy; overrides: Po
     requireTester: DEFAULT_POLICY.requireTester,
     roles: Object.fromEntries(Object.entries(DEFAULT_POLICY.roles).map(([role, tiers]) => [role, [...tiers]])),
     contextMarkers: [...DEFAULT_POLICY.contextMarkers],
+    watchdog: copyWatchdog(DEFAULT_POLICY.watchdog),
   }
   const overrides: PolicyOverride[] = []
   const pass = isObject(config) ? config.pass : undefined
@@ -144,6 +187,7 @@ export function policyFrom(config: unknown): { policy: PassPolicy; overrides: Po
     overrides.push({ setting: 'contextMarkers', value: markers, default: policy.contextMarkers })
     policy.contextMarkers = markers
   }
+  watchdogOver(policy, pass.watchdog, overrides)
   return { policy, overrides }
 }
 
