@@ -74,7 +74,7 @@ Override auto-detection with explicit `--standalone` / `--sequential` flags. Per
 
 | Agent | Type | What it does |
 |---|---|---|
-| `slice-tester` | behavioral | Rendered design-system match + per-affordance exercise + seed-and-cleanup data-flow round-trips (with the bidirectional rule). |
+| `slice-tester` | behavioral | Rendered design-system match + per-affordance exercise + a blocking rendered accessibility pass + seed-and-cleanup data-flow round-trips (with the bidirectional rule). |
 | `slice-verifier` | static | Lint / type / build / unit / e2e-by-tag (threshold-gated per `verification.e2e`) + design-system static grep + CI-integrity + the build-manifest under-declaration backstop. The full local suite runs **once per slice**; after a fix only the touched gates re-run. |
 
 The three v4 verifiers (`basic-checks-runner`, `aggregating-test-reviewer`, `ci-cd-guardrails`) and `frontend/visual-reviewer` are deprecated shims folded into these two.
@@ -88,7 +88,7 @@ The three v4 verifiers (`basic-checks-runner`, `aggregating-test-reviewer`, `ci-
 
 **Type-routed behavioral testing.** `slice-tester` routes on slice type:
 
-- **frontend** → Chrome rendered design-system match + per-affordance exercise.
+- **frontend** → Chrome rendered design-system match + per-affordance exercise + a rendered accessibility pass (contrast, keyboard reach and order, visible focus, focus traps, errors not signalled by color alone, reduced motion, dark-mode contrast) at each viewport. Any a11y `fail` fails the slice; a green result covers the machine-checkable band only and never implies screen-reader behavior. The tester also records the browser tier it actually drove (`tooling_tier_used`).
 - **full-stack / backend** → seed-and-cleanup data-flow round-trips (paired cleanup written first, hard non-prod guard, cleanup-in-`finally`, residue check), success-and-error toasts, cross-surface bidirectional round-trips.
 - **infrastructure** → probe / harness only, no browser.
 
@@ -107,7 +107,7 @@ Stage files and canned stages state their exit criteria in these tiers and never
 
 **Re-verification re-runs only what a fix could change.** After any fix (1st, 2nd or 3rd), `slice-verifier` gets its prior verdict plus the fix's `files_changed`, carries every green check forward, re-runs only the gates that patch could change (its choice, from the fix diff), and reports them in `rerun: [{gate, reason}]`. The full suite never re-runs after a fix.
 
-**Fix cap: 3 local fix loops and 3 CI fix rounds, separate counters.** A loop is one fix dispatch plus its re-verify: `fix-attempter`; then `debug-instrumenter` plus `fix-attempter`; then `fix-attempter` with the full evidence. CI rounds (`ci-fix-attempter` in `/box-it-up`) count per PR. Run instructions such as "continue until verified", "never stop" or "fully automated" never raise either cap; only the operator's explicit reply at the HITL can grant more.
+**Fix cap: 3 local fix loops and 3 CI fix rounds, separate counters.** A loop is one fix dispatch plus its re-verify: `fix-attempter`; then `debug-instrumenter` plus `fix-attempter`; then `fix-attempter` with the full evidence. CI rounds (`ci-fix-attempter` in `/box-it-up`) count per PR. Run instructions such as "continue until verified", "never stop" or "fully automated" never raise either cap; only the operator's explicit reply at the HITL can grant more. Both loops also stop early on a repeated error signature, `normalize(first_error_line) | file | check_key` (the CI loop uses the job name as the key), a plain string held in the conversation and never persisted: when the failure a patch aimed at comes back unchanged, the loop halts with a HITL instead of spending another round. A patch that turns a green gate red is restored by the conductor before the next fix.
 
 **Batched approvals.** Every approval a slice needs (build plan, migrations, live data loads, size exceptions, terms, credentials) goes out as one batch of short questions, one decision each with a recommended answer, at slice start or the first point all are known. The Library Preview gate is the one mid-slice stop outside the batch, because it needs built output.
 
