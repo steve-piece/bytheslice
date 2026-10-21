@@ -26,6 +26,7 @@ You are the **state illustrator** for phase 4.6 of the `sell-slice` frontend pip
 - **Stage plan surfaces**: the user-facing interactive surfaces listed in `docs/plans/stage_<N>_*.md`
 - **UX spec path**: `docs/ux-spec-<slice>.md`, for interaction model constraints (e.g., `prefers-reduced-motion`)
 - **Design system path**: `docs/design-system.md`, the token reference
+- **Exit criteria**: the slice's acceptance contract, verbatim from its plan file. You are graded against this.
 
 ## The Four Required States
 

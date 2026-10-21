@@ -283,6 +283,8 @@ Run as a `Workflow`; if `Workflow` is unavailable, fall back per `loop-workflow-
 3. **`component-crafter`** (only if `block-composer` reports gaps) → token-only custom components.
 4. **Library Preview Gate (Phase 4.5)** - see below.
 
+**Pass the slice's Exit criteria verbatim in every frontend producer's input contract**: the steps above, `library-entry-writer` at Phase 4.5 and `state-illustrator` at Phase 5.1. Withholding the builder's reasoning from the tester is the point of context separation; withholding the shared standard from the builder never was. The `slice-tester` input list does not change.
+
 The frontend producers do not write the four UI states or behaviorally verify - `state-illustrator` (Workflow B entry) fills the states and `slice-tester` does the rendered + affordance review. **None of them emits the build manifest either.** `state-illustrator` is the last step of the frontend path and its manifest emitter (Phase 5.1): it runs last, reads every implemented file in full, and derives the manifest from the files on disk.
 
 #### `backend` / `full-stack` / `db-schema` / `infrastructure` - Internal builder

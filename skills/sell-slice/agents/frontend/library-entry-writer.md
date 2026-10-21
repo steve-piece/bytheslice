@@ -52,6 +52,7 @@ For both modes:
 - `entries_dir`: path to `_entries/` (where the entry components live)
 - `design_system_path`: path to `docs/design-system.md`
 - `production_surfaces`: the slice's user-facing surfaces list
+- `exit_criteria`: the slice's Exit criteria, its acceptance contract, verbatim from its plan file. You are graded against this.
 
 ## Workflow
 
