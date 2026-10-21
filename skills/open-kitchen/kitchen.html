@@ -1471,7 +1471,7 @@ function curbSafe(a, ux, uz) {
   if (roadAt(a.pos.x, a.pos.z)) {
     if (!(a instanceof Actor)) return true;
     // never into a car, and never into the path just ahead of a moving one
-    const car = cars.find(c => c.active !== false && ((inCarBody(c, ax, az) && !inCarBody(c, a.pos.x, a.pos.z)) || (c.v > .3 && inCarPath(c, ax, az) && !inCarPath(c, a.pos.x, a.pos.z))));
+    const car = cars.find(c => c.active !== false && ((carGap(c, ax, az) < .3 && carGap(c, ax, az) < carGap(c, a.pos.x, a.pos.z)) || (c.v > .3 && inCarPath(c, ax, az) && !inCarPath(c, a.pos.x, a.pos.z))));
     if (!car) { a.bodySince = null; return true; }
     a.bodySince ??= simT;
     if (car.v <= .3 && simT - a.bodySince > 1.2) {
@@ -1514,6 +1514,8 @@ function willStop(c, at) {
 }
 // a car's body (1.9 by 0.92) plus a little room
 const inCarBody = (c, x, z, pad = .3) => Math.abs((c.ln.axis === 'x' ? x : z) - c.pos) < .95 + pad && Math.abs((c.ln.axis === 'x' ? z : x) - c.ln.lane) < .46 + pad;
+// how far a point is from a car's body (negative inside it); a step that closes the gap near a car is a step into it
+const carGap = (c, x, z) => Math.max(Math.abs((c.ln.axis === 'x' ? x : z) - c.pos) - .95, Math.abs((c.ln.axis === 'x' ? z : x) - c.ln.lane) - .46);
 // the strip a moving car is about to drive over
 const inCarPath = (c, x, z) => { const along = ((c.ln.axis === 'x' ? x : z) - c.pos) * c.ln.dir; return along > .9 && along < 1.4 + c.v * .8 && Math.abs((c.ln.axis === 'x' ? z : x) - c.ln.lane) < .76; };
 const roadAt = (x, z) => (z > 6.4 && z < 11.0) || (x > 7.6 && x < 11.6) || (z > -10.6 && z < -6.6) || (z > 41.4 && z < 45.4);
@@ -2661,7 +2663,40 @@ async function pregame() {
 async function postgame() {
   const w = GM.winner;
   if (w >= 0) { const champs = TEAMS[w].kids; champs.forEach((k, i) => { park(k, fieldAt(2.2 + (i % 3) * .6, 30 + i * 4), faceTo(...fieldAt(2.2 + (i % 3) * .6, 30 + i * 4), ...BB.M)); k.a.task = 'Celebrating the win'; settle(k); }); TEAMS[1 - w].kids.forEach(toDugout); await bw(5); say(champs[0].a, 'We won!', 1.8); await bw(1.2); say(COACH[1 - w], 'Good game, everybody!', 2); }
-  await bw(10); KIDS.forEach(toDugout); await bw(18); newGame();
+  await bw(10);
+  // one game a day: the field empties and everyone heads home before rejoining the town
+  GM.status = 'done'; GM.last = `${GM.last}. That's the game for today`; drawBoard();
+  for (const a of [...BBALL, ...FANS]) headHomeThenTown(a);
+}
+// ---------- after the final out: home to change and rest, then out into town like everyone else ----------
+const BB_ROLE = new Map();
+const BB_LIKES = { kid: { playground: 2.5, icecream: 2, fountain: 1.2, pond: 1.2, toys: 1.5, wander: .4, chat: .3 }, adult: { cafe: 1.5, bench: 1, bakery: 1, fountain: .6, chat: .8, wander: .5 } };
+function homeFor(name) { const e = HOME_OF[name]; return e.h != null ? { via: 'g' + e.h, path: doorPath(e.h), door: HS(e.h).door } : { via: e.via, path: [e.door], door: e.door }; }
+async function headHomeThenTown(a) {
+  const t = a.townie, gen = ++a.gen, alive = () => a.gen === gen;
+  if (!BB_ROLE.has(a)) BB_ROLE.set(a, { still: t.still, face: t.face, pose: t.pose, what: t.what });
+  a.tballReady = false; a.gl = null; a.lift = 0; a.pose = null; a.rock = false; a.mode = 'idle'; if (TB.holder === a) batDown();
+  a.task = t.kid ? 'Heading home after the game' : 'Walking home after the game';
+  await wait(.5 + rnd() * 3); if (!alive()) return;
+  if (!a.hidden) { const hp = t.home; await a.walk(hp); if (!alive()) return; await goInside(a, hp[hp.length - 1]); if (!alive()) return; }
+  a.atHome = true; a.homeAfterGame = true; a.task = t.kid ? 'Home, changing out of the uniform' : 'Home, resting after the game';
+  await wait(18 + rnd() * 22); if (!alive()) return;
+  // from here on the same brain as every neighbor: needs, likes, places, chats
+  a.home = homeFor(t.name); a.members = []; a.node = a.home.via; a.pace ??= a.speed;
+  a.needs ??= Object.fromEntries(NEEDS.map(k => [k, .3 + rnd() * .5]));
+  t.brain = { start: a.home.via, likes: { ...BB_LIKES[t.kid ? 'kid' : 'adult'] } }; t.what = t.kid ? 'Out after the game' : 'Out and about';
+  if (!BRAIN.includes(a)) BRAIN.push(a);
+  brain(a);
+}
+// the next morning the players and coaches are ballplayers again, and a new game can start
+function bbNewDay() {
+  if (GM.status !== 'done' && GM.status !== 'final') return;
+  for (const [a, role] of BB_ROLE) {
+    const t = a.townie; a.gen++; release(a); a.place = null; delete t.brain; Object.assign(t, role);
+    const at = BRAIN.indexOf(a); if (at >= 0) BRAIN.splice(at, 1);
+    if (!a.hidden) a.show(false); a.atHome = true; a.homeAfterGame = false;
+  }
+  BB_ROLE.clear(); newGame();
 }
 async function ballgame() {
   newGame(); batDown();
@@ -2671,6 +2706,7 @@ async function ballgame() {
     try {
       if (GM.status === 'pre') await pregame();
       else if (GM.status === 'final') await postgame();
+      else if (GM.status === 'done') continue;
       else {
         const bt = GM.top ? 0 : 1;
         if (GM.needField) { await changeover(bt); GM.needField = false; }
@@ -3735,7 +3771,8 @@ async function boardMeeting(gen) {
 let night = 0, nightGoal = 0, dawnK = 0, dawnGoal = 0;
 function setTod(mode, fromSnapshot = false) {
   if (sceneMode === 'live' && !fromSnapshot) return;
-  if (mode === tod) return; const was = tod; tod = mode; nightGoal = { dawn: 0, day: 0, night: 1, late: 1.35 }[mode]; dawnGoal = mode === 'dawn' ? 1 : 0;
+  if (mode === tod) return; const was = tod; tod = mode;
+  if ((mode === 'dawn' || mode === 'day') && (was === 'night' || was === 'late')) bbNewDay(); nightGoal = { dawn: 0, day: 0, night: 1, late: 1.35 }[mode]; dawnGoal = mode === 'dawn' ? 1 : 0;
   if (sceneMode === 'demo') {
     if (mode === 'late') closeShop(); else if (mode === 'dawn') prepShop(); else if (was === 'late' || was === 'dawn') openShop();
     chefRounds();
@@ -4153,6 +4190,10 @@ Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
   get baseCrew() { return BASE_CREW().map(({ actor }) => ({ character: actor.meta.id, name: actor.meta.name, ambient: ambient.has(actor.meta.id),
     task: actor.task, mode: actor.mode, hidden: !!actor.hidden, position: [actor.pos.x, actor.pos.z], tag: actor.workTagO?.on ? actor.workTagO.el.textContent : null })); },
   get oven() { return { on: ovenOn, verifying: liveVerifying }; },
+  get ballgame() { return { status: GM.status, game: GM.no, last: GM.last,
+    people: [...BBALL, ...FANS].map(a => ({ name: a.townie.name, role: a.townie.bb?.coach != null ? 'coach' : a.townie.bb?.ump ? 'umpire' : a.townie.fan ? 'fan' : 'player',
+      hidden: !!a.hidden, homeAfterGame: !!a.homeAfterGame, brain: !!a.townie.brain, task: a.task, x: a.pos.x, z: a.pos.z })) }; },
+  finishGame() { if (GM.status === 'live') endGame(); return GM.status; },
   get lemonade() { const stand = root.getObjectByName('lemonadeStand'), box = new THREE.Box3().setFromObject(stand.children[0]), tess = townies.find(a => a.townie.name === 'Tess');
     return { counter: { x: [box.min.x, box.max.x], z: [box.min.z, box.max.z] }, sidewalkZ: HS(4).gate[1], tess: { x: tess.pos.x, z: tess.pos.z, yaw: tess.goalYaw, task: tess.task, hidden: !!tess.hidden, mode: tess.mode } }; },
   get chef() { return { name: A.chef.meta.name, task: A.chef.task, hidden: !!A.chef.hidden, mode: A.chef.mode, position: [A.chef.pos.x, A.chef.pos.z] }; },
