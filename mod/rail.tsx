@@ -1,27 +1,36 @@
 // mod/rail.tsx
-// The Pass pane: pie header and slice rail of the active pie, drawn read-only from the checklist atoms, plus the pass command's toggle.
+// The Pass pane: pie header, slice rail with live status and last verdict, live agents and gates, drawn from atoms only, plus the pass command's toggle.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
+import { FIX_CAP, findSlice } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, counts } from './projection.ts'
-import type { PassChecklist } from './types'
+import type { PassChecklist, PassLive, PassProjection, PassSliceView } from './types'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
 const loadedAtAtom = atom({ plugin: 'bytheslice', key: 'pass.loadedAt' } as const, 0)
 const branchAtom = atom({ plugin: 'bytheslice', key: 'pass.branch' } as const, null)
+const ledgerAtom = atom({ plugin: 'bytheslice', key: 'pass.ledger' } as const, null)
+const liveAtom = atom({ plugin: 'bytheslice', key: 'pass.live' } as const, { at: 0, agents: [] })
 
 export const PANE_ID = 'pass'
 export const PANE_TITLE = 'The Pass'
 export const COMMAND = 'pass'
+/** Fix targets the gates section lists under a failed verdict. */
+export const PANE_TARGETS = 3
 
-export type PaneLine = { text: string; dim?: boolean; bold?: boolean }
+export type PaneLine = { text: string; dim?: boolean; bold?: boolean; warn?: boolean }
 
 export type PaneView = {
   checklist: PassChecklist | null
   loadedAt: number
   branch: string | null
+  ledger?: PassProjection | null
+  live?: PassLive
 }
+
+const ACTIVE = new Set(['pending', 'running', 'waiting'])
 
 /** Cuts text to `width` cells, ending a cut with an ellipsis. */
 export function truncate(text: string, width: number): string {
@@ -34,27 +43,76 @@ export function truncate(text: string, width: number): string {
 
 const fit = (line: PaneLine, columns: number): PaneLine => ({ ...line, text: truncate(line.text, columns) })
 
-function sliceRows(c: PassChecklist, columns: number): PaneLine[] {
+const gateWord = (gate: string): string => (gate === 'slice-tester' ? 'tester' : 'verifier')
+
+/** A duration as `45s`, `12m` or `2h 05m`. */
+export function runningFor(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000))
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m`
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`
+}
+
+/** A rail row's state words: the status (`fixing (n/3)` while fixing) and the last verdict beside it. */
+export function stateWords(view: PassSliceView | null, done: boolean): string {
+  if (!view) return done ? 'done' : 'queued'
+  const status = view.status === 'fixing' ? `fixing (${view.fixLoop}/${FIX_CAP})` : view.status
+  let last = null as PassSliceView['verdicts'][number] | null
+  for (const verdict of view.verdicts) if (last === null || verdict.t >= last.t) last = verdict
+  return last ? `${status} · ${gateWord(last.gate)} ${last.overall}` : status
+}
+
+function sliceRows(c: PassChecklist, ledger: PassProjection | null, columns: number): PaneLine[] {
   const pie = activePie(c)
   if (!pie) return []
   const current = activeSlice(c)
   const idWidth = Math.max(...pie.slices.map(slice => Array.from(slice.id).length))
   const longest = Math.max(...pie.slices.map(slice => Array.from(slice.name).length))
   return pie.slices.map(slice => {
+    const view = findSlice(ledger, slice.id)
     const mark = slice.id === current?.id ? '▸' : ' '
-    const state = slice.done ? 'done' : 'open'
+    const state = stateWords(view, slice.done)
     const prefix = `${mark} ${slice.id.padEnd(idWidth)} `
-    const room = columns - Array.from(prefix).length - state.length - 1
+    const room = columns - Array.from(prefix).length - Array.from(state).length - 1
     const name = truncate(slice.name, Math.min(room, longest))
     const padded = name + ' '.repeat(Math.max(0, Math.min(room, longest) - Array.from(name).length))
     const text = room > 0 ? `${prefix}${padded} ${state}` : `${prefix}${state}`
-    return { text, dim: slice.done, bold: slice.id === current?.id }
+    const failed = view?.verdicts.some(verdict => verdict.overall === 'fail') === true && view.status === 'fixing'
+    return fit({ text, dim: slice.done, bold: slice.id === current?.id, warn: failed }, columns)
   })
+}
+
+function agentRows(live: PassLive | undefined, columns: number): PaneLine[] {
+  const running = (live?.agents ?? []).filter(agent => ACTIVE.has(agent.status))
+  if (running.length === 0) return [fit({ text: 'No live agents', dim: true }, columns)]
+  return [
+    fit({ text: `Agents · ${running.length} live`, bold: true }, columns),
+    ...running.map(agent =>
+      fit({ text: `  ${agent.role} · ${agent.status} · ${runningFor((live?.at ?? 0) - agent.startedAt)}` }, columns),
+    ),
+  ]
+}
+
+function gateRows(view: PassSliceView | null, columns: number): PaneLine[] {
+  if (!view || view.verdicts.length === 0) return []
+  const rows: PaneLine[] = [fit({ text: `Gates · ${view.id}`, bold: true }, columns)]
+  for (const verdict of view.verdicts) {
+    const head = verdict.head ? ` · ${verdict.head.slice(0, 7)}` : ''
+    rows.push(fit({ text: `  ${gateWord(verdict.gate)} ${verdict.overall}${head}`, warn: verdict.overall === 'fail' }, columns))
+    if (verdict.overall !== 'fail') continue
+    for (const target of verdict.fixTargets.slice(0, PANE_TARGETS)) rows.push(fit({ text: `    ${target}`, dim: true }, columns))
+    if (verdict.fixTargets.length > PANE_TARGETS) {
+      rows.push(fit({ text: `    and ${verdict.fixTargets.length - PANE_TARGETS} more`, dim: true }, columns))
+    }
+  }
+  return rows
 }
 
 /** Every line the pane shows, top to bottom, sized to `columns`. */
 export function paneLines(view: PaneView, columns: number): PaneLine[] {
   const { checklist: c, loadedAt, branch } = view
+  const ledger = view.ledger ?? null
   const width = Math.max(1, columns)
   if (c === null && loadedAt <= 0) return [fit({ text: 'Loading the checklist…', dim: true }, width)]
   if (c === null) {
@@ -80,26 +138,36 @@ export function paneLines(view: PaneView, columns: number): PaneLine[] {
     fit({ text: `Pie ${pie.n} · ${pie.name}`, bold: true }, width),
     fit({ text: mode, dim: true }, width),
     fit({ text: `${done} of ${total} slices done` }, width),
-    ...sliceRows(c, width),
+    ...sliceRows(c, ledger, width),
+    ...agentRows(view.live, width),
+    ...gateRows(findSlice(ledger, activeSlice(c)?.id), width),
   ]
 }
 
 /** Draws the pane from the atoms alone: it never writes and never touches the disk. */
 export async function drawPane($: EngineInterface, e: RenderInput<'Pane'>): Promise<RenderElement> {
-  const [checklist, loadedAt, branch] = await Promise.all([
+  const [checklist, loadedAt, branch, ledger, live] = await Promise.all([
     read($, checklistAtom),
     read($, loadedAtAtom),
     read($, branchAtom),
+    read($, ledgerAtom),
+    read($, liveAtom),
   ])
-  const lines = paneLines({ checklist, loadedAt, branch }, e.props.bodyColumns)
+  const lines = paneLines({ checklist, loadedAt, branch, ledger, live }, e.props.bodyColumns)
   const { Box, Text } = $.ui.resolve(e)
   return (
     <Box flexDirection="column">
-      {lines.map(line => (
-        <Text dimColor={line.dim === true} bold={line.bold === true}>
-          {line.text}
-        </Text>
-      ))}
+      {lines.map(line =>
+        line.warn === true ? (
+          <Text color="warning" bold={line.bold === true}>
+            {line.text}
+          </Text>
+        ) : (
+          <Text dimColor={line.dim === true} bold={line.bold === true}>
+            {line.text}
+          </Text>
+        ),
+      )}
     </Box>
   )
 }

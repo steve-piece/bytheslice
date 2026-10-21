@@ -34,7 +34,7 @@ test('the band and the hint trees validate on every surface table', async ($, on
   await start($)
   for (const surface of SURFACES) {
     const band = await $.ui.mount(bandTarget(surface))
-    expect((await band.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.1 · 0/8 done')
+    expect((await band.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.1 queued')
     await band.unmount()
   }
   world.checklist = ALL_DONE

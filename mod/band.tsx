@@ -1,23 +1,37 @@
 // mod/band.tsx
-// The Pass band above the prompt, the pinned status line and the prompt hint, all drawn from the checklist atoms.
+// The Pass band above the prompt (live slice status, agents, fix loop, warning on a failed verdict), the pinned status line and the prompt hint.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput, RenderPropsOf } from 'claude-code'
 
+import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, counts } from './projection.ts'
 import { PANE_ID } from './rail.tsx'
-import type { PassChecklist } from './types'
+import type { PassChecklist, PassLive, PassProjection } from './types'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
+const ledgerAtom = atom({ plugin: 'bytheslice', key: 'pass.ledger' } as const, null)
+const liveAtom = atom({ plugin: 'bytheslice', key: 'pass.live' } as const, { at: 0, agents: [] })
 
 export const NARROW_COLUMNS = 60
 export const DOCK_COLUMNS = 110
 export const READY = '/box-it-up ready'
 
-export type BandLine = { text: string; dim: boolean }
+export type BandLine = { text: string; dim: boolean; warn?: boolean }
 
-/** The band's one line for a checklist at a width, or null to leave the band to the engine. */
-export function bandLine(c: PassChecklist | null, bodyColumns: number): BandLine | null {
+const ACTIVE = new Set(['pending', 'running', 'waiting'])
+
+/**
+ * The band's one line for a checklist at a width, or null to leave the band to
+ * the engine. With the ledger it reads `Pie 5 · Slice 5.2 verifying · 3 agents
+ * · fix 1/3`, in the warning style while the slice's latest verdict failed.
+ */
+export function bandLine(
+  c: PassChecklist | null,
+  bodyColumns: number,
+  ledger: PassProjection | null = null,
+  live: PassLive | null = null,
+): BandLine | null {
   if (!c) return null
   const narrow = bodyColumns < NARROW_COLUMNS
   if (c.layout === 'stage') return { text: 'v4 checklist', dim: true }
@@ -25,10 +39,25 @@ export function bandLine(c: PassChecklist | null, bodyColumns: number): BandLine
   const pie = activePie(c)
   const slice = activeSlice(c)
   if (!pie || !slice) return null
-  const { done, total } = counts(c)
-  return narrow
-    ? { text: `P${pie.n} S${slice.id} ${done}/${total}`, dim: false }
-    : { text: `Pie ${pie.n} · Slice ${slice.id} · ${done}/${total} done`, dim: false }
+  if (!ledger) {
+    const { done, total } = counts(c)
+    return narrow
+      ? { text: `P${pie.n} S${slice.id} ${done}/${total}`, dim: false }
+      : { text: `Pie ${pie.n} · Slice ${slice.id} · ${done}/${total} done`, dim: false }
+  }
+  const view = findSlice(ledger, slice.id)
+  const status = view?.status ?? 'queued'
+  const agents = (live?.agents ?? []).filter(agent => ACTIVE.has(agent.status)).length
+  const fix = view?.fixLoop ?? 0
+  const warn = lastVerdict(view)?.overall === 'fail'
+  if (narrow) {
+    const tail = fix > 0 ? ` fix ${fix}/${FIX_CAP}` : ''
+    return { text: `P${pie.n} S${slice.id} ${status}${tail}`, dim: false, warn }
+  }
+  const parts = [`Pie ${pie.n} · Slice ${slice.id} ${status}`]
+  if (agents > 0) parts.push(`${agents} agent${agents === 1 ? '' : 's'}`)
+  if (fix > 0) parts.push(`fix ${fix}/${FIX_CAP}`)
+  return { text: parts.join(' · '), dim: false, warn }
 }
 
 /** The pinned status line (`P5 S5.1 ✓0/8`), or undefined to clear it. */
@@ -70,12 +99,12 @@ async function paneDocked($: EngineInterface, e: RenderInput<'AbovePrompt'>): Pr
  */
 export async function drawBand($: EngineInterface, e: RenderInput<'AbovePrompt'>): Promise<RenderElement | null> {
   if (e.props.hasSurvey) return null
-  const c = await read($, checklistAtom)
-  const line = bandLine(c, e.props.bodyColumns)
+  const [c, ledger, live] = await Promise.all([read($, checklistAtom), read($, ledgerAtom), read($, liveAtom)])
+  const line = bandLine(c, e.props.bodyColumns, ledger, live)
   if (!line) return null
   if (await paneDocked($, e)) return null
   const { Text } = $.ui.resolve(e)
-  return <Text dimColor={line.dim}>{line.text}</Text>
+  return line.warn === true ? <Text color="warning">{line.text}</Text> : <Text dimColor={line.dim}>{line.text}</Text>
 }
 
 /**

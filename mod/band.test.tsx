@@ -1,23 +1,23 @@
 // mod/band.test.tsx
-// Unit tests for the band, status line and prompt hint on terminal and desktop: text, survey, narrow form, docked pane and the all-done hint.
+// Unit tests for the band, status line and prompt hint on terminal and desktop: live status, warning style, survey, narrow form, docked pane and the all-done hint.
 
 import { expect, test } from 'claude-code/testing'
 
 import { bandLine, statusText } from './band.tsx'
 import { parseChecklist } from './checklist.ts'
 import { CHECKLIST_FIXTURE } from './fixtures/checklist.fixture.ts'
-import { ALL_DONE, bandTarget, engineDraws, hintTarget, stage, V4 } from './testing.tsx'
+import { ALL_DONE, LEDGER, activeAt52, bandTarget, engineDraws, fixingWorld, hintTarget, stage, V4 } from './testing.tsx'
 
 const SURFACES = ['terminal', 'desktop'] as const
 
-test('the band is one line naming the active pie, slice and count', async ($, on) => {
+test('the band is one line naming the active pie, slice and its status', async ($, on) => {
   const { start } = stage(on, { checklist: CHECKLIST_FIXTURE })
   engineDraws(on)
   await start($)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount(bandTarget(surface))
     const lines = await ui.findAll({ type: 'Text' })
-    expect(lines.map(line => line.text)).toEqual(['Pie 5 · Slice 5.1 · 0/8 done'])
+    expect(lines.map(line => line.text)).toEqual(['Pie 5 · Slice 5.1 queued'])
     await ui.unmount()
   }
 })
@@ -39,10 +39,10 @@ test('under 60 columns the band takes the short form', async ($, on) => {
   await start($)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount(bandTarget(surface, 59))
-    expect((await ui.find({ type: 'Text' }))?.text).toBe('P5 S5.1 0/8')
+    expect((await ui.find({ type: 'Text' }))?.text).toBe('P5 S5.1 queued')
     await ui.unmount()
     const wide = await $.ui.mount(bandTarget(surface, 60))
-    expect((await wide.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.1 · 0/8 done')
+    expect((await wide.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.1 queued')
     await wide.unmount()
   }
 })
@@ -80,14 +80,14 @@ test('the band steps aside while the pane is docked beside a wide fullscreen ter
   expect((await docked.find({ type: 'Text' }))?.text).toBe('engine')
   await docked.unmount()
   const mainScreen = await $.ui.mount(bandTarget('terminal', 100, { columns: 160, isFullscreen: false }))
-  expect((await mainScreen.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.1 · 0/8 done')
+  expect((await mainScreen.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.1 queued')
   await mainScreen.unmount()
   const narrow = await $.ui.mount(bandTarget('terminal', 80, { columns: 90, isFullscreen: true }))
-  expect((await narrow.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.1 · 0/8 done')
+  expect((await narrow.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.1 queued')
   await narrow.unmount()
   world.panes = []
   const closed = await $.ui.mount(bandTarget('terminal', 100, { columns: 160, isFullscreen: true }))
-  expect((await closed.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.1 · 0/8 done')
+  expect((await closed.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.1 queued')
   await closed.unmount()
 })
 
@@ -133,4 +133,42 @@ test('band and status text cover every checklist state', () => {
   expect(statusText(c)).toBe('P5 S5.1 ✓0/8')
   expect(statusText(null)).toBeUndefined()
   expect(statusText(parseChecklist(ALL_DONE))).toBe('✓ all done')
+})
+
+test('with the ledger the band reads status, agents and the fix loop, in the warning style after a failed verdict', async ($, on) => {
+  const { world, start } = stage(on, {
+    checklist: activeAt52(CHECKLIST_FIXTURE),
+    agents: [
+      { id: 'fx', description: 'P5 S5.2 fix: a', type: 'bytheslice:fix-attempter', status: 'running' },
+      { id: 'tt', description: 'P5 S5.2 test: b', type: 'bytheslice:slice-tester', status: 'pending' },
+      { id: 'vv', description: 'P5 S5.2 verify: c', type: 'bytheslice:slice-verifier', status: 'running' },
+    ],
+  })
+  engineDraws(on)
+  fixingWorld(world)
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(bandTarget(surface))
+    const line = await ui.find({ type: 'Text' })
+    expect(line?.text).toBe('Pie 5 · Slice 5.2 fixing · 3 agents · fix 1/3')
+    expect(line?.props.color).toBe('warning')
+    await ui.unmount()
+    const narrow = await $.ui.mount(bandTarget(surface, 40))
+    expect((await narrow.find({ type: 'Text' }))?.text).toBe('P5 S5.2 fixing fix 1/3')
+    await narrow.unmount()
+  }
+})
+
+test('a passing verdict leaves the band in its plain style', async ($, on) => {
+  const { world, start } = stage(on, { checklist: activeAt52(CHECKLIST_FIXTURE) })
+  engineDraws(on)
+  world.files[LEDGER] = `${JSON.stringify({ v: 1, t: 1, sid: 's', ev: 'verdict', pie: 5, slice: '5.2', data: { gate: 'slice-verifier', overall: 'pass', fix_targets: [], head: 'abc1234' } })}\n`
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(bandTarget(surface))
+    const line = await ui.find({ type: 'Text' })
+    expect(line?.text).toBe('Pie 5 · Slice 5.2 verifying')
+    expect(line?.props.color).toBeUndefined()
+    await ui.unmount()
+  }
 })
