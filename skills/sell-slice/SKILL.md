@@ -109,6 +109,7 @@ If `bytheslice.config.json` exists at the project root, the `rules-loader` agent
 - `flow.autoApproveBuildPlan` *(bool, default `false`)* - when `true`, skip the build-plan authorization stop (**C9** - also **always** auto under the `/sell-pie` loop).
 - `flow.libraryGate` *(`"self-critique" | "human" | "off"`, default `"self-critique"`)* - controls the net-new-component library gate behavior (see Workflow A library gate).
 - `delivery.mode` *(`"pie-pr" | "merge-per-slice"`, default `"pie-pr"`)* - picks the closeout. `"pie-pr"` stops at "slice committed, ready for review" and hands off to `/box-it-up`; `"merge-per-slice"` runs the slice's own PR, CI and green-CI merge itself (Phase 6). An explicit autonomous-delivery run instruction ("merge this slice", "deliver it to main without me") selects merge-per-slice for that run and wins over the config in either direction. A slice in a `review: continuous` pie always uses `"pie-pr"`.
+- `delivery.sliceBudgetHours` *(number, default `3`; `0` = off)* - the soft wall-clock budget for this slice (see "Soft time budget" under HITL Handling).
 - `mcps.*` - declarative MCP availability.
 - `visualReview.tools` - ordered tooling priority passed to `slice-tester`.
 
@@ -181,7 +182,7 @@ The skill is an **interactive spine** (Phases 0-3) wrapping two Workflows and on
    > *"Prep step '`<unchecked line>`' is still pending. Run `<the linked command>` first, then come back."*
    This precondition does NOT apply to legacy projects that pre-date the Prep section - those keep the v3 behavior where foundation stages live as `stage_1_*` / `stage_2_*` / `stage_3_*` plan files routed through Workflow A (see Legacy path note in Phase 4).
 3. Identify the **active slice**: first slice/stage with status `Not Started` or `In Progress`, unless the user named one. A slice whose `**Status:**` reads `waiting until <YYYY-MM-DD>: <criterion>` is skipped while that date is ahead (and so is any slice that `depends_on` it); once the date arrives it is the active slice, and the run only checks the date-gated criterion and closes it out (see `../cook-pizzas/references/templates.md` "Calendar-gated criteria").
-4. Confirm git state: `git status --short`, `git rev-parse --abbrev-ref HEAD`.
+4. Confirm git state: `git status --short`, `git rev-parse --abbrev-ref HEAD`. Append the slice's start line (slice id, start time) to the run log `.claude/.bytheslice-state/run-log.md` (gitignored); the soft time budget counts from it. Under the `/sell-pie` loop the conductor already wrote it; do not write a second one.
 5. Detect `/goal` and `Workflow` availability (per "Workflow availability" above); note the fallback that will apply if either is absent.
 6. Switch to **Plan Mode** before continuing.
 
@@ -423,6 +424,8 @@ If any subagent or sub-skill returns `needs_human: true`, the orchestrator pause
 
 **Batched approvals.** Collect every approval the slice needs (the build plan, migrations to apply, live data loads, size exceptions to the task or file cap, terms or licences to accept, credentials to supply) into **one batch** of short questions: one decision per question, each with a recommended answer. Ask the batch once, at slice start or at the first point all of them are known; never drip them one at a time across the slice. An approval that only surfaces later joins the next batch instead of stopping the slice on its own. **Exception:** the Library Preview gate (Phase 4.5) stays its own mid-slice stop, because it needs built output to review. Unforeseeable blocking events (fix cap exhausted, the `slice-tester`'s non-prod guard, a rejected push) still stop when they happen.
 
+**Soft time budget.** The slice has a soft wall-clock budget, `delivery.sliceBudgetHours` (default `3`; `0` turns it off). It counts from the slice's start line in the run log, includes CI time (the merge-per-slice closeout waits on CI inside the slice), and excludes time spent waiting on the operator: the orchestrator writes each HITL ask and its answer to the run log and subtracts those windows. Check the elapsed time whenever an agent returns. When the budget is hit, never interrupt a running agent: let the current agent finish, then stop with one `prd_ambiguity` check-in carrying the slice's progress (tasks committed, gates green, fix loops used), the current blocker, and two options: **extend** (adds another `sliceBudgetHours`; recommended when the slice advanced since the last check-in) or **stop** (the slice stays `In Progress` with its task commits pushed; the next run resumes it). The budget is soft: it never fails a slice and never raises or lowers the fix cap. Under the `/sell-pie` loop the conductor owns this check.
+
 The four blocking HITL categories halt the slice (they are not auto-resolvable): `prd_ambiguity`, `external_credentials`, `destructive_operation` (most commonly the `slice-tester`'s non-prod guard blocking a seed), `creative_direction` (library gate). Any project-specific categories from `hitl.additionalCategories` surface the same way.
 
 ---
@@ -457,6 +460,7 @@ After each item and at slice closeout:
 - **Workflow B gates the output summary.** No "slice complete" report until both `slice-tester` and `slice-verifier` return `pass` (or a half is legitimately skipped for the slice type).
 - **Strip `// INSTRUMENT` lines** before final commit if `debug-instrumenter` ran.
 - **Fix cap: 3 local fix loops, 3 CI fix rounds, separate counters, non-overridable.** No run instruction ("continue until verified", "never stop", "fully automated") raises either cap; only the operator's explicit reply at the HITL grants more attempts.
+- **The slice time budget is soft.** At `delivery.sliceBudgetHours` the orchestrator lets the current agent finish, then checks in once (`prd_ambiguity`: extend or stop). It never kills an agent, fails a slice, or touches the fix cap.
 - **Deprecated agents are never live-dispatched.** `basic-checks-runner`, `aggregating-test-reviewer`, `ci-cd-guardrails`, and `frontend/visual-reviewer` are shims for v4 back-compat only - route through `slice-tester` / `slice-verifier`.
 - **Session goal is set at most once per slice run, after Phase 2 authorization.** Phase 2.5 enforces the parent-goal pre-check; if `/sell-pie` already set a pie-level goal, the slice-level goal is skipped. Never overwrite an active parent goal with a narrower slice-level condition.
 - **`Workflow` / `/goal` unavailable → fall back, never drop.** In-context dispatch with orchestrator-side manual schema validation when `Workflow` is absent; manual goal-tracking when `/goal` is absent.
