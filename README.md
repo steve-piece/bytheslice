@@ -181,7 +181,7 @@ In a pizzeria the pass is the counter where every order is checked before it goe
 | Surface | What it shows |
 |---|---|
 | **Pane** (`The Pass`) | The pie header; one row per slice with its status and last verdict; live agents, stalled ones flagged; the latest check warnings; the HITL inbox; the files the active slice touched (a builder edit after the verifier's pass shows red); the team roster in team mode; and the project's other sessions, read-only. It opens on its own when an interactive session starts in a project with a master checklist and the terminal is wide enough. |
-| **Band** (above the prompt) | One line such as `Pie 5 · Slice 5.2 verifying · 3 agents · fix 1/3 · HITL 1`, in a warning style while a verdict failed or a HITL item is open, and for five minutes after a check warning. The prompt hint adds `/box-it-up ready` once every slice is done. |
+| **Band** (above the prompt) | One line such as `Pie 5 · Slice 5.2 verifying · 3 agents · fix 1/3 · HITL 1`, in a warning style while a verdict failed or a HITL item is open, and for five minutes after a check warning. The band and the prompt hint add `/box-it-up ready` once every slice is done while the pie branch is still checked out; after the merge they read only "All pies done". |
 | **Toasts and notifications** | A toast when a slice is done, a verdict fails, a branch is pushed or a check warns. A native notification only for a blocking HITL question and a finished pie. |
 | **Model tools** | `bts_status` (the same projection the pane draws, with a `Next:` line that is advice), `bts_note` (a decision note), `bts_hitl` (raise or answer a HITL item), `bts_pr_body` (the pie PR's Evidence section) and `bts_wake` (a teammate's stand-in for a scheduled wakeup). |
 

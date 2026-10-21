@@ -91,7 +91,7 @@ Redraws come from atom writes, which are throttled by the engine to about 10 per
 
 - **`AbovePrompt` band:** a single line such as `Pie 4 · Slice 4.2 verifying · 3 agents · fix 1/3 · HITL 0`. It turns to a warning style when a gate failed or HITL is open.
 - **`$.ui.status`:** a short form, `P4 S4.2 ✓3/6`.
-- **`PromptHint`:** the next expected action, such as `/box-it-up ready` when all slices are done.
+- **`PromptHint`:** the next expected action, such as `/box-it-up ready` when all slices are done and the pie branch is still checked out (after the merge, nothing).
 - **`$.ui.toast`:** fires on slice done, gate fail and push.
 - **`$.ui.notify`:** a native OS notification, used only for blocking HITL and a finished pie.
 

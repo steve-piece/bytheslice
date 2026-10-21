@@ -13,6 +13,16 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [5.5.2] - 2026-10-21
+
+**No box to carry when the pies are already served.** The Pass stops pointing at `/box-it-up` once there is nothing left to ship.
+
+### Changed
+
+- **Pass band, prompt hint and `bts_status`** say `/box-it-up ready` only while every slice is done and a pie branch is still checked out. After the last pie merges (on `main` or a detached HEAD) the band reads **All pies done**, the hint is left alone, and `bts_status` says nothing is left to box.
+
+---
+
 ## [5.5.1] - 2026-10-21
 
 **Profiles stop covering the kitchen.** A person's profile now opens as a screen inside the People sheet instead of a dialog over the scene.

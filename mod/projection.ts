@@ -41,6 +41,19 @@ export function allDone(c: PassChecklist | null): boolean {
   return c !== null && c.layout === 'pie' && c.pies.length > 0 && c.pies.every(pie => pie.done)
 }
 
+/** The pie a branch name carries (`pie-5-the-pass`, `pie/5`), or null. */
+export function branchPie(branch: string | null): number | null {
+  const match = /(^|\/)pie[-/](\d+)/.exec(branch ?? '')
+  return match ? Number(match[2]) : null
+}
+
+/**
+ * Every slice is done and a pie branch is still checked out, so its boundary
+ * PR is left to open. Once the pie is merged and the branch is gone there is
+ * nothing to box, and the surfaces say only that the pies are done.
+ */
+export const boxReady = (c: PassChecklist | null, branch: string | null): boolean => allDone(c) && branchPie(branch) !== null
+
 /** True for a tool path that names the master checklist. */
 export function isChecklistPath(path: unknown): boolean {
   return typeof path === 'string' && /(^|[\\/])00_master_checklist\.md$/.test(path)

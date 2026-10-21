@@ -9,7 +9,7 @@ import { checksOn, noteModel } from './checks.ts'
 import type { Finding } from './checks.ts'
 import { raiseHitl } from './hitl.ts'
 import { CI_FIX_CAP, FIX_CAP, findSlice } from './ledger-projection.ts'
-import { activePie, activeSlice } from './projection.ts'
+import { activePie, activeSlice, branchPie } from './projection.ts'
 import type { PassChecklist, PassFixCounts, PassProjection } from './types'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
@@ -31,11 +31,7 @@ export function fixKind(subagentType: unknown): FixSpawn['kind'] | null {
   return null
 }
 
-/** The pie a branch name carries (`pie-5-the-pass`, `pie/5`), or null. */
-export function branchPie(branch: string | null): number | null {
-  const match = /(^|\/)pie[-/](\d+)/.exec(branch ?? '')
-  return match ? Number(match[2]) : null
-}
+export { branchPie } from './projection.ts'
 
 /** What the fix-loop check reads. */
 export type FixView = {

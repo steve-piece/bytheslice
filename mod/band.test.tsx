@@ -102,7 +102,7 @@ test('the status line carries P5 S5.1 ✓0/8 and follows each projection write',
   expect(world.statuses).toEqual(['P5 S5.1 ✓0/8', 'v4 checklist'])
 })
 
-test('the prompt hint says /box-it-up ready only when every slice of every pie is done', async ($, on) => {
+test('the prompt hint says /box-it-up ready only when every slice of every pie is done and a pie branch is checked out', async ($, on) => {
   const { world, clock, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
   engineDraws(on)
   await start($)
@@ -121,6 +121,13 @@ test('the prompt hint says /box-it-up ready only when every slice of every pie i
   const desktop = await $.ui.mount(hintTarget('desktop'))
   expect((await desktop.find({ type: 'Text' }))?.text).toBe('engine hint: ? for shortcuts · /box-it-up ready')
   await desktop.unmount()
+  world.branch = 'main'
+  world.mtimeMs = 4
+  await clock.advance(10000)
+  await clock.settle()
+  const merged = await $.ui.mount(hintTarget('terminal'))
+  expect((await merged.find({ type: 'Text' }))?.text).toBe('engine hint: ? for shortcuts')
+  await merged.unmount()
 })
 
 test('band and status text cover every checklist state', () => {
@@ -128,7 +135,9 @@ test('band and status text cover every checklist state', () => {
   expect(bandLine(c, 100)).toEqual({ text: 'Pie 5 · Slice 5.1 · 0/8 done', dim: false })
   expect(bandLine(null, 100)).toBeNull()
   expect(bandLine(parseChecklist(''), 100)).toBeNull()
-  expect(bandLine(parseChecklist(ALL_DONE), 100)?.text).toBe('All pies done · /box-it-up ready')
+  expect(bandLine(parseChecklist(ALL_DONE), 100, null, null, null, null, 'pie-7-done')?.text).toBe('All pies done · /box-it-up ready')
+  expect(bandLine(parseChecklist(ALL_DONE), 100, null, null, null, null, 'main')?.text).toBe('All pies done')
+  expect(bandLine(parseChecklist(ALL_DONE), 100)?.text).toBe('All pies done')
   expect(bandLine(parseChecklist(ALL_DONE), 40)?.text).toBe('all done')
   expect(statusText(c)).toBe('P5 S5.1 ✓0/8')
   expect(statusText(null)).toBeUndefined()
