@@ -102,7 +102,9 @@ Every wired logger hook runs synchronously and silently (exit 0), completing its
 | Dispatch description has CR / LF / tabs and more than 120 Unicode characters | whitespace reduced to one line, label truncated to 120 Unicode characters |
 | Event lacks optional fields or has empty `agent_type` | row still written; absent and empty optional fields omitted |
 | Description starts `P7 S7.3 build:`; branch/checklist disagree | label wins for both pie and slice |
-| Branch matches `pie-4` or `pie/4`; checklist has earlier open pies | branch wins for pie; first open slice under that pie supplies slice |
+| Unlabeled row (SubagentStart, SubagentStop, Stop, Skill) in a session with a labeled dispatch; branch/checklist disagree | inherits the session's latest labeled row (same `sid`): on SubagentStart or SubagentStop the labeled row with the same `aid` first, then the same agent type, then the latest; another session's labels never count |
+| Inheritance candidates include a torn line, or sit only in `activity.1.jsonl` | torn line skipped; rotated rows still searched; exit 0 silently |
+| No labeled row in the session; branch matches `pie-4` or `pie/4`; checklist has earlier open pies | branch wins for pie; first open slice under that pie supplies slice |
 | Input cwd is a linked worktree; project root is on main | worktree branch decides attribution; log stays at project root |
 | Branch resolves a pie absent from checklist | branch pie retained; unrelated checklist slice never assigned |
 | No matching branch; checklist includes completed pie/slice headings | first open slice under first open pie; checked/struck/completed headings skipped |

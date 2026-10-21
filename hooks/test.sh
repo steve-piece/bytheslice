@@ -936,6 +936,40 @@ EOF
     else
       PASS=$((PASS+1)); printf '  ✓ kitchen %s log stays at project root\n' "$ENGINE"
     fi
+
+    # Session inheritance: an unlabeled row takes the attribution of its own
+    # session's latest labeled dispatch before the branch (pie-4 here) and the
+    # checklist. The live defect: a labeled P5 S5.1 dispatch whose own
+    # SubagentStart was tagged with the hook cwd's pie 4.
+    ARCHIVE="$FIX/.claude/.bytheslice-state/kitchen/activity.1.jsonl"
+    git -C "$FIX" checkout -q -b pie-4-inherit
+    rm -f "$LOG" "$ARCHIVE"
+    kitchen_event() { PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" "$1"; }
+    kitchen_event '{"session_id":"inherit-a","hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"description":"P5 S5.1 prep: recon","subagent_type":"bytheslice:discovery"}}'
+    kitchen_event '{"session_id":"inherit-a","hook_event_name":"SubagentStart","agent_type":"bytheslice:discovery","agent_id":"agent-d"}'
+    kitchen_assert "kitchen $ENGINE SubagentStart inherits its session's labeled dispatch over the branch" 'rows.length === 2 && rows[1].ev === "SubagentStart" && rows[1].pie === 5 && rows[1].slice === "5.1" && !("label" in rows[1])'
+    kitchen_event '{"session_id":"inherit-b","hook_event_name":"SubagentStart","agent_type":"bytheslice:discovery","agent_id":"agent-e"}'
+    kitchen_assert "kitchen $ENGINE another session's label is never inherited" 'rows[2].sid === "inherit-b" && rows[2].pie === 4 && rows[2].slice === "4.2"'
+    kitchen_event '{"session_id":"inherit-a","hook_event_name":"PostToolUse","tool_name":"Agent","tool_input":{"description":"P6 S6.2 build: feed","subagent_type":"bytheslice:implementer"},"tool_response":{"agentId":"agent-bg","status":"async_launched"}}'
+    kitchen_event '{"session_id":"inherit-a","hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"description":"P5 S5.3 test: probe","subagent_type":"bytheslice:slice-tester"}}'
+    kitchen_event '{"session_id":"inherit-a","hook_event_name":"SubagentStop","agent_type":"bytheslice:discovery","agent_id":"agent-bg"}'
+    kitchen_assert "kitchen $ENGINE SubagentStop prefers the labeled row with its own agent id" 'rows.at(-1).ev === "SubagentStop" && rows.at(-1).pie === 6 && rows.at(-1).slice === "6.2"'
+    kitchen_event '{"session_id":"inherit-a","hook_event_name":"SubagentStart","agent_type":"bytheslice:implementer","agent_id":"agent-f"}'
+    kitchen_assert "kitchen $ENGINE SubagentStart prefers the latest labeled row of its agent type" 'rows.at(-1).aid === "agent-f" && rows.at(-1).pie === 6 && rows.at(-1).slice === "6.2"'
+    printf '%s\n' '{"t":1,"sid":"inherit-a","ev":"PreToolUse","label":"P9 S9.9 torn' >> "$LOG"
+    kitchen_event '{"session_id":"inherit-a","hook_event_name":"Stop"}'
+    assert_exit "kitchen $ENGINE inheritance past a torn line exits 0" 0
+    assert_empty "kitchen $ENGINE inheritance past a torn line silent"
+    grep -v '"label":"P9 S9.9 torn' "$LOG" > "$LOG.kept" && mv "$LOG.kept" "$LOG"
+    kitchen_assert "kitchen $ENGINE Stop inherits the latest labeled row and skips a torn line" 'rows.at(-1).ev === "Stop" && rows.at(-1).pie === 5 && rows.at(-1).slice === "5.3"'
+    mv "$LOG" "$ARCHIVE"
+    kitchen_event '{"session_id":"inherit-a","hook_event_name":"SubagentStart","agent_type":"bytheslice:slice-tester","agent_id":"agent-t"}'
+    kitchen_assert "kitchen $ENGINE inheritance reads the rotated log too" 'rows.length === 1 && rows[0].pie === 5 && rows[0].slice === "5.3"'
+    rm -f "$LOG" "$ARCHIVE"
+    kitchen_event '{"session_id":"inherit-a","hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"description":"P7 S7.1 build: x","subagent_type":"bytheslice:implementer"}}'
+    kitchen_event '{"session_id":"inherit-a","hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"description":"P8 S8.2 build: y","subagent_type":"bytheslice:implementer"}}'
+    kitchen_assert "kitchen $ENGINE a labeled row keeps its own label over the session's" 'rows.length === 2 && rows[1].pie === 8 && rows[1].slice === "8.2"'
+    git -C "$FIX" checkout -q main
     rm -f "$FIX/docs/plans/00_master_checklist.md" "$LOG"
     PATH="$KITCHEN_PATH" CLAUDE_PROJECT_DIR="$FIX" run_hook "$KITCHEN_LOG" '{"hook_event_name":"Stop"}'
     kitchen_assert "kitchen $ENGINE unresolved attribution omitted" '!("pie" in rows[0]) && !("slice" in rows[0])'
