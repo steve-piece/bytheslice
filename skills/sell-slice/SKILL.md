@@ -369,7 +369,7 @@ The tester type-routes (frontend = rendered design-system match + per-affordance
 
 Dispatch [`slice-verifier`](agents/slice-verifier.md) with the **slice diff** (branch + base SHA), the **build manifest** (on `frontend`, `state-illustrator`'s), the resolved **`verification.e2e.*`** thresholds (C10), the package manager + script names, the workflow inventory, and the slice type. This first pass is tier 3: the full local suite, one time. The builder's tier 1 and 2 results are narrower in scope and do not substitute for it.
 
-It runs each atomic check once: lint · typecheck · build · unit/integration · e2e by tag (threshold-gated per `verification.e2e` - **C10**) · design-system **static grep** (raw values / non-token - the static check only; the rendered match is the tester's) · CI-integrity (no existing gate weakened) · and the **manifest under-declaration backstop** (§1.4 - independently greps the diff for `action(` / `use server` / `onClick` / `<form` / route-file additions and **fails** if the manifest under-counts). It returns the Appendix-C verdict. On a `frontend` slice a declared total of zero is `needs_human` (`prd_ambiguity`), never `pass`: raise it as a HITL, not a fix-loop failure, so it consumes none of the 3 local fix loops.
+It runs each atomic check once: lint · typecheck · build · unit/integration · e2e by tag (threshold-gated per `verification.e2e` - **C10**) · design-system **static grep** (raw values / non-token, plus the bundled `verify-frontend-statics.sh` sub-check under the same key - the static check only; the rendered match is the tester's) · CI-integrity (no existing gate weakened) · and the **manifest under-declaration backstop** (§1.4 - independently greps the diff for `action(` / `use server` / `onClick` / `<form` / route-file additions and **fails** if the manifest under-counts). It returns the Appendix-C verdict. Its `warnings` array (the statics findings) never fails the slice and never enters the fix loop; list it in the Progress Report. On a `frontend` slice a declared total of zero is `needs_human` (`prd_ambiguity`), never `pass`: raise it as a HITL, not a fix-loop failure, so it consumes none of the 3 local fix loops.
 
 #### 5.4 - Off-context fix loop
 
@@ -448,7 +448,7 @@ After each item and at slice closeout:
 
 1. Checklist items completed (with file paths)
 2. Files changed (grouped by package/app)
-3. Verification results: builder tiers 1-2 (lint / typecheck / unit while coding; the slice's own tests / build / DB tests before each commit), `slice-tester` verdict (per-affordance + transitions + seed/cleanup outcome), `slice-verifier` verdict (each static gate + manifest backstop counts)
+3. Verification results: builder tiers 1-2 (lint / typecheck / unit while coding; the slice's own tests / build / DB tests before each commit), `slice-tester` verdict (per-affordance + transitions + seed/cleanup outcome), `slice-verifier` verdict (each static gate + manifest backstop counts + its non-forcing `warnings`, listed)
 4. Subagent run summary (which roles ran, Workflow A review loops, Workflow B fix-loop activity)
 5. Open risks / blockers
 6. Next recommended slice

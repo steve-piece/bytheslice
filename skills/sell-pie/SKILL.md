@@ -228,13 +228,13 @@ At each loop wake (per slice) and at the pie boundary:
 
 1. **Pie + slice state** - active Pie `N - <name>` (`review:` mode), slice `N.M - <name>` (`type:`), slices `[x]` of total in the pie.
 2. Checklist items completed this slice (with file paths); files changed (grouped by package/app).
-3. **Verification results** - builder tiers 1-2 (while coding; before each task commit), `slice-tester` verdict (per-affordance + transitions **both directions on every surface** + seed/cleanup residue), `slice-verifier` verdict (each static gate + manifest backstop counts).
+3. **Verification results** - builder tiers 1-2 (while coding; before each task commit), `slice-tester` verdict (per-affordance + transitions **both directions on every surface** + seed/cleanup residue), `slice-verifier` verdict (each static gate + manifest backstop counts + its non-forcing `warnings`, listed).
 4. Subagent run summary (Workflow A producers, Workflow B fix-loop activity, Library-gate outcome if it fired).
 5. Task commits (`feat(pie-N): N.M task K <name>`) and the final slice commit (`feat(pie-N): N.M <name>` SHA) + push confirmation (**no PR**), or in merge-per-slice mode the slice PR URL, CI rounds and merge commit SHA.
 6. Open risks / blockers; next slice (or "pie boundary reached → handing off to `/box-it-up`").
 7. **Closing-narrative paragraph** (UI-touching slices only) - one paragraph: what was built · why this shape (one or two trade-offs) · what was deliberately left out · what reviewers should watch. `/box-it-up` lifts it verbatim into the per-slice commit body and the boundary PR.
 
-At the boundary, end with the `/box-it-up` handoff status (PR `Pie N` opened, CI running once, awaiting merge approval - or the merge result if `/box-it-up` completed in the same turn).
+At the boundary, list every slice's `slice-verifier` `warnings` in one block (they never failed a slice, so this is the operator's first look at them), then end with the `/box-it-up` handoff status (PR `Pie N` opened, CI running once, awaiting merge approval - or the merge result if `/box-it-up` completed in the same turn).
 
 ---
 

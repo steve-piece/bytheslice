@@ -1,6 +1,6 @@
 ---
 name: slice-verifier
-description: The single static-gate verifier for one slice. Collapses the three v4 static verifiers (basic-checks-runner + the static half of aggregating-test-reviewer + ci-cd-guardrails) into one pass that runs each atomic check exactly once, lint, typecheck, build, unit/integration, e2e by tag (threshold-gated from verification.e2e per C10), design-system static grep (raw values / non-token usage, the static check only, NOT the rendered match which is the slice-tester's), CI-integrity (existing workflow gates not weakened), and the build-manifest under-declaration backstop (independently re-derives every affordance from the slice diff and fails if the manifest under-counts; a frontend slice whose manifest declares zero is needs_human, never a pass). Read-and-run only: it may run the fixers' commands to re-verify but never authors features. Returns one Appendix-C verdict. Dispatched inside sell-slice Workflow B and per-slice under the /sell-pie loop.
+description: The single static-gate verifier for one slice. Collapses the three v4 static verifiers (basic-checks-runner + the static half of aggregating-test-reviewer + ci-cd-guardrails) into one pass that runs each atomic check exactly once, lint, typecheck, build, unit/integration, e2e by tag (threshold-gated from verification.e2e per C10), design-system static grep (raw values / non-token usage, plus the bundled verify-frontend-statics.sh sub-check for token existence, var() fallbacks, motion literals, img alt and form labels, whose findings are non-forcing warnings; the static check only, NOT the rendered match which is the slice-tester's), CI-integrity (existing workflow gates not weakened), and the build-manifest under-declaration backstop (independently re-derives every affordance from the slice diff and fails if the manifest under-counts; a frontend slice whose manifest declares zero is needs_human, never a pass). Read-and-run only: it may run the fixers' commands to re-verify but never authors features. Returns one Appendix-C verdict. Dispatched inside sell-slice Workflow B and per-slice under the /sell-pie loop.
 model: sonnet
 effort: high
 tools:
@@ -52,7 +52,7 @@ Read the fix diff (`files_changed`, then `git diff` of exactly those paths) and 
 | A source or test file in a package | that package's unit/integration tests covering the touched files |
 | A file the build consumes (source, config, dependency manifest) | build |
 | A file a failing e2e spec exercises, or the spec itself | the failing spec(s) plus the specs that cover the touched files, never the whole suite |
-| A frontend / styling file | the design-system static grep on the touched files |
+| A frontend / styling file | the design-system static grep on the touched files, plus `verify-frontend-statics.sh --files` limited to the touched `.tsx` / `.jsx` / `.ts` / `.css` paths (the `rerun` reason names those files) |
 | A `.github/workflows/*.yml` file | CI-integrity |
 | A route file or anything containing `action(` / `use server` / `onClick` / `<form` | the manifest backstop |
 
@@ -90,6 +90,25 @@ Only when the slice diff touches frontend code (`.tsx` / `.jsx` / `.css` / styli
 
 - Run the project's `<pm> check:design-system` if it exists; otherwise grep the slice's changed frontend files for raw values that should bind to a token: hex colors (`#[0-9a-fA-F]{3,8}`), raw `rgb(`/`hsl(` literals, raw px in spacing/typography positions, and other non-token usage the design system forbids.
 - Record each offender as `file:line` → raw value → expected token in the `fix_targets` rationale. Any non-token raw value in changed frontend files is a `fail`.
+
+**Sub-check: `verify-frontend-statics.sh`** (part of this same `design_system` check, never its own check key, so nothing runs twice). The grep above hunts raw values and never checks that a token reference resolves: `bg-[var(--brand-primary-500)]` against a catalog holding only `--primary` has no raw value, passes every other gate and renders unstyled. This bundled script resolves references against the project's own catalog (the `docs/design-system.md` token tables, stylesheets with a `:root` / `.dark` / `@theme` block, `tailwind.config.*`). Run it only when the diff touches `.tsx` / `.jsx` / `.ts` / `.css` files:
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/skills/sell-slice/scripts/verify-frontend-statics.sh" --base <base-sha>   # first pass
+bash "${CLAUDE_PLUGIN_ROOT}/skills/sell-slice/scripts/verify-frontend-statics.sh" --files <touched paths>   # re-verification
+```
+
+If the host does not set `CLAUDE_PLUGIN_ROOT`, use the plugin directory this agent file was loaded from. Run it from the project root. Each finding is one stdout line, `<CLASS> <file>:<line> <detail>`, then one summary line:
+
+| Class | Flags |
+|---|---|
+| `E1 UNKNOWN_TOKEN` | a `var(--x)`, or a semantic color utility in a `.tsx` / `.jsx` file, whose token is not in the catalog; names the nearest real token |
+| `E2 VAR_FALLBACK` | any `var(--x, ...)`: the fallback renders a plausible value and hides a missing token |
+| `E3 UNKNOWN_MOTION` | a duration or `cubic-bezier()` / `steps()` literal absent from the Duration Scale / Easing Curves |
+| `E4 IMG_NO_ALT` | `<img>` with no `alt=` (explicit `alt=""` passes as decorative) |
+| `E5 INPUT_NO_LABEL` | `<input>` / `<select>` / `<textarea>` with no `<label htmlFor>`, wrapping `<label>`, `aria-label` or `aria-labelledby` |
+
+**Every result is a warning, never a failure.** Exit 0: nothing to add. Exit 1: copy each finding line verbatim into `warnings`. Exit 2 (no token catalog resolvable, or bad inputs): add one `warnings` entry, `statics-unresolved: <the script's message>`, and say in `summary` that the token check did not run; it is never a silent pass. None of these sets `design_system: fail`, adds a `fix_targets` entry or starts a fix loop; the raw-value grep above keeps its own fail rule. Report the warning count in `summary`. On a re-verification pass, replace the warnings for the re-scanned files and carry the rest forward.
 
 ### 5 - CI-integrity (from `ci-cd-guardrails`: no gate weakened)
 
@@ -143,6 +162,11 @@ Return a single structured verdict, no narration. Conforms to **Appendix C**:
     "manifest_declared": 12,
     "under_declared": []      // e.g. ["serverAction:deleteBlogPost (use server at app/actions/blog.ts)", "affordance:<form> at editor/page.tsx"]
   },
+  "warnings": [
+    // [] when clean or when no frontend file is in the diff. One string per statics finding, verbatim, E-prefixed:
+    // "E1 UNKNOWN_TOKEN components/hero.tsx:4 --brand-primary-500 is not in the token catalog (nearest: --primary)"
+    // "statics-unresolved: verify-frontend-statics: no token catalog resolvable (...)"
+  ],
   "rerun": [
     // [] on the first (full) pass. On a re-verification pass, one entry per re-run gate:
     // { "gate": "typecheck", "reason": "fix changed app/actions/blog.ts" }
@@ -160,7 +184,7 @@ Return a single structured verdict, no narration. Conforms to **Appendix C**:
 }
 ```
 
-**Verdict rule:** `overall: fail` if **any** of `checks.*` is `fail`, OR `ci_integrity` is `fail`, OR `manifest_backstop.under_declared` is non-empty. A `skipped` check never forces `fail`. Otherwise `overall: pass`. **Exception, checked first:** slice type `frontend` and `manifest_backstop.manifest_declared == 0` is `needs_human` (`status: needs_human`, `hitl_category: "prd_ambiguity"`), never `overall: pass`; set `overall: fail` and leave `fix_targets` empty, because there is no patch for a manifest that was never emitted and the conductor raises it as a HITL, not a fix loop. On a re-verification pass, `checks.*` holds the carried-forward results merged with the re-run ones, and `rerun` is required (it is the record of what actually ran).
+**Verdict rule:** `overall: fail` if **any** of `checks.*` is `fail`, OR `ci_integrity` is `fail`, OR `manifest_backstop.under_declared` is non-empty. A `skipped` check never forces `fail`, and neither does any entry in `warnings`. Otherwise `overall: pass`. **Exception, checked first:** slice type `frontend` and `manifest_backstop.manifest_declared == 0` is `needs_human` (`status: needs_human`, `hitl_category: "prd_ambiguity"`), never `overall: pass`; set `overall: fail` and leave `fix_targets` empty, because there is no patch for a manifest that was never emitted and the conductor raises it as a HITL, not a fix loop. On a re-verification pass, `checks.*` holds the carried-forward results merged with the re-run ones, and `rerun` is required (it is the record of what actually ran).
 
 Populate `fix_targets` with one entry per actionable failure, each naming the responsible **agent + file + reason** so the orchestrator can dispatch `fix-attempter` precisely (for a manifest under-declaration the target is the manifest emitter, the `implementer` or `state-illustrator` on `frontend`, against the manifest/route file; for a CI-integrity violation the target is the slice diff's workflow change).
 
