@@ -85,12 +85,22 @@ async function now($: EngineInterface): Promise<number> {
   }
 }
 
+// The text the last refresh read, held in memory so the checkbox check can
+// apply an Edit to it on the hot path without reading the disk.
+let lastText: string | null = null
+
+/** The checklist text as the last refresh read it, or null before one (or with no file). */
+export function checklistText(): string | null {
+  return lastText
+}
+
 /**
  * Reads the checklist (a missing file gives null, never a throw), parses it and
  * writes the atoms. Resolves the parsed checklist.
  */
 export async function refresh($: EngineInterface): Promise<PassChecklist | null> {
   const text = await readText($)
+  lastText = text
   const parsed = text === null ? null : parseChecklist(text)
   const branch = await readBranch($)
   const at = await now($)

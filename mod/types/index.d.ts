@@ -1,8 +1,11 @@
 // mod/types/index.d.ts
 // The Pass state contract: checklist, ledger and projection types, and the session state keys the mod owns under the bytheslice plugin.
 
-/** One slice row: its `N.M` id, its name, and whether the checklist marks it done. */
-export type PassSlice = { id: string; name: string; done: boolean }
+/**
+ * One slice row: its `N.M` id, its name, whether the checklist marks it done,
+ * and its `**Type:**` (`frontend`, `full-stack`, `infrastructure`, ...) when the checklist names one.
+ */
+export type PassSlice = { id: string; name: string; done: boolean; type?: string }
 
 /** One pie (Prep counts as Pie 1, Foundations) with its review mode and its slices in checklist order. */
 export type PassPie = {
@@ -126,7 +129,12 @@ export type PassPieView = {
   review: 'boundary' | 'continuous'
   done: boolean
   slices: PassSliceView[]
+  /** ci-fix-attempter starts the activity log attributes to this pie, against a cap of 3 CI rounds. */
+  ciFixLoop: number
 }
+
+/** One warning a Pass check raised, as the ledger's `warn` rows keep it. A warning never blocked anything. */
+export type PassFinding = { code: string; slice: string | null; text: string; t: number }
 
 /** A slice where the checklist and the ledger disagree. Facts to read, never a refusal. */
 export type PassMismatch = {
@@ -144,8 +152,42 @@ export type PassProjection = {
   mismatches: PassMismatch[]
   /** Done slices with no ledger rows of their own: finished before the ledger. */
   untracked: number
+  /** The newest check warnings in the ledger, newest first, at most 10. */
+  findings: PassFinding[]
   at: number
 }
+
+/** Whether a slice marked done needs a slice-tester pass too: UI slices only (the default), every slice, or none. */
+export type PassRequireTester = 'ui-slices' | 'always' | 'never'
+
+/** The check and spawn policy: `bytheslice.config.json` key `pass` over the defaults in mod/policy.ts. */
+export type PassPolicy = {
+  /** False turns every Pass check off; the pane, band and ledger stay on. */
+  enabled: boolean
+  requireTester: PassRequireTester
+  /** Role (an agent type without its `bytheslice:` prefix) to the model tiers it may run on, matched by substring. */
+  roles: Record<string, string[]>
+  /** Case-insensitive strings that mark builder context in a reviewer's prompt. */
+  contextMarkers: string[]
+}
+
+/** The band's warning style after a finding: which one, and until when. */
+export type PassWarning = { code: string; slice: string | null; t: number; until: number }
+
+/** A spawn whose model the Pass checks again when its first turn ends. */
+export type PassSpawnTrack = {
+  role: string
+  /** The model the spawn named, or null when it left the choice to the agent definition. */
+  given: string | null
+  /** The loop that spawned it (`parentAgentId`), or null for the main conversation. */
+  parent: string | null
+  /** The slice its `P<pie> S<slice>` dispatch label named, or null. */
+  slice: string | null
+  at: number
+}
+
+/** Fix spawns this session started: fix-attempter per slice, ci-fix-attempter per pie. */
+export type PassFixCounts = { fix: Record<string, number>; ci: Record<string, number> }
 
 /** What an `agent.spawn` hook learned about one started agent. */
 export type PassAgentMark = { type: string; pie: number | null; slice: string | null; at: number }
@@ -177,6 +219,20 @@ declare module 'claude-code' {
       'pass.toasted': string[]
       /** The listed names of the tools the Pass registered (`mcp__<plugin>__bts_status`). */
       'pass.tools': string[]
+      /** HEAD's sha in the session's directory: read at session start, after each commit row and after a branch move. */
+      'pass.head': string | null
+      /** The ByTheSlice skill the session last started (`sell-pie`, `cook-pizzas`, ...), without its plugin prefix. */
+      'pass.activeSkill': string | null
+      /** The check and spawn policy read once at session start; null before then (the defaults apply). */
+      'pass.policy': PassPolicy | null
+      /** `code|key` of each warning reported, to when; a key reports at most once a minute. */
+      'pass.reported': Record<string, number>
+      /** The latest finding while the band still shows it, or null. */
+      'pass.warning': PassWarning | null
+      /** Agent id to a spawn whose model is checked again when its first turn ends. */
+      'pass.spawns': Record<string, PassSpawnTrack>
+      /** Fix spawns this session started, beside what the activity log counts. */
+      'pass.fixCounts': PassFixCounts
     }
   }
 }

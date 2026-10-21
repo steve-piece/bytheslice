@@ -2,8 +2,10 @@
 // Test-only stand-ins for the engine beneath the Pass: answers the $ calls the mod makes from an in-memory world, plus mount targets.
 
 import { mock } from 'claude-code/testing'
-import type { AgentInfo, On, RenderSurface, UiPane } from 'claude-code'
+import type { AgentInfo, AgentSpawnInput, On, RenderSurface, UiPane } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
+
+import { DEFAULT_ROLES } from './policy.ts'
 
 export const START_MS = 1760000000000
 export const PLUGIN = 'bytheslice'
@@ -315,10 +317,22 @@ export function engineLoops(on: On, agentIds: string[] = ['agent-1']): void {
   on('skill.prompt', (_$, e) => ({ text: e.text }))
 }
 
-/** Spawns an agent through the plugins as the Agent tool does. */
-export function spawn($: Engine, subagentType: string, description: string) {
-  return $.agent.spawn({
-    tool_use_id: `toolu-${description.length}`,
+/** The API id a tier runs as in these tests. */
+export const MODEL_IDS: Readonly<Record<string, string>> = {
+  opus: 'claude-opus-5-5',
+  sonnet: 'claude-sonnet-4-6',
+  haiku: 'claude-haiku-4-5',
+}
+
+// Which model each spawned agent runs on: its definition's tier, as a session runs it.
+const ranOn = new Map<string, string>()
+let spawned = 0
+
+/** Spawns an agent through the plugins as the Agent tool does; `extra` sets `model`, `prompt` and the rest. */
+export async function spawn($: Engine, subagentType: string, description: string, extra: Partial<AgentSpawnInput> = {}) {
+  spawned += 1
+  const started = await $.agent.spawn({
+    tool_use_id: `toolu-${spawned}`,
     prompt: 'the task',
     description,
     subagentType,
@@ -326,11 +340,22 @@ export function spawn($: Engine, subagentType: string, description: string) {
     parentModel: 'claude-opus-5-5',
     background: false,
     fork: false,
+    ...extra,
   })
+  if (typeof started.agentId === 'string') {
+    const tier = DEFAULT_ROLES[subagentType.replace(/^bytheslice:/, '')]?.[0]
+    ranOn.set(started.agentId, (tier === undefined ? undefined : MODEL_IDS[tier]) ?? MODEL_IDS.opus ?? 'claude-opus-5-5')
+  }
+  return started
 }
 
-/** Ends a turn through the plugins: a subagent's when `agentId` is given, else the main loop's. */
-export function endTurn($: Engine, answer: string, agentId?: string) {
+/**
+ * Ends a turn through the plugins: a subagent's when `agentId` is given, else
+ * the main loop's. A spawned agent's turn runs on its definition's tier unless
+ * `model` names another.
+ */
+export function endTurn($: Engine, answer: string, agentId?: string, model?: string) {
+  const used = model ?? (agentId === undefined ? undefined : ranOn.get(agentId)) ?? 'claude-opus-5-5'
   return $.turn.complete({
     answer,
     durationMs: 1200,
@@ -343,7 +368,7 @@ export function endTurn($: Engine, answer: string, agentId?: string) {
       output_tokens: 20,
       cache_read_input_tokens: 5,
       cache_creation_input_tokens: 0,
-      model: 'claude-opus-5-5',
+      model: used,
     },
   })
 }
@@ -373,4 +398,32 @@ export function fixingWorld(world: World): void {
 /** The fixture with Slice 5.1 checked, so 5.2 is the active slice. */
 export function activeAt52(checklist: string): string {
   return checklist.replace('### Slice 5.1 - Pass pane and band [ ]\nStatus: Not Started', '### Slice 5.1 - Pass pane and band [x]\nStatus: Completed')
+}
+
+/** One ledger line: a row at time `t`, on `slice` (and its pie) when one is given. */
+export function ledgerLine(t: number, ev: string, slice?: string, data?: Record<string, unknown>): string {
+  const pie = slice === undefined ? {} : { pie: Number(slice.split('.')[0]), slice }
+  return JSON.stringify({ v: 1, t, sid: 's', ev, ...pie, ...(data ? { data } : {}) })
+}
+
+/** A ledger file's text from its lines. */
+export function ledgerText(lines: readonly string[]): string {
+  return `${lines.join('\n')}\n`
+}
+
+/** The `warn` rows the ledger holds, as `[code, slice]`. */
+export function warnsOf(world: World): [string, string | null][] {
+  return rowsOf(world)
+    .filter(row => row.ev === 'warn')
+    .map(row => [String((row.data as { code?: unknown } | undefined)?.code), typeof row.slice === 'string' ? row.slice : null])
+}
+
+/** The pass command as the person types it. */
+export function typed(args: string) {
+  return {
+    command: 'pass',
+    args,
+    origin: { kind: 'composer' as const },
+    presentation: { isFullscreen: false, columns: 120 },
+  }
 }

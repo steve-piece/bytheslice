@@ -1,5 +1,5 @@
 // mod/checklist.test.ts
-// Unit tests for the Pass checklist parser: pinned fixture counts, review modes, Prep, v4 and malformed input.
+// Unit tests for the Pass checklist parser: pinned fixture counts, review modes, slice types, Prep, v4 and malformed input.
 
 import { expect, test } from 'claude-code/testing'
 
@@ -20,8 +20,23 @@ test('names, ids and review modes come from the headings and annotations', () =>
   expect(c.pies[0]).toMatchObject({ n: 1, name: 'Foundations', review: 'boundary' })
   expect(c.pies[2]).toMatchObject({ n: 3, name: 'Native Agent Registration', review: 'continuous' })
   expect(c.pies[4]?.name).toBe('The Pass')
-  expect(c.pies[4]?.slices[0]).toEqual({ id: '5.1', name: 'Pass pane and band', done: false })
+  expect(c.pies[4]?.slices[0]).toEqual({ id: '5.1', name: 'Pass pane and band', done: false, type: 'infrastructure' })
   expect(c.pies[0]?.slices[1]?.id).toBe('1.2')
+})
+
+test("a slice's Type line gives its type; a slice without one has none", () => {
+  const c = parseChecklist(CHECKLIST_FIXTURE)
+  const types = Object.fromEntries(c.pies.flatMap(pie => pie.slices.map(slice => [slice.id, slice.type ?? null])))
+  expect(types['4.2']).toBe('full-stack')
+  expect(types['4.3']).toBe('frontend')
+  expect(types['5.3']).toBe('infrastructure')
+  expect(types['3.1']).toBeNull()
+  expect(types['1.1']).toBeNull()
+  const one = parseChecklist('## Pie 2 - Two [ ]\n### Slice 2.1 - A [ ]\n**Type:** Full-Stack | **Plan:** x.md\n### Slice 2.2 - B [ ]\nStatus: Not Started\n')
+  expect(one.pies[0]?.slices).toEqual([
+    { id: '2.1', name: 'A', done: false, type: 'full-stack' },
+    { id: '2.2', name: 'B', done: false },
+  ])
 })
 
 test('Prep bare lines count as Pie 1 slices and as the Prep tally', () => {

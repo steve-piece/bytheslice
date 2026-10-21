@@ -1,5 +1,5 @@
 // mod/ledger-projection.ts
-// Pure projection of ledger rows plus the kitchen activity log onto the checklist: slice status, verdicts, fix loops, live agents, rollups.
+// Pure projection of ledger rows plus the kitchen activity log onto the checklist: slice status, verdicts, fix loops, live agents, rollups, warnings.
 
 import type { EngineInterface } from 'claude-code'
 
@@ -7,6 +7,7 @@ import type {
   ActivityRow,
   LedgerRow,
   PassChecklist,
+  PassFinding,
   PassGate,
   PassLiveAgent,
   PassMismatch,
@@ -21,6 +22,10 @@ import type {
 export const ACTIVITY_PATH = '.claude/.bytheslice-state/kitchen/activity.jsonl'
 export const ACTIVITY_ROTATED = '.claude/.bytheslice-state/kitchen/activity.1.jsonl'
 export const FIX_CAP = 3
+/** CI rounds a pie's ci-fix-attempter gets at the boundary before the operator decides. */
+export const CI_FIX_CAP = 3
+/** How many check warnings the projection keeps for the pane and the pass checks command. */
+export const FINDINGS_KEEP = 10
 /** An agent start older than this with no stop is a lost stop, not a live agent. */
 export const STALE_MS = 6 * 60 * 60 * 1000
 
@@ -134,6 +139,32 @@ export function fixLoops(activity: readonly ActivityRow[], slice: string): numbe
     else unnamed += 1
   }
   return aids.size + unnamed
+}
+
+/** ci-fix-attempter starts in the activity log for one pie (one per agent id). */
+export function ciFixLoops(activity: readonly ActivityRow[], pie: number): number {
+  const aids = new Set<string>()
+  let unnamed = 0
+  for (const row of dedupeActivity(activity)) {
+    if (row.ev !== 'SubagentStart' || row.pie !== pie || roleOf(row.agent) !== 'ci-fix-attempter') continue
+    if (typeof row.aid === 'string' && row.aid !== '') aids.add(row.aid)
+    else unnamed += 1
+  }
+  return aids.size + unnamed
+}
+
+/** The newest `warn` rows as findings, newest first. A row without a code is skipped. */
+export function findingsOf(rows: readonly LedgerRow[], keep = FINDINGS_KEEP): PassFinding[] {
+  const out: PassFinding[] = []
+  for (let i = rows.length - 1; i >= 0 && out.length < keep; i -= 1) {
+    const row = rows[i]
+    if (row?.ev !== 'warn') continue
+    const code = row.data?.code
+    if (typeof code !== 'string' || code === '') continue
+    const text = typeof row.data?.text === 'string' ? row.data.text : ''
+    out.push({ code, slice: row.slice ?? null, text, t: row.t })
+  }
+  return out
 }
 
 /** What a slice.rollup row keeps: per-role agent counts, tokens and time, and fix loops. */
@@ -334,6 +365,7 @@ export function projectLedger(
     review: pie.review,
     done: pie.done,
     slices: pie.slices.map(slice => sliceView(pie.n, slice.id, slice.name, slice.done, rows, acts, live, cost)),
+    ciFixLoop: ciFixLoops(acts, pie.n),
   }))
   const views = pies.flatMap(pie => pie.slices)
   const open = pies.find(pie => pie.slices.some(slice => !slice.done))
@@ -344,6 +376,7 @@ export function projectLedger(
     live,
     mismatches: mismatchesOf(views),
     untracked: views.filter(view => view.done && !view.tracked).length,
+    findings: findingsOf(rows),
     at: now,
   }
 }

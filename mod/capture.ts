@@ -10,6 +10,7 @@ import type {
   TurnCompleteInput,
 } from 'claude-code'
 
+import { stripJsonc } from './jsonc.ts'
 import { appendRow, readRows } from './ledger.ts'
 import type { LedgerInput } from './ledger.ts'
 import { gateOf, readActivity, rollup } from './ledger-projection.ts'
@@ -52,37 +53,6 @@ export function subjectOf(subject: unknown): { pie: number; slice: string } | nu
   if (typeof subject !== 'string') return null
   const match = /^\w+\(pie-(\d+)\):\s*(\d+\.\d+)\b/.exec(subject.trim())
   return match ? { pie: Number(match[1]), slice: match[2] ?? '' } : null
-}
-
-// Strips `//` and `/* */` comments outside strings, then trailing commas: the
-// verifier's verdict is written as JSONC.
-function stripJsonc(text: string): string {
-  let out = ''
-  let inString = false
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i] ?? ''
-    const next = text[i + 1] ?? ''
-    if (inString) {
-      out += ch
-      if (ch === '\\') {
-        out += next
-        i += 1
-      } else if (ch === '"') inString = false
-      continue
-    }
-    if (ch === '"') {
-      inString = true
-      out += ch
-    } else if (ch === '/' && next === '/') {
-      while (i < text.length && text[i] !== '\n') i += 1
-      out += '\n'
-    } else if (ch === '/' && next === '*') {
-      i += 2
-      while (i < text.length && !(text[i] === '*' && text[i + 1] === '/')) i += 1
-      i += 1
-    } else out += ch
-  }
-  return out.replace(/,(\s*[}\]])/g, '$1')
 }
 
 // Every balanced top-level `{...}` span that names "overall", last first.

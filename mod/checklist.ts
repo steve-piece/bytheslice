@@ -1,10 +1,10 @@
 // mod/checklist.ts
-// Pure parser of docs/plans/00_master_checklist.md into the Pass projection (pies, slices, Prep counts), ported from mcp/kitchen-state.js.
+// Pure parser of docs/plans/00_master_checklist.md into the Pass projection (pies, slices with their type, Prep counts), ported from mcp/kitchen-state.js.
 
 import type { PassChecklist, PassLayout, PassPie } from './types'
 
 type Status = 'done' | 'active' | 'open'
-type SliceDraft = { id: string; name: string; status: Status }
+type SliceDraft = { id: string; name: string; status: Status; type?: string }
 type PieDraft = {
   n: number
   name: string
@@ -136,6 +136,10 @@ function parse(markdown: string): PassChecklist {
     }
     if (/^###\s/.test(line)) slice = null
 
+    // A slice's `**Type:** frontend | **Plan:** ...` line names what kind of slice it is.
+    const typed = slice ? /^\s*\*\*Type:?\*\*:?\s*([A-Za-z][\w-]*)/i.exec(line)?.[1] : undefined
+    if (slice && typed) slice.type = typed.toLowerCase()
+
     if (/^\s*(?:\*\*)?Status(?:\*\*)?:/i.test(line)) {
       const status = statusOf(line.replace(/\*\*/g, ''))
       if (slice) slice.status = status
@@ -152,7 +156,12 @@ function parse(markdown: string): PassChecklist {
       name: pie.name,
       review: pie.review,
       done: status === 'done',
-      slices: pie.slices.map(item => ({ id: item.id, name: item.name, done: item.status === 'done' })),
+      slices: pie.slices.map(item => ({
+        id: item.id,
+        name: item.name,
+        done: item.status === 'done',
+        ...(item.type === undefined ? {} : { type: item.type }),
+      })),
     }
   })
 
