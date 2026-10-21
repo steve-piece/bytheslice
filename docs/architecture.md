@@ -5,7 +5,7 @@
 
 The under-the-hood reference for ByTheSlice. The [README](../README.md) covers the day-to-day motion; this doc covers *why the kitchen works the way it does* - the rules the plugin enforces, the verification model, and how legacy projects migrate.
 
-> These aren't suggestions. The plugin enforces them through deterministic hooks and structured agent contracts.
+> These aren't suggestions. The skills and their structured agent contracts carry them; the hooks and the Pass mod watch for slips and warn, and never block.
 
 ## Contents
 
@@ -17,6 +17,7 @@ The under-the-hood reference for ByTheSlice. The [README](../README.md) covers t
 - [Orchestration principles](#orchestration-principles)
 - [Evidence, not proof ledgers](#evidence-not-proof-ledgers)
 - [Hook enforcement](#hook-enforcement)
+- [The Pass mod](#the-pass-mod)
 - [Live kitchen](#live-kitchen)
 - [Legacy & migration](#legacy--migration)
 - [Cursor / non-Claude-Code fallback](#cursor--non-claude-code-fallback)
@@ -161,7 +162,7 @@ Every frontend slice through `/sell-slice` passes through Phase 4.5's **Library 
 
 Existing operational state files stay, because they drive behavior rather than prove it: `.claude/.bytheslice-state/kitchen/activity.jsonl`, `kitchen/merged-pie.json`, `env-check-passed`, and the seed and cleanup pairs under `tests/seeds/<slice>/`. The closing-narrative paragraph in commit and PR bodies also stays; the 3-line limit applies to the checklist note only.
 
-**The one sanctioned exception: the Pass mod ledger.** The Pass mod's `.bytheslice/ledger.jsonl` ([`docs/pass-mod-spec.md`](pass-mod-spec.md)) is the single sanctioned completion record that tracks project progression over time. It is not a per-step proof file, and this rule does not ban it.
+**The one sanctioned exception: the Pass mod ledger.** The Pass mod's `.bytheslice/ledger.jsonl` ([`docs/pass-mod-spec.md`](pass-mod-spec.md)) is the single sanctioned completion record that tracks project progression over time. It is not a per-step proof file, and this rule does not ban it. As shipped in 5.4.0 it holds one JSON row per event: `pie.started`, `slice.started`, `slice.done`, `slice.rollup`, `verdict`, `commit`, `push`, `merge`, `warn`, `hitl.raised`, `hitl.answered`, `agent.stalled`, `teammate.idle`, `teammate.done`, `note`, `usage` and `edit` (a path and the role that edited it, never the content). No row carries a hash, a freeze, a fingerprint or a lease, and agent starts and stops stay in the kitchen activity log rather than a second recorder (see [The Pass mod](#the-pass-mod)).
 
 ---
 
@@ -177,6 +178,41 @@ Skill preconditions are checked inline by each skill at the start and raised as 
 Slice 5.4 retired the hooks the mod covers or that never fired; `hooks/README.md` keeps the inventory and what each retirement means on a host without the mod. Hooks dual-read flat `## Stage N` and nested `## Pie N` / `### Slice N.M` checklists; the regression suite lives at `hooks/test.sh`. Disable per-session with `BTS_HOOKS_DISABLED=1`. See [`hooks/README.md`](../hooks/README.md).
 
 > **v5 note:** the `Stop`-gate and `commit-checklist-correlator` hooks were deleted - `/loop` + the pie-completion `/goal` own loop continuation natively.
+
+---
+
+## The Pass mod
+
+The Pass is the plugin's Claude Code mod: a live ticket rail (pane, band, prompt hint, toasts) and a set of checks that **warn and never block**. The design and every as-built note live in [`pass-mod-spec.md`](pass-mod-spec.md); this section is the summary of what shipped in 5.4.0.
+
+**Packaging.** The mod lives inside the plugin. [`hooks/hooks.json`](../hooks/hooks.json) names `../mod/register.tsx` under `modules` beside its `hooks` block, `.claude-plugin/plugin.json` points `types` at `mod/types/index.d.ts`, and the npm package ships `mod`, `scripts/ledger-summary.js` and `docs/pass-mod-spec.md`. Cursor reads only the `hooks` key, so it never loads the mod. The mod needs Claude Code 2.1.299 or later; on anything older it stays inert and logs one line. Every mod hook registers a `.catch` that passes the call through, so a mod error never stops a tool call. `claude plugin validate .` and `claude plugin test .` (including the seeded-violation suite on both the `terminal` and `desktop` surfaces) are its gating checks.
+
+**Ledger, built on the kitchen activity log.** The ledger is `.bytheslice/ledger.jsonl` in the primary checkout (the parent of the git common dir, so every pie worktree writes one file), with its own `.gitignore` (`*`). Each row is one `tee -a` append; a failed write logs once and drops the row. Capture is off in a repository without a master checklist. Agent starts, stops, tokens and durations are not recorded twice: they come from [`kitchen-log.sh`](../hooks/kitchen-log.sh)'s `activity.jsonl`, and each finished slice adds one `slice.rollup` row so those numbers outlive the activity log's rotation. [`scripts/ledger-summary.js`](../scripts/ledger-summary.js) (zero dependencies, read-only) is the one fold every reader uses: `--format text` for `pass history`, `--format json` for the kitchen and `/close-shop`'s `retrospective-reviewer`, `--format pr-body` for the pie PR's `## Evidence` section (through the `bts_pr_body` tool).
+
+**Warn-only checks.** A check judges before the call from session state held in memory (never the disk or a process), always lets the call run, and reports each finding three ways: one `warn` ledger row `{ code, text }`, one toast, and text the model reads (after a tool call's result, or as a hidden note in the loop that spawned an agent). The same code and key report at most once a minute; the band keeps the warning style for five minutes. `pass checks` and the pane list the latest ten.
+
+| Code | Fires when |
+|---|---|
+| `checkbox-without-verdict` | An `Edit` or `Write` ticks a `### Slice` or Prep box in `00_master_checklist.md` (or the parser now reads a slice done) without a `slice-verifier` pass at HEAD |
+| `checkbox-without-tester` | The same flip on a `frontend` or `full-stack` slice with no `slice-tester` pass at any HEAD |
+| `push-slice-done-unverified` | A `git push` on a `pie-N` branch whose HEAD is a commit of a slice already `[x]` without a verifier pass there; a mid-slice push is silent |
+| `fix-loop-cap` | `fix-attempter` attempt 4 on a slice, or `ci-fix-attempter` round 4 on a pie; it also opens one HITL inbox item |
+| `commit-on-main` | A `git commit` or `git push` while the session's branch is `main` or `master` (best effort under `git -C` or `cd`) |
+| `plan-write-during-bake` | An `Edit` or `Write` under `docs/plans/stage_` while `sell-slice` was the last ByTheSlice skill started (`sell-pie` appends build notes to stage files by design) |
+| `model-policy` | A spawn names a model outside its role's allowed tiers |
+| `model-drift` | A spawn's first turn ran on a tier its role does not allow |
+| `builder-context` | A `slice-tester`, `slice-verifier`, `spec-reviewer` or `quality-reviewer` prompt carries a context marker (`files_changed`, `diff --git`, `implementer returned`, `builder transcript`) or runs past 20,000 characters |
+| `gate-teamified` | `implementer`, `slice-tester`, `slice-verifier`, `spec-reviewer` or `quality-reviewer` is started as a teammate |
+
+**Spawn policy.** The role table is the registered agents' own `model:` frontmatter, one tier per role (`implementer`, `quality-reviewer`, `retrospective-reviewer` and `token-expander` on opus; the scanners, `discovery` and `rules-loader` on haiku; the rest on sonnet), held in `mod/policy.ts` and kept equal to the agent files by `tests/pass/policy-parity.test.js`. A teammate is judged by a `teammate` role (opus or sonnet). The policy never rewrites a spawn's model or prompt. A project overrides it in `bytheslice.config.json` under the `pass` key: `pass.spawnPolicy.roles.<role>` (a tier list; an empty list stops checking that role), `pass.spawnPolicy.contextMarkers`, `pass.checks.enabled` and `pass.checks.requireTester` (`ui-slices`, the default, `always` or `never`). Each override is recorded once as a `note` row with `data.kind: 'policy-override'`.
+
+**Watchdog.** Every 30 seconds the mod scans the live agent list and flags an agent that has run past its role's budget (15 minutes; `discovery` 5, `implementer` 30) with no activity for 3 minutes. A slice's first stall writes `agent.stalled`, one toast, a flag on the pane row, and a hidden note to the main conversation; a second stall in the same slice opens a pane-only HITL item instead. It never stops, restarts or messages an agent. `pass.watchdog` (`enabled`, `idleMs`, `budgetsMs`) overrides the thresholds.
+
+**HITL inbox.** `bts_hitl` records an item in one of the four HITL categories, shows it in the pane and the band (`HITL n`, warning style), sends one native notification titled `ByTheSlice needs you` (a toast when no channel sent it), and returns at once: the skill's own HITL flow, asking in chat and stopping, is what waits. An answer is kept to 500 characters with secret shapes redacted, and nothing at all for `external_credentials`. The operator's own reply in chat closes the items the model was told to ask there, without the reply's words being read or kept.
+
+**Team mode and the spike answer.** The pane gains a Team section and the band `· n bakers` while teammates exist; each teammate turn is one attributed `usage` row, and `TeammateIdle` and `TaskCompleted` land as `teammate.idle` and `teammate.done`. The 5.6 spike (CLI 2.1.302, agent teams on, `teammateMode: "in-process"`) found that a teammate has neither `Workflow` nor `ScheduleWakeup` in its tool list, while mod tools work. `bts_wake` stands in for `ScheduleWakeup` by sending the teammate a message on a timer; nothing stands in for `Workflow`, so a teammate cannot run `/sell-pie`'s per-slice Workflow and **pies stay sequential**. The Pass observes a team; it does not make `/run-the-day` a team.
+
+**Review and progress.** Every successful `Edit` or `Write` adds an `edit` row (workspace path, agent, role, tool). The pane's Touched section joins them with `git diff --numstat` and draws red any file a builder edited after the slice's last verifier pass. `pass replay <slice>` steps through a slice's commits and its uncommitted changes with each file's diff. Sessions of the same project share a read-only roadmap strip through the mod store. The kitchen's Progress sheet reads the same fold from `GET /state` (see [Live kitchen](#live-kitchen)). A shared live page was spiked and not built: the PR's Evidence section and the local Progress sheet cover collaboration.
 
 ---
 
@@ -199,6 +235,8 @@ Rows live in `.claude/.bytheslice-state/kitchen/activity.jsonl`. The strict fiel
 The same process binds HTTP to `127.0.0.1` only. It starts at **4477** (or `BTS_KITCHEN_PORT`) and tries the next free port, then writes the chosen number to `.claude/.bytheslice-state/kitchen/port`. Only exact **`GET /`** (bundled viewer) and **`GET /state`** (snapshot) are served. Other methods return 405; other paths return 404. Host, Origin and Fetch Metadata checks reject foreign browser requests; responses disable caching and embedding. There is no mutation endpoint, shell action, remote publish operation or filesystem browse route. The server writes its local port-discovery file; the lifecycle logger and explicit workflow helpers write their own bounded local evidence.
 
 **Slice progress is measured, never estimated.** For each unfinished slice whose checklist row links a plan (`**Plan:** [stage_*.md](...)`, a plain file name inside `docs/plans`), the state reader counts the plan's top-level task checkboxes, then counts distinct task commits on the local branches with a read-only `git log --branches` over the 5.3.0 subjects `feat(pie-N): N.M task K <name>` (cached for 15 seconds). A pie's commits usually sit on its own branch in another worktree, which is why local branches are searched rather than only the current one. A missing plan, no git, or a task number past the plan's count yields no progress at all. The current step comes from the dispatch label (`P5 S5.2 verify:`) or the agent's role. The served-pie details show only the commit, commit range, date and one-line summary that the checklist rows themselves state.
+
+**Progress over time comes from the Pass ledger.** The snapshot's `progress` field is `.bytheslice/ledger.jsonl` folded by [`scripts/ledger-summary.js`](../scripts/ledger-summary.js), the newest 1 MiB read once per snapshot. The header's Progress button opens a sheet with one block per pie: a slice table (started, done, duration, fix loops, verifier verdict, cost) and an inline SVG step line of slices done over time. Without a ledger (no mod, or no Claude Code session yet) the sheet says so.
 
 The visible page polls same-origin `/state` every **three seconds**, preserves the latest valid snapshot and pauses polling while hidden. `window.kitchenLive.snapshot` exposes the latest snapshot for inspection. The header browser button uses only the validated snapshot port and opens the same loopback URL with `noopener` after a user click. Host behavior determines whether the new tab leaves the pane. The viewer loads Three.js from **unpkg** and fonts from **Google Fonts**, so its rendering is not offline.
 

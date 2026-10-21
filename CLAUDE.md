@@ -15,6 +15,7 @@ Rules every delivery run follows (details in [docs/architecture.md](docs/archite
 - **Merge-per-slice mode** (opt-in, see above): one branch, worktree and PR per slice, merged with a merge commit on green CI.
 - **Fallback agent shape.** On a host without plugin-agent registration, each agent's frontmatter travels as a header (model tier, effort, normalized tool allowlist, the read-only line for agents without write tools, no git writes), and the conductor logs one self-check line per dispatch in `.claude/.bytheslice-state/run-log.md`.
 - **No proof ledgers.** No hashes, fingerprints, leases or per-step proof files; the Pass mod ledger ([docs/pass-mod-spec.md](docs/pass-mod-spec.md)) is the one sanctioned completion record.
+- **The Pass.** The plugin's Claude Code mod (`mod/`, Claude Code 2.1.299+) draws a live pane and band, keeps the ledger at `.bytheslice/ledger.jsonl`, gives the model `bts_status`, `bts_note`, `bts_hitl`, `bts_pr_body` and `bts_wake`, and warns on rule slips (a checkbox without a verdict, builder context in a tester prompt, the fix cap, a commit on `main`); nothing it does blocks, and without it everything still works.
 
 Source of truth for in-flight work: `docs/plans/00_master_checklist.md` (gitignored, generated per project), nested as `## Pie N` / `### Slice N.M` with the `## Prep` gate acting as Pie 1 (Foundations). Per-slice plans live alongside it as `docs/plans/stage_<n>_*.md` (filenames keep the `stage_` prefix for dual-read back-compat).
 
