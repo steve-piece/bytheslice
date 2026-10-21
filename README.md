@@ -140,7 +140,7 @@ Default install paths - **Cursor:** `~/.cursor/plugins/local/bytheslice` · **Cl
 
 ## Watch the kitchen
 
-Run [`/open-kitchen`](skills/open-kitchen/SKILL.md) from your project to open its local 3D kitchen. Characters follow active agents, the lighting follows the session phase, and the order line follows the master checklist.
+Run [`/open-kitchen`](skills/open-kitchen/SKILL.md) from your project to open its local 3D kitchen. Characters follow active agents (off-duty crew live in town and run in when called), the lighting follows the session phase, and the order line follows the master checklist, with measured slice progress, pie details, a plain-words activity log and a profile for every person in town.
 
 | Area | What it shows |
 |---|---|
