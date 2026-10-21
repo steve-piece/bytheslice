@@ -4,6 +4,7 @@
 
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { execFile } = require('node:child_process');
 
 const EVENTS = new Set(['SessionStart', 'Stop', 'SubagentStart', 'SubagentStop',
   'PreToolUse', 'PostToolUse', 'UserPromptExpansion']);
@@ -55,6 +56,24 @@ function statusOf(line) {
 function titleOf(value) {
   return text(value.replace(/<!--.*?-->/g, '').replace(/\[[ xX-]\]/g, '')
     .replace(/~~/g, '').replace(/\bStatus:.*$/i, '').replace(/^\s*[:.-]\s*/, ''), 240);
+}
+
+// Facts a checklist row states in plain text: a commit range or commit, a date, the plan file and a one-line summary.
+const COMMIT_RANGE = /\b([0-9a-f]{7,40}\.\.[0-9a-f]{7,40})\b/;
+const COMMIT_ONE = /\b(?:commit|in|at)\s+`?([0-9a-f]{7,40})\b/i;
+function rowFacts(target, line) {
+  if (/^\s*(?:\*\*)?Status(?:\*\*)?:/i.test(line)) {
+    const commit = COMMIT_RANGE.exec(line)?.[1] || COMMIT_ONE.exec(line)?.[1];
+    const date = /\b(20\d\d-[01]\d-[0-3]\d)\b/.exec(line)?.[1];
+    if (commit && !target.commit) target.commit = commit;
+    if (date && !target.date) target.date = date;
+    return;
+  }
+  const plan = /\*\*Plan:\*\*\s*\[[^\]]*\]\((?:\.\/)?([\w.-]+\.md)\)/.exec(line);
+  if (plan && !target.plan) target.plan = plan[1];
+  const scope = /^\s*\*\*Pie scope:\*\*\s*(.+?)(?:\s+\|\s+\*\*|$)/.exec(line);
+  if (scope && !target.summary) { target.summary = text(scope[1].replace(/`/g, ''), 240); return; }
+  if (!target.summary && line.trim() && !/^\s*(?:\*\*|<!--|[-*|#>[]|\d+\.|Status\b|---)/i.test(line)) target.summary = text(line.replace(/\*\*|`/g, ''), 240);
 }
 
 function parseChecklist(markdown) {
@@ -122,6 +141,7 @@ function parseChecklist(markdown) {
       current.slices.push(slice); continue;
     }
     if (/^###\s/.test(line)) slice = null;
+    if (!prep && (slice || current)) rowFacts(slice || current, line);
     if (/^\s*(?:\*\*)?Status(?:\*\*)?:/i.test(line)) {
       const status = statusOf(line.replace(/\*\*/g, ''));
       if (slice) slice.status = status;
@@ -228,15 +248,59 @@ function foldActivity(inputRows, now = Date.now(), { mergedPie = null, activePie
   };
 }
 
+// The step an agent is on, from the dispatch label convention (`P5 S5.2 build: ...`) or, without one, from its role.
+const STEPS = ['build', 'test', 'verify', 'fix', 'commit', 'review', 'plan'];
+const STEP_OF_TYPE = { implementer: 'build', 'block-composer': 'build', 'component-crafter': 'build', 'layout-architect': 'build',
+  'state-illustrator': 'build', plater: 'build', 'slice-tester': 'test', 'slice-verifier': 'verify', 'local-gates-runner': 'verify',
+  'fix-attempter': 'fix', 'debug-instrumenter': 'fix', 'spec-reviewer': 'review', 'quality-reviewer': 'review' };
+function stepOf(agent) {
+  const labelled = /\bS\d+\.\d+\s+([a-z]+)\b/i.exec(agent.label || '')?.[1]?.toLowerCase();
+  if (STEPS.includes(labelled)) return labelled;
+  return STEP_OF_TYPE[String(agent.type || '').replace(/^bytheslice:/, '')] || null;
+}
+
+// Tasks committed per slice, from the 5.3.0 task-boundary subjects `feat(pie-N): N.M task K <name>`, counted once per task.
+const TASK_SUBJECT = /^feat\(pie-(\d+)\):\s+(\d+\.\d+)\s+task\s+(\d+)\b/i;
+function taskProgress(subjects, number, total) {
+  if (!Array.isArray(subjects) || !Number.isSafeInteger(total) || total < 1) return null;
+  const pie = number.split('.')[0], done = new Set();
+  for (const subject of subjects) {
+    const hit = TASK_SUBJECT.exec(subject || '');
+    if (!hit || hit[1] !== pie || hit[2] !== number) continue;
+    const task = Number(hit[3]);
+    // A task number past the plan's count means the plan and the history disagree: report nothing rather than guess.
+    if (task < 1 || task > total) return null;
+    done.add(task);
+  }
+  return { done: done.size, total };
+}
+
+// Top-level checkbox lines in a slice plan are its tasks.
+function countPlanTasks(markdown) {
+  let fenced = false, count = 0;
+  for (const line of String(markdown || '').split(/\r?\n/)) {
+    if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; continue; }
+    if (!fenced && /^- \[[ xX]\]\s/.test(line)) count++;
+  }
+  return count;
+}
+
 const PIECE_MARKERS = { walls: 'config', menu: 'prd', tickets: 'checklist', case: 'designSystem',
   safe: 'envCheck', oven: 'workflows', alarm: 'prePush', locks: 'branchProtection' };
 
-function buildSnapshot({ root, checklist = '', markers = {}, rows = [], cursor = 0, port = null, now, mergedPie = null }) {
+function buildSnapshot({ root, checklist = '', markers = {}, rows = [], cursor = 0, port = null, now, mergedPie = null, planTasks = {}, taskSubjects = null }) {
   const parsed = parseChecklist(checklist);
   const activity = foldActivity(rows, now, { mergedPie, activePie: parsed.pies.find(pie => pie.status === 'active')?.pie ?? null });
   for (const pie of parsed.pies) {
     for (const slice of pie.slices) {
-      if (slice.status !== 'done' && activity.active.some(agent => agent.slice === slice.number)) slice.status = 'active';
+      const working = activity.active.filter(agent => agent.slice === slice.number).sort((a, b) => b.startedAt - a.startedAt);
+      if (slice.status !== 'done' && working.length) slice.status = 'active';
+      if (slice.status !== 'done') {
+        const step = working.map(stepOf).find(Boolean);
+        if (step) slice.step = step;
+        const progress = taskProgress(taskSubjects, slice.number, slice.plan ? planTasks[slice.plan] : null);
+        if (progress) slice.progress = progress;
+      }
     }
     if (pie.status !== 'done' && (pie.slices.some(slice => slice.status === 'active') ||
         activity.active.some(agent => agent.pie === pie.pie))) pie.status = 'active';
@@ -297,6 +361,34 @@ async function readMergeEvidence(file) {
   } catch { return null; }
 }
 
+// Plan files are read only by the name a checklist row links, only inside docs/plans, and only as regular files.
+async function readPlanTasks(root, names) {
+  const dir = path.join(root, 'docs/plans'), out = {};
+  await Promise.all([...new Set(names)].filter(name => /^[\w.-]+\.md$/.test(name)).slice(0, 64).map(async name => {
+    try {
+      const file = path.join(dir, name), stat = await fs.lstat(file);
+      if (!stat.isFile() || stat.size > 512 * 1024) return;
+      out[name] = countPlanTasks(await fs.readFile(file, 'utf8'));
+    } catch { /* A missing plan simply has no measured progress. */ }
+  }));
+  return out;
+}
+
+// Read-only: commit subjects that follow the task-boundary convention, on any local branch (a pie is built on its own branch,
+// often in another worktree). Cached briefly so the three second poll does not run git every time. Null when git is unavailable.
+const subjectCache = new Map();
+function readTaskSubjects(root, now = Date.now()) {
+  const hit = subjectCache.get(root);
+  if (hit && now - hit.at < 15000) return hit.value;
+  const value = new Promise(resolve => {
+    execFile('git', ['log', '--branches', '--format=%s', '-E', '--grep=^feat\\(pie-[0-9]+\\): [0-9]+\\.[0-9]+ task [0-9]+', '-n', '2000'],
+      { cwd: root, timeout: 2500, maxBuffer: 1024 * 1024, windowsHide: true },
+      (error, stdout) => resolve(error ? null : stdout.split('\n').filter(Boolean)));
+  });
+  subjectCache.set(root, { at: now, value });
+  return value;
+}
+
 async function readKitchenState(root, { since, port = null, now = Date.now() } = {}) {
   if (since !== undefined && !integer(since)) throw new TypeError('since must be a nonnegative integer');
   root = path.resolve(root);
@@ -312,9 +404,13 @@ async function readKitchenState(root, { since, port = null, now = Date.now() } =
     readMergeEvidence(path.join(dir, 'merged-pie.json')),
   ]);
   const previous = parseActivity(rotation), latest = parseActivity(current);
-  return buildSnapshot({ root, checklist: checklist.toString('utf8'),
+  const markdown = checklist.toString('utf8');
+  const plans = parseChecklist(markdown).pies.flatMap(pie => pie.slices).filter(slice => slice.status !== 'done' && slice.plan).map(slice => slice.plan);
+  const [planTasks, taskSubjects] = plans.length ? await Promise.all([readPlanTasks(root, plans), readTaskSubjects(root, now)]) : [{}, null];
+  return buildSnapshot({ root, checklist: markdown, planTasks, taskSubjects,
     markers: { config, checklist: checklistExists, designSystem, workflows, prePush, envCheck, branchProtection, library, prd: docs.some(entry => entry.isFile() && /^prd-.*\.md$/.test(entry.name)) },
     rows: [...previous.rows, ...latest.rows], cursor: latest.cursor, port, now, mergedPie });
 }
 
-module.exports = { shopStatus, mergeEvidence, sanitizeRow, parseActivity, parseChecklist, foldActivity, buildSnapshot, readKitchenState };
+module.exports = { shopStatus, mergeEvidence, sanitizeRow, parseActivity, parseChecklist, foldActivity, buildSnapshot, readKitchenState,
+  stepOf, taskProgress, countPlanTasks };
