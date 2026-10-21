@@ -449,6 +449,36 @@ for SRC in compact resume; do
 done
 rm -rf "$FIX"
 
+# A pie's **User flow:** block (numbered "N. <step> - Slice N.M" items) must
+# not change bts_slice_counts, which counts `### Slice N.M` headings only.
+FIX=$(mk_fixture)
+mkdir -p "$FIX/docs/plans"
+cat > "$FIX/docs/plans/00_master_checklist.md" <<'EOF'
+# Master
+
+## Pie 2: Blog Editor    <!-- review: boundary -->
+**Pie scope:** write and publish a post | **MVP:** Yes | **Depends on:** Pie 1
+**User flow:**
+1. Open the editor and start a draft - Slice 2.1
+2. Save the draft and see it in the list - Slice 2.2
+3. Publish the post and open it at its public URL - Slice 2.3
+
+### Slice 2.1: Editor shell [x]
+
+### Slice 2.2: Server actions
+
+### Slice 2.3: Publish button
+EOF
+HEADINGS=$(grep -cE '^### +Slice[[:space:]]+[0-9]+\.[0-9]' "$FIX/docs/plans/00_master_checklist.md")
+LAST_OUT=$(CLAUDE_PROJECT_DIR=$FIX bash -c '. "$1/lib/checklist.sh"; bts_slice_counts' _ "$HERE")
+if [ "$HEADINGS" = 3 ] && [ "$LAST_OUT" = "1 $HEADINGS" ]; then
+  PASS=$((PASS+1)); printf '  ✓ user-flow items are not counted as slices (%s, %s headings)\n' "$LAST_OUT" "$HEADINGS"
+else
+  FAIL=$((FAIL+1)); FAILED_NAMES+=("user-flow items are not counted as slices (got: $LAST_OUT, headings: $HEADINGS)")
+  printf '  ✗ user-flow items are not counted as slices (got: %s, want: 1 %s)\n' "$LAST_OUT" "$HEADINGS"
+fi
+rm -rf "$FIX"
+
 # BTS_HOOKS_DISABLED → PASS silent
 FIX=$(mk_fixture)
 mkdir -p "$FIX/docs/plans"
