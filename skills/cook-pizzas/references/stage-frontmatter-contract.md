@@ -136,6 +136,8 @@ Every line MUST be:
 2. **Binary** — either met or not met.
 3. **Specific to this slice** — name the routes, files, suites, or subagent verdicts that prove intent.
 
+**Date-gated lines.** A criterion that can only be checked after a calendar date is allowed when marked as such: `(date-gated, on or after YYYY-MM-DD) <criterion>`. It is the one exception to "verifiable now". While its date is ahead, the slice's checklist `**Status:**` reads `waiting until <YYYY-MM-DD>: <criterion>` and the slice stays open; see `references/templates.md` → "Calendar-gated criteria".
+
 See `references/templates.md` → "Exit-criteria contract (consumed by `/goal`)" for full guidance and good/bad examples. The `phased-plan-writer` agent is the enforcement point.
 
 ## Cross-skill linking

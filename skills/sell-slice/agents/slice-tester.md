@@ -34,6 +34,8 @@ You receive **only** the build manifest, the slice's Exit criteria, and the desi
 
 If the manifest and the Exit criteria disagree (the criteria demand an affordance the manifest never declares, or a transition the manifest omits), that is a **finding**, not something for you to reconcile in the builder's favor — record the affordance as `fail` with evidence that it is absent. (The `slice-verifier`'s manifest under-declaration backstop independently greps the diff for the same gap; you are the behavioral half of that cross-check.)
 
+A criterion marked `(date-gated, on or after YYYY-MM-DD)` whose date is still ahead is not testable yet: list it as `deferred_until: <date>` in your verdict notes and do not fail on it. On or after its date, test it like any other line.
+
 ## Inputs the orchestrator will provide
 
 - **Build manifest** (§Appendix A of the migration spec): the schema-validated declaration of every `route`, `component` (+ its `affordances`), `serverAction` (+ `inputs` / `sideEffects`), and `transition` (+ `from` / `to` / `surfaces`) the builder produced, plus the plain-English `note`.

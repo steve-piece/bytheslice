@@ -93,6 +93,7 @@ For each Pie in the filtered queue, in order:
    - In merge-per-slice delivery (opt-in; pass the run instruction through), `/sell-pie` instead merges each slice through its own PR on green CI (merge commit, at most 3 CI fix rounds, still red halts) and cleans each slice worktree up before cutting the next; there is no boundary PR.
    **Wait for `/sell-pie` to return.** Do not start the next Pie until it does.
 3. **Handle HITL if returned.** If `/sell-pie` returns `needs_human: true`, **stop the chain** and propagate its structured `hitl_*` fields verbatim in this skill's return contract (see HITL Handling). Do not advance, do not reschedule.
+   **Waiting on a date.** If `/sell-pie` returns `status: waiting` (its only open slices are calendar-gated, `waiting until <YYYY-MM-DD>: <criterion>`), the Pie is not complete: **stop the chain** without a HITL, report each waiting slice and its date, and set `waiting_slices` in this skill's return. Never start the next Pie past a waiting one, and never keep a loop or wake alive to wait; a `/run-the-day` or `/sell-pie` run on or after the date resumes.
 4. **Confirm the pie closed cleanly.** From `/sell-pie`'s return, verify: the Pie PR is `MERGED` (in merge-per-slice delivery: every slice PR is `MERGED`), CI was green on the merged head SHA, the working tree is clean on `main` synced with `origin/main`, the pie branch + worktree (or every slice branch + worktree) were removed, and the Pie's `## Pie N` status reads `Completed`. If any is false and there is no HITL reason, set `status: failed` and stop; do not advance to the next Pie on a half-finished one.
 5. **Update the pie queue** from the `## Pie N` status `/sell-pie` left. The flip is committed on the pie branch before the boundary PR opens (`/box-it-up` Phase 1 step 4), or on the last slice branch in merge-per-slice delivery, so it reaches `main` with the merge. If the status still does not read `Completed` after the merge, report it in `notes` and stop; never edit the checklist on `main` (the pre-commit guard blocks commits there). The chainer never edits slice rows; those are `/sell-pie`'s.
 6. **Report pie completion** to the user (see Progress Report Format).
@@ -187,7 +188,8 @@ pies_completed: <int>
 pies_queued: <int>
 filter: all | auto-mvp | auto-all
 pr_urls: [<merged Pie PR URLs in order>]
-active_pie: <int or null — the Pie that paused, if any>
+active_pie: <int or null, the Pie that paused (HITL or waiting on a date), if any>
+waiting_slices: [] | [{slice: "<N.M>", until: "<YYYY-MM-DD>", criterion: "<text>"}]
 on_main: true | false
 clean_tree: true | false
 needs_human: false | true

@@ -62,6 +62,7 @@ This is **Pie 1, Foundations**. `/sell-slice` checks every box below before acce
 
 ### Slice 2.1: [Slice Name]
 **Type:** [type] | **Depends on:** Slices [list]
+**Status:** Not Started
 
 Completion criteria:
 - [ ] [criterion from the return's completion_criteria]
@@ -98,7 +99,8 @@ Exit criteria:
 - A label line such as `Completion criteria:` sits directly above its list. No blank line is needed; a bullet list interrupts a paragraph.
 - Do not put checkboxes inside table cells. The summary tables use the words `open` and `done` in their Status column instead.
 - Each `completion_criteria` entry from the return becomes one checkbox, verbatim.
-- Each `exit_criteria` line from the return becomes one checkbox, verbatim. Do not paraphrase; `/sell-slice` lifts this block into the `/goal` condition and `slice-tester` derives its plan from it.
+- Each `exit_criteria` line from the return becomes one checkbox, verbatim. A `(date-gated, on or after YYYY-MM-DD)` marker stays on its line exactly as written.
+- Each slice block carries a `**Status:** Not Started` line under its `**Type:**` line. The delivery loop later sets it to `In Progress`, `Completed`, or `waiting until <YYYY-MM-DD>: <criterion>` for a slice held only by a date-gated criterion (see `../references/templates.md` "Calendar-gated criteria"). Do not paraphrase; `/sell-slice` lifts this block into the `/goal` condition and `slice-tester` derives its plan from it.
 - Every slice block always ends its Completion criteria with these universal checks (add them even if the return omits them, and skip any the return already lists):
   1. `- [ ] tests_passing`
   2. `- [ ] slice-tester pass (behavioral; per-affordance verdict + evidence)`

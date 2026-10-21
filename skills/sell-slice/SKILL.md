@@ -180,7 +180,7 @@ The skill is an **interactive spine** (Phases 0-3) wrapping two Workflows and on
 2. **Prep-section precondition.** If the master checklist has a `## Prep` section, verify every Prep checkbox is `[x]` before any feature slice can run. If any Prep box is `[ ]`, STOP and surface a helpful message:
    > *"Prep step '`<unchecked line>`' is still pending. Run `<the linked command>` first, then come back."*
    This precondition does NOT apply to legacy projects that pre-date the Prep section - those keep the v3 behavior where foundation stages live as `stage_1_*` / `stage_2_*` / `stage_3_*` plan files routed through Workflow A (see Legacy path note in Phase 4).
-3. Identify the **active slice**: first slice/stage with status `Not Started` or `In Progress`, unless the user named one.
+3. Identify the **active slice**: first slice/stage with status `Not Started` or `In Progress`, unless the user named one. A slice whose `**Status:**` reads `waiting until <YYYY-MM-DD>: <criterion>` is skipped while that date is ahead (and so is any slice that `depends_on` it); once the date arrives it is the active slice, and the run only checks the date-gated criterion and closes it out (see `../cook-pizzas/references/templates.md` "Calendar-gated criteria").
 4. Confirm git state: `git status --short`, `git rev-parse --abbrev-ref HEAD`.
 5. Detect `/goal` and `Workflow` availability (per "Workflow availability" above); note the fallback that will apply if either is absent.
 6. Switch to **Plan Mode** before continuing.
@@ -235,7 +235,7 @@ After build-plan authorization (or auto-approval) and before Phase 3, the orches
 Build the `/goal` condition string in this exact order:
 
 1. **Header** - one sentence: `Slice <SLICE_ID> (<slice name>) at <slice_file_path> is ready for review locally:`
-2. **Lifted Exit criteria** - copy every bullet from the slice's `**Exit criteria:**` block verbatim, preserving order. If the slice is `backend` / `db-schema` / `infrastructure` with zero UI surface (or a pure internal refactor with no rendered-output delta), drop the Library Preview Gate line if present.
+2. **Lifted Exit criteria** - copy every bullet from the slice's `**Exit criteria:**` block verbatim, preserving order. A `(date-gated, on or after YYYY-MM-DD)` line whose date is still ahead is replaced by `master checklist Status line for slice <SLICE_ID> reads waiting until <YYYY-MM-DD>: <criterion>`, so the goal can close without waiting. If the slice is `backend` / `db-schema` / `infrastructure` with zero UI surface (or a pure internal refactor with no rendered-output delta), drop the Library Preview Gate line if present.
 3. **Pipeline-level constraints** - append exactly these three lines:
    - `master checklist row for slice <SLICE_ID> in docs/plans/00_master_checklist.md shows Status: Completed`
    - `working tree clean on the slice branch: every task commit and the final slice commit pushed, no untracked or modified file the slice created; no PR opened (default mode)`
@@ -394,7 +394,7 @@ The fixers make no git writes: `fix-attempter` and `debug-instrumenter` return `
 
 When every in-scope item is `[x]` and Workflow B is green:
 
-1. Flip slice status `In Progress` → `Completed` in `docs/plans/00_master_checklist.md`, then make the slice's **final commit** on the slice branch, `feat(pie-N): N.M <slice name>` (closing narrative in the body for UI slices), carrying the flip and any fix-loop patches, and push it. Stage selectively: the checklist plus the fixers' `files_changed`, never `git add -A`.
+1. Flip slice status `In Progress` → `Completed` in `docs/plans/00_master_checklist.md` (or, when the only unmet line is a date-gated criterion whose date is ahead, set `**Status:** waiting until <YYYY-MM-DD>: <criterion>` and leave the row `[ ]`; the slice stays open and a run on or after that date closes it), then make the slice's **final commit** on the slice branch, `feat(pie-N): N.M <slice name>` (closing narrative in the body for UI slices), carrying the flip and any fix-loop patches, and push it. Stage selectively: the checklist plus the fixers' `files_changed`, never `git add -A`.
 2. Confirm the slice branch has every commit it needs and the working tree is clean: `git status --short` empty, with no untracked or modified file the slice created. A leftover file is either committed with the slice (it belongs to it) or reported as a blocker; never leave it behind.
 3. Walk the **Completion Checklist** (below). The slice is not "ready to ship" until every box up through §4 is `[x]`.
 4. Report to the user using the **Progress Report Format**, ending with the **Handoff to `/box-it-up`** message.

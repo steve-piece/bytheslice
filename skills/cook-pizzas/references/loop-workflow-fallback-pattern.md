@@ -63,7 +63,7 @@ These sections describe what the primitive would have done internally; the skill
 
 Build the same control state the primitive would have managed:
 
-- **`/loop` fallback (self-paced loop)** — hold the pie's slice list (the active Pie's `### Slice N.M` entries from the master checklist), the per-slice completion predicate (slice's Exit criteria + commit-and-push done, no PR), and the pie-completion predicate (every slice `[x]`). This is the loop variable `/loop` would have carried across wakes.
+- **`/loop` fallback (self-paced loop)**: hold the pie's slice list (the active Pie's `### Slice N.M` entries from the master checklist), the per-slice completion predicate (slice's Exit criteria + commit-and-push done, no PR), and the pie-completion predicate (every slice `[x]`; a slice whose `**Status:**` reads `waiting until <YYYY-MM-DD>: <criterion>` is not `[x]`, so the pie is not complete). This is the loop variable `/loop` would have carried across wakes.
 - **`Workflow` fallback (manual dispatch)** — hold, for each Workflow stage, the **expected return schema**: build manifest (§App A) from the builder/`implementer`, slice-tester verdict (§App B), slice-verifier verdict (§App C). This is the contract `Workflow` would have enforced at the barrier.
 
 Log to the user on activation:
@@ -78,9 +78,9 @@ Log to the user on activation:
 
 Iterate the active pie's slices in dependency order. Per iteration:
 
-1. Pick the next incomplete slice.
+1. Pick the next incomplete slice, skipping any slice waiting on a future date and every slice that `depends_on` one. If only waiting slices remain, stop the loop now (report each with its date); never keep iterating or self-schedule to wait, since the next run on or after the date resumes it.
 2. Run that slice's produce→verify cycle (itself a `Workflow` in the normal path — if `Workflow` is *also* unavailable, nest the manual-dispatch fallback from this same step inside it).
-3. On the slice's per-affordance/gate verdicts passing: mark the slice `[x]`, make the final slice commit `feat(pie-N): N.M <name>` on top of the task commits already pushed at each task boundary, and push, **no PR** (default mode; merge-per-slice mode then runs `/box-it-up --merge-slice`).
+3. On the slice's per-affordance/gate verdicts passing: mark the slice `[x]` (or, when the only unmet line is a date-gated criterion with a future date, set its status to `waiting until <YYYY-MM-DD>: <criterion>` and leave it `[ ]`), make the final slice commit `feat(pie-N): N.M <name>` on top of the task commits already pushed at each task boundary, and push, **no PR** (default mode; merge-per-slice mode then runs `/box-it-up --merge-slice`).
 4. Re-evaluate the pie-completion predicate. If every slice is `[x]` → **stop the loop** (the self-paced analogue of not scheduling the next wake) and hand off to `/box-it-up` to open the one Pie PR. If not → continue to the next slice.
 
 Crucially, the conductor passes **only the build manifest + Exit criteria + design-system path** to the slice-tester — never the builder's reasoning. Self-pacing in one context makes it tempting to let context bleed between agents; do not. Re-state the context-separation rule to yourself each iteration.

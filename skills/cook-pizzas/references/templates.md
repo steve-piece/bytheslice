@@ -57,6 +57,7 @@ This is **Pie 1 — Foundations**: its four slices (1.1–1.4) are the run-once 
 
 ### Slice N.1: [Slice Name]
 **Type:** [type] | **Depends on:** Slices [list]
+**Status:** Not Started    <!-- In Progress | Completed | waiting until <YYYY-MM-DD>: <criterion> -->
 
 Completion criteria:
 - [ ] [criterion from frontmatter]
@@ -217,7 +218,7 @@ So a task's **Commit** step runs tier 2 only, and the Exit criteria name the sli
 
 The **Exit criteria** block is the single source of truth for "what it means for this slice to be done." `/bytheslice:sell-slice` Phase 2.5 lifts this block verbatim into the session-scoped `/goal` condition, where a fast model (default Haiku) checks it between turns.
 
-Every line MUST be:
+Every line MUST be (a line marked `(date-gated, on or after YYYY-MM-DD)` is the one exception to "now"; see "Calendar-gated criteria" below):
 
 1. **Transcript-verifiable from the conversation.** The evaluator does not run commands or read files independently — only what Claude has already surfaced in the transcript counts as evidence. Write criteria that Claude's own output can demonstrate (a command's exit code that lands in the transcript, a subagent's structured `verdict: pass`, a file path Claude has read).
 2. **Binary.** Each criterion is either met or not met. No partial credit, no "looks good."
@@ -242,6 +243,14 @@ Bad examples (vague, non-transcript-verifiable, generic):
 - "Ship-ready" → meta; not a criterion
 - "Tests pass" without naming the test command → too generic
 - "`gh pr checks` green", "`@regression-core` passes", "`db-schema-drift` CI job green" → CI-only (gate tier 4); CI runs at the PR, not per slice
+
+### Calendar-gated criteria (the one allowed exception to "verifiable now")
+
+Some criteria can only be checked after a date (a 7-day retention number, a scheduled job's first real run, a vendor's go-live). Write such a line **marked as date-gated**, with the earliest date it can be checked:
+
+- `(date-gated, on or after 2026-11-03) the nightly export job's first scheduled run wrote rows to exports.daily`
+
+Rules: use it only when no earlier check exists; every other line stays verifiable now. When the rest of the slice is green but a date-gated line's date is still ahead, the slice is not done: its `**Status:**` line in the master checklist reads `waiting until <YYYY-MM-DD>: <criterion>` and its row stays `[ ]`. The delivery loop skips it and moves on to the next slice that does not `depends_on` it, or stops if there is none; nothing keeps a loop alive to wait. The next `/sell-pie` run on or after the date checks the criterion and closes the slice. A pie with a waiting slice is not complete, so its boundary PR cannot open. In merge-per-slice mode the slice's code is merged; only the slice stays open.
 
 ### Library Preview Gate criterion (UI-touching slices only)
 
