@@ -1,5 +1,5 @@
 // tests/kitchen/kitchen-people.browser.js
-// The people sheet: Crew and Town tabs (underline, keyboard, full town list) and person profiles from every entry point.
+// The people sheet: Crew and Town tabs (underline, keyboard, full town list) and person profiles, a screen inside the sheet, from every entry point.
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -63,25 +63,29 @@ async function main() {
     const profile = () => page.evaluate(() => window.__kitchenScene.profile);
     await page.click('#panel-crew [data-person="crew:implementer"]');
     let card = await profile(); assert.equal(card.name, 'Ren');
-    let text = await page.textContent('#profile');
+    let text = await page.textContent('#shBody .pf');
     assert.match(text, /Line cook, builds code/); assert.match(text, /bytheslice:implementer/); assert.match(text, /The line crew flat, Upstairs on Main Street/);
     assert.match(text, /Family.*Chef Nico.*Dom/s); assert.match(text, /Loves.*Lunch at the diner/s); assert.match(text, /Now/);
-    assert.equal(await page.evaluate(() => document.activeElement.id), 'pfClose');
+    assert.ok(await page.evaluate(() => document.activeElement.matches('[data-pback]')), 'focus lands on the back button');
+    assert.equal(await page.textContent('#shTitle'), 'People');
     assert.ok(await page.evaluate(() => { const c = document.getElementById('pfCanvas'), x = c.getContext('webgl2') || c.getContext('webgl'); const px = new Uint8Array(4); x.readPixels(300, 300, 1, 1, x.RGBA, x.UNSIGNED_BYTE, px); return px[3] > 0; }), 'the portrait renders the character');
     if (SHOTS) await page.screenshot({ path: `${SHOTS}-profile-crew.png` });
-    await page.click('#pfClose'); assert.equal(await profile(), null);
-    console.log('PASS profiles: a Crew list name opens the profile (role, agent, family, home, loves, now) and X closes it');
+    await page.click('[data-pback]'); assert.equal(await profile(), null);
+    assert.deepEqual(await shown(), ['panel-crew'], 'back returns to the Crew list');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.person), 'crew:implementer', 'focus returns to the name that opened it');
+    console.log('PASS profiles: a Crew list name opens the profile screen in the sheet (role, agent, family, home, loves, now) and Back returns to the list');
 
     // entry point 2, a name in the Town list, and a family link to another profile
     await page.click('#tab-town'); await page.click('#panel-town [data-person="town:Tess"]');
     card = await profile(); assert.equal(card.name, 'Tess'); assert.equal(card.pose, 'Selling lemonade');
-    assert.match(await page.textContent('#profile'), /Runs the lemonade stand/);
-    await page.click('#profile [data-person="town:Lena"]');
+    assert.match(await page.textContent('#shBody .pf'), /Runs the lemonade stand/);
+    await page.click('#shBody .pf [data-person="town:Lena"]');
     card = await profile(); assert.equal(card.name, 'Lena'); assert.equal(card.pose, 'Out for a run');
-    assert.match(await page.textContent('#profile'), /The Okafor home, Elm Street/);
+    assert.match(await page.textContent('#shBody .pf'), /The Okafor home, Elm Street/);
     await page.keyboard.press('Escape'); assert.equal(await profile(), null);
+    assert.deepEqual(await shown(), ['panel-town'], 'Escape returns to the Town list');
     await page.click('#panel-town [data-person="town:Hank"]'); assert.equal((await profile()).pose, 'Mowing'); await page.keyboard.press('Escape');
-    console.log('PASS profiles: a Town list name opens a fitting pose, a family link opens that profile, Escape closes');
+    console.log('PASS profiles: a Town list name opens a fitting pose, a family link opens that profile, Escape goes back to the list');
 
     // entry point 3, a person in the 3D scene
     await page.click('#shClose');
@@ -90,9 +94,11 @@ async function main() {
     let spot = await page.evaluate(() => window.__kitchenScene.screenOf('Chef Nico'));
     await page.mouse.click(spot.x, spot.y);
     card = await profile(); assert.ok(card, 'tapping a person opens a profile'); assert.equal(card.name, 'Chef Nico');
-    assert.match(await page.textContent('#profile'), /Head chef, leads the session/);
-    await page.keyboard.press('Escape');
-    console.log('PASS profiles: tapping Chef Nico in the scene opens his profile');
+    assert.match(await page.textContent('#shBody .pf'), /Head chef, leads the session/);
+    assert.ok(!(await page.$eval('#sheet', el => el.hidden)), 'a scene tap opens the People sheet on the profile');
+    assert.ok(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('#stage'), spot), 'the scene stays clickable while a profile shows');
+    await page.keyboard.press('Escape'); await page.click('#shClose');
+    console.log('PASS profiles: tapping Chef Nico in the scene opens his profile in the sheet, and the scene stays clickable');
 
     // entry point 4, an avatar head in a house card's popover
     await page.evaluate(() => window.__kitchenScene.look(2, -13.5, 1.6)); await page.waitForTimeout(300);
@@ -101,18 +107,18 @@ async function main() {
     await page.waitForSelector('#tip:not([hidden]) .fam [data-person]');
     await page.click('#tip .fam .hav >> nth=0');
     card = await profile(); assert.ok(['Lena', 'Tess', 'Ricky'].includes(card.name), `the avatar opens a household member (${card.name})`);
-    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape'); await page.click('#shClose');
     console.log(`PASS profiles: an avatar head in the Okafor house card opens ${card.name}'s profile`);
 
     // phone width: the card fits and still closes
     await page.setViewportSize({ width: 375, height: 812 });
     await page.evaluate(() => window.__kitchenScene.pause(false));
     await page.click('#bCrew'); await page.click('#panel-town [data-person="town:Carl"]');
-    const box = await page.$eval('#profile', el => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, scroll: document.documentElement.scrollWidth }; });
+    const box = await page.$eval('#sheet', el => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, scroll: document.documentElement.scrollWidth }; });
     assert.ok(box.left >= 0 && box.right <= 375 && box.top >= 0 && box.bottom <= 812 && box.scroll <= 375, `fits a phone (${JSON.stringify(box)})`);
     if (SHOTS) await page.screenshot({ path: `${SHOTS}-profile-phone.png` });
-    await page.click('#pfClose'); assert.equal(await profile(), null);
-    console.log('PASS profiles: the card fits a 375 px phone viewport');
+    await page.click('[data-pback]'); assert.equal(await profile(), null);
+    console.log('PASS profiles: the profile screen fits a 375 px phone viewport');
     assert.deepEqual(errors, []);
   } finally {
     await browser.close(); server.close();

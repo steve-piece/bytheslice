@@ -1,6 +1,6 @@
 {
   "name": "bytheslice",
-  "version": "5.5.0",
+  "version": "5.5.1",
   "description": "ByTheSlice runs your project like a grab-and-go pizza shop. v5 delivers in Pies (coherent 3 to 8 slice chapters, one PR each) built from Slices (single deliverable units). Everyday loop: /sell-pie bakes a whole Pie autonomously, driving each slice through a context-separated build, test, verify and fix Workflow and committing per slice; at the pie boundary /box-it-up opens one PR, watches CI, and merges. /sell-slice is the high-touch single-slice loop. One-time prep: /setup-shop, /create-menu (PRD), /cook-pizzas (Pie/Slice roadmap; --repie migrates v4 checklists), /set-display-case (design system plus /library preview route), /final-quality-check (CI/E2E), /open-the-shop (credentials). The Library Preview Gate shows every user-visible component before it ships. Ships 49 registered subagents plus 6 documented deprecated shims; in Claude Code the 49 run with enforced model tiers, tool allowlists and effort levels. The Pass, a Claude Code mod, draws a live pane and band beside the chat and warns, never blocks, when a delivery rule slips. /open-kitchen opens a local read-only 3D kitchen, /special-order adds features mid-flight, and /inspect-display audits the running app end to end.",
   "author": {
     "name": "Steven Light"

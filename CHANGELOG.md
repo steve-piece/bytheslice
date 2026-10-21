@@ -13,6 +13,16 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [5.5.1] - 2026-10-21
+
+**Profiles stop covering the kitchen.** A person's profile now opens as a screen inside the People sheet instead of a dialog over the scene.
+
+### Changed
+
+- **Kitchen profiles** open inside the People sheet, from a list name, a family link, a house card or a tap in the scene. A **Go Back** button (or Escape) returns to the Crew or Town list it came from, and the scene stays free to pan, zoom and click while a profile shows.
+
+---
+
 ## [5.5.0] - 2026-10-21
 
 **The frontend path: verifiable, and taught what it is building.** Pie 6 (slices 6.1 to 6.7) gives frontend slices the same build manifest, Exit-criteria contract and rendered checks the backend path already had, makes the understand pair run in order, gives user outcomes one sanctioned way into verification, and lets the builder look up what an installed dependency already ships.
