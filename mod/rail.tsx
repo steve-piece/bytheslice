@@ -1,12 +1,12 @@
 // mod/rail.tsx
-// The Pass pane: pie header, slice rail with live status and last verdict, live agents and gates, drawn from atoms only, plus the pass command's toggle.
+// The Pass pane: pie header, slice rail with live status and last verdict, live agents, gates and check warnings, drawn from atoms only, plus the pass command's toggle and checks text.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
 import { FIX_CAP, findSlice } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, counts } from './projection.ts'
-import type { PassChecklist, PassLive, PassProjection, PassSliceView } from './types'
+import type { PassChecklist, PassFinding, PassLive, PassProjection, PassSliceView } from './types'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
 const loadedAtAtom = atom({ plugin: 'bytheslice', key: 'pass.loadedAt' } as const, 0)
@@ -28,6 +28,8 @@ export type PaneView = {
   branch: string | null
   ledger?: PassProjection | null
   live?: PassLive
+  /** The time ages are counted to; the projection's own time when left out. */
+  now?: number
 }
 
 const ACTIVE = new Set(['pending', 'running', 'waiting'])
@@ -109,6 +111,36 @@ function gateRows(view: PassSliceView | null, columns: number): PaneLine[] {
   return rows
 }
 
+/** One finding as the pane and the pass checks command list it: `code · slice · age ago`. */
+export function findingLine(finding: PassFinding, now: number): string {
+  return `${finding.code} · ${finding.slice ?? 'no slice'} · ${runningFor(now - finding.t)} ago`
+}
+
+function findingRows(ledger: PassProjection | null, now: number, columns: number): PaneLine[] {
+  if (!ledger) return []
+  const findings = ledger.findings ?? []
+  if (findings.length === 0) return [fit({ text: 'Warnings · none', dim: true }, columns)]
+  return [
+    fit({ text: `Warnings · ${findings.length} latest`, bold: true }, columns),
+    ...findings.map(finding => fit({ text: `  ${findingLine(finding, now)}`, warn: true }, columns)),
+  ]
+}
+
+/**
+ * The pass checks command's text: the same findings the pane lists, newest
+ * first, each with what it said. Every check warns; none ever blocked.
+ */
+export function checksText(ledger: PassProjection | null, now: number): string {
+  const findings = ledger?.findings ?? []
+  if (findings.length === 0) return 'Pass checks: no warnings in the ledger. Every check warns; nothing is ever blocked.'
+  const lines = [`Pass checks: the latest ${findings.length} warning${findings.length === 1 ? '' : 's'}, newest first. Nothing was blocked.`]
+  for (const finding of findings) {
+    lines.push(`  ${findingLine(finding, now)}`)
+    if (finding.text !== '') lines.push(`    ${finding.text}`)
+  }
+  return lines.join('\n')
+}
+
 /** Every line the pane shows, top to bottom, sized to `columns`. */
 export function paneLines(view: PaneView, columns: number): PaneLine[] {
   const { checklist: c, loadedAt, branch } = view
@@ -123,11 +155,13 @@ export function paneLines(view: PaneView, columns: number): PaneLine[] {
   }
   if (c.layout === 'empty') return [fit({ text: 'The checklist has no pies yet.', dim: true }, width)]
   const where = branch === null ? null : fit({ text: `branch ${branch}`, dim: true }, width)
+  const now = view.now ?? ledger?.at ?? 0
   if (allDone(c)) {
     return [
       fit({ text: 'All pies done', bold: true }, width),
       ...(where ? [where] : []),
       fit({ text: '/box-it-up ready' }, width),
+      ...findingRows(ledger, now, width),
     ]
   }
   const pie = activePie(c)
@@ -141,6 +175,7 @@ export function paneLines(view: PaneView, columns: number): PaneLine[] {
     ...sliceRows(c, ledger, width),
     ...agentRows(view.live, width),
     ...gateRows(findSlice(ledger, activeSlice(c)?.id), width),
+    ...findingRows(ledger, now, width),
   ]
 }
 
@@ -153,7 +188,13 @@ export async function drawPane($: EngineInterface, e: RenderInput<'Pane'>): Prom
     read($, ledgerAtom),
     read($, liveAtom),
   ])
-  const lines = paneLines({ checklist, loadedAt, branch, ledger, live }, e.props.bodyColumns)
+  let now = ledger?.at ?? 0
+  try {
+    now = await $.clock.now()
+  } catch {
+    // Ages count to the projection's time.
+  }
+  const lines = paneLines({ checklist, loadedAt, branch, ledger, live, now }, e.props.bodyColumns)
   const { Box, Text } = $.ui.resolve(e)
   return (
     <Box flexDirection="column">

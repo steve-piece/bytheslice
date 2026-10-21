@@ -1,5 +1,5 @@
 // mod/band.tsx
-// The Pass band above the prompt (live slice status, agents, fix loop, warning on a failed verdict), the pinned status line and the prompt hint.
+// The Pass band above the prompt (live slice status, agents, fix loop, warning style on a failed verdict or a check warning), the pinned status line and the prompt hint.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput, RenderPropsOf } from 'claude-code'
@@ -7,11 +7,12 @@ import type { EngineInterface, RenderElement, RenderInput, RenderPropsOf } from 
 import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, counts } from './projection.ts'
 import { PANE_ID } from './rail.tsx'
-import type { PassChecklist, PassLive, PassProjection } from './types'
+import type { PassChecklist, PassLive, PassProjection, PassWarning } from './types'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
 const ledgerAtom = atom({ plugin: 'bytheslice', key: 'pass.ledger' } as const, null)
 const liveAtom = atom({ plugin: 'bytheslice', key: 'pass.live' } as const, { at: 0, agents: [] })
+const warningAtom = atom({ plugin: 'bytheslice', key: 'pass.warning' } as const, null)
 
 export const NARROW_COLUMNS = 60
 export const DOCK_COLUMNS = 110
@@ -24,13 +25,15 @@ const ACTIVE = new Set(['pending', 'running', 'waiting'])
 /**
  * The band's one line for a checklist at a width, or null to leave the band to
  * the engine. With the ledger it reads `Pie 5 · Slice 5.2 verifying · 3 agents
- * · fix 1/3`, in the warning style while the slice's latest verdict failed.
+ * · fix 1/3`, in the warning style while the slice's latest verdict failed,
+ * and for five minutes after a check warning, which it then names.
  */
 export function bandLine(
   c: PassChecklist | null,
   bodyColumns: number,
   ledger: PassProjection | null = null,
   live: PassLive | null = null,
+  warning: PassWarning | null = null,
 ): BandLine | null {
   if (!c) return null
   const narrow = bodyColumns < NARROW_COLUMNS
@@ -49,7 +52,7 @@ export function bandLine(
   const status = view?.status ?? 'queued'
   const agents = (live?.agents ?? []).filter(agent => ACTIVE.has(agent.status)).length
   const fix = view?.fixLoop ?? 0
-  const warn = lastVerdict(view)?.overall === 'fail'
+  const warn = lastVerdict(view)?.overall === 'fail' || warning !== null
   if (narrow) {
     const tail = fix > 0 ? ` fix ${fix}/${FIX_CAP}` : ''
     return { text: `P${pie.n} S${slice.id} ${status}${tail}`, dim: false, warn }
@@ -57,6 +60,7 @@ export function bandLine(
   const parts = [`Pie ${pie.n} · Slice ${slice.id} ${status}`]
   if (agents > 0) parts.push(`${agents} agent${agents === 1 ? '' : 's'}`)
   if (fix > 0) parts.push(`fix ${fix}/${FIX_CAP}`)
+  if (warning !== null) parts.push(`warn ${warning.code}`)
   return { text: parts.join(' · '), dim: false, warn }
 }
 
@@ -99,8 +103,13 @@ async function paneDocked($: EngineInterface, e: RenderInput<'AbovePrompt'>): Pr
  */
 export async function drawBand($: EngineInterface, e: RenderInput<'AbovePrompt'>): Promise<RenderElement | null> {
   if (e.props.hasSurvey) return null
-  const [c, ledger, live] = await Promise.all([read($, checklistAtom), read($, ledgerAtom), read($, liveAtom)])
-  const line = bandLine(c, e.props.bodyColumns, ledger, live)
+  const [c, ledger, live, warning] = await Promise.all([
+    read($, checklistAtom),
+    read($, ledgerAtom),
+    read($, liveAtom),
+    read($, warningAtom),
+  ])
+  const line = bandLine(c, e.props.bodyColumns, ledger, live, warning)
   if (!line) return null
   if (await paneDocked($, e)) return null
   const { Text } = $.ui.resolve(e)
