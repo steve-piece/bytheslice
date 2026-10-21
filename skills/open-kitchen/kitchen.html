@@ -3704,7 +3704,7 @@ function renderProfile(key) {
   const info = personInfo(key); if (!info) { delete sheet.dataset.person; return false; }
   renderProfileModel(info);
   PF.canvas.setAttribute('aria-label', `${info.name}: ${PF.pose.toLowerCase()}`);
-  $('#shBody').innerHTML = `<div class="pf"><button type="button" class="sh-back" data-pback>‹ All ${info.kind === 'crew' ? 'crew' : 'townsfolk'}</button><div data-pf-canvas></div>
+  $('#shBody').innerHTML = `<div class="pf"><button type="button" class="sh-back" data-pback>‹ Go Back</button><div data-pf-canvas></div>
     <h4 id="pfName">${escapeCard(info.name)}</h4><div class="sub">${escapeCard(info.kind === 'crew' ? `${info.crewLabel || 'Kitchen crew'} · ${PF.pose}` : PF.pose)}</div><dl>
     <dt>Role</dt><dd>${escapeCard(info.role)}${info.agent ? `<br><code>${escapeCard(info.agent)}</code>` : ''}</dd>
     <dt>Family</dt><dd>${info.family.length ? info.family.map(personButton).join('') : 'Lives on their own'}</dd>
