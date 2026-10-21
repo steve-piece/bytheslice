@@ -26,6 +26,7 @@ const EVENTS: ReadonlySet<string> = new Set<LedgerEvent>([
   'usage',
   'slice.rollup',
   'warn',
+  'agent.stalled',
 ])
 
 /** A row as a caller hands it; the writer stamps `v`, `t` and `sid`. */
