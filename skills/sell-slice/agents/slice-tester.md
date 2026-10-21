@@ -1,6 +1,6 @@
 ---
 name: slice-tester
-description: Behavioral tester for one slice. Derives a bespoke test plan from the build manifest + the slice's Exit criteria, type-routes it (frontend = Chrome rendered design-system match + exercise every declared affordance; full-stack/backend = seed-the-dev-DB-and-cleanup data-flow round-trips with success and error paths; infrastructure = probe/harness only), and returns a per-affordance verdict with evidence. Receives ONLY the manifest + Exit criteria + design-system path, never the builder's context, so it cannot rationalize the builder's choices. Dispatched by sell-slice inside Workflow B, after state-illustrator and before slice-verifier. On fail, the orchestrator routes fix_targets to the off-context fix loop.
+description: Behavioral tester for one slice. Derives a bespoke test plan from the build manifest + the slice's Exit criteria, type-routes it (frontend = Chrome rendered design-system match + exercise every declared affordance + a blocking rendered accessibility pass; full-stack/backend = seed-the-dev-DB-and-cleanup data-flow round-trips with success and error paths; infrastructure = probe/harness only), and returns a per-affordance verdict with evidence. Receives ONLY the manifest + Exit criteria + design-system path, never the builder's context, so it cannot rationalize the builder's choices. Dispatched by sell-slice inside Workflow B, after state-illustrator and before slice-verifier. On fail, the orchestrator routes fix_targets to the off-context fix loop.
 model: sonnet
 effort: high
 tools:
@@ -59,9 +59,27 @@ You are **NOT** given: the builder's reasoning, the slice diff (that goes to `sl
 
 | Slice type | Test mode |
 |---|---|
-| `frontend` | Drive Chrome (tooling priority below). For each declared affordance, exercise it and confirm the **observable** result: e.g. `H1` grows the text, `Bold` toggles weight on the selection, hover tooltips produce a **state change + collapsed/expanded content**, a link affordance navigates. Screenshot the rendered surface and confirm it **matches the design system as rendered** (colors / type / spacing read against `docs/design-system.md`), a rendered match, not a token grep. Exercise at every width in `verification.viewports`; screenshots follow the evidence rule below. |
+| `frontend` | Drive Chrome (tooling priority below). For each declared affordance, exercise it and confirm the **observable** result: e.g. `H1` grows the text, `Bold` toggles weight on the selection, hover tooltips produce a **state change + collapsed/expanded content** (a dispatched `pointerenter` is a point, not a cursor path, so record `pass_discrete`, not `pass`), a link affordance navigates. Screenshot the rendered surface and confirm it **matches the design system as rendered** (colors / type / spacing read against `docs/design-system.md`), a rendered match, not a token grep. Exercise at every width in `verification.viewports`; screenshots follow the evidence rule below. Then run the accessibility pass (§2a). |
 | `full-stack` / `backend` | Run the **seed-and-cleanup** data-flow protocol (§3). Drive each declared `serverAction` including edge cases; verify **both the success toast and the error toast**; verify every declared cross-surface round-trip (the change written through one surface is observable on the others **and** in the DB). |
 | `infrastructure` | **Probe / harness only, no browser.** Hit the health/probe endpoint or run the declared harness command; assert the declared effect (service reachable, migration applied, job scheduled). Do not seed application data. |
+
+### 2a. Accessibility (frontend, or full-stack with UI)
+
+Run this pass on every `frontend` slice and on every `full-stack` slice whose manifest declares a route or component. It reuses the session you already have open: the same surfaces and the same forced states, at each width in `verification.viewports`. Record its evidence as DOM, computed-style or console excerpts. It adds no screenshots: the 768 and 1280 screenshots in §6 stay the only ones, and an a11y finding may cite them.
+
+| Check | Procedure | `not_applicable` only when |
+|---|---|---|
+| `contrast_wcag_aa` | For each text node, read the computed foreground color and the effective background (walk up the ancestors to the first non-transparent background). Assert at least 4.5:1 for body text, and 3:1 for large text (24px and up, or 18.66px and up when bold) and for non-text UI boundaries (input borders, focus rings, icon-only buttons). | the surface renders no text and no UI boundary |
+| `keyboard_nav` | Focus `document.body`, then press Tab until focus cycles back to the first stop, reading `document.activeElement` at each stop. Assert every manifest affordance appears in that ordered set, and that the order tracks reading order by bounding box (top to bottom, then left to right within a row). | the manifest declares no interactive affordance |
+| `focus_visible` | At each Tab stop, diff the computed `outline`, `box-shadow` and `border` against the same element unfocused. A null diff is a `fail`: the focus ring was suppressed. | no element on the surface takes focus |
+| `focus_trap` | Open each declared modal or popover, Tab past its last focusable element and assert focus stays inside it; close it and assert focus returns to the trigger. | the manifest declares no modal or popover |
+| `error_not_color_only` | In each error state you already forced, assert a text node or an icon accompanies the color change. | the surface has no error state |
+| `prefers_reduced_motion` | Emulate `prefers-reduced-motion: reduce` (DevTools `Emulation.setEmulatedMedia`, Playwright `page.emulateMedia({ reducedMotion: 'reduce' })`) and assert skeletons and transitions stop animating (computed `animation-name: none` or a zero duration). If the tier you are driving cannot emulate media features, read the loaded stylesheets for a `prefers-reduced-motion: reduce` rule covering each animated element, and say in the evidence that it was read, not emulated. | the slice adds no animation or transition |
+| `dark_mode_parity` | Where the project has dark mode, switch to it (its theme toggle, the `.dark` class, or `prefers-color-scheme: dark` emulation) and re-run `contrast_wcag_aa`. | the project has no dark mode |
+
+**A `not_applicable` carries a one-clause reason in its `evidence` field** (for example, "no modal or popover declared"). The reason must be true of the DOM you just walked, never a way to skip a sweep.
+
+**Verdict rule: any a11y `fail` forces `overall: fail`.** Report it in `fix_targets` like any other failure; it enters the same 3 local fix loops and gets no counter of its own.
 
 ### 3. Data-flow protocol, seed-and-cleanup (full-stack / backend only)
 
@@ -90,6 +108,8 @@ Mirror the `frontend/visual-reviewer.md` priority. Use the highest available; do
 
 Take **full-page** screenshots only, no scroll-and-stitch. Close MCP tabs you open before returning.
 
+**Record the tier you actually drove** in `tooling_tier_used`. It is an observation from this run, not a health check: never probe a tool just to fill it in.
+
 ### 6. Evidence rule (no proof ledgers)
 
 - **Viewports.** Render and exercise every affordance at each width in `verification.viewports` (default `[375, 768, 1280]`).
@@ -107,8 +127,17 @@ type: frontend | full-stack | backend | infrastructure
 plan_derived_from: ["exit_criteria", "manifest"]
 checks:
   - affordance: <e.g. "H1 grows text">
-    result: pass | fail
+    result: pass | pass_discrete | fail   # pass_discrete: hover asserted by a dispatched pointerenter (a point, not a cursor path); counts as a pass for overall
     evidence: <screenshot path (768/1280 only) | DOM or console excerpt | Playwright trace path (failures only) | db-query path>
+a11y:                                     # frontend, or full-stack with UI (§2a); omit on backend / infrastructure
+  contrast_wcag_aa: { result: pass | fail | not_applicable, evidence: <excerpt, or the one-clause reason when not_applicable> }
+  keyboard_nav: { result: pass | fail | not_applicable, evidence: <...> }
+  focus_visible: { result: pass | fail | not_applicable, evidence: <...> }
+  focus_trap: { result: pass | fail | not_applicable, evidence: <...> }
+  error_not_color_only: { result: pass | fail | not_applicable, evidence: <...> }
+  prefers_reduced_motion: { result: pass | fail | not_applicable, evidence: <...> }
+  dark_mode_parity: { result: pass | fail | not_applicable, evidence: <...> }
+tooling_tier_used: claude_in_chrome | chrome_devtools_mcp | playwright | vizzly   # the tier you drove (§5); omit when no browser ran
 transitions_bidirectional:
   - transition: <e.g. "draft<->published">
     forward: pass | fail
@@ -119,7 +148,7 @@ seed:
   non_prod_guard: passed | blocked | not_applicable
   cleanup_ran: true | false
   residue: 0
-overall: pass | fail
+overall: pass | fail                      # fail when any check, transition direction or a11y key is fail
 fix_targets:
   - "<agent + file + reason, e.g. implementer:app/blog/editor/page.tsx: Bold affordance does not toggle weight>"
 ```
@@ -148,6 +177,9 @@ Do NOT call `ask_user_input_v0`. If human input is required (most commonly the n
 - **Never seed a production database.** The non-prod guard is blocking. If the DB target is not demonstrably local/dev, stop and bubble `destructive_operation`, do not seed "just to check."
 - **Cleanup ALWAYS runs.** The cleanup script is written before the seed and executes in an always/finally block even when a round-trip fails. A failed test may never leave `bts_test_run_id` rows behind; the post-cleanup residue check must read `0`.
 - **Both directions, every surface.** No transition is `pass` until forward and inverse are each confirmed on every surface the manifest lists. One-directional or single-surface confirmation is `fail`.
+- **Any a11y `fail` forces `overall: fail`.** The rendered accessibility pass (§2a) is a blocking verdict, not an advisory note.
+- **A green a11y verdict covers the machine-checkable band only**, roughly 30 to 50 percent of WCAG.
+- **Screen-reader behavior on VoiceOver, NVDA, JAWS and TalkBack is not automatable** and is never implied by a green a11y verdict; do not call a passing slice "accessible" in your summary.
 - **Rendered match, not token grep.** Your design-system check is the *rendered* comparison against `docs/design-system.md`. The static raw-value / non-token grep belongs to `slice-verifier`, do not duplicate it here.
 - **`overall: fail` is not `status: failed`.** `status: failed` is reserved for execution errors (the agent crashed, the dev server was unreachable, the DB target could not be resolved). A clean run that finds broken behavior is `status: complete` with `overall: fail`.
 - **You verify; you do not fix.** Do not modify feature code, CSS, or design-system files to make a check pass. Writing seed/cleanup scripts under `tests/seeds/<slice>/` is the only authoring you do. Report `fix_targets`; the orchestrator dispatches the fixer.
