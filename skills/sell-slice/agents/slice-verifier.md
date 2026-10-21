@@ -49,9 +49,11 @@ Read the fix diff (`files_changed`, then `git diff` of exactly those paths) and 
 | The fix touched | Re-run |
 |---|---|
 | Any source file | lint on the touched files; the incremental typecheck |
+| A lint or type config (`eslint.config.*`, `.eslintrc*`, `tsconfig*.json`) | lint and the typecheck across the project: a config change reaches every file, so touched-file scoping does not apply |
 | A source or test file in a package | that package's unit/integration tests covering the touched files |
 | A file the build consumes (source, config, dependency manifest) | build |
 | A file a failing e2e spec exercises, or the spec itself | the failing spec(s) plus the specs that cover the touched files, never the whole suite |
+| A file a green e2e spec covers, when no e2e spec failed | only the specs that cover the touched files, in the suites `verification.e2e.*` enables, so a patch that breaks a passing flow shows up as a regression |
 | A frontend / styling file | the design-system static grep on the touched files, plus `verify-frontend-statics.sh --files` limited to the touched `.tsx` / `.jsx` / `.ts` / `.css` paths (the `rerun` reason names those files) |
 | A `.github/workflows/*.yml` file | CI-integrity |
 | A route file or anything containing `action(` / `use server` / `onClick` / `<form` | the manifest backstop |
