@@ -13,6 +13,53 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [5.4.0] - 2026-10-21
+
+**The Pass: every order checked at the counter.** A Claude Code mod draws a live ticket rail beside the chat, keeps one ledger of what actually happened, and checks each delivery rule as it happens, warning instead of blocking. The hooks shrink to three scripts that never block, and the kitchen measures real progress and fills its town. Retired hooks: `stage-plan-guard.sh`, `library-gate-guard.sh`, `record-library-approval.sh`, `compact-snapshot.sh`.
+
+### Added
+
+- **The Pass mod** (`mod/`, Claude Code 2.1.299+), loaded from `hooks/hooks.json` `modules`. A pane, *The Pass* (pie header, slice rail with status and last verdict, live agents with stalls flagged, the latest check warnings, the HITL inbox, the active slice's touched files, the team roster, the project's other sessions), a band above the prompt (`Pie 5 · Slice 5.2 verifying · 3 agents · fix 1/3 · HITL 1`, in a warning style on a failed verdict, an open HITL item or a recent warning), a status line, a `/box-it-up ready` prompt hint, and toasts on a slice done, a failed verdict, a push and a warning. The pane opens on its own in an interactive session with a master checklist. `/pass` toggles it; `/pass checks`, `/pass history`, `/pass replay <slice>` and `/pass reconcile` cover the rest.
+- **The ledger**, `.bytheslice/ledger.jsonl` in the primary checkout (one file for every pie worktree, kept out of git by its own `.gitignore`): pie and slice starts, verdicts at the commit they judged, commits, pushes, merges, warnings, HITL raised and answered, stalls, decision notes, usage, slice rollups, and file edits as path and role only. Agent starts and stops come from the kitchen activity log rather than a second recorder. No row holds a prompt, an agent message, file contents or a secret.
+- **Model tools**, listed from the first turn: `bts_status` (the pane's projection in under 40 lines, with a `Next:` line that is advice), `bts_note` (a decision note), `bts_hitl` (raise or answer a HITL item), `bts_pr_body` (the pie PR's Evidence section) and `bts_wake` (a teammate's timed wakeup message).
+- **Warn-only checks and spawn policy.** Ten codes: `checkbox-without-verdict`, `checkbox-without-tester`, `push-slice-done-unverified`, `fix-loop-cap`, `commit-on-main`, `plan-write-during-bake`, `model-policy`, `model-drift`, `builder-context`, `gate-teamified`. Each finding writes one `warn` row, one toast and a note the model reads, and the edit, spawn, commit or push always runs. The spawn policy's tiers mirror each agent's `model:` frontmatter (`tests/pass/policy-parity.test.js` keeps them equal). `bytheslice.config.json` key `pass` overrides roles, context markers, `checks.enabled` and `checks.requireTester`, each override recorded once in the ledger.
+- **Watchdog and HITL inbox.** A 30-second scan flags an agent past its role's budget (15 minutes; `discovery` 5, `implementer` 30) with 3 minutes of no activity: the first stall writes `agent.stalled`, a toast, a pane flag and a hidden note to the main conversation, and a second stall in the slice opens a pane HITL item. It never stops an agent. `bts_hitl` items show in the pane and the band, send one native notification titled `ByTheSlice needs you` (a toast when no channel sent it), keep at most 500 characters of the answer with secret shapes redacted (nothing for `external_credentials`), and close when the operator replies in chat. The fix cap opens one inbox item per loop. `pass.watchdog` overrides the thresholds.
+- **Team mode.** A Team section and `· n bakers` in the band while teammates exist; teammate turns, skill starts, `teammate.idle` and `teammate.done` land in the ledger attributed to their pie; a `teammate` model role (opus or sonnet).
+- **Replay and touched files.** `/pass replay <slice>` steps through each commit of a slice (and its uncommitted changes) with per-file numstat, the roles that edited each file and its diff. The pane's Touched section lists the active slice's files from `git diff --numstat` and draws red any file a builder edited after the verifier's pass.
+- **Cross-session strip and history.** Sessions of one project see each other's pie, slice and status read-only in the pane's roadmap strip. `/pass history` prints progress per pie. [`scripts/ledger-summary.js`](scripts/ledger-summary.js) (zero dependencies, read-only) is the one fold every reader uses: `--format text`, `json` and `pr-body`.
+- **Kitchen Progress sheet.** A header button in `/open-kitchen` reads `progress` from `GET /state`: one block per pie with a slice table (started, done, duration, fix loops, verifier verdict, cost) and an inline SVG step line of slices done over time. Without a ledger it says so.
+- **Retro feed.** `/close-shop`'s `retrospective-reviewer` runs the fold and cites fix-loop depth, warnings by code, stalls, HITL wait and cost per slice, saying "not in the ledger" when a metric is absent.
+- **Kitchen polish** (merged as PR #44): *measured slice progress* (tasks committed of each linked plan, counted from `feat(pie-N): N.M task K` subjects on local branches, plus the current step; never an estimated percent); *pie details* for any served or planned pie in the Orders sheet; a *readable activity log* ("Ren (line cook, builds code) started building slice 5.2"); a *base crew* (Dom, Ollie and Sal on ambient duty with Chef Nico while a pie is open, running agents in a gold work tag); a *roaming crew* (off-duty crew live in town and run in when their agent starts); *one ballgame a day*, after which players, coaches and fans go home and into town; and a *People sheet* with Crew and Town tabs and a profile card for every crew member and townsperson.
+
+### Changed
+
+- **Hook set reduced.** Three scripts remain: `kitchen-log.sh`, `shop-status.sh` and `pre-commit-guard.sh`. Nothing blocks: every script exits 0, and a warning reaches the model as hook context. `hooks/README.md` keeps the inventory and the evidence (408 sampled sessions) for each decision.
+- **`pre-commit-guard.sh` warns instead of blocking** a `git commit` on `main` or `master`. It never reads `$CLAUDE_PROJECT_DIR`, and shell forms it cannot follow warn "branch unknown". 22 of its 25 recorded blocks had been false.
+- **Session skill marker dropped.** `kitchen-log.sh` no longer writes `last-precheck.json`: nothing reads it, and the mod tracks the active skill itself.
+- **PR body gains a generated Evidence section.** `/box-it-up` writes `bts_pr_body`'s Markdown (slice table with the verifier verdict at its commit, fix loops, models, duration and cost, warnings per code, HITL waits, decision notes) under `## Evidence` after the `--fill` content.
+- **Kitchen time lock in live mode.** While a real session drives the scene, the time-of-day buttons are visibly disabled with the tooltip "Time follows the real session"; the demo shop keeps them working.
+- Release manifests and npm metadata advance together to 5.4.0, and the Claude plugin descriptions mention the Pass. The npm `files` list ships `mod`, `scripts/ledger-summary.js` and `docs/pass-mod-spec.md`. README (new *The Pass* section), architecture (new *The Pass mod* section), CLAUDE.md, the agent roster and the mod spec (status: shipped, warn-only wording) describe what shipped.
+
+### Removed
+
+- `hooks/stage-plan-guard.sh` (PreToolUse Write/Edit): the mod's `plan-write-during-bake` covers it; it never warned across 1,706 plan writes.
+- `hooks/library-gate-guard.sh` (PreToolUse Write/Edit): never armed and never warned; 3,871 watched-path writes were all silent.
+- `hooks/record-library-approval.sh` and its `library-approvals.json`, retired with their only reader.
+- `hooks/compact-snapshot.sh` (PreCompact) and its `compact-snapshot.json`: written 19 times, never read. `shop-status.sh` already re-injects the checklist summary after a compaction.
+
+### Fixed
+
+- Kitchen: the Main and Oak traffic deadlock is gone, and walkers in the road refuse any step that closes on a car.
+- Kitchen: Tess stands behind her lemonade counter instead of showing through it.
+
+### Notes
+
+- **Minimum versions.** The Pass needs Claude Code 2.1.299 (mods exist since 2.1.287); below that, or on a version the engine cannot report, it stays inert and logs one line. Team mode also needs agent teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) and was proven on 2.1.302 in-process. Without the mod everything still works; the pane, band and checks simply do not appear.
+- **Hosts that lose coverage.** Cursor (which never loads the mod) and Claude Code below 2.1.299 now get no warning for a plan write during a bake, none for a production-route write before a library approval (the `sell-slice` Phase 4.5 stop holds the line), and no compaction snapshot. The commit-on-`main` warning stays everywhere hooks run.
+- **Spike answers.** An in-process teammate has neither `Workflow` nor `ScheduleWakeup` but can call mod tools, so `bts_wake` stands in for the wakeup and **pies stay sequential**: a two-pie team bake is not possible on 2.1.302. `classic.TeammateIdle` and `classic.TaskCompleted` do not run in an organization-managed install unless the organization lists the plugin. A mod's `$.http.fetch` reaches both localhost and the network, but the shared live page was not built: the PR's Evidence section and the local Progress sheet cover collaboration.
+
+---
+
 ## [5.3.0] - 2026-10-20
 
 **Ship each slice without babysitting it.** Gates run in tiers instead of the full ladder at every step, fixes are capped hard, approvals arrive as one batch, and an opt-in mode merges every slice to `main` on green CI.
