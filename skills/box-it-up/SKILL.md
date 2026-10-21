@@ -60,6 +60,8 @@ CI watching itself is inline (`gh pr checks <pr> --watch` blocks until checks se
 
 ## Workflow
 
+At every phase boundary, if the `bts_status` tool is available call it instead of re-reading the checklist; if it is not, read the checklist as before.
+
 > **Per-slice mode runs Phase 1 only, then returns.** Phases 0 and 2-6 are pie-completion / universal closeout. `slice-merge` mode runs Phases 0 → 6 with the overrides in "Merge-per-slice closeout" below. The phase numbering is shared so the commit logic is defined once.
 
 ### Phase 0 - Pre-flight Safety Checks *(pie-completion / universal)*

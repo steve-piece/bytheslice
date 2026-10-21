@@ -72,6 +72,8 @@ If the file exists but parses as malformed JSON, **stop before dispatching any P
 
 ## Workflow
 
+At every phase boundary, if the `bts_status` tool is available call it instead of re-reading the checklist; if it is not, read the checklist as before.
+
 ### Phase 0 — Read the master checklist and build the pie queue
 
 1. Read `docs/plans/00_master_checklist.md`.

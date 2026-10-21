@@ -67,6 +67,8 @@ An append-only event log at `.bytheslice/ledger.jsonl`, gitignored and written t
 
 The ledger is the single writer of slice status. Skills stop editing state prose and call the tools in section 4.4.
 
+> **Note (5.2, as built).** The ledger lives at `<primary checkout>/.bytheslice/ledger.jsonl` (the parent of `git rev-parse --git-common-dir`, so every pie worktree writes one file; the session directory outside git), and the folder carries its own `.gitignore` (`*`) so it stays out of git in any project. `$.fs` has no append, so each row is one `tee -a` write through `$.process.run`. Agent starts, stops, tokens and durations are not recorded twice: they come from the Pie 4 kitchen activity log, and each `slice.done` adds one `slice.rollup` row so they outlive its rotation. `pie.started` and `slice.started` come from `skill.prompt`, the `Skill` tool and the typed command (whichever the session raises; an organization-managed install passes the first and last over), deduplicated against the ledger; `verdict` comes from `turn.complete` of a tester or verifier agent; `commit`, `push` and `merge` from a Bash result that did not error. A ledger write that fails logs once and drops the row; no hook ever refuses a call.
+
 ### 4.2 Ticket rail pane (the dashboard)
 
 Opened with `$.ui.open({ id: 'pass', title: 'The Pass' })` and drawn by a `ui.render` hook for `Pane`. It sits as a right sidebar in a wide fullscreen terminal and as a pane in the desktop Code tab.
@@ -100,6 +102,8 @@ The model reads and writes the ledger through registered tools (`$.tool.register
 | `bts_note` | Appends a free-form decision note to the slice's ledger. The retro and the PR body use these. |
 
 The system prompt is left alone. Changing it each turn would invalidate the prompt cache. If a standing reminder is needed, `prompt.compose` adds one fixed section ("call `bts_status` before choosing the next step") that never changes.
+
+> **Note (5.2, as built).** `bts_status` and `bts_note` return facts and halt nothing: `bts_status` reads the session's atoms and the ledger projection (the ledger plus the Pie 4 kitchen activity log) and answers text under 40 lines, including a `Next:` line that is advice, not a gate; `bts_note` appends one `note` row (text cut at 2,000 characters) and answers `ok`. Both are listed with their schemas in the prompt (`isDeferred: false`) from the first turn, as `mcp__bytheslice__bts_status` and `mcp__bytheslice__bts_note`. `pass reconcile` prints where the checklist and the ledger disagree and edits nothing. `bts_hitl` arrives in 5.5.
 
 ### 4.5 Gates: the check at the pass
 

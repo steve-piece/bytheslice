@@ -121,6 +121,8 @@ On activation of either fallback, WebFetch the canonical docs the fallback refer
 
 ## Workflow
 
+At every phase boundary, if the `bts_status` tool is available call it instead of re-reading the checklist; if it is not, read the checklist as before.
+
 `/sell-pie` is the **`/loop` driver** over one pie. The conductor holds **zero implementation context**: it reads structured returns, routes them, and never itself writes feature code, behaviorally tests, or grades a slice. The shape:
 
 > **read checklist → pick the active Pie → if `review: continuous` run `/sell-slice` mode → else loop the pie's slices (per-slice Workflow: builder → tester → verifier → fixer; commit + push; no PR) → on all slices `[x]` stop → open the Pie PR via `/box-it-up`.** In merge-per-slice mode each slice instead runs in its own worktree and merges through its own PR before the next one starts (Phase 1-M).

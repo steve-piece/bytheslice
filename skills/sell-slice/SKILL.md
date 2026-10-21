@@ -167,6 +167,8 @@ The house phrasing for any Workflow-backed step below is: *"Run as a `Workflow` 
 
 ## Workflow
 
+At every phase boundary, if the `bts_status` tool is available call it instead of re-reading the checklist; if it is not, read the checklist as before.
+
 The skill is an **interactive spine** (Phases 0-3) wrapping two Workflows and one human gate:
 
 - **Spine:** prep gate (Phase 0) · recon (Phase 1) · build-plan auth (Phase 2, auto under loop / `flow.autoApproveBuildPlan`) · `/goal` (Phase 2.5) · branch (Phase 3).
