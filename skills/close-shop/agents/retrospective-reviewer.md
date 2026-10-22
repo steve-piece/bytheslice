@@ -167,7 +167,8 @@ For each proposal, write a unified diff that can be applied directly with `git a
 Before including any proposed change in the output, verify the `target_file` is NOT any of the following:
 
 - `skills/close-shop/SKILL.md`
-- `skills/close-shop/agents/close-shop-reviewer.md`
+- `skills/close-shop/agents/retrospective-reviewer.md`
+- `skills/close-shop/agents/proposal-drafter.md`
 - `commands/close-shop.md`
 
 If a proposed change targets one of these files, exclude it from `proposed_changes` and include a note in `patterns_observed`:
