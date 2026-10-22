@@ -144,4 +144,5 @@ if (require.main === module) {
   });
 }
 
-module.exports = { ensureKitchen, parsePort };
+// matchingServer is shared with the lobby (mcp/lobby-state.js), which probes each registered project's kitchen.
+module.exports = { ensureKitchen, parsePort, readPort, matchingServer };
