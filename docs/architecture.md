@@ -77,7 +77,7 @@ Override auto-detection with explicit `--standalone` / `--sequential` flags. Per
 | `slice-tester` | behavioral | Rendered design-system match + per-affordance exercise + a blocking rendered accessibility pass + seed-and-cleanup data-flow round-trips (with the bidirectional rule). |
 | `slice-verifier` | static | Lint / type / build / unit / e2e-by-tag (threshold-gated per `verification.e2e`) + design-system static grep + CI-integrity + the build-manifest under-declaration backstop. The full local suite runs **once per slice**; after a fix only the touched gates re-run. |
 
-The three v4 verifiers (`basic-checks-runner`, `aggregating-test-reviewer`, `ci-cd-guardrails`) and `frontend/visual-reviewer` are deprecated shims folded into these two.
+These two replace the three v4 static verifiers and the v4 frontend visual review.
 
 **Build manifest + under-declaration backstop.** The builder emits a schema-validated manifest declaring every route / component / affordance / serverAction / transition the slice produced: `implementer` on backend and full-stack slices, `state-illustrator` on frontend slices (it reads the files on disk, and a frontend slice with an empty manifest stops to ask). `slice-verifier` independently greps the slice diff and **fails if the manifest under-counts** - so a builder can't hide an affordance from the tester with prompt wording alone.
 

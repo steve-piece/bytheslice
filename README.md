@@ -297,7 +297,7 @@ Drop a `bytheslice.config.json` at your project root to override defaults:
 
 **Precedence (top wins):** `env vars` → `bytheslice.config.json` → `project rules file (CLAUDE.md / AGENTS.md)` → `plugin defaults`.
 
-Full schema and precedence rules: [`bytheslice-config-schema.md`](skills/setup-shop/references/bytheslice-config-schema.md). System-wide defaults live at `~/.bytheslice/defaults.json` (created during first-time install). Config keys keep their v3 names for backward compatibility; as of v5 the `ciCdGuardrails` / `basicChecksRunner` / `aggregatingTestReviewer` tiers are deprecated aliases of `sliceVerifier` and still resolve.
+Full schema and precedence rules: [`bytheslice-config-schema.md`](skills/setup-shop/references/bytheslice-config-schema.md). System-wide defaults live at `~/.bytheslice/defaults.json` (created during first-time install). Config keys keep their v3 names for backward compatibility.
 
 ---
 
@@ -314,7 +314,7 @@ The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once*
 - [**Hook enforcement**](docs/architecture.md#hook-enforcement) - what the [`hooks/`](hooks/) layer logs and warns about (it blocks nothing)
 - [**The Pass mod**](docs/architecture.md#the-pass-mod) - packaging, the ledger, the warn-only checks, spawn policy, watchdog, HITL inbox, team mode
 - [**Legacy & migration**](docs/architecture.md#legacy--migration) - flat v4 / v3 projects, `--repie`
-- [**Agent roster**](docs/agents.md) - ByTheSlice ships 49 registered subagents plus 6 documented deprecated shims; every one in plain English
+- [**Agent roster**](docs/agents.md) - ByTheSlice ships 49 registered subagents; every one in plain English
 
 ---
 
