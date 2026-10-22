@@ -84,7 +84,7 @@ On-demand, no particular order:
 | Command | In pizza terms | What it does |
 |---|---|---|
 | [`/special-order`](skills/special-order/SKILL.md) | Cook something off-menu on the spot. | Bolts new features onto an in-progress project - writes fresh stage files, hands off to `/sell-slice`. |
-| [`/open-kitchen`](skills/open-kitchen/SKILL.md) | Watch the shop at work. | Opens the project's local read-only 3D kitchen in the host's native Browser pane when available. |
+| [`/open-kitchen`](skills/open-kitchen/SKILL.md) | Watch the shop at work. | Opens the project's local read-only 3D kitchen in the host's native Browser pane when available. `--lobby` opens the lobby: every ByTheSlice project on this machine on one page. |
 | [`/inspect-display`](skills/inspect-display/SKILL.md) | Eyeball every pie on the tray. | Read-only audit of the running app - every route, every page, captured to a report. |
 | [`/run-the-day`](skills/run-the-day/SKILL.md) ⚠️ | Auto-pilot the whole day's service. | Thin chainer that drives `/sell-pie` across every Pie in sequence. *Experimental - fine for short roadmaps, drifts across many pies.* |
 | [`/close-shop`](skills/close-shop/SKILL.md) ⚠️ | Sit down and debrief after service. | Friction retro on the workflow itself - drafts plugin improvements back to disk. *Experimental.* |
@@ -171,6 +171,27 @@ node "/absolute/plugin/root/skills/open-kitchen/open-kitchen.js" --project "/abs
 Replace both paths with real absolute paths. The helper prints a verified `http://127.0.0.1:<port>/` link for that project, reusing a matching server or starting one. The server defaults to port 4477, tries the next free port, and records discovery at `.claude/.bytheslice-state/kitchen/port`. The visible page refreshes state every three seconds. See [the local transport and privacy contract](docs/architecture.md#live-kitchen).
 
 **Host verification status:** both artifact bridge probes (`host:plugin_bytheslice_kitchen` and `host:kitchen`) returned `server_not_connected`. The localhost Browser-pane path is selected; native `/open-kitchen` invocation and a production `/sell-slice` session remain unverified. A ready localhost link alone does not complete the native command.
+
+### The lobby
+
+Run `/open-kitchen --lobby` to see **every ByTheSlice project on this machine** on one page, each as a card: its name and folder, what is in progress now (pie and slice), a bar of slices done, slices and pies done over total, and one state badge.
+
+| Badge | Means |
+|---|---|
+| **Needs you** | An open HITL question in the project's [Pass](#the-pass) ledger, or a session that asked for a permission or sat idle at the prompt and has not had a new prompt since. |
+| **Active** | A session is working (a prompt was submitted and it has not stopped) or has subagents running. The arrows spin; with reduced motion they hold still. |
+| **Done** | Every pie in the master checklist is done. |
+| **Inactive** | Anything else. |
+
+Cards sort Needs you, Active, Done, Inactive, then by name, and the page refreshes every three seconds while it is visible. Several sessions or worktrees of one project roll up into one card. **Click a card** to open that project's city: a running kitchen opens straight away, otherwise the lobby starts that project's kitchen first ("Starting kitchen..."). An Inactive or Done project opens **idle**: no customer line, a "Nothing is in progress in this project" notice, and the time-of-day buttons unlocked so you can look around; idle ends for good once the kitchen sees an agent at work. A kitchen opened from the lobby shows a **Lobby** button in its header that leads back, and any kitchen answers `/lobby` with a redirect to the running lobby (or a 404 when none is running).
+
+A project joins the lobby the first time a Claude Code or Cursor session starts in it with the 5.6.0 hooks installed; only a primary checkout holding `docs/plans/00_master_checklist.md` or `bytheslice.config.json` counts. The list lives in `~/.bytheslice/projects.json` (`BTS_HOME` moves it), and a project whose folder is gone drops off on its own. The lobby reads checklists, ledgers and hook signals; it can start a registered project's kitchen and nothing else. Hooks record only folder paths and derived facts (working, subagent count, waiting kind), never prompts, messages or secrets. Cursor has no notification hook, so a Cursor session never shows Needs you for a waiting prompt. The helper runs it without a model session too:
+
+```sh
+node "/absolute/plugin/root/skills/open-kitchen/open-kitchen.js" --lobby
+```
+
+It prints one verified `http://127.0.0.1:<port>/` line, reusing the running lobby or starting one (port 4466 by default, the next free one when taken). See [the lobby's architecture](docs/architecture.md#the-lobby).
 
 ---
 
@@ -413,7 +434,7 @@ No. Every foundation skill is standalone-invocable. Drop into any project and ru
 rm -rf ~/.cursor/plugins/local/bytheslice ~/.claude/plugins/bytheslice
 ```
 
-Project-local configuration and `.claude/.bytheslice-state/` may remain after uninstall, including kitchen activity and discovery records. Remove those only if you no longer need the project's local workflow state.
+Project-local configuration and `.claude/.bytheslice-state/` may remain after uninstall, including kitchen activity and discovery records. Remove those only if you no longer need the project's local workflow state. The lobby's machine-level files also remain under `~/.bytheslice/` (`projects.json`, `signals/`, `lobby/`); they hold folder paths and session flags only and are safe to delete. `~/.bytheslice/defaults.json` is your system-wide config, so keep it if you plan to reinstall.
 
 </details>
 

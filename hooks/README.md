@@ -1,8 +1,8 @@
 # ByTheSlice Hooks
 
-Deterministic hooks that log kitchen activity, put the checklist summary in front of the model at session start, and warn on a risky commit. **No hook blocks**: every script exits 0. A warning is printed as Claude Code hook JSON, so `hookSpecificOutput.additionalContext` reaches the model and `systemMessage` reaches the person; plain stdout from a tool hook shows in the transcript only.
+Deterministic hooks that log kitchen activity, record projects and session flags for the lobby, put the checklist summary in front of the model at session start, and warn on a risky commit. **No hook blocks**: every script exits 0. A warning is printed as Claude Code hook JSON, so `hookSpecificOutput.additionalContext` reaches the model and `systemMessage` reaches the person; plain stdout from a tool hook shows in the transcript only.
 
-The Pass, the plugin's Claude Code mod (a TypeScript hooks module that `hooks.json` names under `modules` beside the `hooks` block), lives in [`mod/`](../mod/). Cursor never loads the mod: `.cursor-plugin/plugin.json` points it at [`hooks-cursor.json`](./hooks-cursor.json) instead, which runs `shop-status.sh` on `sessionStart` and `pre-commit-guard.sh` on `beforeShellExecution`, both with `BTS_HOST=cursor` so they answer in Cursor's JSON (the guard always answers `{"permission":"allow"}`, since Cursor blocks a command whose hook prints no JSON).
+The Pass, the plugin's Claude Code mod (a TypeScript hooks module that `hooks.json` names under `modules` beside the `hooks` block), lives in [`mod/`](../mod/). Cursor never loads the mod: `.cursor-plugin/plugin.json` points it at [`hooks-cursor.json`](./hooks-cursor.json) instead, which runs `shop-status.sh` on `sessionStart`, `pre-commit-guard.sh` on `beforeShellExecution`, and `lobby-signal.sh` on `sessionStart`, `beforeSubmitPrompt`, `subagentStart`, `subagentStop` and `stop`, all with `BTS_HOST=cursor` so they answer in Cursor's JSON (the guard always answers `{"permission":"allow"}`, since Cursor blocks a command whose hook prints no JSON; the lobby signal answers `{"permission":"allow"}` on `subagentStart`, `{"continue":true}` on `beforeSubmitPrompt` and `{}` otherwise).
 
 ## Hooks
 
@@ -10,6 +10,7 @@ The Pass, the plugin's Claude Code mod (a TypeScript hooks module that `hooks.js
 |---|---|---|
 | `shop-status.sh` | `SessionStart` | Reads `docs/plans/00_master_checklist.md` if present and injects a compact summary: Prep progress, plus pie/slice counts and the first open pie (nested v5) or stage counts and the next not-started row (flat v4). It has no `source` matcher, so it runs again after a resume or a compaction and re-orients the session. |
 | `pre-commit-guard.sh` | `PreToolUse` (Bash matcher) | WARNs (exit 0, never blocks) on `git commit` on main/master, reading the branch of the repository each commit in the command runs in (parsed `cd`/`pushd`, `git -C`, `--git-dir`, `GIT_DIR=`, else the hook cwd), so worktree commits are judged by the worktree's branch. It never reads `$CLAUDE_PROJECT_DIR`: shell forms it cannot follow (subshell `cd`, `popd`, `$VAR` paths, a branch switch earlier in the command, a directory that is not a git repo yet) warn "branch unknown". Otherwise prints a short staged-files summary (transcript only). |
+| `lobby-signal.sh` | `SessionStart`, `UserPromptSubmit`, `SubagentStart`, `SubagentStop`, `Stop`, `Notification` (Cursor: `sessionStart`, `beforeSubmitPrompt`, `subagentStart`, `subagentStop`, `stop`) | Machine-level and silent; always exits 0. Registers the primary checkout of a ByTheSlice project on `SessionStart` and keeps one flag file per session (working, subagent count, waiting on a permission or idle prompt) for the lobby. See [Lobby signals](#lobby-signals). |
 | `kitchen-log.sh` | `SessionStart`, `SubagentStart`, `SubagentStop`, `PreToolUse` (Agent/Skill), `PostToolUse` (Agent), `UserPromptExpansion`, `Stop` | Fast synchronous local activity rows with an explicit metadata allowlist, completed before the hook returns including Stop during session shutdown; silent and always exit 0; labels capped at 120 characters; pie/slice attribution from label, then the same session's latest labeled row (same agent id, then agent type, first), then branch, then checklist; serialized 2 MiB rotation with one backup. Uses jq or Node and skips logging when neither exists. |
 
 ## Inventory (5.4)
@@ -33,6 +34,28 @@ Every script that was in this directory at the start of slice 5.4, with the evid
 ## Kitchen activity
 
 `kitchen-log.sh` writes only allowlisted metadata to `.claude/.bytheslice-state/kitchen/activity.jsonl`, with one rotated backup at 2 MiB. Dispatch descriptions are single-line and capped at 120 characters. Prompts, agent final messages, tool output, skill arguments, file contents and environment values never enter a row. The hook completes each append before returning; asynchronous hooks lost the final `Stop` event at shutdown. It remains silent and always exits 0, including on malformed input or filesystem failures. See [the kitchen architecture](../docs/architecture.md#live-kitchen) for transport, setup evidence and privacy details.
+
+## Lobby signals
+
+`lobby-signal.sh` feeds the machine-level lobby (`/open-kitchen --lobby`). 5.6.0 added its six `hooks.json` entries, including the plugin's first `UserPromptSubmit` and `Notification` hooks, each with no matcher, a 5 second timeout and a synchronous run. It writes under `${BTS_HOME:-$HOME/.bytheslice}`, never inside a project:
+
+| File | Shape |
+|---|---|
+| `projects.json` | `{"v":1,"projects":[{"root":"<abs primary checkout>","name":"<basename>","addedAt":<ms>}]}` |
+| `signals/<session id>.json` | `{"v":1,"sid":"<id>","root":"<abs primary checkout>","t":<ms>,"working":<bool>,"subagents":<int>,"waiting":null\|"permission"\|"idle"}` |
+
+| Event | Effect |
+|---|---|
+| `SessionStart` | Upsert the project (an existing root keeps its `addedAt`), drop every row whose folder is gone, delete signals over 7 days old and temp files over an hour old. |
+| `UserPromptSubmit` | Working, waiting cleared. |
+| `SubagentStart` | Working, one more subagent. |
+| `SubagentStop` | One fewer subagent (never below 0). |
+| `Stop` | Not working; subagents and waiting kept. |
+| `Notification` | `permission_prompt` sets waiting `permission`, `idle_prompt` sets `idle`; any other type writes nothing. |
+
+`root` is the parent of the git common dir, so every worktree rolls up to its primary checkout, and only a primary holding `docs/plans/00_master_checklist.md` or `bytheslice.config.json` counts. Writes are atomic (temp file, then rename, mode 0600) under a short `.lock` mutex. Only `session_id`, `hook_event_name`, `notification_type` and `cwd` are read out of the envelope: the prompt, messages, the last assistant message, tool data and environment values never reach a file. It uses jq, or Node when jq is missing, and writes nothing when neither exists.
+
+**The reduced Cursor set.** Cursor gets five of the six events. It has no Notification equivalent, so a Cursor project never shows **Needs you** from a waiting prompt; only an open HITL item in a ledger that a Claude Code session wrote can mark it. Under `BTS_HOST=cursor` the script reads the conversation id (the parent's on `subagentStart`) as the session and the first workspace root as the folder. See [the lobby architecture](../docs/architecture.md#the-lobby) for the server, the state rules and the privacy limits.
 
 ## The scenario contract
 
@@ -66,7 +89,7 @@ Run it locally before committing changes to anything under `hooks/`. No CI workf
 
 ## State
 
-All hook state lives under `.claude/.bytheslice-state/` (gitignored): today that is the kitchen activity log (see Kitchen activity). Files an earlier version left there (the library approvals record, the compaction snapshot, the session skill marker) are no longer read or written; deleting them is safe. The Pass mod tracks the active skill itself, from typed input.
+All per-project hook state lives under `.claude/.bytheslice-state/` (gitignored): today that is the kitchen activity log (see Kitchen activity). The one machine-level exception is the lobby's `${BTS_HOME:-$HOME/.bytheslice}` (`projects.json`, `signals/`), written only by `lobby-signal.sh` (see Lobby signals). Files an earlier version left there (the library approvals record, the compaction snapshot, the session skill marker) are no longer read or written; deleting them is safe. The Pass mod tracks the active skill itself, from typed input.
 
 ## Disable
 

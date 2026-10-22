@@ -19,6 +19,7 @@ The under-the-hood reference for ByTheSlice. The [README](../README.md) covers t
 - [Hook enforcement](#hook-enforcement)
 - [The Pass mod](#the-pass-mod)
 - [Live kitchen](#live-kitchen)
+- [The lobby](#the-lobby)
 - [Legacy & migration](#legacy--migration)
 - [Cursor / non-Claude-Code fallback](#cursor--non-claude-code-fallback)
 
@@ -179,6 +180,7 @@ Skill preconditions are checked inline by each skill at the start and raised as 
 - [`kitchen-log.sh`](../hooks/kitchen-log.sh) logs kitchen activity (the Pass mod tracks the active skill itself).
 - [`shop-status.sh`](../hooks/shop-status.sh) injects the checklist summary at session start, and again after a resume or a compaction, so a compacted session re-orients.
 - [`pre-commit-guard.sh`](../hooks/pre-commit-guard.sh) warns on `git commit` on `main` (or on a branch it cannot tell); the commit is not stopped.
+- [`lobby-signal.sh`](../hooks/lobby-signal.sh) registers ByTheSlice projects and records per-session flags for [the lobby](#the-lobby), silently.
 - Editing a stage plan mid-delivery draws a warning from the Pass mod (`plan-write-during-bake`), on Claude Code hosts that load it.
 
 Slice 5.4 retired the hooks the mod covers or that never fired; `hooks/README.md` keeps the inventory and what each retirement means on a host without the mod. Hooks dual-read flat `## Stage N` and nested `## Pie N` / `### Slice N.M` checklists; the regression suite lives at `hooks/test.sh`. Disable per-session with `BTS_HOOKS_DISABLED=1`. See [`hooks/README.md`](../hooks/README.md).
@@ -191,7 +193,7 @@ Slice 5.4 retired the hooks the mod covers or that never fired; `hooks/README.md
 
 The Pass is the plugin's Claude Code mod: a live ticket rail (pane, band, prompt hint, toasts) and a set of checks that **warn and never block**. The design and every as-built note live in [`pass-mod-spec.md`](pass-mod-spec.md); this section is the summary of what shipped in 5.4.0.
 
-**Packaging.** The mod lives inside the plugin. [`hooks/hooks.json`](../hooks/hooks.json) names `../mod/register.tsx` under `modules` beside its `hooks` block, `.claude-plugin/plugin.json` points `types` at `mod/types/index.d.ts`, and the npm package ships `mod`, `scripts/ledger-summary.js` and `docs/pass-mod-spec.md`. Cursor never loads the mod: `.cursor-plugin/plugin.json` points it at `hooks/hooks-cursor.json`, which runs the shop status and the commit guard in Cursor's own hook format. The mod needs Claude Code 2.1.299 or later; on anything older it stays inert and logs one line. Every mod hook registers a `.catch` that passes the call through, so a mod error never stops a tool call. `claude plugin validate .` and `claude plugin test .` (including the seeded-violation suite on both the `terminal` and `desktop` surfaces) are its gating checks.
+**Packaging.** The mod lives inside the plugin. [`hooks/hooks.json`](../hooks/hooks.json) names `../mod/register.tsx` under `modules` beside its `hooks` block, `.claude-plugin/plugin.json` points `types` at `mod/types/index.d.ts`, and the npm package ships `mod`, `scripts/ledger-summary.js` and `docs/pass-mod-spec.md`. Cursor never loads the mod: `.cursor-plugin/plugin.json` points it at `hooks/hooks-cursor.json`, which runs the shop status, the commit guard and the lobby signal in Cursor's own hook format. The mod needs Claude Code 2.1.299 or later; on anything older it stays inert and logs one line. Every mod hook registers a `.catch` that passes the call through, so a mod error never stops a tool call. `claude plugin validate .` and `claude plugin test .` (including the seeded-violation suite on both the `terminal` and `desktop` surfaces) are its gating checks.
 
 **Ledger, built on the kitchen activity log.** The ledger is `.bytheslice/ledger.jsonl` in the primary checkout (the parent of the git common dir, so every pie worktree writes one file), with its own `.gitignore` (`*`). Each row is one `tee -a` append; a failed write logs once and drops the row. Capture is off in a repository without a master checklist. Agent starts, stops, tokens and durations are not recorded twice: they come from [`kitchen-log.sh`](../hooks/kitchen-log.sh)'s `activity.jsonl`, and each finished slice adds one `slice.rollup` row so those numbers outlive the activity log's rotation. [`scripts/ledger-summary.js`](../scripts/ledger-summary.js) (zero dependencies, read-only) is the one fold every reader uses: `--format text` for `pass history`, `--format json` for the kitchen and `/close-shop`'s `retrospective-reviewer`, `--format pr-body` for the pie PR's `## Evidence` section (through the `bts_pr_body` tool).
 
@@ -224,7 +226,7 @@ The Pass is the plugin's Claude Code mod: a live ticket rail (pane, band, prompt
 
 ## Live kitchen
 
-[`/open-kitchen`](../skills/open-kitchen/SKILL.md) connects the bundled 3D viewer to project-local state. It prefers the registered `kitchen_state` MCP tool, checks the canonical project root and advertised port, then opens a verified loopback URL in the native Browser pane. If MCP is unavailable or belongs to another project, [`open-kitchen.js`](../skills/open-kitchen/open-kitchen.js) reuses a matching local server or starts one without launching a Claude model session. Complete plugin installs include the runtime; skills-only copies do not register MCP or hooks.
+[`/open-kitchen`](../skills/open-kitchen/SKILL.md) connects the bundled 3D viewer to project-local state. It prefers the registered `kitchen_state` MCP tool, checks the canonical project root and advertised port, then opens a verified loopback URL in the native Browser pane. If MCP is unavailable or belongs to another project, [`open-kitchen.js`](../skills/open-kitchen/open-kitchen.js) reuses a matching local server or starts one without launching a Claude model session. Complete plugin installs include the runtime; skills-only copies do not register MCP or hooks. `/open-kitchen --lobby` opens the machine-level [lobby](#the-lobby) instead of one project's kitchen.
 
 The artifact host bridge probes for `host:plugin_bytheslice_kitchen` and `host:kitchen` both returned `server_not_connected`. The selected path serves localhost to the Browser pane. Native command invocation, discovery in the production host, `/sell-pie`, and a real production `/sell-slice` acceptance run remain pending. The fallback helper and local test evidence do not establish those host integrations.
 
@@ -238,13 +240,23 @@ Rows live in `.claude/.bytheslice-state/kitchen/activity.jsonl`. The strict fiel
 
 [`mcp/kitchen-server.js`](../mcp/kitchen-server.js) exposes one read-only stdio MCP tool, `kitchen_state`, with an optional nonnegative integer `since` cursor. The snapshot includes project setup, per-piece evidence, checklist orders, active agents and skills, recent allowed metadata, phase and port. `since` is accepted for cursor compatibility; the result remains a full snapshot for deterministic replay.
 
-The same process binds HTTP to `127.0.0.1` only. It starts at **4477** (or `BTS_KITCHEN_PORT`) and tries the next free port, then writes the chosen number to `.claude/.bytheslice-state/kitchen/port`. Only exact **`GET /`** (bundled viewer) and **`GET /state`** (snapshot) are served. Other methods return 405; other paths return 404. Host, Origin and Fetch Metadata checks reject foreign browser requests; responses disable caching and embedding. There is no mutation endpoint, shell action, remote publish operation or filesystem browse route. The server writes its local port-discovery file; the lifecycle logger and explicit workflow helpers write their own bounded local evidence.
+The same process binds HTTP to `127.0.0.1` only. It starts at **4477** (or `BTS_KITCHEN_PORT`) and tries the next free port, then writes the chosen number to `.claude/.bytheslice-state/kitchen/port`. Three exact routes are served, all `GET`:
+
+| Route | Answer |
+|---|---|
+| `GET /` | The bundled viewer. The page alone may carry a query string (`/?lobby=<port>&idle=1`, from the lobby); the server never reads it and always answers the same file. |
+| `GET /state` | The snapshot. |
+| `GET /lobby` | `302` to `http://127.0.0.1:<port>/` when `<BTS_HOME or ~/.bytheslice>/lobby/port` holds an integer port from 1 to 65535 (not the kitchen's own) and `GET /state` there answers a JSON `projects` array within 500 ms; otherwise `404`. It never redirects anywhere else. |
+
+Other methods return 405; other paths return 404. Host, Origin and Fetch Metadata checks reject foreign browser requests: the Host must be this port on `127.0.0.1` or `localhost`, an Origin must match it, and `Sec-Fetch-Site` must be `same-origin` or `none`. The one exception is a **same-site top-level page navigation** (`GET /` or `GET /?...` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document`), which is how a lobby card on another `127.0.0.1` port opens a kitchen; `/state` and `/lobby` stay same-origin. Responses disable caching and embedding. There is no mutation endpoint, shell action, remote publish operation or filesystem browse route. The server writes its local port-discovery file; the lifecycle logger and explicit workflow helpers write their own bounded local evidence.
 
 **Slice progress is measured, never estimated.** For each unfinished slice whose checklist row links a plan (`**Plan:** [stage_*.md](...)`, a plain file name inside `docs/plans`), the state reader counts the plan's top-level task checkboxes, then counts distinct task commits on the local branches with a read-only `git log --branches` over the 5.3.0 subjects `feat(pie-N): N.M task K <name>` (cached for 15 seconds). A pie's commits usually sit on its own branch in another worktree, which is why local branches are searched rather than only the current one. A missing plan, no git, or a task number past the plan's count yields no progress at all. The current step comes from the dispatch label (`P5 S5.2 verify:`) or the agent's role. The served-pie details show only the commit, commit range, date and one-line summary that the checklist rows themselves state.
 
 **Progress over time comes from the Pass ledger.** The snapshot's `progress` field is `.bytheslice/ledger.jsonl` folded by [`scripts/ledger-summary.js`](../scripts/ledger-summary.js), the newest 1 MiB read once per snapshot. The header's Progress button opens a sheet with one block per pie: a slice table (started, done, duration, fix loops, verifier verdict, cost) and an inline SVG step line of slices done over time. Without a ledger (no mod, or no Claude Code session yet) the sheet says so.
 
 The visible page polls same-origin `/state` every **three seconds**, preserves the latest valid snapshot and pauses polling while hidden. `window.kitchenLive.snapshot` exposes the latest snapshot for inspection. The header browser button uses only the validated snapshot port and opens the same loopback URL with `noopener` after a user click. Host behavior determines whether the new tab leaves the pane. The viewer loads Three.js from **unpkg** and fonts from **Google Fonts**, so its rendering is not offline.
+
+**Opened from the lobby.** With `?lobby=<port>` (a valid port from 1 to 65535) the header shows a **Lobby** button (`#bLobby`) linking `http://127.0.0.1:<port>/`. With `?idle=1`, the first live snapshot decides: when no agent or skill is active the kitchen goes **idle**, with no customer line, a "Nothing is in progress in this project" notice and the time-of-day buttons unlocked; the first later snapshot with active work ends idle for good, locks the time again and re-applies the session phase. `window.__kitchenScene.idle` reports it. A kitchen opened without `?lobby=` has no Lobby button; its `/lobby` route covers that case.
 
 ### Setup evidence and phases
 
@@ -272,6 +284,59 @@ Completed Prep can declare a specific fixture inapplicable without claiming the 
 The comment affects applicability only once Prep is complete. A checked Prep item explicitly marked not applicable for the display case or shop opening also supplies that item's exemption. A generic completed Prep row does not invent presence or exempt unrelated fixtures. All fixtures absent means demo mode; some evidence means partial construction; completed Prep or all fixtures present means built setup, while each fixture retains its own presence/applicability evidence.
 
 Session and active-work metadata drive dawn, open service and after-hours lighting. A `Stop` followed by ten minutes with no active agents or skills can enter after hours. A successful Pie boundary merge can do so immediately only with fresh, matching evidence: `/box-it-up` passes the selected project root (`CLAUDE_PROJECT_DIR`, otherwise the working directory) to [`record-kitchen-merge.js`](../skills/box-it-up/record-kitchen-merge.js), which validates a confirmed `MERGED` PR number and merge time, then atomically writes only version, pie, PR number and merge timestamp to `kitchen/merged-pie.json`. This is Pie mode only. Checklist completion alone is not confirmed merge evidence.
+
+---
+
+## The lobby
+
+The lobby lists every ByTheSlice project on this machine on one page: one card per project with its progress, its active pie and slice, and one state. `/open-kitchen --lobby` opens it in the native Browser pane; a kitchen's Lobby button or its `/lobby` route lead back to it.
+
+### Process and transport
+
+[`mcp/lobby-server.js`](../mcp/lobby-server.js) is **one machine-level process**, separate from every kitchen. It binds `127.0.0.1` only, from **4466** (or `BTS_LOBBY_PORT`) upward past any port in use, and writes the chosen port to `<BTS_HOME or ~/.bytheslice>/lobby/port` (directory 0700, file 0600, temp file then rename). On SIGTERM or SIGINT it drains open requests, then removes the port file if it still names its own port. [`open-kitchen.js --lobby`](../skills/open-kitchen/open-kitchen.js) reuses the lobby when that port answers `GET /state` with a `projects` array, and otherwise starts `lobby-server.js --serve-only` detached (stdio ignored, `BTS_HOME` passed through) and waits at most eight seconds. Its stdout is only `http://127.0.0.1:<port>/`; `--lobby` cannot be combined with `--project`. A lobby started with `--serve-only` runs until it receives SIGTERM or SIGINT; without that flag it stops when its stdin closes.
+
+| Route | Answer |
+|---|---|
+| `GET /` | The bundled [`lobby.html`](../skills/open-kitchen/lobby.html) (503 while it is missing). |
+| `GET /state` | `{ v: 1, generatedAt, projects: [...] }`, one row per registered project. |
+| `POST /open` | Body `{"root":"<absolute path>"}` (`application/json`, at most 1 KiB): starts that registered project's kitchen and answers `{"url":"http://127.0.0.1:<port>/"}`. |
+
+Paths are exact, with no query strings. A method other than `GET` (or `POST` on `/open`) is 405, and any other path is 404. Every request passes the kitchen's checks: Host is this port on `127.0.0.1` or `localhost`, an Origin matches it, and `Sec-Fetch-Site` is `same-origin` or `none`, except a same-site top-level `GET /` navigation (`Sec-Fetch-Mode: navigate`, `Sec-Fetch-Dest: document`), which is how a kitchen's Lobby button reaches it from another `127.0.0.1` port. `/state` and `/open` stay same-origin only. Responses carry `no-store`, `nosniff`, `DENY` framing, `no-referrer`, a same-origin resource policy and a CSP with `connect-src 'self'`.
+
+Each `/state` row is `{ key, root, path, name, pies, slices, active, activePie, activeSlice, sessions, state, kitchenUrl }`:
+
+| Field | Value |
+|---|---|
+| `key`, `root`, `path` | The same realpath of the project's primary checkout. |
+| `name` | The registered name (the folder's basename). |
+| `pies`, `slices` | `{ done, total }` from the master checklist, read through the kitchen's own parser (never git, never a route scan). |
+| `active` | `null`, or `{ pie: { number, name }, slice: { number, name } \| null }` for the first active pie and its first active slice; `activePie` and `activeSlice` mirror it. |
+| `sessions` | How many of this project's session signals are under 24 hours old. |
+| `state` | `needs-you`, `active`, `done` or `inactive` (below). |
+| `kitchenUrl` | `http://127.0.0.1:<port>/` when the project's kitchen port file names a kitchen whose `/state` answers for this very root within 300 ms, else `null`. |
+
+**One state per project**, in priority order: **Needs you** when the Pass ledger holds an open HITL item (the same fold as `scripts/ledger-summary.js`, cached on the ledger's size and modification time) or any live signal is waiting on a permission or idle prompt; **Active** when any live signal is working or has subagents running; **Done** when the checklist has at least one pie and every pie is done; **Inactive** otherwise. A signal older than 24 hours is ignored, so a session that died without a `Stop` cannot pin a card for longer than that. Rows sort by that order, then by name. The page polls `/state` every three seconds while visible, keeps the last good list behind a "Lobby offline, retrying" strip, sets every string with `textContent`, and loads its fonts from Google Fonts (system fonts stand in without them).
+
+**Read-only, except starting a registered kitchen.** The lobby writes nothing in any project. Its one action is `POST /open`, behind a **path allowlist**: the realpath of the requested root must equal the realpath of a registry entry, so `/etc`, a registered root plus `/..`, or a symlink to an unregistered folder answers 404. It then calls the same `ensureKitchen` as `/open-kitchen` (reuse the project's matching kitchen or start one detached, which writes that project's own kitchen port file), one in-flight start per root so a double click spawns one kitchen, and accepts only a returned `http://127.0.0.1:<port>/`. The page navigates only to such a URL from `/state` or `/open`, adding `?lobby=<lobby port>`, plus `&idle=1` for an Inactive or Done card. Its one write to its own files: `GET /state` prunes registry rows whose folder is gone (below).
+
+### The registry and session signals
+
+[`hooks/lobby-signal.sh`](../hooks/lobby-signal.sh) is the only writer. Under `${BTS_HOME:-~/.bytheslice}`:
+
+| File | Shape |
+|---|---|
+| `projects.json` | `{"v":1,"projects":[{"root":"<abs primary checkout>","name":"<basename>","addedAt":<ms>}]}` |
+| `signals/<session id>.json` | `{"v":1,"sid":"<id>","root":"<abs primary checkout>","t":<ms>,"working":<bool>,"subagents":<int>,"waiting":null\|"permission"\|"idle"}` |
+
+`root` is the parent of `git rev-parse --git-common-dir` as a physical path, so **every worktree rolls up to its primary checkout** and concurrent sessions roll up into one card. Only a primary holding `docs/plans/00_master_checklist.md` or `bytheslice.config.json` counts; any other folder writes nothing. Events: `SessionStart` upserts the project (an existing root keeps its `addedAt`); `UserPromptSubmit` sets working and clears waiting; `SubagentStart` sets working and adds a subagent; `SubagentStop` removes one; `Stop` clears working and keeps waiting; `Notification` with `permission_prompt` or `idle_prompt` sets waiting, and any other notification writes nothing. Waiting therefore holds until the session's next prompt. Writes are atomic (temp file, then rename, mode 0600) under a `.lock` directory holding the writer's pid, reclaimed when that pid is gone.
+
+**Stale prune.** `SessionStart` drops registry rows whose folder is no longer a directory, deletes signals more than 7 days old and temp files more than an hour old. `GET /state` also drops rows whose folder is gone and rewrites `projects.json` under the same lock (it gives up after about 200 ms and the next poll tries again); a permission error keeps the row.
+
+**Cursor.** `hooks/hooks-cursor.json` runs the same script with `BTS_HOST=cursor` on `sessionStart`, `beforeSubmitPrompt`, `subagentStart`, `subagentStop` and `stop`, mapping the conversation id (the parent's on `subagentStart`) to the session and the first workspace root to the folder. Every run answers the JSON Cursor reads: `{"permission":"allow"}` on `subagentStart` (a permission hook), `{"continue":true}` on `beforeSubmitPrompt`, `{}` otherwise. Cursor has no Notification equivalent, so a Cursor session never shows Needs you from a prompt; only an open HITL item in a ledger written by a Claude Code session can mark its project.
+
+### Privacy limits
+
+The hook reads only `session_id`, `hook_event_name`, `notification_type` and `cwd` from the envelope (on Cursor, the conversation ids and the first workspace root). The files hold **absolute folder paths and derived facts only**: a basename, timestamps, working, a subagent count and the waiting kind. The prompt, any message, the last assistant message, tool data, transcript paths and environment values never reach a file; `hooks/test.sh` asserts it with a sentinel in every one of those fields. The lobby adds checklist titles and counts, and reads the ledger only to count open HITL items for the state; no ledger text is served. It serves all of it on `127.0.0.1` only, behind the checks above, so a foreign web page cannot read it; any local process on the machine can, as with the kitchen.
 
 ---
 
