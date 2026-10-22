@@ -869,6 +869,50 @@ else
   PASS=$((PASS+1)); printf '  ✓ sourced lib/checklist.sh never blocks\n'
 fi
 
+echo
+echo "## Cursor hooks (hooks-cursor.json)"
+
+# Cursor loads its own file: version 1, camelCase events, flat entries, and
+# ${CURSOR_PLUGIN_ROOT}, never ${CLAUDE_PLUGIN_ROOT} (which Cursor leaves empty).
+cursor_ok() { PASS=$((PASS+1)); printf '  ✓ %s\n' "$1"; }
+cursor_no() { FAIL=$((FAIL+1)); FAILED_NAMES+=("$1"); printf '  ✗ %s\n' "$1"; }
+CURSOR_HOOKS="$HERE/hooks-cursor.json"
+if python3 - "$CURSOR_HOOKS" "$HERE" <<'PY' >/dev/null 2>&1
+import json, os, re, sys
+d = json.load(open(sys.argv[1]))
+assert d["version"] == 1
+for event, entries in d["hooks"].items():
+    assert re.match(r"^[a-z]", event), event
+    for e in entries:
+        assert "hooks" not in e and "${CLAUDE_PLUGIN_ROOT}" not in e["command"]
+        script = re.search(r"\$\{CURSOR_PLUGIN_ROOT\}/hooks/([^\"]+)", e["command"]).group(1)
+        assert os.path.isfile(os.path.join(sys.argv[2], script)), script
+PY
+then cursor_ok "hooks-cursor.json is Cursor shaped and every script exists"; else cursor_no "hooks-cursor.json shape"; fi
+if grep -q '"hooks": "./hooks/hooks-cursor.json"' "$HERE/../.cursor-plugin/plugin.json"; then cursor_ok ".cursor-plugin/plugin.json points at hooks-cursor.json"; else cursor_no ".cursor-plugin/plugin.json hooks key"; fi
+
+# Cursor blocks a shell command whose hook prints no JSON or JSON off schema,
+# so every Cursor guard run must print a valid allow.
+cursor_allow() { # name, stdin, extra env assignment (may be empty), expect-substring
+  local out
+  out=$(cd "$FIX" && printf '%s' "$2" | env BTS_HOST=cursor $3 bash "$COMMIT_GUARD" 2>/dev/null)
+  if printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["permission"]=="allow"' 2>/dev/null \
+    && { [ -z "$4" ] || printf '%s' "$out" | grep -q "$4"; }; then cursor_ok "$1"; else cursor_no "$1 ($out)"; fi
+}
+FIX=$(mk_fixture)
+cursor_allow "cursor guard: commit on main allows and warns" "{\"command\":\"git commit -m x\",\"cwd\":\"$FIX\"}" "" "git commit on main"
+cursor_allow "cursor guard: non-commit allows" "{\"command\":\"ls\",\"cwd\":\"$FIX\"}" "" ""
+cursor_allow "cursor guard: disabled still allows" "{\"command\":\"git commit -m x\"}" "BTS_HOOKS_DISABLED=1" ""
+cursor_allow "cursor guard: unreadable input still allows" "not json" "" ""
+
+OUT=$(cd "$FIX" && env -u CLAUDE_PROJECT_DIR BTS_HOST=cursor bash "$SHOP_STATUS" </dev/null 2>/dev/null)
+if [ "$OUT" = "{}" ]; then cursor_ok "cursor shop-status: no checklist prints {}"; else cursor_no "cursor shop-status no checklist ($OUT)"; fi
+mkdir -p "$FIX/docs/plans"; printf '## Pie 1: A\n### Slice 1.1: B\n- [ ] x\n' > "$FIX/docs/plans/00_master_checklist.md"
+OUT=$(cd "$FIX" && env -u CLAUDE_PROJECT_DIR BTS_HOST=cursor bash "$SHOP_STATUS" </dev/null 2>/dev/null)
+if printf '%s' "$OUT" | python3 -c 'import json,sys; assert "bytheslice shop status" in json.load(sys.stdin)["additional_context"]' 2>/dev/null; then
+  cursor_ok "cursor shop-status: additional_context carries the header"; else cursor_no "cursor shop-status header ($OUT)"; fi
+rm -rf "$FIX"
+
 ####################################################################
 # Summary
 ####################################################################

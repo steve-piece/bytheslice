@@ -16,6 +16,17 @@ bts_root() {
   pwd
 }
 
+# Encode a string for a JSON string literal (no jq needed).
+json_str() {
+  local s="$1"
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\t'/\\t}
+  s=${s//$'\r'/}
+  s=${s//$'\n'/\\n}
+  printf '%s' "$s" | tr -d '\000-\010\013\014\016-\037'
+}
+
 # Path to the master checklist if it exists at the conventional location.
 # Empty string if missing.
 bts_checklist_path() {

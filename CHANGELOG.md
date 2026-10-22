@@ -13,6 +13,16 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [5.5.3] - 2026-10-21
+
+**Cursor gets hooks that actually fire.** Cursor matched none of the Claude Code event names in `hooks/hooks.json` and left `${CLAUDE_PLUGIN_ROOT}` empty, so every hook was a silent no-op there.
+
+### Fixed
+
+- **Cursor hooks.** A new `hooks/hooks-cursor.json` in Cursor's format (version 1, camelCase, flat entries, `${CURSOR_PLUGIN_ROOT}`), named by the `hooks` key of `.cursor-plugin/plugin.json`. It runs `shop-status.sh` on `sessionStart` (as `additional_context`) and `pre-commit-guard.sh` on `beforeShellExecution`. With `BTS_HOST=cursor` both scripts answer in Cursor's JSON, and the guard prints `{"permission":"allow"}` on every exit, because Cursor blocks a command whose hook prints no JSON. Clears the plugin audit's `cursor/hooks-claude-shape` and `cursor/claude-plugin-root-var` errors.
+
+---
+
 ## [5.5.2] - 2026-10-21
 
 **No box to carry when the pies are already served.** The Pass stops pointing at `/box-it-up` once there is nothing left to ship.
