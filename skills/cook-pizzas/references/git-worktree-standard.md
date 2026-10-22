@@ -9,17 +9,17 @@ The single source of truth for how ByTheSlice sets up, runs in, verifies, merges
 
 | Git term | Analogy | What it means here |
 |---|---|---|
-| `.git` object store (`$GIT_COMMON_DIR`) | the shared blueprint cabinet | one content-addressed store, shared by every worktree — `fetch` updates it for all of them at once |
+| `.git` object store (`$GIT_COMMON_DIR`) | the shared blueprint cabinet | one content-addressed store, shared by every worktree; `fetch` updates it for all of them at once |
 | Worktree (`$GIT_DIR`) | a private desk | its own `HEAD`, **its own index/`index.lock`**, its own working files |
 | Branch | the desk's nameplate | a branch can be checked out on **only one** desk at a time (git enforces this) |
 | Commit | a photo in the album | an immutable snapshot |
 | PR merge | filing into the main cabinet | the one place a branch's work enters shared `main` |
 
-Because each worktree has its own `index.lock`, N agents on N worktrees commit in parallel with **zero lock contention** — that is the whole reason worktrees beat one shared checkout for parallel work.
+Because each worktree has its own `index.lock`, N agents on N worktrees commit in parallel with **zero lock contention**: that is the whole reason worktrees beat one shared checkout for parallel work.
 
 ---
 
-## 1. ByTheSlice's worktree topology (read this first — it differs from the generic "swarm")
+## 1. ByTheSlice's worktree topology (read this first: it differs from the generic "swarm")
 
 The generic guidance is "one worktree per agent, merge each into main." ByTheSlice is **two-level**, and conflating them is the #1 mistake:
 
@@ -27,14 +27,14 @@ The generic guidance is "one worktree per agent, merge each into main." ByTheSli
 |---|---|---|
 | **One worktree per Pie** | ✅ the standard | `/sell-pie` cuts `pie-<n>-<scope>` into **one** worktree. Its slices run **sequentially** in that worktree, *not* one worktree per slice (except in merge-per-slice mode, next row). `/sell-slice` (standalone) cuts one worktree for its one slice. |
 | **One worktree per Slice** | merge-per-slice mode only | When `delivery.mode` resolves to `merge-per-slice` (opt-in), each slice gets its own branch `pie-N-sN.M-<scope>` cut from fresh `origin/main` into its own worktree, merges through its own PR, and is removed before the next slice is cut. Still one worktree at a time: slices stay sequential. |
-| **One worktree per agent** (`isolation:'worktree'`) | ⚠️ escape hatch only | Use **only** when a `Workflow` runs agents **in parallel that mutate overlapping files**. Most ByTheSlice fan-out is **disjoint-file** (each agent owns distinct paths) and needs **no** isolation — the migration Workflow and `cook-pizzas`' plan-writers prove it. Worktree-per-agent costs disk + setup; don't pay it unless writes would actually collide. |
+| **One worktree per agent** (`isolation:'worktree'`) | ⚠️ escape hatch only | Use **only** when a `Workflow` runs agents **in parallel that mutate overlapping files**. Most ByTheSlice fan-out is **disjoint-file** (each agent owns distinct paths) and needs **no** isolation; the migration Workflow and `cook-pizzas`' plan-writers prove it. Worktree-per-agent costs disk + setup; don't pay it unless writes would actually collide. |
 | **Merge** | pie branch → `main`, one PR | There are **no** sub-worktree→pie merges. Slices commit to the pie branch; the **pie branch** merges to `main` via one PR at the boundary (`/box-it-up`). In merge-per-slice mode, each **slice branch** merges to `main` via its own PR with a merge commit on green CI. Never an integration branch. |
 
 > Decision rule: **disjoint files → no isolation, just a file-ownership partition. Overlapping files in parallel → `isolation:'worktree'`. Sequential → the shared pie worktree.**
 
 ---
 
-## 2. Phase 1 — Setup (the Dispatcher)
+## 2. Phase 1: Setup (the Dispatcher)
 
 **Invariant: a worktree is ALWAYS cut from the freshly-fetched remote `main`, never from local `main`.** Local `main` can be stale; cutting from it silently bases new work on an old tree.
 
@@ -48,7 +48,7 @@ git worktree add -b pie-<n>-<scope> <path> origin/main      # cut from the REMOT
 - **Path convention:** sibling worktrees under the session's worktree root (e.g. `.claude/worktrees/<name>`), never nested inside the main checkout.
 - Never create a worktree on, or commit directly to, `main`/`master`.
 
-## 3. Phase 2 — Run (the Swarm)
+## 3. Phase 2: Run (the Swarm)
 
 - **1:1 agent:worktree for parallel mutating work.** An agent's uncommitted edits are physically invisible to siblings, so a reviewer/tester agent reasons only from the artifact + spec, never the builder's half-finished state. This is the filesystem half of ByTheSlice's context-separation.
 - **Selective staging.** Stage only the files this task owns (`git add <paths>`), never `git add -A` blindly, so the commit stays scoped to the task.
@@ -56,12 +56,12 @@ git worktree add -b pie-<n>-<scope> <path> origin/main      # cut from the REMOT
 - **Clean up right after every merge,** from the primary checkout (§4): remove the merged branch's worktree and delete the branch, local and remote.
 - **⚠️ The Runtime Isolation Gap (the collision worktrees do NOT prevent).** Worktrees isolate *files*, not *the building's utilities*. Two agents will still collide on a shared **dev-server port** or a shared **database**. ByTheSlice mitigations, mandatory whenever work runs in parallel:
   - **Ports:** derive the dev-server / preview port from the worktree (offset per worktree), never hardcode `3000`. The `slice-tester` boots the dev server for the worktree it was handed; parallel pies must not share a port.
-  - **Database:** the `slice-tester` seeds the **dev** DB. Its safeguards are exactly the collision fix and are non-negotiable — (a) the **non-prod guard** blocks any non-local/dev target (`destructive_operation` HITL), (b) every seeded row carries a unique **`bts_test_run_id`** marker so parallel runs never read/delete each other's data, (c) the **paired cleanup script runs in a finally block** and a residue check asserts the run's own marker is gone. Seeding must be keyed to the run, not the table.
+  - **Database:** the `slice-tester` seeds the **dev** DB. Its safeguards are exactly the collision fix and are non-negotiable: (a) the **non-prod guard** blocks any non-local/dev target (`destructive_operation` HITL), (b) every seeded row carries a unique **`bts_test_run_id`** marker so parallel runs never read/delete each other's data, (c) the **paired cleanup script runs in a finally block** and a residue check asserts the run's own marker is gone. Seeding must be keyed to the run, not the table.
 
-## 4. Phase 3 — Verify · Merge · Cleanup (the Inspector)
+## 4. Phase 3: Verify · Merge · Cleanup (the Inspector)
 
 - **Verify against the spec, not the author.** A separate agent compares the staged diff against the slice's Exit criteria / the living spec (the `slice-tester` + `slice-verifier` independence). Drift is caught here, before the work enters `main`.
-- **Merge = pie branch → `main` via one PR, preserving per-slice commits** (default `pie-pr` mode). Use `--rebase`/merge-commit, **never `--squash`** for a pie (PR = Pie, commit = Slice; squashing destroys that mapping). Sync `main` with `--ff-only` after. This is where silent overwrites become normal, resolvable git conflicts.
+- **Merge = pie branch → `main` via one PR, preserving per-slice commits** (default `pie-pr` mode). Use `--rebase`/merge-commit, **never `--squash`** for a pie (PR = Pie, commit = Slice; squashing destroys that mapping). A branch holding an empty commit (a slice close made with `--allow-empty`) always takes a merge commit, because GitHub's rebase-merge drops empty commits; `/box-it-up`'s `pick-merge-strategy.js` decides. Sync `main` with `--ff-only` after. This is where silent overwrites become normal, resolvable git conflicts.
 - **Merge-per-slice mode:** slice branch → `main` via one PR per slice, merged on green CI with a **merge commit** (`gh pr merge --merge`; never squash, never rebase). If the repo disallows merge commits, halt and ask. The next slice is cut from the freshly synced `main`.
 - **Cleanup runs from the primary checkout, in this order** (`PRIMARY=$(git worktree list --porcelain | sed -n '1s/^worktree //p')`). `main` is checked out there, so `git checkout main` inside a worktree fails, and git refuses to delete a branch a worktree still holds:
   ```bash
@@ -90,11 +90,11 @@ git worktree add -b pie-<n>-<scope> <path> origin/main      # cut from the REMOT
 
 `/box-it-up` composes the boundary PR body from this shape (the per-slice closing-narrative paragraphs aggregate into it):
 
-- **Context** — link to the spec / Pie; why this change exists from a product POV.
-- **Description** — the technical *why* and *how*; what steps were taken.
-- **Changes in codebase** — modified functions, refactors, new logic.
-- **Changes outside codebase** — infra, DB/migrations, external API / env changes.
-- **Additional information** — design choices, performance considerations, and **rejected alternatives**.
+- **Context**: link to the spec / Pie; why this change exists from a product POV.
+- **Description**: the technical *why* and *how*; what steps were taken.
+- **Changes in codebase**: modified functions, refactors, new logic.
+- **Changes outside codebase**: infra, DB/migrations, external API / env changes.
+- **Additional information**: design choices, performance considerations, and **rejected alternatives**.
 
 ## 7. When the primitive is unavailable (Cursor / no `Workflow`)
 
