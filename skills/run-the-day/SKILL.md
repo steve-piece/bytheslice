@@ -47,8 +47,6 @@ The pie-boundary checkpoint (the one kept HITL, §1.8) lives **inside** each `/s
 | Per Pie | Invoke [`/sell-pie`](../sell-pie/SKILL.md) for the active Pie | `/sell-pie` skill (not a subagent of this skill) |
 | Pie boundary | PR · CI · merge · cleanup | [`/box-it-up`](../box-it-up/SKILL.md), called by `/sell-pie` |
 
-> **Deprecated agents.** The v4 [`agents/stage-runner.md`](agents/stage-runner.md) and [`agents/pr-reviewer.md`](agents/pr-reviewer.md) are retained for v4 back-compat through 5.1 but are **no longer dispatched**. `/sell-pie` supersedes the stage-runner's per-stage wrapper role, and `/box-it-up`'s single-PR CI watch + the `slice-verifier`'s CI-integrity check supersede the pr-reviewer's post-merge sanity pass. See each file's deprecation note.
-
 ## Inputs and Preconditions
 
 > This skill checks its own preconditions inline at the start, via tools (checklist exists, clean synced `main`, `gh auth status`). If one fails, raise the problem to the operator as a question with a recommended next step, never a refusal; a flat checklist is handled by Mode detection above. If the master checklist is missing, ask (AskUserQuestion, Accept or Decline) whether to set up ByTheSlice. Never narrate passing checks in chat. No ByTheSlice hook blocks a prompt.

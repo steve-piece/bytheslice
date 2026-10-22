@@ -262,7 +262,6 @@ At the boundary, list every slice's `slice-verifier` `warnings` in one block (th
 - **One worktree per pie (default) or per slice (merge-per-slice); never bake on `main`.** The pie branch lives in its own worktree and `/box-it-up` removes it at the boundary. In merge-per-slice mode each slice branch gets its own worktree, removed from the primary checkout right after that slice merges; the conductor itself sits on `main` only between slices and never builds there.
 - **Workflow / loop / goal unavailable → fall back, never drop.** In-context dispatch with orchestrator-side manual schema validation when `Workflow` is absent (`loop-workflow-fallback-pattern.md`); self-pace over ≤8 slices when `/loop` is absent; manual goal-tracking when `/goal` is absent (`goal-fallback-pattern.md`).
 - **Subagent prompts live in `./agents/*.md` (under `/sell-slice`).** This SKILL.md is loop logic only - never inline a subagent prompt here.
-- **Deprecated agents are never live-dispatched.** `basic-checks-runner`, `aggregating-test-reviewer`, `ci-cd-guardrails`, and `frontend/visual-reviewer` are v4 shims; route through `slice-tester` / `slice-verifier`.
 - **Always provide a recommended answer in available options** at every elicitation point the conductor surfaces.
 
 ---

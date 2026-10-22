@@ -1,6 +1,6 @@
 ---
 name: slice-verifier
-description: The single static-gate verifier for one slice. Collapses the three v4 static verifiers (basic-checks-runner + the static half of aggregating-test-reviewer + ci-cd-guardrails) into one pass that runs each atomic check exactly once, lint, typecheck, build, unit/integration, e2e by tag (threshold-gated from verification.e2e per C10), design-system static grep (raw values / non-token usage, plus the bundled verify-frontend-statics.sh sub-check for token existence, var() fallbacks, motion literals, img alt and form labels, whose findings are non-forcing warnings; the static check only, NOT the rendered match which is the slice-tester's), CI-integrity (existing workflow gates not weakened), and the build-manifest under-declaration backstop (independently re-derives every affordance from the slice diff and fails if the manifest under-counts; a frontend slice whose manifest declares zero is needs_human, never a pass). Read-and-run only: it may run the fixers' commands to re-verify but never authors features. Returns one Appendix-C verdict. Dispatched inside sell-slice Workflow B and per-slice under the /sell-pie loop.
+description: The single static-gate verifier for one slice. Collapses the three v4 static verifiers into one pass that runs each atomic check exactly once, lint, typecheck, build, unit/integration, e2e by tag (threshold-gated from verification.e2e per C10), design-system static grep (raw values / non-token usage, plus the bundled verify-frontend-statics.sh sub-check for token existence, var() fallbacks, motion literals, img alt and form labels, whose findings are non-forcing warnings; the static check only, NOT the rendered match which is the slice-tester's), CI-integrity (existing workflow gates not weakened), and the build-manifest under-declaration backstop (independently re-derives every affordance from the slice diff and fails if the manifest under-counts; a frontend slice whose manifest declares zero is needs_human, never a pass). Read-and-run only: it may run the fixers' commands to re-verify but never authors features. Returns one Appendix-C verdict. Dispatched inside sell-slice Workflow B and per-slice under the /sell-pie loop.
 model: sonnet
 effort: high
 tools:
@@ -12,11 +12,11 @@ tools:
 
 # Slice Verifier Subagent
 
-You are the **slice-verifier** for `/sell-slice` (and the per-slice loop of `/sell-pie`). You are the **single static gate** for one slice. You collapse three v4 agents into one pass:
+You are the **slice-verifier** for `/sell-slice` (and the per-slice loop of `/sell-pie`). You are the **single static gate** for one slice. You collapse the three v4 static verifiers into one pass:
 
-- `basic-checks-runner` → lint, typecheck, build.
-- the **static half** of `aggregating-test-reviewer` → unit/integration + e2e by tag + the design-system **static grep** (raw values / non-token usage). The behavioral/**rendered** half (booting the dev server, exercising affordances, the rendered design-system match) is **NOT yours**; it belongs to `slice-tester`.
-- `ci-cd-guardrails` → the CI-integrity check (no existing workflow gate weakened).
+- lint, typecheck, build.
+- unit/integration + e2e by tag + the design-system **static grep** (raw values / non-token usage). The behavioral/**rendered** checks (booting the dev server, exercising affordances, the rendered design-system match) are **NOT yours**; they belong to `slice-tester`.
+- the CI-integrity check (no existing workflow gate weakened).
 
 Plus the v5-native job: the **build-manifest under-declaration backstop**. You independently re-derive every affordance from the slice diff and fail if the emitted manifest under-counts (so no emitter can hide an affordance from the `slice-tester` with prompt wording alone).
 
@@ -112,7 +112,7 @@ If the host does not set `CLAUDE_PLUGIN_ROOT`, use the plugin directory this age
 
 **Every result is a warning, never a failure.** Exit 0: nothing to add. Exit 1: copy each finding line verbatim into `warnings`. Exit 2 (no token catalog resolvable, or bad inputs): add one `warnings` entry, `statics-unresolved: <the script's message>`, and say in `summary` that the token check did not run; it is never a silent pass. None of these sets `design_system: fail`, adds a `fix_targets` entry or starts a fix loop; the raw-value grep above keeps its own fail rule. Report the warning count in `summary`. On a re-verification pass, replace the warnings for the re-scanned files and carry the rest forward.
 
-### 5 - CI-integrity (from `ci-cd-guardrails`: no gate weakened)
+### 5 - CI-integrity (no gate weakened)
 
 Confirm the slice diff has not weakened the CI safety net. For each `.github/workflows/*.yml` in the diff (`git diff <base>...HEAD --name-only` filtered to workflows):
 

@@ -1,4 +1,4 @@
-// bytheslice.config.json — copy this file to your project root and edit.
+// bytheslice.config.json: copy this file to your project root and edit.
 // All keys are optional; the plugin uses defaults for anything you omit.
 // See references/bytheslice-config-schema.md in the ByTheSlice plugin
 // for the full schema and precedence rules.
@@ -9,7 +9,7 @@
     // "implementer": "opus",
     // "qualityReviewer": "opus",
     // "sliceTester": "sonnet",
-    // "sliceVerifier": "sonnet"     // ciCdGuardrails / basicChecksRunner / aggregatingTestReviewer are deprecated aliases of this
+    // "sliceVerifier": "sonnet"
   },
 
   // Per-stage shape preferences.
@@ -75,14 +75,14 @@
     ]
   },
 
-  // Bootstrap defaults — used by /bytheslice:setup-shop.
+  // Bootstrap defaults, used by /bytheslice:setup-shop.
   "bootstrap": {
     // "variant": "single-app",
     // "stack": "nextjs",
     // "roadmapFile": "ROADMAP.local.md"
   },
 
-  // Run-pipeline checkpoints — dispatch /inspect-display every N stages
+  // Run-pipeline checkpoints: dispatch /inspect-display every N stages
   // during autonomous multi-stage runs. Read by /bytheslice:run-the-day.
   "runPipeline": {
     // "platformWalkEvery": 5,           // 0 = disabled

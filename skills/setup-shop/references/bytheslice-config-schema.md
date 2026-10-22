@@ -39,16 +39,12 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
     "discovery": "haiku",
     "sliceTester": "sonnet",      // v5, independent behavioral tester
     "sliceVerifier": "sonnet",    // v5, collapsed static-gate verifier
-    "ciCdGuardrails": "sonnet",   // deprecated alias of sliceVerifier (through 5.1)
     "checklistCurator": "sonnet",
-    "stageRunner": "opus",
-    "prReviewer": "sonnet",
     "modernUxExpert": "sonnet",
     "layoutArchitect": "sonnet",
     "blockComposer": "sonnet",
     "componentCrafter": "sonnet",
     "stateIllustrator": "sonnet",
-    "visualReviewer": "sonnet",   // deprecated v4 shim, never dispatched; the rendered review is sliceTester's
     "tokenExpander": "opus",
     "bundleValidator": "sonnet",
     "compliancePreCheck": "sonnet",
@@ -159,7 +155,7 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
 
 Maps agent name → tier alias. Agent names use camelCase (e.g. `qualityReviewer`, `sliceVerifier`). Values must be one of `"haiku" | "sonnet" | "opus"`. Unknown agent names are ignored (with a one-line warning at session start).
 
-The v5 verification agents are `sliceTester` (independent behavioral tester) and `sliceVerifier` (collapsed static-gate verifier). The legacy keys `ciCdGuardrails`, `basicChecksRunner`, and `aggregatingTestReviewer` are **deprecated aliases of `sliceVerifier`** (retained through 5.1 for v4 back-compat); setting any of them is equivalent to setting `sliceVerifier`. See [`model-tier-guide.md`](./model-tier-guide.md) for the full per-agent table and the deprecation mapping.
+The v5 verification agents are `sliceTester` (independent behavioral tester) and `sliceVerifier` (collapsed static-gate verifier). See [`model-tier-guide.md`](./model-tier-guide.md) for the full per-agent table.
 
 Why use this instead of the env vars: env vars override the tier *globally* (every agent typed `opus` becomes the same model). Config overrides individual agent assignments. They compose: env vars handle the alias resolution, the config picks which alias each agent uses.
 

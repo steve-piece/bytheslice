@@ -208,7 +208,7 @@ One question per top-level config section. Multi-select where multiple apply, si
 > "How do you want to handle per-agent model tier assignments? Each agent has a default tier per [`skills/setup-shop/references/model-tier-guide.md`](references/model-tier-guide.md). Most projects don't need overrides."
 > single_select: ["Use plugin defaults (recommended)", "I'll edit the modelTiers block manually after generation"]
 
-If "Use plugin defaults": leave `modelTiers: {}` in the generated file. If "edit manually": leave `modelTiers: {}` plus a comment block listing the most-overridden agents (`implementer`, `qualityReviewer`, `ciCdGuardrails`) for the user to fill in.
+If "Use plugin defaults": leave `modelTiers: {}` in the generated file. If "edit manually": leave `modelTiers: {}` plus a comment block listing the most-overridden agents (`implementer`, `qualityReviewer`, `sliceVerifier`) for the user to fill in.
 
 **Q-stages**
 > "Use the default stage shape (6 tasks max per stage, target 20 to 30 feature stages)? The defaults work for most projects. Lower the task cap for tighter slices; raise the stage band for finer-grained splits."
@@ -290,7 +290,7 @@ If any marker is missing, set `ci_cd_ready: false` and ask the user.
 If "Yes": print *"Run `/bytheslice:final-quality-check` next; it will run on a dedicated `chore/final-quality-check` branch and open a PR. Once that PR merges, return here and run `/bytheslice:special-order` (or `/bytheslice:create-menu` for a full PRD-to-app run)."*
 
 If "No": warn the user and continue:
-> ⚠️ **Without the CI/CD baseline:** `/bytheslice:sell-slice`'s Phase 8 (CI/CD guardrails) will likely fail because the `ci-cd-guardrails` agent expects the baseline workflows to exist. You can still run `/bytheslice:sell-slice`, but you'll need to manually wire equivalent gates in your own CI for the per-stage `@visual` and `design-system-compliance` checks. To re-enable the offer later, delete `.bytheslice/.skip-ci-cd` and re-run `/bytheslice:setup-shop`.
+> ⚠️ **Without the CI/CD baseline:** the PR has no baseline workflows for CI to run, so nothing re-checks the slice gates at the PR. You can still run `/bytheslice:sell-slice`, but you'll need to manually wire equivalent gates in your own CI for the per-stage `@visual` and `design-system-compliance` checks. To re-enable the offer later, delete `.bytheslice/.skip-ci-cd` and re-run `/bytheslice:setup-shop`.
 
 If the user chose "No": create a sentinel file `.bytheslice/.skip-ci-cd` so future `/bytheslice:setup-shop` runs skip Q-ci-cd-baseline.
 

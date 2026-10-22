@@ -34,9 +34,6 @@ The table below reflects the **actual current values** in each agent file. Where
 | **set-display-case** | token-expander | `opus` | high | no |
 | **open-the-shop** | env-verifier | `haiku` | low | no |
 | **sell-slice** | checklist-curator | `sonnet` | medium | yes |
-| **sell-slice** | ci-cd-guardrails *(deprecated → slice-verifier)* | `sonnet` | medium | yes |
-| **sell-slice** | basic-checks-runner *(deprecated → slice-verifier)* | `haiku` | low | no |
-| **sell-slice** | aggregating-test-reviewer *(deprecated → slice-verifier)* | `sonnet` | high | no |
 | **sell-slice** | discovery | `haiku` | medium | yes |
 | **sell-slice** | implementer | `opus` | xhigh | no |
 | **sell-slice** | quality-reviewer | `opus` | high | yes |
@@ -48,16 +45,13 @@ The table below reflects the **actual current values** in each agent file. Where
 | **sell-slice** (frontend) | layout-architect | `sonnet` | medium | no |
 | **sell-slice** (frontend) | modern-ux-expert | `sonnet` | medium | no |
 | **sell-slice** (frontend) | state-illustrator | `sonnet` | medium | no |
-| **sell-slice** (frontend) | visual-reviewer *(deprecated shim, never dispatched; rendered review is slice-tester's)* | `sonnet` | medium | yes |
 | **special-order** | complexity-assessor | `sonnet` | medium | yes |
 | **special-order** | phased-plan-writer (incremental mode) | `sonnet` | medium | no |
-| **run-the-day** | pr-reviewer | `sonnet` | medium | yes |
-| **run-the-day** | stage-runner | `opus` | high | no |
 | **close-shop** | retrospective-reviewer | `opus` | high | no |
 
 > **Note on `close-shop`:** The `retrospective-reviewer` agent is experimental. Its model and effort assignments are fixed as documented above.
 
-> **v5 verification agents + deprecated aliases.** v5 splits per-slice verification into two singular-goal agents: `slice-tester` (independent behavioral/rendered testing, `sonnet/high`) and `slice-verifier` (all static gates run once: lint, typecheck, build, unit/integration, tagged e2e, design-system grep, CI-integrity, and the manifest under-declaration backstop; `sonnet/high`). The `slice-verifier` collapses three v4 agents: **`basic-checks-runner`**, the static half of **`aggregating-test-reviewer`**, and **`ci-cd-guardrails`**. Those three are **deprecated aliases of `slice-verifier`** in `modelTiers` and are retained as shimmed agent files for v4 back-compat through **5.1**: setting any of their camelCase keys (`basicChecksRunner`, `aggregatingTestReviewer`, `ciCdGuardrails`) resolves to `sliceVerifier`. Their rows above show the legacy assignments the shims still carry. `visual-reviewer` is a fourth deprecated shim: its rendered review folded into `slice-tester`, and it is never dispatched.
+> **v5 verification agents.** v5 splits per-slice verification into two singular-goal agents: `slice-tester` (independent behavioral/rendered testing, `sonnet/high`) and `slice-verifier` (all static gates run once: lint, typecheck, build, unit/integration, tagged e2e, design-system grep, CI-integrity, and the manifest under-declaration backstop; `sonnet/high`). The `slice-verifier` replaces the three v4 static verifiers, and the v4 rendered visual review now lives in `slice-tester`.
 
 Aliases (`haiku`, `sonnet`, `opus`) resolve to:
 
@@ -105,8 +99,7 @@ The plugin intentionally invests heavier compute on agents that PRODUCE or VERIF
 
 - The `implementer` (the primary code writer) runs at the deepest tier with the highest effort budget. It is assigned `opus/xhigh` (above the spec default of `opus/high`) because implementation quality directly determines rework cost.
 - The `quality-reviewer` (the gate that catches what the implementer missed) runs at deep tier with high effort (`opus/high`). This is a user override from the spec default of `sonnet/medium`: the reasoning is that a Sonnet reviewer applied to Opus output would miss subtle issues that only a model of equal depth can catch.
-- The `slice-verifier` runs at balanced tier with high effort (`sonnet/high`). It is the single gate that runs every static check once, so it must reason about precedence and environment interaction (subtle CI-config or design-system violations missed here are expensive to debug downstream) without burning Opus budget on otherwise deterministic checks. This inherits the rationale that kept the now-deprecated `ci-cd-guardrails` on `sonnet` (NOT `haiku/low` as the original spec assigned); the deprecated `basic-checks-runner` (`haiku/low`) and `aggregating-test-reviewer` (`sonnet/high`) fold into it.
+- The `slice-verifier` runs at balanced tier with high effort (`sonnet/high`). It is the single gate that runs every static check once, so it must reason about precedence and environment interaction (subtle CI-config or design-system violations missed here are expensive to debug downstream) without burning Opus budget on otherwise deterministic checks. This inherits the rationale that kept the v4 CI-integrity gate on `sonnet` (NOT `haiku/low` as the original spec assigned).
 - The `slice-tester` runs at balanced tier with high effort (`sonnet/high`). It writes and reasons over a bespoke behavioral plan, drives a browser, and (for data-flow slices) authors seed/cleanup scripts under a hard non-prod guard, judgment-heavy work that nonetheless does not author features, so balanced tier fits.
 - Pure scan-and-list agents (`env-verifier`, `discovery`) stay on the fast tier; judgment is cheap there.
 - The `token-expander` in `set-display-case` runs at deep tier (`opus/high`) because brand token expansion is a genuinely creative act; the output constrains the entire visual system.
-- The `stage-runner` in `run-the-day` runs at deep tier (`opus/high`) because it coordinates full stage execution and must reason across multiple agent outputs.
