@@ -831,6 +831,283 @@ EOF
 fi
 
 ####################################################################
+# lobby-signal.sh
+####################################################################
+
+echo
+echo "## lobby-signal.sh"
+
+# Every case runs against a fixture HOME and a temp BTS_HOME, so the real
+# ~/.bytheslice is never read or written.
+LOBBY_SIGNAL="$HERE/lobby-signal.sh"
+LOBBY_NODE=$(command -v node || true)
+LOBBY_BASH=$(command -v bash)
+if [ -z "$LOBBY_NODE" ]; then
+  FAIL=$((FAIL+1)); FAILED_NAMES+=("lobby tests require Node.js")
+  printf '  ✗ lobby tests require Node.js\n'
+else
+  LOBBY_BAD=""
+  LOBBY_ROOT=""
+  LOBBY_EXPECT=""
+
+  # Judge the lobby home with a JS expression over: projects (parsed
+  # projects.json, null when absent or damaged), sig(id) (a parsed signal),
+  # raw(p) (a file's text, null when absent), mode(p) (permission bits),
+  # files (every file under the home, relative), exists(p), root
+  # ($LOBBY_ROOT) and expect ($LOBBY_EXPECT). A run that exited non-zero or
+  # printed since the last assertion fails it too.
+  LOBBY_JS='
+    const fs = require("fs"), path = require("path"), home = process.argv[1], expr = process.argv[2];
+    const root = process.env.LOBBY_ROOT, expect = process.env.LOBBY_EXPECT;
+    const raw = (p) => { try { return fs.readFileSync(path.join(home, p), "utf8"); } catch (e) { return null; } };
+    const parse = (p) => { try { return JSON.parse(raw(p)); } catch (e) { return null; } };
+    const exists = (p) => fs.existsSync(path.join(home, p));
+    const mode = (p) => fs.statSync(path.join(home, p)).mode & 0o777;
+    const sig = (id) => parse("signals/" + id + ".json");
+    const walk = (d) => fs.readdirSync(path.join(home, d), { withFileTypes: true })
+      .flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
+    const files = fs.existsSync(home) ? walk("") : [];
+    const projects = parse("projects.json");
+  '
+  lobby_assert() {
+    local name="$1" expression="$2" out
+    out=$(LOBBY_ROOT="$LOBBY_ROOT" LOBBY_EXPECT="$LOBBY_EXPECT" "$LOBBY_NODE" -e "$LOBBY_JS"'
+      try { if (!eval(expr)) process.exit(1); } catch (e) { console.error(e.message); process.exit(1); }
+    ' "$LOBBY_HOME" "$expression" 2>&1)
+    if [ "$?" = 0 ] && [ -z "$LOBBY_BAD" ]; then
+      PASS=$((PASS+1)); printf '  ✓ %s\n' "$name"
+    else
+      FAIL=$((FAIL+1)); FAILED_NAMES+=("$name"); printf '  ✗ %s %s%s\n' "$name" "$out" "$LOBBY_BAD"
+    fi
+    LOBBY_BAD=""
+  }
+  # The value of a JS expression over the same context.
+  lobby_val() {
+    LOBBY_ROOT="$LOBBY_ROOT" "$LOBBY_NODE" -e "$LOBBY_JS"'
+      try { process.stdout.write(String(eval(expr))); } catch (e) { process.stdout.write("error"); }
+    ' "$LOBBY_HOME" "$1" 2>/dev/null
+  }
+
+  # Run the hook as Claude Code would: it must exit 0 and print nothing.
+  # Args: payload, then extra env assignments.
+  lobby_run() {
+    local payload="$1"
+    shift
+    LAST_OUT=$(printf '%s' "$payload" | env PATH="$LOBBY_PATH" HOME="$LOBBY_FAKE_HOME" BTS_HOME="$LOBBY_HOME" "$@" "$LOBBY_BASH" "$LOBBY_SIGNAL" 2>&1)
+    LAST_EXIT=$?
+    if [ "$LAST_EXIT" != 0 ] || [ -n "$LAST_OUT" ]; then
+      LOBBY_BAD="$LOBBY_BAD [exit=$LAST_EXIT out=$LAST_OUT]"
+    fi
+  }
+  # Run the hook as Cursor would: it must exit 0 and print exactly the answer,
+  # as valid JSON. Args: payload, the expected answer, then extra env.
+  lobby_cursor() {
+    local payload="$1" want="$2"
+    shift 2
+    LAST_OUT=$(printf '%s' "$payload" | env PATH="$LOBBY_PATH" HOME="$LOBBY_FAKE_HOME" BTS_HOME="$LOBBY_HOME" BTS_HOST=cursor "$@" "$LOBBY_BASH" "$LOBBY_SIGNAL" 2>&1)
+    LAST_EXIT=$?
+    if [ "$LAST_EXIT" != 0 ] || [ "$LAST_OUT" != "$want" ] ||
+        ! printf '%s' "$LAST_OUT" | "$LOBBY_NODE" -e 'JSON.parse(require("fs").readFileSync(0, "utf8"))' 2>/dev/null; then
+      LOBBY_BAD="$LOBBY_BAD [cursor exit=$LAST_EXIT out=$LAST_OUT want=$want]"
+    fi
+  }
+  # A Claude Code envelope. Args: event, session id, cwd, extra JSON members.
+  lobby_env() {
+    printf '{"hook_event_name":"%s","session_id":"%s","cwd":%s%s}' "$1" "$2" "$(json_str "$3")" "${4:+,$4}"
+  }
+
+  # The parser-free PATH: the node engine sees only these utilities.
+  LOBBY_BINS=$(mktemp -d)
+  for utility in bash cat dirname git mkdir mktemp mv rm rmdir chmod find sleep; do
+    ln -s "$(command -v "$utility")" "$LOBBY_BINS/$utility"
+  done
+  ln -s "$LOBBY_NODE" "$LOBBY_BINS/node"
+
+  for ENGINE in jq node; do
+    if [ "$ENGINE" = jq ]; then
+      command -v jq >/dev/null 2>&1 || continue
+      LOBBY_PATH=$PATH
+    else
+      LOBBY_PATH=$LOBBY_BINS
+    fi
+    L="lobby $ENGINE:"
+    LOBBY_HOME=$(mktemp -d)
+    LOBBY_FAKE_HOME=$(mktemp -d)
+    FIX=$(mk_fixture)
+    mkdir -p "$FIX/docs/plans"
+    printf '## Pie 1: A\n### Slice 1.1: B\n' > "$FIX/docs/plans/00_master_checklist.md"
+    WT="$FIX/.claude/worktrees/wt"
+    git -C "$FIX" worktree add -q -b feat/lobby "$WT"
+    # Physical path: the hook resolves /var to /private/var on macOS.
+    LOBBY_ROOT=$(cd "$FIX" && pwd -P)
+
+    lobby_run "$(lobby_env SessionStart s-start "$FIX" '"source":"startup"')"
+    lobby_assert "$L SessionStart registers the primary" 'Object.keys(projects).join() === "v,projects" && projects.v === 1 && projects.projects.length === 1 && Object.keys(projects.projects[0]).join() === "root,name,addedAt" && projects.projects[0].root === root && projects.projects[0].name === path.basename(root) && Number.isInteger(projects.projects[0].addedAt) && mode("projects.json") === 0o600 && files.join() === "projects.json"'
+
+    # Pin addedAt, so a re-added row (a fresh timestamp) cannot pass.
+    "$LOBBY_NODE" -e 'const fs=require("fs"),f=process.argv[1],d=JSON.parse(fs.readFileSync(f,"utf8"));d.projects[0].addedAt=1000;fs.writeFileSync(f,JSON.stringify(d))' "$LOBBY_HOME/projects.json"
+    lobby_run "$(lobby_env SessionStart s-wt "$WT")"
+    lobby_assert "$L a linked worktree rolls up to one row" 'projects.projects.length === 1 && projects.projects[0].root === root && projects.projects[0].addedAt === 1000'
+
+    GONE=$(mk_fixture)
+    printf '{}\n' > "$GONE/bytheslice.config.json"
+    lobby_run "$(lobby_env SessionStart s-gone "$GONE")"
+    lobby_assert "$L a bytheslice.config.json project registers too" 'projects.projects.length === 2 && projects.projects[1].root !== root'
+    rm -rf "$GONE"
+    lobby_run "$(lobby_env SessionStart s-start "$FIX")"
+    lobby_assert "$L a vanished project folder is pruned" 'projects.projects.length === 1 && projects.projects[0].root === root && projects.projects[0].addedAt === 1000'
+
+    PLAIN=$(mk_fixture)
+    NOGIT=$(mktemp -d)
+    mkdir -p "$NOGIT/docs/plans"
+    printf '## Pie 1: A\n' > "$NOGIT/docs/plans/00_master_checklist.md"
+    lobby_run "$(lobby_env SessionStart s-plain "$PLAIN")"
+    lobby_run "$(lobby_env SessionStart s-nogit "$NOGIT")"
+    lobby_run "$(lobby_env UserPromptSubmit s-plain "$PLAIN")"
+    lobby_run "$(lobby_env UserPromptSubmit s-nogit "$NOGIT")"
+    lobby_assert "$L a non-ByTheSlice repo is not registered" 'projects.projects.length === 1 && projects.projects[0].root === root && sig("s-plain") === null && sig("s-nogit") === null'
+    rm -rf "$PLAIN" "$NOGIT"
+
+    lobby_run "$(lobby_env UserPromptSubmit s-1 "$WT" '"prompt":"hello"')"
+    lobby_assert "$L UserPromptSubmit sets working" 'const s = sig("s-1"); Object.keys(s).join() === "v,sid,root,t,working,subagents,waiting" && s.v === 1 && s.sid === "s-1" && s.root === root && Number.isInteger(s.t) && s.t > 1e12 && s.working === true && s.subagents === 0 && s.waiting === null && mode("signals/s-1.json") === 0o600'
+
+    lobby_run "$(lobby_env SubagentStart s-2 "$WT" '"agent_type":"bytheslice:implementer","agent_id":"a-1"')"
+    lobby_run "$(lobby_env SubagentStart s-2 "$WT" '"agent_type":"bytheslice:discovery","agent_id":"a-2"')"
+    TWO=$(lobby_val 'sig("s-2").subagents + "/" + sig("s-2").working')
+    lobby_run "$(lobby_env SubagentStop s-2 "$WT" '"agent_id":"a-1"')"
+    ONE=$(lobby_val 'sig("s-2").subagents')
+    lobby_run "$(lobby_env SubagentStop s-2 "$WT" '"agent_id":"a-2"')"
+    lobby_run "$(lobby_env SubagentStop s-2 "$WT" '"agent_id":"a-3"')"
+    lobby_assert "$L SubagentStart and SubagentStop count subagents" "'$TWO' === '2/true' && '$ONE' === '1' && sig('s-2').subagents === 0 && sig('s-2').working === true"
+
+    lobby_run "$(lobby_env UserPromptSubmit s-3 "$FIX")"
+    lobby_run "$(lobby_env SubagentStart s-3 "$FIX")"
+    lobby_run "$(lobby_env Stop s-3 "$FIX" '"stop_hook_active":false')"
+    lobby_assert "$L Stop clears working" 'sig("s-3").working === false && sig("s-3").subagents === 1 && sig("s-3").waiting === null'
+
+    lobby_run "$(lobby_env Notification s-3 "$FIX" '"notification_type":"permission_prompt","message":"Claude needs your permission"')"
+    lobby_assert "$L Notification permission_prompt sets waiting permission" 'sig("s-3").waiting === "permission" && sig("s-3").working === false && sig("s-3").subagents === 1'
+
+    lobby_run "$(lobby_env Notification s-3 "$FIX" '"notification_type":"idle_prompt","message":"Claude is waiting for your input"')"
+    lobby_assert "$L Notification idle_prompt sets waiting idle" 'sig("s-3").waiting === "idle" && sig("s-3").subagents === 1'
+
+    # Pin t, so a write that refreshed it cannot pass as no change.
+    "$LOBBY_NODE" -e 'const fs=require("fs"),f=process.argv[1],d=JSON.parse(fs.readFileSync(f,"utf8"));d.t=1;fs.writeFileSync(f,JSON.stringify(d)+"\n")' "$LOBBY_HOME/signals/s-3.json"
+    LOBBY_EXPECT=$(cat "$LOBBY_HOME/signals/s-3.json")
+    for NT in auth_success elicitation_dialog ""; do
+      lobby_run "$(lobby_env Notification s-3 "$FIX" "\"notification_type\":\"$NT\",\"message\":\"m\"")"
+      lobby_run "$(lobby_env Notification s-4 "$FIX" "\"notification_type\":\"$NT\"")"
+    done
+    lobby_run "$(lobby_env Notification s-3 "$FIX")"
+    lobby_run "$(lobby_env PreToolUse s-3 "$FIX" '"tool_name":"Bash"')"
+    lobby_assert "$L Notification of another type changes nothing" 'raw("signals/s-3.json").trim() === expect.trim() && sig("s-3").t === 1 && sig("s-4") === null'
+    LOBBY_EXPECT=""
+
+    lobby_run "$(lobby_env UserPromptSubmit s-3 "$FIX")"
+    lobby_assert "$L UserPromptSubmit clears waiting" 'sig("s-3").waiting === null && sig("s-3").working === true && sig("s-3").subagents === 1 && sig("s-3").t > 1'
+
+    SECRET=SECRET-PROMPT-TEXT
+    lobby_run "$(lobby_env SessionStart s-5 "$FIX" "\"source\":\"startup\",\"transcript_path\":\"/tmp/$SECRET\"")" BTS_TEST_SECRET=$SECRET
+    lobby_run "$(lobby_env UserPromptSubmit s-5 "$FIX" "\"prompt\":\"$SECRET\"")" BTS_TEST_SECRET=$SECRET
+    lobby_run "$(lobby_env SubagentStart s-5 "$FIX" "\"agent_type\":\"$SECRET\",\"tool_input\":{\"prompt\":\"$SECRET\"}")" BTS_TEST_SECRET=$SECRET
+    lobby_run "$(lobby_env Notification s-5 "$FIX" "\"notification_type\":\"permission_prompt\",\"message\":\"$SECRET\",\"title\":\"$SECRET\"")" BTS_TEST_SECRET=$SECRET
+    lobby_run "$(lobby_env Stop s-5 "$FIX" "\"last_assistant_message\":\"$SECRET\"")" BTS_TEST_SECRET=$SECRET
+    lobby_assert "$L no prompt text reaches the lobby dir" 'files.length > 1 && files.every((f) => !fs.readFileSync(path.join(home, f), "utf8").includes("SECRET-PROMPT-TEXT")) && files.every((f) => f === "projects.json" || /^signals\/[A-Za-z0-9._-]+\.json$/.test(f)) && files.filter((f) => f.startsWith("signals/")).every((f) => Object.keys(parse(f)).join() === "v,sid,root,t,working,subagents,waiting") && sig("s-5").waiting === "permission" && sig("s-5").subagents === 1'
+
+    printf '{broken' > "$LOBBY_HOME/projects.json"
+    printf 'not json' > "$LOBBY_HOME/signals/s-6.json"
+    lobby_run "$(lobby_env SessionStart s-6 "$FIX")"
+    lobby_run "$(lobby_env SubagentStart s-6 "$FIX")"
+    lobby_assert "$L corrupt projects.json recovers" 'projects.projects.length === 1 && projects.projects[0].root === root && sig("s-6").subagents === 1 && sig("s-6").working === true'
+    printf '{"v":1,"projects":[{"root":%s},{"root":%s,"addedAt":5},"junk",{"root":42},{"root":"/no/such/dir","addedAt":7}]}' "$(json_str "$LOBBY_ROOT")" "$(json_str "$LOBBY_ROOT")" > "$LOBBY_HOME/projects.json"
+    lobby_run "$(lobby_env SessionStart s-6 "$FIX")"
+    lobby_assert "$L damaged entries are dropped and a duplicate root folded" 'projects.projects.length === 1 && projects.projects[0].root === root && projects.projects[0].name === path.basename(root) && Number.isInteger(projects.projects[0].addedAt) && projects.projects[0].addedAt > 1e12'
+
+    rm -f "$LOBBY_HOME/projects.json"
+    lobby_cursor "{\"hook_event_name\":\"sessionStart\",\"session_id\":\"c-1\",\"conversation_id\":\"c-1\",\"is_background_agent\":false,\"composer_mode\":\"agent\",\"workspace_roots\":[$(json_str "$WT")]}" '{}'
+    lobby_assert "$L cursor sessionStart prints valid JSON" 'projects.projects.length === 1 && projects.projects[0].root === root && sig("c-1") === null'
+
+    lobby_cursor "{\"hook_event_name\":\"beforeSubmitPrompt\",\"conversation_id\":\"c-1\",\"workspace_roots\":[$(json_str "$FIX")],\"prompt\":\"$SECRET\",\"attachments\":[]}" '{"continue":true}'
+    lobby_assert "$L cursor beforeSubmitPrompt sets working and continues" 'sig("c-1").working === true && sig("c-1").root === root && !raw("signals/c-1.json").includes("SECRET")'
+    lobby_cursor "{\"hook_event_name\":\"subagentStart\",\"conversation_id\":\"c-other\",\"parent_conversation_id\":\"c-1\",\"subagent_id\":\"sa-1\",\"task\":\"$SECRET\",\"workspace_roots\":[$(json_str "$FIX")]}" '{"permission":"allow"}'
+    lobby_assert "$L cursor subagentStart allows and counts on the parent" 'sig("c-1").subagents === 1 && sig("c-other") === null'
+    lobby_cursor "{\"hook_event_name\":\"subagentStop\",\"conversation_id\":\"c-1\",\"child_conversation_id\":\"c-child\",\"status\":\"completed\",\"summary\":\"$SECRET\",\"workspace_roots\":[$(json_str "$FIX")]}" '{}'
+    lobby_cursor "{\"hook_event_name\":\"stop\",\"conversation_id\":\"c-1\",\"status\":\"completed\",\"loop_count\":0,\"workspace_roots\":[$(json_str "$FIX")]}" '{}'
+    lobby_assert "$L cursor subagentStop and stop update the same signal" 'sig("c-1").subagents === 0 && sig("c-1").working === false && sig("c-child") === null && files.every((f) => !raw(f).includes("SECRET"))'
+    lobby_cursor "{\"hook_event_name\":\"subagentStart\",\"parent_conversation_id\":\"c-9\",\"workspace_roots\":[$(json_str "$FIX")]}" '{"permission":"allow"}' BTS_HOOKS_DISABLED=1
+    lobby_cursor 'not json' '{}'
+    lobby_cursor '' '{}'
+    lobby_cursor "{\"hook_event_name\":\"sessionStart\",\"workspace_roots\":[\"/no/such/dir\"]}" '{}'
+    lobby_assert "$L cursor answers on every exit path (disabled, unreadable, empty, no repo)" 'sig("c-9") === null'
+
+    rm -rf "$FIX" "$LOBBY_HOME" "$LOBBY_FAKE_HOME"
+  done
+
+  # Single-engine cases: home resolution, disable, parser absence, cleanup
+  # and the writers' lock.
+  LOBBY_PATH=$PATH
+  LOBBY_FAKE_HOME=$(mktemp -d)
+  FIX=$(mk_fixture)
+  mkdir -p "$FIX/docs/plans"
+  printf '## Pie 1: A\n' > "$FIX/docs/plans/00_master_checklist.md"
+  LOBBY_ROOT=$(cd "$FIX" && pwd -P)
+
+  LOBBY_HOME="$LOBBY_FAKE_HOME/.bytheslice"
+  lobby_run "$(lobby_env SessionStart s-home "$FIX")" BTS_HOME=
+  lobby_assert "lobby: without BTS_HOME it writes under HOME/.bytheslice" 'projects.projects[0].root === root && (fs.statSync(home).mode & 0o777) === 0o700'
+
+  LOBBY_HOME="$LOBBY_FAKE_HOME/disabled"
+  lobby_run "$(lobby_env SessionStart s-off "$FIX")" BTS_HOOKS_DISABLED=1
+  lobby_run "$(lobby_env UserPromptSubmit s-off "$FIX")" BTS_HOOKS_DISABLED=1
+  lobby_assert "lobby: BTS_HOOKS_DISABLED writes nothing" '!fs.existsSync(home)'
+
+  rm -f "$LOBBY_BINS/node"
+  LOBBY_PATH=$LOBBY_BINS
+  LOBBY_HOME="$LOBBY_FAKE_HOME/noparser"
+  lobby_run "$(lobby_env SessionStart s-np "$FIX")"
+  lobby_assert "lobby: neither jq nor node writes nothing" '!fs.existsSync(home)'
+  LOBBY_PATH=$PATH
+
+  LOBBY_HOME=$(mktemp -d)
+  mkdir -p "$LOBBY_HOME/signals"
+  printf '{}\n' > "$LOBBY_HOME/signals/old.json"
+  printf '{}\n' > "$LOBBY_HOME/signals/fresh.json"
+  touch -t 202001010000 "$LOBBY_HOME/signals/old.json"
+  lobby_run "$(lobby_env SessionStart s-clean "$FIX")"
+  lobby_assert "lobby: SessionStart deletes signals older than 7 days" '!exists("signals/old.json") && exists("signals/fresh.json")'
+
+  # A lock whose owner is gone is reclaimed; a live owner's lock is left alone
+  # and the writer gives up quietly.
+  bash -c 'exit 0' &
+  DEAD=$!
+  wait "$DEAD"
+  mkdir "$LOBBY_HOME/.lock" && printf '%s\n' "$DEAD" > "$LOBBY_HOME/.lock/pid"
+  lobby_run "$(lobby_env UserPromptSubmit s-dead "$FIX")"
+  lobby_assert "lobby: a dead owner's lock is reclaimed" 'sig("s-dead").working === true && !exists(".lock")'
+  mkdir "$LOBBY_HOME/.lock"
+  touch -t 202001010000 "$LOBBY_HOME/.lock"
+  lobby_run "$(lobby_env UserPromptSubmit s-orphan "$FIX")"
+  lobby_assert "lobby: an ownerless lock older than a minute is reclaimed" 'sig("s-orphan").working === true && !exists(".lock")'
+  mkdir "$LOBBY_HOME/.lock" && printf '%s\n' "$$" > "$LOBBY_HOME/.lock/pid"
+  LOBBY_EXPECT=$$
+  lobby_run "$(lobby_env UserPromptSubmit s-held "$FIX")"
+  lobby_assert "lobby: a live owner's lock makes the writer give up quietly" 'sig("s-held") === null && raw(".lock/pid").trim() === expect'
+  LOBBY_EXPECT=""
+  rm -rf "$LOBBY_HOME/.lock"
+
+  # Parallel subagent starts in one session: the lock keeps every increment.
+  PIDS=()
+  for N in {1..12}; do
+    (printf '%s' "$(lobby_env SubagentStart s-par "$FIX")" | HOME="$LOBBY_FAKE_HOME" BTS_HOME="$LOBBY_HOME" "$LOBBY_BASH" "$LOBBY_SIGNAL") &
+    PIDS+=("$!")
+  done
+  for PID in "${PIDS[@]}"; do wait "$PID"; done
+  lobby_assert "lobby: concurrent SubagentStart keeps every increment" 'sig("s-par").subagents === 12 && !exists(".lock") && files.every((f) => !path.basename(f).startsWith(".tmp."))'
+
+  rm -rf "$FIX" "$LOBBY_HOME" "$LOBBY_FAKE_HOME" "$LOBBY_BINS"
+fi
+
+####################################################################
 # hooks.json wiring
 ####################################################################
 
@@ -862,11 +1139,33 @@ while IFS= read -r script; do
 done <<EOF
 $WIRED
 EOF
-# The shared helpers are sourced by every wired script, so they count too.
-if grep -nE '(^|[^[:alnum:]_])exit[[:space:]]+2([^[:digit:]]|$)' "$HERE/lib/checklist.sh" >/dev/null 2>&1; then
-  FAIL=$((FAIL+1)); FAILED_NAMES+=("lib/checklist.sh can block"); printf '  ✗ lib/checklist.sh can block\n'
+# The shared helpers are sourced by the wired scripts, so they count too.
+for lib in "$HERE"/lib/*.sh; do
+  libname="lib/${lib##*/}"
+  if grep -nE '(^|[^[:alnum:]_])exit[[:space:]]+2([^[:digit:]]|$)' "$lib" >/dev/null 2>&1; then
+    FAIL=$((FAIL+1)); FAILED_NAMES+=("$libname can block"); printf '  ✗ %s can block\n' "$libname"
+  else
+    PASS=$((PASS+1)); printf '  ✓ sourced %s never blocks\n' "$libname"
+  fi
+done
+
+# lobby-signal.sh runs on exactly the six Lobby events, Notification and
+# UserPromptSubmit included, synchronously in the kitchen-log.sh command form.
+if "$JSON_NODE" -e '
+  const hooks = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).hooks;
+  const got = [];
+  for (const [ev, groups] of Object.entries(hooks)) for (const g of groups) for (const h of g.hooks) {
+    if (!h.command.includes("/hooks/lobby-signal.sh")) continue;
+    if (h.command !== "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/lobby-signal.sh\"" || h.timeout !== 5 || g.matcher ||
+        (h.async !== undefined && h.async !== false)) process.exit(1);
+    got.push(ev);
+  }
+  const want = ["SessionStart", "SubagentStart", "SubagentStop", "Stop", "UserPromptSubmit", "Notification"];
+  process.exit(JSON.stringify(got.sort()) === JSON.stringify(want.sort()) ? 0 : 1);
+' "$HERE/hooks.json" 2>/dev/null; then
+  PASS=$((PASS+1)); printf '  ✓ lobby-signal.sh wired once each on SessionStart, SubagentStart, SubagentStop, Stop, UserPromptSubmit and Notification\n'
 else
-  PASS=$((PASS+1)); printf '  ✓ sourced lib/checklist.sh never blocks\n'
+  FAIL=$((FAIL+1)); FAILED_NAMES+=("lobby-signal.sh wiring"); printf '  ✗ lobby-signal.sh wiring (want the six Lobby events, Notification and UserPromptSubmit included)\n'
 fi
 
 echo
@@ -890,6 +1189,15 @@ for event, entries in d["hooks"].items():
 PY
 then cursor_ok "hooks-cursor.json is Cursor shaped and every script exists"; else cursor_no "hooks-cursor.json shape"; fi
 if grep -q '"hooks": "./hooks/hooks-cursor.json"' "$HERE/../.cursor-plugin/plugin.json"; then cursor_ok ".cursor-plugin/plugin.json points at hooks-cursor.json"; else cursor_no ".cursor-plugin/plugin.json hooks key"; fi
+# The Lobby runs on the five Cursor events its docs confirm (no Notification
+# equivalent exists), always as BTS_HOST=cursor so every exit answers JSON.
+if "$JSON_NODE" -e '
+  const hooks = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).hooks;
+  const cmd = "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/lobby-signal.sh\"";
+  const got = Object.entries(hooks).filter(([, list]) => list.some((e) => e.command.includes("lobby-signal.sh")))
+    .map(([ev, list]) => list.filter((e) => e.command.includes("lobby-signal.sh")).every((e) => e.command === cmd && e.timeout === 5) ? ev : "bad:" + ev);
+  process.exit(JSON.stringify(got.sort()) === JSON.stringify(["beforeSubmitPrompt", "sessionStart", "stop", "subagentStart", "subagentStop"]) ? 0 : 1);
+' "$CURSOR_HOOKS" 2>/dev/null; then cursor_ok "hooks-cursor.json runs lobby-signal.sh on sessionStart, beforeSubmitPrompt, subagentStart, subagentStop and stop"; else cursor_no "hooks-cursor.json lobby-signal.sh events"; fi
 
 # Cursor blocks a shell command whose hook prints no JSON or JSON off schema,
 # so every Cursor guard run must print a valid allow.
