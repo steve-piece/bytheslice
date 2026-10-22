@@ -2,10 +2,23 @@
   "version": 1,
   "hooks": {
     "sessionStart": [
-      { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/shop-status.sh\"", "timeout": 3 }
+      { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/shop-status.sh\"", "timeout": 3 },
+      { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/lobby-signal.sh\"", "timeout": 5 }
     ],
     "beforeShellExecution": [
       { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/pre-commit-guard.sh\"", "timeout": 3 }
+    ],
+    "beforeSubmitPrompt": [
+      { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/lobby-signal.sh\"", "timeout": 5 }
+    ],
+    "subagentStart": [
+      { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/lobby-signal.sh\"", "timeout": 5 }
+    ],
+    "subagentStop": [
+      { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/lobby-signal.sh\"", "timeout": 5 }
+    ],
+    "stop": [
+      { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/lobby-signal.sh\"", "timeout": 5 }
     ]
   }
 }
