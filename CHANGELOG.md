@@ -13,6 +13,36 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [5.6.0] - 2026-10-22
+
+**The lobby: every project on one page.** Pie 7 (slices 7.1 to 7.5) deletes the six deprecated v4 agent shims and adds a machine-level lobby that lists every ByTheSlice project on this machine with its progress and one live state, and opens any project's city from its card.
+
+### Added
+
+- **The lobby (7.3, 7.4).** `mcp/lobby-server.js` serves `skills/open-kitchen/lobby.html` on `127.0.0.1` only (port 4466 or `BTS_LOBBY_PORT`, the next free one when taken; port file `~/.bytheslice/lobby/port`) with three routes: `GET /`, `GET /state` and `POST /open`. One card per registered project: name, folder, active pie and slice, a slices bar, slices and pies done over total, and one badge: **Needs you** (an open HITL item in the Pass ledger, or a session that hit a permission or idle prompt), **Active** (working or subagents running; the arrows spin, and hold still under reduced motion), **Done** (every pie done) or **Inactive**. The page polls every three seconds while visible and shows "Lobby offline, retrying" when a poll fails. `GET /state` rows are `{ key, root, path, name, pies, slices, active, activePie, activeSlice, sessions, state, kitchenUrl }`, and each read prunes registry rows whose folder is gone. A click opens a running kitchen, or starts a registered project's kitchen through `POST /open` (realpath allowlist against the registry, one start per root); the lobby writes nothing else.
+- **`/open-kitchen --lobby` (7.5).** `open-kitchen.js --lobby` reuses the running lobby when its `/state` answers a `projects` array, else starts `lobby-server.js --serve-only` detached and waits at most eight seconds, printing only `http://127.0.0.1:<port>/`. `--lobby` with `--project` is a usage error.
+- **Idle kitchen and the Lobby button (7.4).** A kitchen opened from a card carries `?lobby=<port>`, which shows a **Lobby** button in its header, and for an Inactive or Done project `&idle=1`: no customer line, a "Nothing is in progress in this project" notice and unlocked time-of-day buttons until the kitchen sees an agent at work.
+- **Kitchen `/lobby` redirect (7.5).** Every kitchen answers `GET /lobby` with a `302` to `http://127.0.0.1:<port>/` when the lobby's port file names a lobby whose `/state` answers a `projects` array, else `404`, so a kitchen opened without `?lobby=` still has a way there.
+- **The `lobby-signal.sh` hook (7.2).** Registers a ByTheSlice project's primary checkout (worktrees roll up to it) in `~/.bytheslice/projects.json` (`BTS_HOME` moves the folder) and keeps one `signals/<session>.json` flag file per session (working, subagent count, waiting kind). Writes are atomic, mode 0600, under a short lock, and it reads only the session id, event name, notification type and cwd: never a prompt, message or secret. New `hooks/hooks.json` entries on `UserPromptSubmit` and `Notification` (the plugin's first on either), plus `SessionStart`, `SubagentStart`, `SubagentStop` and `Stop`. `hooks/hooks-cursor.json` runs it on `sessionStart`, `beforeSubmitPrompt`, `subagentStart`, `subagentStop` and `stop`, answering `{"permission":"allow"}` on `subagentStart` and `{"continue":true}` on `beforeSubmitPrompt`. Cursor has no Notification equivalent, so a Cursor session never shows Needs you from a waiting prompt.
+
+### Changed
+
+- **Same-site page navigation (7.3, 7.4).** The kitchen and the lobby each accept `Sec-Fetch-Site: same-site` for a top-level `GET` page navigation only (the kitchen's `/` and `/?query`, the lobby's `/`), so the two can link to each other across `127.0.0.1` ports. `/state`, `/open` and `/lobby` stay same-origin only.
+- **The kitchen serves `/` with a query string (7.4).** `/?lobby=<port>&idle=1` answers the same page; the server never reads the query.
+- **Docs and manifests (7.5).** The README, `docs/architecture.md`, `hooks/README.md`, the `open-kitchen` skill and command, and the four manifest descriptions cover the lobby, its read-only story and its privacy limits.
+
+### Removed
+
+- **The six v4 agent shims (7.1)**, as 5.5.0 announced: `skills/run-the-day/agents/stage-runner.md`, `skills/run-the-day/agents/pr-reviewer.md`, `skills/sell-slice/agents/basic-checks-runner.md`, `skills/sell-slice/agents/aggregating-test-reviewer.md`, `skills/sell-slice/agents/ci-cd-guardrails.md` and `skills/sell-slice/agents/frontend/visual-reviewer.md`. The manifest lockstep test no longer allows any unregistered agent file, and the skills, references, README, `docs/agents.md` and manifests no longer mention them.
+
+### Notes
+
+- Hooks run from the installed plugin, so the lobby fills only after 5.6.0 is installed and a session starts in each project. A cache-installed plugin needs a reinstall (or a marketplace update), then a new session.
+- The 7.5 production test drove the hook script by hand from the pie worktree, because the installed plugin predates 5.6.0; live hook firing is to be re-confirmed once this release is installed.
+- A kitchen still running from a session that loaded an older plugin answers a lobby card's click with 403 (it predates the same-site page allowance), though the card shows it as running. Restarting that session on 5.6.0 replaces it.
+
+---
+
 ## [5.5.3] - 2026-10-21
 
 **Cursor gets hooks that actually fire.** Cursor matched none of the Claude Code event names in `hooks/hooks.json` and left `${CLAUDE_PLUGIN_ROOT}` empty, so every hook was a silent no-op there.
