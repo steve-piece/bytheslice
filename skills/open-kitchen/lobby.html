@@ -1,0 +1,434 @@
+<!-- skills/open-kitchen/lobby.html -->
+<!-- Machine-level lobby page: one card per registered project (progress, active pie and slice, state badge) that opens its city. -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ByTheSlice Lobby</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Tokens: copied from kitchen.html :root (tests/kitchen/lobby-tokens.test.js keeps them equal), plus the lobby's own below. */
+:root{
+  --lawn:#9fb27a; --ink:#4a3426; --ink-soft:#7a604c; --cream:#fbf6ec; --card:#fffdf8;
+  --accent:#c9643f; --accent-soft:#f6e1d3; --sage:#6c8a52; --sage-soft:#e5ecd9;
+  --mustard:#d8a23c; --mustard-soft:#f8ecd0; --dusty:#5f7d93; --dusty-soft:#e1e9ef;
+  --bad:#b8473a; --bad-soft:#f6dcd7; --line:rgba(74,52,38,.12);
+  --display:'Fredoka',ui-rounded,system-ui,sans-serif; --body:'Nunito',system-ui,-apple-system,sans-serif;
+  --shadow:0 10px 28px rgba(80,50,30,.18),0 1px 2px rgba(80,50,30,.08);
+  color-scheme:light;
+  /* Lobby only: the kitchen's frosted pill values, a hover lift and a quiet wash. */
+  --frost:rgba(251,246,236,.8); --frost-edge:rgba(255,255,255,.75);
+  --frost-shadow:0 8px 22px rgba(80,50,30,.16),inset 0 1px 0 rgba(255,255,255,.8);
+  --frost-blur:blur(12px) saturate(1.2);
+  --shadow-lift:0 14px 34px rgba(80,50,30,.22),0 2px 4px rgba(80,50,30,.1);
+  --wash:rgba(74,52,38,.07);
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+[hidden]{display:none!important}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--cream);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.4;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button{font:inherit;color:inherit}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* frosted pill, the kitchen HUD's .pill */
+.pill{background:var(--frost);-webkit-backdrop-filter:var(--frost-blur);backdrop-filter:var(--frost-blur);border:1px solid var(--frost-edge);border-radius:999px;box-shadow:var(--frost-shadow)}
+
+/* the lawn band: the town's own green behind the title */
+.band{background:var(--lawn);padding:calc(18px + env(safe-area-inset-top,0px)) 0 30px}
+.wrap{width:100%;max-width:1160px;margin:0 auto;padding:0 24px}
+.head{display:flex;flex-direction:column;align-items:flex-start;gap:18px}
+.brand{display:inline-flex;align-items:center;gap:8px;padding:6px 16px 6px 6px;font-family:var(--display);font-weight:600;font-size:17px;letter-spacing:.1px}
+.brand .mark{width:28px;height:28px;border-radius:50%;background:var(--accent);display:grid;place-items:center;flex:none}
+.brand .mark svg{width:17px;height:17px}
+.brand .crust{fill:var(--cream)}
+.brand .pep{fill:var(--accent)}
+h1{margin:0;font-family:var(--display);font-weight:600;font-size:34px;line-height:1.1;letter-spacing:.2px}
+.sub{margin:4px 0 0;font-weight:700;font-size:14.5px}
+
+main.wrap{padding-top:22px;padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))}
+
+/* offline strip: role=status lives in the page, the strip appears inside it */
+#offline:not(:empty){margin:0 0 16px}
+.strip{display:inline-flex;align-items:center;gap:8px;margin:0;padding:7px 14px 7px 10px;border-radius:999px;background:var(--mustard-soft);box-shadow:inset 0 0 0 1.5px var(--mustard);font-weight:800;font-size:13.5px}
+.strip svg{width:16px;height:16px;flex:none;color:var(--mustard)}
+
+/* the grid of cards: as many 320 px columns as fit, one column on a phone */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr));gap:16px}
+.card{position:relative;display:flex;flex-direction:column;gap:12px;min-width:0;padding:20px 18px 14px;background:var(--card);border-radius:20px;box-shadow:var(--shadow);transition:transform .18s ease,box-shadow .18s ease}
+.card::before{content:"";position:absolute;left:20px;right:20px;top:0;height:4px;border-radius:0 0 4px 4px;background:var(--tone)}
+.card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lift)}
+.card[aria-busy="true"]{transform:none;box-shadow:var(--shadow)}
+
+/* one tone per state; the badge and the card stripe read it */
+[data-state="needs-you"]{--tone:var(--bad);--tone-soft:var(--bad-soft)}
+[data-state="active"]{--tone:var(--sage);--tone-soft:var(--sage-soft)}
+[data-state="done"]{--tone:var(--dusty);--tone-soft:var(--dusty-soft)}
+[data-state="inactive"]{--tone:var(--ink-soft);--tone-soft:var(--wash)}
+
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.name{margin:0;min-width:0;font-family:var(--display);font-weight:600;font-size:20px;line-height:1.2;overflow-wrap:anywhere}
+/* The name is the card's one real button; its ::after stretches over the whole card, so any click on the card opens it. */
+.open{margin:0;padding:0;border:0;background:none;text-align:left;cursor:pointer;font:inherit;color:inherit}
+.open::after{content:"";position:absolute;inset:0;z-index:1;border-radius:20px}
+.open:focus-visible{outline:none}
+.open:focus-visible::after{outline:3px solid var(--accent);outline-offset:3px}
+.open:disabled{cursor:progress}
+
+.badge{flex:none;display:inline-flex;align-items:center;gap:6px;padding:4px 11px 4px 7px;border-radius:999px;background:var(--tone-soft);box-shadow:inset 0 0 0 1.5px var(--tone);color:var(--ink);font-size:12.5px;font-weight:800;letter-spacing:.2px;white-space:nowrap}
+.badge[data-state="inactive"]{color:var(--ink-soft)}
+.badge svg{display:none;width:16px;height:16px;flex:none;color:var(--tone)}
+.badge[data-state="needs-you"] .i-needs-you,.badge[data-state="active"] .i-active,.badge[data-state="done"] .i-done,.badge[data-state="inactive"] .i-inactive{display:block}
+.spin{animation:lobby-spin 1.6s linear infinite}
+@keyframes lobby-spin{to{transform:rotate(360deg)}}
+
+.path{margin:-6px 0 0;font:600 12px/1.3 var(--mono);color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.now{display:flex;flex-direction:column;gap:1px;min-width:0;padding:10px 12px;border-radius:14px;background:var(--cream)}
+.eyebrow{font-size:10.5px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--ink-soft)}
+.where{font-size:15px;font-weight:800}
+.now.idle .where{color:var(--ink-soft);font-weight:700}
+.what{font-size:12.5px;font-weight:700;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.what:empty{display:none}
+
+.progress{display:grid;gap:7px}
+.bar{height:8px;border-radius:999px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;width:0;border-radius:inherit;background:var(--sage);transition:width .4s ease}
+.counts{display:flex;justify-content:space-between;gap:12px;margin:0;font-size:12.5px;font-weight:700;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.counts b{color:var(--ink);font-weight:800}
+
+.foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto;padding-top:11px;border-top:1px solid var(--line);font-size:13px;font-weight:700}
+.status{display:flex;align-items:center;gap:7px;min-width:0;color:var(--ink-soft)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--line)}
+.status.running .dot{background:var(--sage);box-shadow:0 0 0 3px var(--sage-soft)}
+.msg:empty{display:none}
+.msg:not(:empty) + .hint{display:none}
+.msg.err{color:var(--bad)}
+.go{display:inline-flex;align-items:center;gap:5px;flex:none;color:var(--ink);font-weight:800}
+.go svg{width:16px;height:16px;color:var(--accent);transition:transform .18s ease}
+.card:hover .go svg{transform:translateX(2px)}
+
+/* loading skeleton and the empty notice */
+.ghost{height:214px;border-radius:20px;background:var(--card);box-shadow:var(--shadow);padding:22px 18px;display:grid;align-content:start;gap:14px;animation:lobby-breathe 1.4s ease-in-out infinite}
+.ghost i{display:block;height:12px;border-radius:999px;background:var(--wash)}
+.ghost i:nth-child(1){width:55%;height:18px}.ghost i:nth-child(2){width:70%}.ghost i:nth-child(3){height:52px;border-radius:14px}.ghost i:nth-child(4){height:8px}
+@keyframes lobby-breathe{50%{opacity:.55}}
+.notice{display:flex;flex-direction:column;align-items:center;gap:4px;padding:40px 20px;text-align:center;background:var(--card);border-radius:20px;box-shadow:var(--shadow)}
+.notice b{font-family:var(--display);font-weight:600;font-size:21px}
+.notice span{color:var(--ink-soft);font-weight:700;font-size:14px;max-width:420px}
+
+@media (max-width:640px){
+  .wrap{padding:0 16px}
+  h1{font-size:28px}
+  .band{padding-bottom:24px}
+  main.wrap{padding-top:16px}
+  .card{padding:18px 16px 13px}
+  .card::before{left:16px;right:16px}
+}
+@media (prefers-reduced-motion:reduce){
+  .spin,.ghost{animation:none}
+  .card,.bar i,.go svg{transition:none}
+  .card:hover{transform:none}
+  .card:hover .go svg{transform:none}
+}
+</style>
+</head>
+<body>
+<header class="band">
+  <div class="wrap head">
+    <div class="pill brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path class="crust" d="M4 5c5-3 11-3 16 0L12 21z"/><circle class="pep" cx="10" cy="8.5" r="1.6"/><circle class="pep" cx="14.5" cy="11" r="1.4"/><circle class="pep" cx="11.6" cy="14.6" r="1.2"/></svg></span>ByTheSlice</div>
+    <div>
+      <h1>Lobby</h1>
+      <p class="sub" id="summary">Loading projects...</p>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="offline" role="status" aria-live="polite"></div>
+  <div class="grid" id="skeleton" aria-hidden="true"><div class="ghost"><i></i><i></i><i></i><i></i></div><div class="ghost"><i></i><i></i><i></i><i></i></div><div class="ghost"><i></i><i></i><i></i><i></i></div></div>
+  <div class="notice" id="empty" hidden><b>No projects yet</b><span>A project shows up here once a ByTheSlice session starts in it.</span></div>
+  <section class="grid" id="cards" aria-label="Projects" aria-busy="true"></section>
+</main>
+
+<template id="cardTpl">
+  <article class="card">
+    <div class="card-head">
+      <h2 class="name"><button type="button" class="open"></button></h2>
+      <span class="badge">
+        <svg class="i-needs-you" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.4v5.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="16.4" r="1.3" fill="currentColor"/></svg>
+        <svg class="i-active spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.61 10.7A7.5 7.5 0 0 1 18.5 8.25M19.33 5.16 18.5 8.25 15.41 7.42M19.39 13.3A7.5 7.5 0 0 1 5.5 15.75M4.67 18.84 5.5 15.75 8.59 16.58" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg class="i-done" viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.6l4.1 4.1 8.9-9.4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg class="i-inactive" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.6A8 8 0 0 1 9.4 4.5a8 8 0 1 0 10.1 10.1z" fill="currentColor"/></svg>
+        <span class="badge-text"></span>
+      </span>
+    </div>
+    <p class="path"></p>
+    <div class="now"><span class="eyebrow">Now</span><b class="where"></b><span class="what"></span></div>
+    <div class="progress">
+      <div class="bar" role="progressbar" aria-valuemin="0"><i></i></div>
+      <p class="counts"><span><b class="n-slices"></b> slices</span><span><b class="n-pies"></b> pies</span></p>
+    </div>
+    <div class="foot">
+      <span class="status"><span class="dot" aria-hidden="true"></span><span class="msg" aria-live="polite"></span><span class="hint"></span></span>
+      <span class="go" aria-hidden="true">Open city<svg viewBox="0 0 24 24"><path d="M5 12h13M13 6.5l5.5 5.5-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    </div>
+  </article>
+</template>
+<template id="offlineTpl">
+  <p class="strip"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.6v5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="16.2" r="1.3" fill="currentColor"/></svg>Lobby offline, retrying</p>
+</template>
+
+<script>
+// Polls GET /state, renders one keyed card per project with textContent only, and opens a project's kitchen on click.
+(() => {
+  'use strict';
+  const STATES = ['needs-you', 'active', 'done', 'inactive'];
+  const LABEL = { 'needs-you': 'Needs you', active: 'Active', done: 'Done', inactive: 'Inactive' };
+  const KITCHEN_URL = /^http:\/\/127\.0\.0\.1:([1-9]\d{0,4})\/$/;
+  const INTERVAL = 3000;
+  const STATE_TIMEOUT = 8000;
+  const OPEN_TIMEOUT = 20000;
+  const OPEN_FAILED = 'Could not start the kitchen. Try again.';
+  const byId = id => document.getElementById(id);
+  const grid = byId('cards'), skeleton = byId('skeleton'), empty = byId('empty'), offline = byId('offline'), summary = byId('summary');
+  const template = byId('cardTpl'), stripTemplate = byId('offlineTpl');
+
+  let projects = [];
+  let polls = 0, loaded = false, timer = null, controller = null, serial = 0;
+  const cards = new Map();
+  const busy = new Set();
+  const failed = new Map();
+
+  // A read-only seam for browser tests: copies of the last good list and the count of finished polls.
+  Object.defineProperty(window, '__lobby', {
+    value: Object.freeze({
+      get projects() { return JSON.parse(JSON.stringify(projects)); },
+      get polls() { return polls; },
+    }),
+    configurable: false, writable: false,
+  });
+
+  const visible = () => document.visibilityState === 'visible';
+  const validPort = value => /^[1-9]\d{0,4}$/.test(String(value)) && Number(value) <= 65535;
+  /** The URL itself when it is exactly http://127.0.0.1:<valid port>/, else null. Nothing else is ever navigated to. */
+  function kitchenUrl(value) {
+    const match = typeof value === 'string' ? KITCHEN_URL.exec(value) : null;
+    return match && validPort(match[1]) ? value : null;
+  }
+  const clean = (value, max = 160) => typeof value === 'string'
+    ? Array.from(value.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim()).slice(0, max).join('') : '';
+  function tally(value) {
+    const ok = value && Number.isSafeInteger(value.done) && Number.isSafeInteger(value.total) &&
+      value.done >= 0 && value.total >= 0 && value.done <= value.total;
+    return ok ? { done: value.done, total: value.total } : { done: 0, total: 0 };
+  }
+  function marker(value) {
+    if (!value || typeof value !== 'object') return null;
+    const number = typeof value.number === 'number' && Number.isFinite(value.number) ? String(value.number) : clean(value.number, 16);
+    return number ? { number, name: clean(value.name) } : null;
+  }
+  function normalize(row) {
+    if (!row || typeof row !== 'object' || typeof row.key !== 'string' || !row.key) return null;
+    const path = typeof row.path === 'string' && row.path ? row.path : typeof row.root === 'string' ? row.root : '';
+    if (!path || path.length > 4096) return null;
+    return {
+      key: row.key, path,
+      name: clean(row.name) || clean(path.split('/').filter(Boolean).pop()) || 'Project',
+      state: STATES.includes(row.state) ? row.state : 'inactive',
+      pies: tally(row.pies), slices: tally(row.slices),
+      activePie: marker(row.activePie), activeSlice: marker(row.activeSlice),
+      kitchenUrl: kitchenUrl(row.kitchenUrl),
+    };
+  }
+  /** The /state payload as a sorted project list (needs you, active, done, inactive, then name), or null when malformed. */
+  function parse(data) {
+    if (!data || typeof data !== 'object' || !Array.isArray(data.projects)) return null;
+    const seen = new Set(), list = [];
+    for (const row of data.projects) {
+      const project = normalize(row);
+      if (!project || seen.has(project.key)) continue;
+      seen.add(project.key); list.push(project);
+    }
+    return list.sort((a, b) => STATES.indexOf(a.state) - STATES.indexOf(b.state) ||
+      a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
+  }
+
+  function where(project) {
+    const pie = project.activePie, slice = project.activeSlice;
+    if (pie && slice) return [`Pie ${pie.number}, Slice ${slice.number}`, slice.name || pie.name];
+    if (pie) return [`Pie ${pie.number}`, pie.name];
+    if (slice) return [`Slice ${slice.number}`, slice.name];
+    return ['Nothing in progress', ''];
+  }
+
+  const setText = (el, value) => { if (el.textContent !== value) el.textContent = value; };
+  const setAttr = (el, name, value) => { if (el.getAttribute(name) !== value) el.setAttribute(name, value); };
+
+  function makeCard(key) {
+    const el = template.content.firstElementChild.cloneNode(true);
+    const id = `card${++serial}`;
+    const pick = selector => el.querySelector(selector);
+    const refs = {
+      open: pick('.open'), badge: pick('.badge'), badgeText: pick('.badge-text'), path: pick('.path'),
+      now: pick('.now'), where: pick('.where'), what: pick('.what'), bar: pick('.bar'), fill: pick('.bar i'),
+      slices: pick('.n-slices'), pies: pick('.n-pies'), status: pick('.status'), msg: pick('.msg'), hint: pick('.hint'),
+    };
+    el.dataset.key = key;
+    refs.badge.id = `${id}-badge`; refs.where.id = `${id}-where`; refs.msg.id = `${id}-msg`; refs.hint.id = `${id}-hint`;
+    refs.open.setAttribute('aria-describedby', `${id}-badge ${id}-where ${id}-msg ${id}-hint`);
+    refs.open.addEventListener('click', () => { openProject(key); });
+    return { el, refs, project: null };
+  }
+
+  function fill(card, project) {
+    const { el, refs } = card;
+    card.project = project;
+    el.dataset.state = project.state;
+    refs.badge.dataset.state = project.state;
+    setText(refs.open, project.name);
+    setText(refs.badgeText, LABEL[project.state]);
+    setText(refs.path, project.path);
+    setAttr(refs.path, 'title', project.path);
+    const [line, detail] = where(project);
+    setText(refs.where, line); setText(refs.what, detail);
+    refs.now.classList.toggle('idle', !project.activePie && !project.activeSlice);
+    const { done, total } = project.slices;
+    setAttr(refs.bar, 'aria-label', `${project.name}: slices done`);
+    setAttr(refs.bar, 'aria-valuemax', String(Math.max(total, 1)));
+    setAttr(refs.bar, 'aria-valuenow', String(done));
+    setAttr(refs.bar, 'aria-valuetext', total ? `${done} of ${total} slices done` : 'No slices planned yet');
+    refs.fill.style.width = total ? `${(done / total * 100).toFixed(1)}%` : '0%';
+    setText(refs.slices, `${done}/${total}`);
+    setText(refs.pies, `${project.pies.done}/${project.pies.total}`);
+    const starting = busy.has(project.key), error = failed.get(project.key) || '';
+    refs.open.disabled = starting;
+    if (starting) el.setAttribute('aria-busy', 'true'); else el.removeAttribute('aria-busy');
+    setText(refs.msg, starting ? 'Starting kitchen...' : error);
+    refs.msg.classList.toggle('err', !starting && !!error);
+    setText(refs.hint, project.kitchenUrl ? 'Kitchen running' : 'Kitchen not running');
+    refs.status.classList.toggle('running', !!project.kitchenUrl && !starting && !error);
+  }
+
+  function render() {
+    skeleton.hidden = loaded;
+    empty.hidden = !loaded || projects.length > 0;
+    setAttr(grid, 'aria-busy', String(!loaded));
+    const keep = new Set(projects.map(project => project.key));
+    for (const [key, card] of cards) if (!keep.has(key)) { card.el.remove(); cards.delete(key); busy.delete(key); failed.delete(key); }
+    const focused = document.activeElement;
+    projects.forEach((project, index) => {
+      let card = cards.get(project.key);
+      if (!card) { card = makeCard(project.key); cards.set(project.key, card); }
+      fill(card, project);
+      if (grid.children[index] !== card.el) grid.insertBefore(card.el, grid.children[index] || null);
+    });
+    // A reorder moves nodes; keep keyboard focus where the operator left it.
+    if (focused && focused !== document.activeElement && focused.isConnected && grid.contains(focused)) focused.focus({ preventScroll: true });
+    if (!loaded) { setText(summary, 'Loading projects...'); return; }
+    if (!projects.length) { setText(summary, 'No projects yet'); return; }
+    const count = state => projects.filter(project => project.state === state).length;
+    const parts = [`${projects.length} ${projects.length === 1 ? 'project' : 'projects'}`];
+    const waiting = count('needs-you'), working = count('active');
+    if (waiting) parts.push(`${waiting} ${waiting === 1 ? 'needs' : 'need'} you`);
+    if (working) parts.push(`${working} active`);
+    setText(summary, parts.join(', '));
+  }
+
+  function setOffline(on) {
+    if (!on) { if (offline.firstChild) offline.replaceChildren(); return; }
+    if (!offline.firstChild) offline.append(stripTemplate.content.firstElementChild.cloneNode(true));
+  }
+
+  /** The kitchen URL plus ?lobby=<this lobby's port>, and &idle=1 for an Inactive or Done project. Null for anything else. */
+  function destination(url, idle) {
+    if (!kitchenUrl(url)) return null;
+    const params = [];
+    if (validPort(location.port)) params.push(`lobby=${Number(location.port)}`);
+    if (idle) params.push('idle=1');
+    return params.length ? `${url}?${params.join('&')}` : url;
+  }
+  function go(url, idle) {
+    const target = destination(url, idle);
+    if (!target) return false;
+    location.assign(target);
+    return true;
+  }
+
+  async function openProject(key) {
+    const card = cards.get(key), project = card?.project;
+    if (!project || busy.has(key)) return;
+    failed.delete(key);
+    const idle = project.state === 'inactive' || project.state === 'done';
+    if (project.kitchenUrl && go(project.kitchenUrl, idle)) return;
+    busy.add(key); fill(card, project);
+    let url = null;
+    const request = new AbortController(), timeout = setTimeout(() => request.abort(), OPEN_TIMEOUT);
+    try {
+      const response = await fetch('/open', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ root: project.path }),
+        cache: 'no-store', credentials: 'omit', redirect: 'error', signal: request.signal,
+      });
+      if (response.ok) url = kitchenUrl((await response.json())?.url);
+    } catch {
+      url = null;
+    } finally {
+      clearTimeout(timeout);
+    }
+    // While the browser navigates, the card stays in its starting state.
+    if (url && go(url, idle)) return;
+    busy.delete(key); failed.set(key, OPEN_FAILED);
+    const current = cards.get(key);
+    if (!current) return;
+    const lostFocus = document.activeElement === document.body || document.activeElement === null;
+    fill(current, current.project);
+    if (lostFocus) current.refs.open.focus({ preventScroll: true });
+  }
+
+  async function poll() {
+    if (!visible() || controller) return;
+    const request = new AbortController();
+    controller = request;
+    const timeout = setTimeout(() => request.abort(), STATE_TIMEOUT);
+    let ok = false;
+    try {
+      const response = await fetch('/state', { cache: 'no-store', credentials: 'omit', redirect: 'error', signal: request.signal });
+      if (response.ok) {
+        const next = parse(await response.json());
+        if (next) { projects = next; loaded = true; ok = true; }
+      }
+    } catch {
+      ok = false;
+    } finally {
+      clearTimeout(timeout);
+      controller = null;
+    }
+    polls++;
+    // A poll cut short because the page went hidden says nothing about the lobby.
+    if (ok || visible()) setOffline(!ok);
+    render();
+    clearTimeout(timer);
+    if (visible()) timer = setTimeout(poll, INTERVAL);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    clearTimeout(timer);
+    if (!visible()) controller?.abort();
+    else if (!controller) poll();
+  });
+  // Coming back to the lobby from a kitchen: forget any starting state and refresh at once.
+  window.addEventListener('pageshow', event => {
+    if (!event.persisted) return;
+    busy.clear(); failed.clear(); render();
+    clearTimeout(timer); if (!controller) poll();
+  });
+
+  render();
+  if (visible()) poll();
+})();
+</script>
+</body>
+</html>

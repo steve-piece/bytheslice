@@ -12,3 +12,4 @@ require('./kitchen-progress.test.js');
 require('./kitchen-ledger-progress.test.js');
 require('./kitchen-words.test.js');
 require('./kitchen-installer.test.js');
+require('./lobby-tokens.test.js');
