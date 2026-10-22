@@ -2,9 +2,9 @@
 
 # 🍕 Agent Roster
 
-Every ByTheSlice subagent in one table, in plain English. ByTheSlice ships 49 registered subagents plus 6 documented deprecated shims. The 49 live agents are registered plugin agents: type `@bytheslice:<name>` in any Claude Code session to aim one at something directly, or just run the skills and let them dispatch. Registration means each agent's model tier, effort level, and tool allowlist (when its file declares one; an agent without a `tools:` list gets every tool) are enforced by the platform, not just suggested.
+Every ByTheSlice subagent in one table, in plain English. ByTheSlice ships 49 subagents, and every one is a registered plugin agent: type `@bytheslice:<name>` in any Claude Code session to aim one at something directly, or just run the skills and let them dispatch. Registration means each agent's model tier, effort level, and tool allowlist (when its file declares one; an agent without a `tools:` list gets every tool) are enforced by the platform, not just suggested.
 
-Bold rows mark the skill each group of agents belongs to. The 6 deprecated shims at the bottom are v4 leftovers that stay on disk for back-compat but are not registered.
+Bold rows mark the skill each group of agents belongs to.
 
 | Agent | Kitchen character | What it does |
 |---|---|---|
@@ -69,13 +69,6 @@ Bold rows mark the skill each group of agents belongs to. The 6 deprecated shims
 | **🍕 /close-shop** | | |
 | `retrospective-reviewer` | Rhea | Reads the project's history (logs, commits, PRs, escalations, and the Pass ledger's metrics when the mod ran) and identifies recurring friction the plugin itself caused. |
 | `proposal-drafter` | Paz | Turns those findings into ready-to-apply patch files against the plugin repo, one per improvement. Barred from modifying /close-shop itself. |
-| **🗄️ Deprecated (on disk, not registered)** | | |
-| `basic-checks-runner` | Not registered | Old lint/types/build runner from /sell-slice v4. Folded into `slice-verifier`. |
-| `aggregating-test-reviewer` | Not registered | Old all-in-one test reviewer from /sell-slice v4. Split between `slice-verifier` (static half) and `slice-tester` (behavioral half). |
-| `ci-cd-guardrails` | Not registered | Old per-slice CI-safety pass from /sell-slice v4. Now the CI-integrity check inside `slice-verifier`. |
-| `visual-reviewer` | Not registered | Old screenshot reviewer from the v4 frontend pipeline. Folded into `slice-tester`'s rendered design-system checks. |
-| `stage-runner` | Not registered | v4 /run-the-day wrapper that ran one stage by calling /sell-slice. Superseded by /sell-pie. |
-| `pr-reviewer` | Not registered | v4 /run-the-day post-merge sanity check. Superseded by /box-it-up's CI watch plus `slice-verifier`'s CI-integrity check. |
 
 ## Scene roles and extra instances
 
@@ -87,5 +80,3 @@ The [kitchen roster](../skills/open-kitchen/kitchen.html) groups characters into
 - **Pia** is the `plater` scene helper that collects slices and plates pies. It is not a registered plugin agent.
 - **Base crew and town crew.** While a pie is open in live mode, Dom works the line, Ollie tends the oven and Sal minds the window on ambient duty, with Chef Nico leading; an agent that is actually running wears a gold work tag. The rest of the named crew live in town, in flats above the Main Street shops, until their agent starts, then run in to their station and walk back out when it finishes. The People sheet's Crew and Town tabs open a profile card for any of them.
 - Additional simultaneous plugin instances use numbered helpers in the matching division, such as `line helper 1`. Unknown plugin roles use line helpers. Non-plugin agents appear as numbered **Temp** helpers at the pass, preserving their actual agent type in the role description.
-
-The 6 deprecated shims above stay distinct from the 49 registered roles and have no documented named live-character assignment.
