@@ -16,20 +16,8 @@ const agentFiles = skills.filter((s) => fs.existsSync(path.join(root, 'skills', 
   .flatMap((s) => walk(`skills/${s}/agents`)).filter((f) => f.endsWith('.md'));
 const registered = read('.claude-plugin/plugin.json').agents.map((a) => a.replace(/^\.\//, ''));
 
-// The documented deprecated shims (docs/agents.md): on disk, never registered. A new agent file must be registered instead.
-const DEPRECATED = [
-  'skills/run-the-day/agents/pr-reviewer.md',
-  'skills/run-the-day/agents/stage-runner.md',
-  'skills/sell-slice/agents/aggregating-test-reviewer.md',
-  'skills/sell-slice/agents/basic-checks-runner.md',
-  'skills/sell-slice/agents/ci-cd-guardrails.md',
-  'skills/sell-slice/agents/frontend/visual-reviewer.md',
-];
-
-test('every agent file is registered in plugin.json agents[] or is a documented deprecated shim', () => {
-  const stray = agentFiles.filter((f) => !registered.includes(f) && !DEPRECATED.includes(f));
-  assert.deepEqual(stray, []);
-  assert.deepEqual(DEPRECATED.filter((f) => registered.includes(f)), [], 'a deprecated shim is registered');
+test('every agent file is registered in plugin.json agents[]', () => {
+  assert.deepEqual(agentFiles.filter((f) => !registered.includes(f)), []);
 });
 
 test('every agents[] entry exists on disk', () => {
