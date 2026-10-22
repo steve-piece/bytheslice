@@ -1,10 +1,11 @@
 // mcp/kitchen-server.js
-// Serves read-only kitchen snapshots over stdio MCP and a protected loopback HTTP page.
+// Serves read-only kitchen snapshots over stdio MCP and a protected loopback HTTP page, plus a verified redirect to the lobby.
 'use strict';
 
 const { createInterface } = require('node:readline');
 const http = require('node:http');
 const fs = require('node:fs/promises');
+const os = require('node:os');
 const path = require('node:path');
 const { readKitchenState } = require('./kitchen-state.js');
 
@@ -141,6 +142,53 @@ function trustedRequest(req) {
   return true;
 }
 
+/** The lobby home: $BTS_HOME, else ~/.bytheslice (lockstep with mcp/lobby-state.js and hooks/lib/lobby.sh). */
+function lobbyHome() {
+  return path.resolve(process.env.BTS_HOME || path.join(os.homedir(), '.bytheslice'));
+}
+
+/** True when 127.0.0.1:<lobbyPort> answers GET /state with a JSON object holding a projects array, within 500 ms. */
+function lobbyAnswers(lobbyPort) {
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = result => { if (!settled) { settled = true; clearTimeout(deadline); resolve(result); } };
+    const request = http.get({ hostname: '127.0.0.1', port: lobbyPort, path: '/state',
+      headers: { 'Cache-Control': 'no-cache', Accept: 'application/json' } }, response => {
+      if (response.statusCode !== 200) { response.destroy(); finish(false); return; }
+      const chunks = [];
+      let bytes = 0;
+      response.on('data', chunk => {
+        bytes += chunk.length;
+        if (bytes > 1024 * 1024) { request.destroy(); finish(false); } else chunks.push(chunk);
+      });
+      response.on('end', () => {
+        try {
+          const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          finish(data !== null && typeof data === 'object' && Array.isArray(data.projects));
+        } catch { finish(false); }
+      });
+      response.on('error', () => finish(false));
+    });
+    const deadline = setTimeout(() => { request.destroy(); finish(false); }, 500);
+    request.on('error', () => finish(false));
+  });
+}
+
+/** The lobby URL, http://127.0.0.1:<port>/, when its port file names a live lobby; else null. Never another host. */
+async function lobbyUrl() {
+  let lobbyPort;
+  try {
+    const file = path.join(lobbyHome(), 'lobby', 'port');
+    const stat = await fs.stat(file);
+    if (!stat.isFile() || stat.size > 32) return null;
+    const text = (await fs.readFile(file, 'utf8')).trim();
+    if (!/^\d{1,5}$/.test(text)) return null;
+    lobbyPort = Number(text);
+  } catch { return null; }
+  if (!Number.isInteger(lobbyPort) || lobbyPort < 1 || lobbyPort > 65535 || lobbyPort === port) return null;
+  return await lobbyAnswers(lobbyPort) ? `http://127.0.0.1:${lobbyPort}/` : null;
+}
+
 async function serve(req, res) {
   const reply = (code, message, type = 'text/plain; charset=utf-8') => {
     res.writeHead(code, responseHeaders(type)); res.end(message);
@@ -158,6 +206,13 @@ async function serve(req, res) {
   if (req.url === '/state') {
     try { return reply(200, JSON.stringify(await readKitchenState(projectRoot, { port })), 'application/json; charset=utf-8'); }
     catch { return reply(503, 'Kitchen state unavailable'); }
+  }
+  // The way to the lobby from any kitchen, with or without ?lobby=: 302 to the running lobby, else 404.
+  if (req.url === '/lobby') {
+    const target = await lobbyUrl();
+    if (!target) return reply(404, 'Lobby not running');
+    res.writeHead(302, { ...responseHeaders('text/plain; charset=utf-8'), Location: target });
+    return res.end('Found');
   }
   return reply(404, 'Not found');
 }

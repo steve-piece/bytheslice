@@ -1,5 +1,5 @@
 // tests/kitchen/kitchen-server.test.js
-// Exercises MCP snapshots, protected loopback HTTP, port discovery, collision recovery, and shutdown.
+// Exercises MCP snapshots, protected loopback HTTP, the lobby redirect, port discovery, collision recovery, and shutdown.
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -181,4 +181,75 @@ test('recovers from an occupied port and removes discovery on signal shutdown', 
 test('uses CLAUDE_PROJECT_DIR when no explicit project argument is given', async t => {
   const data = await fixture(t), session = await start(t, data, { serveOnly: true, args: [], env: { CLAUDE_PROJECT_DIR: data.root } });
   assert.equal(JSON.parse((await get(session.port)).body).project.root, data.root);
+});
+
+/** A stand-in lobby answering GET /state with `body` on an ephemeral 127.0.0.1 port; closed after the test. */
+async function fakeLobby(t, body) {
+  const seen = [];
+  const lobby = http.createServer((req, res) => {
+    seen.push({ url: req.url, host: req.headers.host });
+    res.setHeader('Content-Type', 'application/json');
+    res.end(typeof body === 'string' ? body : JSON.stringify(body));
+  });
+  lobby.listen(0, '127.0.0.1'); await once(lobby, 'listening');
+  let closed = false;
+  const close = () => closed ? Promise.resolve() : new Promise(resolve => { closed = true; lobby.close(resolve); lobby.closeAllConnections(); });
+  t.after(close);
+  return { port: lobby.address().port, seen, close };
+}
+
+test('GET /lobby redirects only to a live lobby on 127.0.0.1, else 404', async t => {
+  const data = await fixture(t);
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'kitchen-lobby-home-'));
+  t.after(() => fs.rm(home, { recursive: true, force: true }));
+  const lobbyPortFile = path.join(home, 'lobby', 'port');
+  const writeLobbyPort = async value => { await fs.mkdir(path.dirname(lobbyPortFile), { recursive: true }); await fs.writeFile(lobbyPortFile, value); };
+  const session = await start(t, data, { serveOnly: true, env: { BTS_HOME: home } });
+
+  const none = await get(session.port, '/lobby');
+  assert.equal(none.status, 404, 'no lobby port file');
+  assert.equal(none.headers.location, undefined);
+
+  const lobby = await fakeLobby(t, { v: 1, generatedAt: 1, projects: [] });
+  await writeLobbyPort(`${lobby.port}\n`);
+  const found = await get(session.port, '/lobby');
+  assert.equal(found.status, 302, 'a live lobby');
+  assert.equal(found.headers.location, `http://127.0.0.1:${lobby.port}/`);
+  assert.equal(found.headers['cache-control'], 'no-store');
+  assert.deepEqual(lobby.seen.at(-1), { url: '/state', host: `127.0.0.1:${lobby.port}` }, 'the kitchen probed the lobby /state');
+  // Typed in the address bar (none) or clicked inside the kitchen (same-origin) both reach it.
+  assert.equal((await get(session.port, '/lobby', { 'Sec-Fetch-Site': 'none', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' })).status, 302);
+  assert.equal((await get(session.port, '/lobby', { Origin: `http://127.0.0.1:${session.port}`, 'Sec-Fetch-Site': 'same-origin' })).status, 302);
+  // Exact path, GET only, and the same Host, Origin and Fetch Metadata checks as every other route.
+  for (const url of ['/lobby/', '/lobby?x=1', '/Lobby', '/lobby/state']) assert.equal((await get(session.port, url)).status, 404, url);
+  assert.equal((await get(session.port, '/lobby', {}, 'POST')).status, 405);
+  assert.equal((await get(session.port, '/lobby', { Host: 'attacker.invalid' })).status, 403);
+  assert.equal((await get(session.port, '/lobby', { Origin: 'https://attacker.invalid' })).status, 403);
+  assert.equal((await get(session.port, '/lobby', { 'Sec-Fetch-Site': 'cross-site' })).status, 403);
+  assert.equal((await get(session.port, '/lobby', { 'Sec-Fetch-Site': 'same-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' })).status, 403,
+    'a same-site navigation reaches the page only');
+
+  // A listener that is not a lobby (no projects array, an error, junk) is never a redirect target.
+  for (const body of [{ port: 1, project: { root: data.root } }, { projects: {} }, 'not json', 'null']) {
+    const other = await fakeLobby(t, body);
+    await writeLobbyPort(String(other.port));
+    const res = await get(session.port, '/lobby');
+    assert.equal(res.status, 404, JSON.stringify(body));
+    assert.equal(res.headers.location, undefined);
+  }
+  // The kitchen's own port, malformed values and anything off 127.0.0.1 never redirect.
+  for (const value of [String(session.port), 'http://attacker.invalid/', '127.0.0.1:4466', '0', '65536', '-1', '4466/x', '1e3', ' ', 'x'.repeat(64)]) {
+    await writeLobbyPort(value);
+    const res = await get(session.port, '/lobby');
+    assert.equal(res.status, 404, value);
+    assert.equal(res.headers.location, undefined, value);
+  }
+  // A lobby that has stopped (its port file left behind) is a 404, not a redirect into nothing.
+  await writeLobbyPort(String(lobby.port));
+  assert.equal((await get(session.port, '/lobby')).status, 302);
+  await lobby.close();
+  assert.equal((await get(session.port, '/lobby')).status, 404, 'stopped lobby');
+  // Every redirect this test saw pointed at 127.0.0.1 only.
+  assert.match(found.headers.location, /^http:\/\/127\.0\.0\.1:\d{1,5}\/$/);
+  assert.equal(session.stdout(), ''); assert.equal(session.stderr(), '');
 });
