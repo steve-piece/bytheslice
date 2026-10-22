@@ -150,6 +150,15 @@ test('HTTP serves exact page and state routes on loopback with same-origin prote
   assert.equal((await get(session.port, '/state', { Origin: 'https://attacker.invalid' })).status, 403);
   assert.equal((await get(session.port, '/state', { 'Sec-Fetch-Site': 'cross-site' })).status, 403);
   assert.equal((await get(session.port, '/state', { Origin: `http://127.0.0.1:${session.port}`, 'Sec-Fetch-Site': 'same-origin' })).status, 200);
+  // The lobby's card click is a same-site top-level navigation (another 127.0.0.1 port): the page document only.
+  const nav = { 'Sec-Fetch-Site': 'same-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' };
+  assert.equal((await get(session.port, '/', nav)).status, 200, 'same-site page navigation');
+  assert.equal((await get(session.port, '/?lobby=4466&idle=1', nav)).status, 200, 'same-site hand-off navigation');
+  assert.equal((await get(session.port, '/', { 'Sec-Fetch-Site': 'same-site' })).status, 403, 'same-site page fetch without navigate/document');
+  assert.equal((await get(session.port, '/', { ...nav, 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty' })).status, 403, 'same-site page fetch');
+  assert.equal((await get(session.port, '/state', nav)).status, 403, 'same-site /state');
+  assert.equal((await get(session.port, '/', { ...nav, 'Sec-Fetch-Site': 'cross-site' })).status, 403, 'cross-site navigation');
+  assert.equal((await get(session.port, '/', { ...nav, Host: 'attacker.invalid' })).status, 403, 'same-site navigation still checks Host');
   const listeners = spawnSync('lsof', ['-nP', '-a', '-p', String(session.child.pid), '-iTCP', '-sTCP:LISTEN'], { encoding: 'utf8' });
   assert.equal(listeners.status, 0);
   assert.match(listeners.stdout, new RegExp(`127\\.0\\.0\\.1:${session.port} \\(LISTEN\\)`));

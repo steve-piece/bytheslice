@@ -44,7 +44,11 @@ function trustedRequest(req, port) {
   const hosts = [`127.0.0.1:${port}`, `localhost:${port}`];
   if (!hosts.includes(req.headers.host)) return false;
   if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return false;
-  if (req.headers['sec-fetch-site'] && !['same-origin', 'none'].includes(req.headers['sec-fetch-site'])) return false;
+  const site = req.headers['sec-fetch-site'];
+  // A top-level click from a kitchen (another 127.0.0.1 port) is same-site: allowed for the page document only.
+  const pageNavigation = site === 'same-site' && req.method === 'GET' && req.url === '/'
+    && req.headers['sec-fetch-mode'] === 'navigate' && req.headers['sec-fetch-dest'] === 'document';
+  if (site && !['same-origin', 'none'].includes(site) && !pageNavigation) return false;
   return true;
 }
 
