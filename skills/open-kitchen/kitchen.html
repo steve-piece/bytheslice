@@ -99,6 +99,12 @@ button{font:inherit;color:inherit}
 .dock button.on{background:var(--ink);color:var(--cream)}
 .dock svg{width:17px;height:17px}
 button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+/* opened from the lobby (?lobby=<port>, ?idle=1): the way back, and the idle notice */
+a.iconbtn{color:inherit;text-decoration:none}
+a.iconbtn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.idle-note{position:fixed;z-index:5;top:calc(68px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);padding:8px 16px;font-size:13.5px;font-weight:700;white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis}
+@media (min-width:641px){.with-lobby .top{right:340px}}
+@media (max-width:640px){.idle-note{top:calc(112px + env(safe-area-inset-top,0px));white-space:normal;text-align:center}}
 
 /* side sheet */
 #pfCanvas{display:block;width:100%;aspect-ratio:1/1;max-height:300px;border-radius:14px;background:radial-gradient(circle at 50% 40%,#fff8ec 0,#f3e5cf 70%,#ead6b8 100%)}
@@ -291,7 +297,9 @@ button.orow:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
   <button class="pill iconbtn" id="bProgress" type="button" aria-label="Progress" title="Progress: the Pass ledger per pie" aria-controls="sheet" data-i="progress"></button>
   <button class="pill iconbtn" id="bHome" aria-label="Recenter camera" data-i="target"></button>
   <button class="pill iconbtn" id="bOpen" type="button" aria-label="Open this kitchen in your default browser (new tab)" title="Waiting for the local kitchen address" data-i="ext" disabled></button>
+  <a class="pill iconbtn" id="bLobby" hidden aria-label="Back to the lobby" title="Lobby: every project" data-i="lobby"></a>
 </div>
+<div class="pill idle-note" id="idleNote" role="status" hidden>Nothing is in progress in this project</div>
 
 
 
@@ -522,6 +530,8 @@ window.createKitchenBuildDriver = function ({ render }) {
 <script type="module">
 import * as THREE from 'three';
 let sceneMode = 'pending';
+// Opened from the lobby with ?idle=1 and no active work: no customers, a notice, and the time buttons work (see syncIdle).
+let idleMode = false;
 
 // ---------- icons ----------
 const IC = {
@@ -560,6 +570,7 @@ const IC = {
   stars:'<circle cx="12" cy="12" r="10" fill="#f3cf72" stroke="#c99a2e" stroke-width="1.2"/><path d="M8.5 7.6l.8 1.6 1.7.2-1.3 1.2.3 1.7-1.5-.8-1.5.8.3-1.7-1.3-1.2 1.7-.2zM15.5 7.6l.8 1.6 1.7.2-1.3 1.2.3 1.7-1.5-.8-1.5.8.3-1.7-1.3-1.2 1.7-.2z" fill="#f08a24" stroke="#c9643f" stroke-width=".6"/><path d="M7.4 14q4.6 4.6 9.2 0z" fill="#4a3426"/><path d="M9.5 16.1q2.5 1.2 5 0" fill="none" stroke="#e8706a" stroke-width="1.2"/>',
   grin:'<circle cx="12" cy="12" r="10" fill="#f3cf72" stroke="#c99a2e" stroke-width="1.2"/><ellipse cx="8.7" cy="9.6" rx="1.1" ry="1.5" fill="#4a3426"/><ellipse cx="15.3" cy="9.6" rx="1.1" ry="1.5" fill="#4a3426"/><path d="M6.8 13.2h10.4q-.7 5-5.2 5t-5.2-5z" fill="#fff" stroke="#4a3426" stroke-width="1.3" stroke-linejoin="round"/><circle cx="6.3" cy="13" r="1.2" fill="#e8978a"/><circle cx="17.7" cy="13" r="1.2" fill="#e8978a"/>',
   fix:'<path d="M14.5 4.5a4.5 4.5 0 0 0-5.6 5.8L3.8 15.4a1.8 1.8 0 0 0 2.6 2.6l5.1-5.1a4.5 4.5 0 0 0 5.8-5.6l-2.6 2.6-2.3-.5-.5-2.3z" fill="#e1e9ef" stroke="#4a3426" stroke-width="1.5" stroke-linejoin="round"/>',
+  lobby:'<g fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.8" y="3.8" width="7" height="7" rx="1.8"/><rect x="13.2" y="3.8" width="7" height="7" rx="1.8"/><rect x="3.8" y="13.2" width="7" height="7" rx="1.8"/><rect x="13.2" y="13.2" width="7" height="7" rx="1.8"/></g>',
 };
 const svg = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${IC[k]}</svg>`;
 document.querySelectorAll('[data-i]').forEach(e => { e.innerHTML = svg(e.dataset.i) + (e.dataset.l ? `<span class="lbl${e.id === 'bFit' ? ' lbl-x' : ''}">${e.dataset.l}</span>` : ''); });
@@ -4084,7 +4095,8 @@ function setTod(mode, fromSnapshot = false) {
   ['bDawn', 'bDay', 'bNight', 'bLate'].forEach(id => $('#' + id).classList.toggle('on', id === { dawn: 'bDawn', day: 'bDay', night: 'bNight', late: 'bLate' }[mode]));
   townies.forEach(startLife); bikes.forEach(b => b.gen++);
 }
-$('#bDawn').onclick = () => setTod('dawn'); $('#bDay').onclick = () => setTod('day'); $('#bNight').onclick = () => setTod('night'); $('#bLate').onclick = () => setTod('late');
+// While idle (opened from the lobby with nothing running) the operator sets the time, as a snapshot otherwise would.
+$('#bDawn').onclick = () => setTod('dawn', idleMode); $('#bDay').onclick = () => setTod('day', idleMode); $('#bNight').onclick = () => setTod('night', idleMode); $('#bLate').onclick = () => setTod('late', idleMode);
 // the day starts before opening: neighbors are still at home except the early risers, and the prep crew is in
 function startAtDawn() {
   if (sceneMode === 'live') { setTod('dawn', true); prepShop(); return; }
@@ -4461,6 +4473,28 @@ function syncLivePhase(snapshot) {
   }
 }
 const castDriver = window.createKitchenCastDriver({ roster: { ...byId, 'box-it-up': byId.lead }, emit: castEvent, demo: demoDriver, live: startLive });
+// Opened from the lobby: ?lobby=<port> shows the way back; ?idle=1 opens a project with nothing running explorable.
+const QUERY = new URLSearchParams(location.search);
+const LOBBY_PORT = /^[1-9]\d{0,4}$/.test(QUERY.get('lobby') || '') && Number(QUERY.get('lobby')) <= 65535 ? Number(QUERY.get('lobby')) : null;
+const IDLE_ASKED = QUERY.get('idle') === '1';
+let idleDecided = false;
+if (LOBBY_PORT) {
+  $('#bLobby').href = `http://127.0.0.1:${LOBBY_PORT}/`; $('#bLobby').hidden = false;
+  document.documentElement.classList.add('with-lobby');
+}
+// The first snapshot decides: idle only when asked and no agent is active. Active work later ends idle for good.
+function syncIdle(snapshot) {
+  const working = Array.isArray(snapshot.active) && snapshot.active.length > 0;
+  if (!idleDecided) {
+    idleDecided = true;
+    if (IDLE_ASKED && sceneMode === 'live' && !working) { idleMode = true; $('#idleNote').hidden = false; lockTime(false); }
+    return;
+  }
+  if (!idleMode || (!working && sceneMode === 'live')) return;
+  idleMode = false; $('#idleNote').hidden = true;
+  // Back to the real session: the clock locks again and the current phase re-applies its time of day.
+  if (sceneMode === 'live') { lockTime(true); livePhase = null; }
+}
 function liveDriver(snapshot) {
   liveSnapshot = snapshot;
   buildDriver.apply(snapshot);
@@ -4470,12 +4504,13 @@ function liveDriver(snapshot) {
   for (const [id, entry] of phaseActors) if ((snapshot.active || []).some(row => row.type === `bytheslice:${id}`)) {
     phaseActors.delete(id); cancelActor(entry.actor);
   }
-  castDriver.apply(castSnapshot); syncBuildCrews(snapshot); syncLivePhase(snapshot); syncBaseCrew(snapshot); syncTownCrew(); syncOrderLine(snapshot);
+  castDriver.apply(castSnapshot); syncIdle(snapshot); syncBuildCrews(snapshot); syncLivePhase(snapshot); syncBaseCrew(snapshot); syncTownCrew(); if (!idleMode) syncOrderLine(snapshot);
 }
 window.liveDriver = liveDriver;
 Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
   get mode() { return sceneMode; },
   get phase() { return livePhase; },
+  get idle() { return idleMode; },
   get sign() { return { on: signOn, glow: LED.emissiveIntensity, lights: LEDS.map(light => light.intensity), flicker: signFlick, level: signK }; },
   get lighting() { return { time: tod, night, nightGoal, dawn: dawnK, dawnGoal, sun: sun.intensity, ambient: amb.intensity }; },
   get statusBoard() { return { counts: liveShopStatus ? JSON.parse(JSON.stringify(liveShopStatus)) : null, card: root.getObjectByName('board86').userData.card() }; },

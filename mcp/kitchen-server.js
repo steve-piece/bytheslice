@@ -143,8 +143,9 @@ async function serve(req, res) {
   };
   if (!trustedRequest(req)) return reply(403, 'Forbidden');
   if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); return reply(405, 'Method not allowed'); }
-  // Exact paths avoid exposing any other file or accepting traversal and query parameters.
-  if (req.url === '/') {
+  // Exact paths avoid exposing any other file or accepting traversal and query parameters. The page alone may carry a
+  // query string (?lobby=<port>&idle=1 from the lobby); the server never reads it and always answers the same file.
+  if (req.url === '/' || req.url.startsWith('/?')) {
     try {
       const html = await fs.readFile(path.join(__dirname, '../skills/open-kitchen/kitchen.html'));
       return reply(200, html, 'text/html; charset=utf-8');
