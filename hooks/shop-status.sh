@@ -4,15 +4,23 @@
 # starts with master-checklist state in context; it replaces the repeated
 # Phase 1 "read the checklist" step in several skills.
 #
-# Exit 0; stdout becomes additional session context.
+# Exit 0; stdout becomes additional session context. With BTS_HOST=cursor it
+# runs as Cursor's sessionStart hook and prints the same header as
+# {"additional_context": "..."} ({} when there is nothing to say).
 
 set -u
-
-[ "${BTS_HOOKS_DISABLED:-0}" = "1" ] && exit 0
 
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=./lib/checklist.sh
 . "$SELF_DIR/lib/checklist.sh"
+
+if [ "${BTS_HOST:-}" = "cursor" ]; then
+  STATUS=$(BTS_HOST= bash "$SELF_DIR/shop-status.sh" </dev/null 2>/dev/null)
+  if [ -n "$STATUS" ]; then printf '{"additional_context":"%s"}\n' "$(json_str "$STATUS")"; else printf '{}\n'; fi
+  exit 0
+fi
+
+[ "${BTS_HOOKS_DISABLED:-0}" = "1" ] && exit 0
 
 CHECKLIST=$(bts_checklist_path)
 [ -z "$CHECKLIST" ] && exit 0  # Not a ByTheSlice project; nothing to inject.

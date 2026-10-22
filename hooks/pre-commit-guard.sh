@@ -13,8 +13,18 @@
 # Hook contract: reads JSON from stdin with .tool_input.command and .cwd.
 # Always exit 0. A warning is printed as Claude Code hook JSON: the
 # additionalContext reaches the model, the systemMessage reaches the person.
+#
+# With BTS_HOST=cursor it runs as Cursor's beforeShellExecution hook instead:
+# stdin carries .command and .cwd at the top level, and every exit prints a
+# {"permission":"allow"} answer, since Cursor blocks a command whose hook
+# prints no JSON or JSON off its schema.
 
 set -u
+
+CURSOR_ANSWERED=0
+if [ "${BTS_HOST:-}" = "cursor" ]; then
+  trap '[ "$CURSOR_ANSWERED" = 1 ] || printf '"'"'{"permission":"allow"}\n'"'"'' EXIT
+fi
 
 [ "${BTS_HOOKS_DISABLED:-0}" = "1" ] && exit 0
 
@@ -26,7 +36,7 @@ INPUT="$(cat 2>/dev/null || true)"
 CMD=""
 HOOK_CWD=""
 if command -v jq >/dev/null 2>&1; then
-  CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+  CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // .command // empty' 2>/dev/null)
   HOOK_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
 fi
 # jq-less fallback. Reads JSON string values with their escapes intact, so
@@ -47,16 +57,6 @@ if [ -z "$HOOK_CWD" ]; then
   HOOK_CWD=$(json_unescape "$(printf '%s' "$INPUT" | sed -nE 's/.*"cwd"[[:space:]]*:[[:space:]]*"(([^"\\]|\\.)*)".*/\1/p')")
 fi
 
-# Encode a string for a JSON string literal (no jq needed).
-json_str() {
-  local s="$1"
-  s=${s//\\/\\\\}
-  s=${s//\"/\\\"}
-  s=${s//$'\t'/\\t}
-  s=${s//$'\r'/}
-  s=${s//$'\n'/\\n}
-  printf '%s' "$s" | tr -d '\000-\010\013\014\016-\037'
-}
 
 # Only act on `git commit` invocations (including `git -C <dir> commit`).
 # Anything else passes silently. Every commit in the command is checked, and
@@ -100,9 +100,17 @@ staged files on branch $(bts_branch "$COMMIT_DIR"):
 $(printf '%s\n' "$STAGED" | sed 's/^/  /')"
   fi
   TEXT=$(json_str "$WARN")
+  if [ "${BTS_HOST:-}" = "cursor" ]; then
+    printf '{"permission":"allow","user_message":"%s","agent_message":"%s"}\n' "$TEXT" "$TEXT"
+    CURSOR_ANSWERED=1
+    exit 0
+  fi
   printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}\n' "$TEXT" "$TEXT"
   exit 0
 fi
+
+# Cursor reads only the JSON answer, so the staged summary is Claude Code's alone.
+[ "${BTS_HOST:-}" = "cursor" ] && exit 0
 
 if [ -n "$STAGED" ]; then
   printf '[bytheslice pre-commit] staged files on branch %s:\n' "$(bts_branch "$COMMIT_DIR")"

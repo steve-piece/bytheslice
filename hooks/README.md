@@ -2,7 +2,7 @@
 
 Deterministic hooks that log kitchen activity, put the checklist summary in front of the model at session start, and warn on a risky commit. **No hook blocks**: every script exits 0. A warning is printed as Claude Code hook JSON, so `hookSpecificOutput.additionalContext` reaches the model and `systemMessage` reaches the person; plain stdout from a tool hook shows in the transcript only.
 
-The Pass, the plugin's Claude Code mod (a TypeScript hooks module that `hooks.json` names under `modules` beside the `hooks` block), lives in [`mod/`](../mod/); Cursor reads only the `hooks` key and ignores it.
+The Pass, the plugin's Claude Code mod (a TypeScript hooks module that `hooks.json` names under `modules` beside the `hooks` block), lives in [`mod/`](../mod/). Cursor never loads the mod: `.cursor-plugin/plugin.json` points it at [`hooks-cursor.json`](./hooks-cursor.json) instead, which runs `shop-status.sh` on `sessionStart` and `pre-commit-guard.sh` on `beforeShellExecution`, both with `BTS_HOST=cursor` so they answer in Cursor's JSON (the guard always answers `{"permission":"allow"}`, since Cursor blocks a command whose hook prints no JSON).
 
 ## Hooks
 
@@ -28,7 +28,7 @@ Every script that was in this directory at the start of slice 5.4, with the evid
 | library approval recorder | not wired (`sell-slice` Phase 4.5 ran it) | 0 runs (no approvals file anywhere) | 0 | 0 | same prose | **Retired** with its only reader |
 | compact snapshot | `PreCompact` | ran: 19 snapshot files in 19 project dirs, latest 2026-10-20; 93 compactions in transcripts | 0 (silent by design) | 0 | `shop-status.sh` on `SessionStart:compact` (22 rows), and the bakers' prose: call `bts_status` or re-read the checklist at every phase boundary | **Retired**: nothing ever read the snapshot it wrote |
 
-**Hosts without the mod.** Cursor reads only the `hooks` key of `hooks.json` and never loads the mod; Claude Code below 2.1.299 keeps the mod inert. On those hosts the reduced set means: plan writes during a bake draw no warning (the mod was already their only cover once the stage plan guard went), production-route writes before a library approval draw no warning (only the `sell-slice` prose holds the line, as it did whenever the gate was unarmed), and compaction writes no snapshot (`shop-status.sh` still re-injects the summary on Claude Code; Cursor's handling of `SessionStart` sources is unconfirmed). A commit on `main` still draws the `pre-commit-guard.sh` warning everywhere the `hooks` key runs. The operator accepted this loss.
+**Hosts without the mod.** Cursor reads `hooks-cursor.json` and never loads the mod; Claude Code below 2.1.299 keeps the mod inert. On those hosts the reduced set means: plan writes during a bake draw no warning (the mod was already their only cover once the stage plan guard went), production-route writes before a library approval draw no warning (only the `sell-slice` prose holds the line, as it did whenever the gate was unarmed), and compaction writes no snapshot (`shop-status.sh` still re-injects the summary on Claude Code, and Cursor gets it once per conversation through `sessionStart`). A commit on `main` still draws the `pre-commit-guard.sh` warning on both hosts. The activity log (`kitchen-log.sh`) is Claude Code only. The operator accepted this loss.
 
 ## Kitchen activity
 
