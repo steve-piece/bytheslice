@@ -11,6 +11,10 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ## [Unreleased]
 
+### Fixed
+
+- **Empty slice-close commits survived no rebase-merge.** A slice whose final commit has nothing left to stage (the checklist is gitignored by default) closes with an `--allow-empty` commit, and GitHub's rebase-merge silently drops those: Pie 7 lost three of its five `feat(pie-7): N.M` slice commits that way. `/box-it-up` now picks the merge strategy with `skills/box-it-up/pick-merge-strategy.js`, which takes a merge commit whenever the pie branch holds an empty commit, rebase otherwise, and asks when the repo allows neither. Phase 5 also confirms every branch commit subject reached `main`, and a gitignored checklist's Pie flip no longer tries to commit.
+
 ---
 
 ## [5.6.0] - 2026-10-22
