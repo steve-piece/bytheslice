@@ -57,6 +57,26 @@ test('/state host-header 403', async t => {
   assert.equal((await request(port, { headers: { Host: `localhost:${port}` } })).status, 200, 'localhost is our own host');
 });
 
+test('a same-site top-level navigation reaches the page only', async t => {
+  const { base } = await sandbox(t);
+  const page = path.join(base, 'lobby.html');
+  await fs.writeFile(page, '<!doctype html><title>Lobby</title>');
+  const { port, root, calls } = await lobby(t, { page });
+  // The kitchen's Lobby button is a same-site top-level navigation (another 127.0.0.1 port).
+  const nav = { 'Sec-Fetch-Site': 'same-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' };
+  assert.equal((await request(port, { url: '/', headers: nav })).status, 200, 'same-site page navigation');
+  assert.equal((await request(port, { url: '/', headers: { 'Sec-Fetch-Site': 'same-site' } })).status, 403, 'same-site page fetch');
+  assert.equal((await request(port, { url: '/', headers: { ...nav, 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty' } })).status, 403,
+    'same-site cors fetch of the page');
+  assert.equal((await request(port, { url: '/state', headers: nav })).status, 403, 'same-site /state');
+  assert.equal((await request(port, { url: '/?x=1', headers: nav })).status, 403, 'same-site navigation with a query');
+  assert.equal((await open(port, root, { 'Sec-Fetch-Site': 'same-site' })).status, 403, 'same-site POST /open');
+  assert.equal((await open(port, root, nav)).status, 403, 'same-site POST /open as a navigation');
+  assert.equal(calls.length, 0, 'no kitchen started');
+  assert.equal((await request(port, { url: '/', headers: { ...nav, 'Sec-Fetch-Site': 'cross-site' } })).status, 403, 'cross-site navigation');
+  assert.equal((await request(port, { url: '/', headers: { ...nav, Host: 'evil.test' } })).status, 403, 'same-site navigation still checks Host');
+});
+
 test('/state serves the lobby JSON with the protective headers', async t => {
   const { port, root } = await lobby(t);
   const res = await request(port);
