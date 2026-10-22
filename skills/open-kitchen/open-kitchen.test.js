@@ -1,5 +1,5 @@
 // skills/open-kitchen/open-kitchen.test.js
-// Verify loopback server reuse, bounded startup, safe CLI errors, and project isolation for the kitchen opener.
+// Verify loopback server reuse, bounded startup, safe CLI errors, and project isolation for the kitchen and lobby opener.
 'use strict';
 
 const test = require('node:test');
@@ -8,11 +8,15 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
-const { execFile } = require('node:child_process');
+const net = require('node:net');
+const { execFile, spawnSync } = require('node:child_process');
 const { promisify } = require('node:util');
-const { ensureKitchen, parsePort } = require('./open-kitchen');
+const { ensureKitchen, ensureLobby, parsePort } = require('./open-kitchen');
 const execute = promisify(execFile);
 const portFile = root => path.join(root, '.claude', '.bytheslice-state', 'kitchen', 'port');
+const lobbyPortFile = home => path.join(home, 'lobby', 'port');
+const opener = path.join(__dirname, 'open-kitchen.js');
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function fixture(t) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'bts-kitchen-opener-'));
@@ -143,4 +147,153 @@ test('CLI errors do not echo invalid project arguments', async t => {
   const missing = path.join(base, 'private-input-do-not-echo');
   await assert.rejects(execute(process.execPath, [path.join(__dirname, 'open-kitchen.js'), '--project', missing]),
     error => error.stdout === '' && error.stderr === 'Kitchen project directory is unavailable.\n');
+});
+
+// The lobby entry (--lobby). Every case uses a temp BTS_HOME, never the real ~/.bytheslice.
+
+async function lobbyFixture(t) {
+  const base = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'bts-lobby-opener-')));
+  const home = path.join(base, 'lobby home');
+  const plugin = path.join(base, 'plugin');
+  await fs.mkdir(path.join(plugin, 'mcp'), { recursive: true });
+  t.after(async () => {
+    try {
+      const pid = Number(await fs.readFile(path.join(home, 'server.pid'), 'utf8'));
+      if (Number.isInteger(pid) && pid > 0) process.kill(pid, 'SIGTERM');
+    } catch {}
+    await fs.rm(base, { recursive: true, force: true });
+  });
+  return { base, home, plugin };
+}
+
+async function serveJson(t, body) {
+  const server = http.createServer((request, response) => {
+    assert.equal(request.url, '/state');
+    assert.equal(request.headers['cache-control'], 'no-cache');
+    response.setHeader('Content-Type', 'application/json');
+    response.end(JSON.stringify(typeof body === 'function' ? body(server.address().port) : body));
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  return server.address().port;
+}
+
+async function writeLobbyPort(home, value) {
+  await fs.mkdir(path.dirname(lobbyPortFile(home)), { recursive: true });
+  await fs.writeFile(lobbyPortFile(home), value);
+}
+
+const fakeLobby = `// mcp/lobby-server.js
+// Test fixture for the detached machine-level lobby startup contract.
+const fs = require('node:fs');
+const path = require('node:path');
+const http = require('node:http');
+if (process.argv.slice(2).join(' ') !== '--serve-only' || !process.env.BTS_HOME) process.exit(2);
+const home = process.env.BTS_HOME;
+fs.mkdirSync(home, { recursive: true });
+fs.writeFileSync(path.join(home, 'server.pid'), String(process.pid));
+const server = http.createServer((request, response) => {
+  response.setHeader('Content-Type', 'application/json');
+  response.end(JSON.stringify({ v: 1, projects: [] }));
+});
+server.listen(0, '127.0.0.1', () => {
+  fs.mkdirSync(path.join(home, 'lobby'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'lobby', 'port'), String(server.address().port));
+});
+`;
+
+test('lobby: reuses a running lobby without needing a server installation', async t => {
+  const { home, base } = await lobbyFixture(t);
+  const port = await serveJson(t, { v: 1, projects: [{ key: '/x' }] });
+  await writeLobbyPort(home, `${port}\n`);
+  assert.equal(await ensureLobby({ home, pluginRoot: path.join(base, 'missing') }), `http://127.0.0.1:${port}/`);
+});
+
+test('lobby: starts one detached under the given BTS_HOME when absent, then reuses it', async t => {
+  const { home, plugin } = await lobbyFixture(t);
+  await fs.writeFile(path.join(plugin, 'mcp', 'lobby-server.js'), fakeLobby);
+  const url = await ensureLobby({ home, pluginRoot: plugin, timeoutMs: 3000 });
+  assert.match(url, /^http:\/\/127\.0\.0\.1:\d+\/$/);
+  assert.equal(url, `http://127.0.0.1:${(await fs.readFile(lobbyPortFile(home), 'utf8')).trim()}/`);
+  assert.equal(await ensureLobby({ home, pluginRoot: plugin }), url);
+});
+
+test('lobby: a malformed port file or a listener without a projects array is never reused', async t => {
+  const { home, plugin } = await lobbyFixture(t);
+  await fs.writeFile(path.join(plugin, 'mcp', 'lobby-server.js'), fakeLobby);
+  const kitchenPort = await serveJson(t, port => ({ port, project: { root: '/somewhere' } }));
+  await writeLobbyPort(home, String(kitchenPort));
+  const url = await ensureLobby({ home, pluginRoot: plugin, timeoutMs: 3000 });
+  assert.notEqual(url, `http://127.0.0.1:${kitchenPort}/`);
+  for (const value of ['http://untrusted.example/state', '0', '65536', '4466/x']) {
+    await writeLobbyPort(home, value);
+    await assert.rejects(ensureLobby({ home, pluginRoot: path.join(plugin, 'missing') }),
+      { message: 'Lobby server is missing from this plugin installation.' }, value);
+  }
+});
+
+test('lobby: startup fails safely and promptly when the child exits, and rejects a bad timeout', async t => {
+  const { home, plugin } = await lobbyFixture(t);
+  await fs.writeFile(path.join(plugin, 'mcp', 'lobby-server.js'),
+    '// mcp/lobby-server.js\n// Test fixture for a failed lobby startup.\nprocess.exit(1);\n');
+  const before = Date.now();
+  await assert.rejects(ensureLobby({ home, pluginRoot: plugin, timeoutMs: 1000 }),
+    { message: 'Lobby server did not become ready. Check the plugin installation and try again.' });
+  assert.ok(Date.now() - before < 1500);
+  for (const timeoutMs of [0, -1, 60001, Number.NaN]) {
+    await assert.rejects(ensureLobby({ home, pluginRoot: plugin, timeoutMs }), { message: 'Lobby startup timeout is invalid.' });
+  }
+});
+
+test('CLI --lobby stdout contains only the verified lobby URL', async t => {
+  const { home } = await lobbyFixture(t);
+  const port = await serveJson(t, { v: 1, projects: [] });
+  await writeLobbyPort(home, String(port));
+  const result = await execute(process.execPath, [opener, '--lobby'], { env: { ...process.env, BTS_HOME: home } });
+  assert.equal(result.stdout, `http://127.0.0.1:${port}/\n`);
+  assert.equal(result.stderr, '');
+});
+
+test('CLI rejects --lobby combined with --project or anything else, without echoing input', async t => {
+  const { home, base } = await lobbyFixture(t);
+  const secret = path.join(base, 'private-input-do-not-echo');
+  const usage = 'Usage: node open-kitchen.js [--project <project-root> | --lobby]\n';
+  for (const args of [['--lobby', '--project', secret], ['--project', secret, '--lobby'], ['--lobby', secret], ['--lobby', '--lobby']]) {
+    await assert.rejects(execute(process.execPath, [opener, ...args], { env: { ...process.env, BTS_HOME: home } }),
+      error => error.code === 1 && error.stdout === '' && error.stderr === usage, args.join(' '));
+  }
+  await assert.rejects(fs.access(lobbyPortFile(home)), 'nothing was started');
+});
+
+test('CLI --lobby starts the real lobby server under a temp BTS_HOME and prints one URL line', async t => {
+  const { home } = await lobbyFixture(t);
+  const probe = net.createServer();
+  await new Promise(resolve => probe.listen(0, '127.0.0.1', resolve));
+  const preferred = probe.address().port;
+  await new Promise(resolve => probe.close(resolve));
+  const result = await execute(process.execPath, [opener, '--lobby'],
+    { env: { ...process.env, BTS_HOME: home, BTS_LOBBY_PORT: String(preferred) }, timeout: 15000 });
+  assert.match(result.stdout, /^http:\/\/127\.0\.0\.1:\d+\/\n$/);
+  assert.equal(result.stderr, '');
+  const port = Number(/:(\d+)\//.exec(result.stdout)[1]);
+  const listeners = spawnSync('lsof', ['-nP', '-t', `-iTCP:${port}`, '-sTCP:LISTEN'], { encoding: 'utf8' });
+  const pid = Number(listeners.stdout.trim().split('\n')[0]);
+  assert.ok(Number.isInteger(pid) && pid > 0 && pid !== process.pid, 'the detached lobby is listening');
+  t.after(() => { try { process.kill(pid, 'SIGTERM'); } catch {} });
+  const state = await new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port, path: '/state' }, response => {
+      let body = '';
+      response.setEncoding('utf8'); response.on('data', chunk => { body += chunk; });
+      response.on('end', () => resolve({ status: response.statusCode, body }));
+    }).on('error', reject);
+  });
+  assert.equal(state.status, 200);
+  assert.deepEqual(JSON.parse(state.body).projects, []);
+  assert.equal((await fs.stat(lobbyPortFile(home))).mode & 0o777, 0o600);
+  process.kill(pid, 'SIGTERM');
+  for (let attempt = 0; attempt < 100; attempt++) {
+    try { await fs.access(lobbyPortFile(home)); } catch { return; }
+    await delay(20);
+  }
+  assert.fail('the lobby removes its port file on SIGTERM');
 });
