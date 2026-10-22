@@ -27,7 +27,6 @@ This skill ships as a **standalone, operator-invoked** command in its first slic
 
 **Skill changes:**
 - `skills/run-the-day/SKILL.md`: add Phase 2.5 between stage dispatches that dispatches `inspect-display` if `stageIndex % platformWalkEvery == 0`
-- `skills/run-the-day/agents/stage-runner.md`: pass through the inspect-display return contract to the orchestrator so it can decide whether to halt
 - `skills/setup-shop/references/bytheslice-config-schema.md`: document the new `runPipeline.platformWalkEvery` etc. keys
 
 **Halt rules:**

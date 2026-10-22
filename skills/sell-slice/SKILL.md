@@ -64,18 +64,7 @@ Each subagent is a **registered plugin agent**; its definition file under `./age
 | Library Preview Gate | [agents/frontend/library-entry-writer.md](agents/frontend/library-entry-writer.md) | sonnet | write |
 | State coverage + **build manifest** emitter on `frontend` (Workflow B entry) | [agents/frontend/state-illustrator.md](agents/frontend/state-illustrator.md) | sonnet | write |
 
-> **Behavioral + rendered review is `slice-tester`'s job; static gates are `slice-verifier`'s.** The v4 frontend `visual-reviewer` is **deprecated** - its rendered design-system match folded into `slice-tester` and its console/network checks are part of the same behavioral pass.
-
-### Deprecated / shimmed (NOT live-dispatched in v5 - retained for v4 back-compat through 5.1)
-
-These three static verifiers collapsed into [`slice-verifier`](agents/slice-verifier.md) (C5), and the frontend visual reviewer folded into [`slice-tester`](agents/slice-tester.md). The orchestrator **does not dispatch** them; they remain on disk only so v4 flat projects mid-migration keep working.
-
-| Deprecated agent | Replaced by |
-|---|---|
-| [agents/basic-checks-runner.md](agents/basic-checks-runner.md) | `slice-verifier` (lint / typecheck / build) |
-| [agents/aggregating-test-reviewer.md](agents/aggregating-test-reviewer.md) | `slice-verifier` (static half) + `slice-tester` (behavioral / rendered half) |
-| [agents/ci-cd-guardrails.md](agents/ci-cd-guardrails.md) | `slice-verifier` (CI-integrity check) |
-| [agents/frontend/visual-reviewer.md](agents/frontend/visual-reviewer.md) | `slice-tester` (rendered design-system match + affordance UAT) |
+> **Behavioral + rendered review is `slice-tester`'s job; static gates are `slice-verifier`'s.** The rendered design-system match and the console/network checks both run in `slice-tester`'s one behavioral pass.
 
 ### Sub-skill dispatches (Workflow A, foundation slice types - legacy v3 projects only)
 
@@ -102,7 +91,7 @@ These three static verifiers collapsed into [`slice-verifier`](agents/slice-veri
 
 If `bytheslice.config.json` exists at the project root, the `rules-loader` agent (recon) reads it and returns resolved values. Honor:
 
-- `modelTiers.<agent>` - overrides the agent file's `model:` for THIS run (`sliceTester`, `sliceVerifier` are the v5 verification tiers; `ciCdGuardrails` / `basicChecksRunner` / `aggregatingTestReviewer` are deprecated aliases of `sliceVerifier`).
+- `modelTiers.<agent>` - overrides the agent file's `model:` for THIS run (`sliceTester`, `sliceVerifier` are the v5 verification tiers).
 - `stages.maxTasksPerStage` - overrides the default cap of 6 (warn if user sets > 8).
 - `verification.viewports` *(int[], default `[375, 768, 1280]`)* - the widths `slice-tester` renders `frontend` slices at (**C7**); it screenshots only at 768 and 1280. Pass this to `slice-tester` instead of any hardcoded viewport list.
 - `verification.e2e.{feature,regressionCore,visual}` *(each `"always" | "critical-only" | "off"`)* - threshold-gates which e2e suites `slice-verifier` runs by tag (**C10**). Pass the resolved values to `slice-verifier`; it gates before running anything.
@@ -479,7 +468,6 @@ After each item and at slice closeout:
 - **No proof ledgers.** Never write artifact hashes, source freezes, fingerprint files, leases, or per-step proof files; the allowed evidence is listed in "Evidence, not proof ledgers". The Pass mod ledger is the one sanctioned exception.
 - **Fix cap: 3 local fix loops, 3 CI fix rounds, separate counters, non-overridable.** No run instruction ("continue until verified", "never stop", "fully automated") raises either cap; only the operator's explicit reply at the HITL grants more attempts.
 - **The slice time budget is soft.** At `delivery.sliceBudgetHours` the orchestrator lets the current agent finish, then checks in once (`prd_ambiguity`: extend or stop). It never kills an agent, fails a slice, or touches the fix cap.
-- **Deprecated agents are never live-dispatched.** `basic-checks-runner`, `aggregating-test-reviewer`, `ci-cd-guardrails`, and `frontend/visual-reviewer` are shims for v4 back-compat only - route through `slice-tester` / `slice-verifier`.
 - **Session goal is set at most once per slice run, after Phase 2 authorization.** Phase 2.5 enforces the parent-goal pre-check; if `/sell-pie` already set a pie-level goal, the slice-level goal is skipped. Never overwrite an active parent goal with a narrower slice-level condition.
 - **`Workflow` / `/goal` unavailable → fall back, never drop.** In-context dispatch with orchestrator-side manual schema validation when `Workflow` is absent; manual goal-tracking when `/goal` is absent.
 

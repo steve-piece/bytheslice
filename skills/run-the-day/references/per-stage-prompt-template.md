@@ -1,46 +1,36 @@
 <!-- skills/run-the-day/references/per-stage-prompt-template.md -->
-<!-- Supplemental reference: example prompt run-the-day constructs for stage-runner dispatch. The authoritative variable list lives in SKILL.md. This file shows how the variables compose into a complete prompt. -->
+<!-- Supplemental reference: example per-Pie /sell-pie dispatch run-the-day composes in Phase 1 step 2. The authoritative rules live in SKILL.md. This file shows how the inputs compose into one dispatch. -->
 
-# Per-Stage Prompt Template (Reference)
+# Per-Pie Dispatch Template (Reference)
 
-The orchestrator fills in these four variables and passes the result to the `stage-runner` subagent alongside the full body of `agents/stage-runner.md`. The authoritative variable descriptions live in `SKILL.md` — this file shows the composed form.
+`/run-the-day` dispatches no subagents of its own. Per Pie it invokes [`/sell-pie`](../../sell-pie/SKILL.md) once, passing the inputs below, and waits for it to return (Phase 1 step 2 in [`SKILL.md`](../SKILL.md)). The authoritative behavior lives in `SKILL.md`; this file shows the composed form.
 
 ## Variables
 
-- `{STAGE_N}` — integer stage number, e.g. `3`.
-- `{STAGE_FILE_PATH}` — workspace-relative path to the stage file, e.g. `docs/plans/stage_3_env_setup.md`.
-- `{STAGE_GOAL}` — the goal sentence from the stage file's `**Goal:**` line.
-- `{SKILL_TO_LOAD}` — determined from stage `type` frontmatter via the routing table in `SKILL.md`.
+- `{PIE_N}`: integer Pie number of the active Pie in the filtered queue, e.g. `3`.
+- `{PIE_NAME}`: the name on that `## Pie N` header.
+- `{RESOLVED_CONFIG}`: the resolved `bytheslice.config.json` values (Project Config step 3), or `none` when the file is absent.
+- `{RUN_INSTRUCTION}`: an explicit autonomous-delivery instruction to pass through for merge-per-slice delivery, or `none`.
+- `{HITL_RESOLUTION}`: the operator's answer when resuming after a pause, or `none`.
 
-## Composed Prompt
+## Composed Dispatch
 
 ```
-You are the stage-runner for Stage {STAGE_N} of the active phased plan.
+Invoke /bytheslice:sell-pie for Pie {PIE_N} ({PIE_NAME}).
 
-Stage file: @{STAGE_FILE_PATH}
-Stage goal: {STAGE_GOAL}
-Skill to load: /{SKILL_TO_LOAD}
 Master checklist: docs/plans/00_master_checklist.md
+Resolved config: {RESOLVED_CONFIG}
+Run instruction: {RUN_INSTRUCTION}
+HITL resolution: {HITL_RESOLUTION}
 
-Complete all steps in @{STAGE_FILE_PATH} using /{SKILL_TO_LOAD}.
-
-Requirements:
-1. Read the stage file end-to-end before doing anything.
-2. Load the skill and run its full workflow (let it dispatch its own subagents).
-3. Open and merge the PR. Wait for CI. Patch failures on the same branch until
-   every required check is green.
-4. After merge: sync local main, delete the slice branch (local + remote if
-   not auto-deleted), prune any worktrees, confirm clean tree on main.
-5. Walk the loaded skill's embedded completion checklist. Confirm every item is
-   checked before returning.
-6. Return the structured summary from the stage-runner return contract.
-   Do NOT advance to Stage {STAGE_N}+1 — that is the orchestrator's job.
-7. If you need human input at any point, return needs_human: true with the
-   structured HITL fields. Do NOT call ask_user_input_v0 directly.
+Bake this Pie to its boundary and return the /sell-pie return contract.
+Do NOT start Pie {PIE_N}+1; sequencing Pies is the chainer's job.
+If you need human input, return needs_human: true with the structured
+hitl_* fields. Do NOT call ask_user_input_v0 directly.
 ```
 
 ## Notes
 
-- Variables are filled by the orchestrator before sending.
-- The orchestrator passes the full body of `agents/stage-runner.md` alongside this filled prompt.
-- For the `--auto-mvp` and `--auto-all` mode flags, no changes are needed to this prompt — mode logic lives in the orchestrator's loop, not in the per-stage prompt.
+- Variables are filled by the chainer before dispatching.
+- For the `--auto-mvp` and `--auto-all` mode flags, no changes are needed to this dispatch: they filter the Pie queue and set the between-pie pause, both in the chainer's loop.
+- The Pie's own `review:` property, not this dispatch, decides whether `/sell-pie` bakes autonomously or in `/sell-slice` mode.
