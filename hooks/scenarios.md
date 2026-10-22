@@ -80,17 +80,45 @@ Every wired logger hook runs synchronously and silently (exit 0), completing its
 | Neither jq nor Node available | exit 0 silently without creating state |
 | Invalid JSON, multiple JSON values, array/scalar envelope or unwired tool/event | exit 0 silently without creating a log |
 
+## Lobby registry and signals: `lobby-signal.sh`
+
+Machine-level files for the Lobby, under `${BTS_HOME:-$HOME/.bytheslice}`: `projects.json` (`{"v":1,"projects":[{"root","name","addedAt"}]}`) and `signals/<sid>.json` (`{"v":1,"sid","root","t","working","subagents","waiting"}`). `root` is the parent of `git rev-parse --git-common-dir` as a physical path, so a worktree rolls up to its primary checkout. Only a primary holding `docs/plans/00_master_checklist.md` or `bytheslice.config.json` counts as a project. Every Claude Code run exits 0 and prints nothing; writes are atomic (temp file, then rename, mode 0600) under a short lock. `hooks/test.sh` runs the named cases once with jq and once with the Node fallback, against a fixture `HOME` and a temp `BTS_HOME`.
+
+| Case | Event | Fixture | Expected |
+|---|---|---|---|
+| SessionStart registers the primary | `SessionStart` | primary checkout with a checklist, empty lobby home | `projects.json` holds one `{root, name, addedAt}` row for the primary (physical path, basename, integer ms), mode 0600; silent |
+| a linked worktree rolls up to one row | `SessionStart` | cwd is a linked worktree of the registered primary, its `addedAt` pinned | still one row, `root` the primary, `addedAt` unchanged |
+| a vanished project folder is pruned | `SessionStart` | a second registered project whose folder was deleted | that row dropped, the live row kept with its `addedAt` |
+| a non-ByTheSlice repo is not registered | `SessionStart`, `UserPromptSubmit` | a git repo with neither file; a non-git folder with a checklist | `projects.json` unchanged, no signal written |
+| UserPromptSubmit sets working | `UserPromptSubmit` | cwd is a linked worktree | `signals/<sid>.json` is `{v:1, sid, root:<primary>, t:<ms>, working:true, subagents:0, waiting:null}` in that key order, mode 0600 |
+| SubagentStart and SubagentStop count subagents | `SubagentStart` x2, `SubagentStop` x3 | one session | `subagents` 2, then 1, then 0 (floored, never negative); `working` true |
+| Stop clears working | `UserPromptSubmit`, `SubagentStart`, `Stop` | one session | `working` false, `subagents` 1 kept, `waiting` null |
+| Notification permission_prompt sets waiting permission | `Notification` | `notification_type: permission_prompt` | `waiting` "permission"; `working` and `subagents` kept |
+| Notification idle_prompt sets waiting idle | `Notification` | `notification_type: idle_prompt` | `waiting` "idle" |
+| Notification of another type changes nothing | `Notification`, `PreToolUse` | `auth_success`, `elicitation_dialog`, empty or absent type; `t` pinned | the signal file is byte-identical (`t` not refreshed); no file for a new session |
+| UserPromptSubmit clears waiting | `UserPromptSubmit` | `waiting` "idle" | `waiting` null, `working` true, `t` refreshed |
+| no prompt text reaches the lobby dir | all six events | `prompt`, `message`, `title`, `last_assistant_message`, tool input, transcript path and an env var all hold `SECRET-PROMPT-TEXT` | no file under the lobby home contains it; only `projects.json` and `signals/*.json` exist, each signal holding exactly the contract keys |
+| corrupt projects.json recovers | `SessionStart`, `SubagentStart` | `projects.json` is `{broken`, a signal is `not json`; then a list with junk, a non-string root, a dead root and a duplicate | both files replaced with valid contract JSON; junk and dead rows dropped, the duplicate folded to one row |
+| cursor sessionStart prints valid JSON | Cursor `sessionStart` | `BTS_HOST=cursor`, `workspace_roots[0]` a linked worktree | stdout exactly `{}`, exit 0; the primary registered |
+| (Cursor) other events | `beforeSubmitPrompt`, `subagentStart`, `subagentStop`, `stop` | `conversation_id` (the parent's `parent_conversation_id` on `subagentStart`), prompt and task text present | stdout `{"continue":true}`, `{"permission":"allow"}`, `{}`, `{}`; one signal per conversation id updated as the matching Claude Code event; no prompt or task text written |
+| (Cursor) every exit path | `subagentStart` with `BTS_HOOKS_DISABLED=1`; unreadable, empty or repo-less input | | stdout is still the valid JSON answer for the event (`{}` when unknown); nothing written |
+| (all hosts) home, disable, parsers | any | `BTS_HOME` unset; `BTS_HOOKS_DISABLED=1`; neither jq nor Node | writes under `$HOME/.bytheslice` (dir 0700); disabled or parser-free runs create nothing |
+| (all hosts) cleanup and lock | `SessionStart`, `UserPromptSubmit`, 12 parallel `SubagentStart` | a signal older than 7 days; a lock held by a dead pid, an ownerless lock over a minute old, a live pid's lock | the old signal is deleted on SessionStart; dead and ownerless locks are reclaimed; a live lock makes the writer give up quietly after about two seconds; parallel starts count to exactly 12 |
+
 ## Wiring: `hooks.json`
 
 | Check | Expected |
 |---|---|
 | Every `command` in `hooks.json` | names a script that exists under `hooks/` |
 | Every script `hooks.json` wires | contains no `exit 2` and prints no block decision (`"decision": "block"`, `"permissionDecision": "deny"`) |
+| Every sourced `lib/*.sh` | contains no `exit 2` |
 | `kitchen-log.sh` registrations | exactly eight (asserted with the kitchen rows above) |
+| `lobby-signal.sh` registrations | exactly one each on `SessionStart`, `SubagentStart`, `SubagentStop`, `Stop`, `UserPromptSubmit` and `Notification`: no matcher, timeout 5, synchronous |
+| `hooks-cursor.json` | `lobby-signal.sh` with `BTS_HOST=cursor` on `sessionStart`, `beforeSubmitPrompt`, `subagentStart`, `subagentStop` and `stop` (Cursor has no Notification equivalent) |
 
 ## Notes
 
-- Every hook honors `BTS_HOOKS_DISABLED=1` as the first action after `set -u`. That's the supported per-session disable.
-- Every hook tolerates missing `jq`; `pre-commit-guard.sh` falls back to `sed`, while `kitchen-log.sh` uses Node or silently skips logging when neither parser is available.
-- All state lives under `.claude/.bytheslice-state/` (gitignored).
+- Every hook honors `BTS_HOOKS_DISABLED=1` as the first action after `set -u`. That's the supported per-session disable. Under `BTS_HOST=cursor`, `pre-commit-guard.sh` and `lobby-signal.sh` first arm the JSON answer Cursor needs, then honor it.
+- Every hook tolerates missing `jq`; `pre-commit-guard.sh` falls back to `sed`, while `kitchen-log.sh` and `lobby-signal.sh` use Node or silently skip writing when neither parser is available.
+- All per-project state lives under `.claude/.bytheslice-state/` (gitignored). The one machine-level exception is the Lobby's `${BTS_HOME:-$HOME/.bytheslice}` (`projects.json`, `signals/`), written only by `lobby-signal.sh`.
 - All awk in the hooks is POSIX-portable (BSD awk on macOS has no gawk extensions such as the 3-argument `match()`).
