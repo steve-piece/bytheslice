@@ -48,6 +48,23 @@ git worktree add -b pie-<n>-<scope> <path> origin/main      # cut from the REMOT
 - **Path convention:** sibling worktrees under the session's worktree root (e.g. `.claude/worktrees/<name>`), never nested inside the main checkout.
 - Never create a worktree on, or commit directly to, `main`/`master`.
 
+### Where the plans live (`$PLANS`)
+
+`docs/plans/` is gitignored by default, so a worktree cut from `origin/main` holds **no checklist and no stage plans**. Resolve their location once per run, before the first slice:
+
+```bash
+PRIMARY=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
+if git -C "$PRIMARY" check-ignore -q docs/plans/00_master_checklist.md; then
+  PLANS="$PRIMARY/docs/plans"          # ignored (default): the primary's copy is the only copy
+else
+  PLANS="$WORKTREE_PATH/docs/plans"    # tracked: the branch's copy
+fi
+```
+
+- **Ignored (the default):** read the checklist and every stage plan from `$PLANS`, and hand agents working in a worktree absolute `$PLANS/...` paths. Flip checklist rows and status lines in `$PLANS/00_master_checklist.md` and commit nothing for the flip. Never copy plans into a worktree: the copy is deleted with the worktree, and every flip made in it is lost.
+- **Tracked:** read and flip the worktree's copy and commit the flip on the branch, so it reaches `main` with the merge.
+- **Merge-per-slice with ignored plans:** flip a slice row only after its PR has merged, so a slice that halts or stays red keeps `[ ]` and the next run resumes it.
+
 ## 3. Phase 2: Run (the Swarm)
 
 - **1:1 agent:worktree for parallel mutating work.** An agent's uncommitted edits are physically invisible to siblings, so a reviewer/tester agent reasons only from the artifact + spec, never the builder's half-finished state. This is the filesystem half of ByTheSlice's context-separation.
@@ -85,6 +102,7 @@ git worktree add -b pie-<n>-<scope> <path> origin/main      # cut from the REMOT
 5. **Never `rm -rf` a worktree**: `git worktree remove` + `prune`.
 6. **Never bake on `main`/`master`**: feature/pie/slice branch only. (The merge-per-slice conductor waits on `main` between slices but never builds or commits there.)
 7. **Clean up from the primary checkout**: `pull --ff-only`, `worktree remove`, `branch -d`, remote delete, `prune`, in that order, after every merge.
+8. **Gitignored plans stay in the primary checkout**: read and flip them only at `$PLANS` (section 2, "Where the plans live"), never in a worktree copy.
 
 ## 6. PR template (the Inspector files this so history stays searchable)
 

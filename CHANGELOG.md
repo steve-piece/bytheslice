@@ -14,6 +14,7 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 ### Fixed
 
 - **Empty slice-close commits survived no rebase-merge.** A slice whose final commit has nothing left to stage (the checklist is gitignored by default) closes with an `--allow-empty` commit, and GitHub's rebase-merge silently drops those: Pie 7 lost three of its five `feat(pie-7): N.M` slice commits that way. `/box-it-up` now picks the merge strategy with `skills/box-it-up/pick-merge-strategy.js`, which takes a merge commit whenever the pie branch holds an empty commit, rebase otherwise, and asks when the repo allows neither. Phase 5 also confirms every branch commit subject reached `main`, and a gitignored checklist's Pie flip no longer tries to commit.
+- **Merge-per-slice lost its checklist flips.** `docs/plans/` is gitignored by default, so a slice worktree cut from `origin/main` held no checklist or stage plans: the slice's `[x]` was made in a copy that `worktree remove` deleted, and the next run could pick the same slice again. `git-worktree-standard.md` now resolves `$PLANS` once per run (the primary checkout's `docs/plans` when ignored, the worktree's when tracked) and adds invariant 8. `/sell-pie` Phase 1-M hands agents absolute `$PLANS` plan paths and, with ignored plans, marks the slice in `$PLANS` only after its PR merges, so a red or halted slice keeps `[ ]`. `/sell-slice`, `/box-it-up` (including the last slice's Pie flip) and `/run-the-day` point at the same rule. New `tests/plans-location` proves the resolution against a real worktree.
 
 ---
 
