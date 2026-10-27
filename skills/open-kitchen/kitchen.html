@@ -616,12 +616,6 @@ const cyl = (rt, rb, h, s = 24) => gc[key('c', rt, rb, h, s)] ??= new THREE.Cyli
 const capg = (r, l) => gc[key('cap', r, l)] ??= new THREE.CapsuleGeometry(r, l, 6, 14);
 const tor = (R, t, arc = Math.PI * 2) => gc[key('t', R, t, arc)] ??= new THREE.TorusGeometry(R, t, 10, 32, arc);
 const capHair = (R, th) => gc[key('hc', R, th)] ??= new THREE.SphereGeometry(R, 32, 16, 0, Math.PI * 2, 0, th);
-// character rig (makeChar): HIP: hip pivot height; the head is built at the old .3 radius inside hd, scaled down by HK, so every hair style and hat keeps its shape
-const HIP = .66, HK = .13 / .3, HKY = HK * 1.08, SIT_DROP = .455, KNEEL_Y = -.316;
-// a full beard hugs the jaw and chin below the mouth (the old shell sat at full head radius over the whole lower face)
-const beardG = () => gc.beardJaw ??= new THREE.SphereGeometry(.322, 28, 8, Math.PI * .02, Math.PI * .96, Math.PI * .7, Math.PI * .27);
-// how far the knees bend for a sitter whose seat is `butt` above the ground: shins hang down from a tall seat, legs stretch out on the grass
-const sitKnee = (butt, s) => 1.45 - Math.acos(clamp((butt + .062 * s) / (.353 * s), 0, 1));
 const noiseTex = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
   const img = x.createImageData(256, 256);
@@ -1299,7 +1293,7 @@ const POND = new THREE.Vector3(-1.6, 0, 23.4), ducks = [];
   const br = m('bronze', 0x8f6b3c, { m: .65, r: .32, b: .4 }), fig = makeChar({ id: 'statue', skin: 0x8f6b3c, top: 0x8f6b3c, pants: 0x8f6b3c, hair: 'toque', hairC: 0x8f6b3c, apron: 0x8f6b3c, buttons: true });
   root.remove(fig.g); st.add(fig.g); fig.g.position.set(0, 1.12, 0); fig.g.scale.setScalar(1.25); fig.g.rotation.y = .5;
   fig.g.traverse(o => { if (o.isMesh && o !== fig.hit) o.material = br; });
-  fig.arms[1].rotation.z = 2.75; fig.arms[0].rotation.x = -.3; const sl = P(cyl(0, .26, .05, 3), br, 0, -.5, .02, fig.arms[1]); sl.rotation.set(Math.PI / 2, 0, Math.PI);
+  fig.arms[1].rotation.z = 2.75; fig.arms[0].rotation.x = -.3; const sl = P(cyl(0, .26, .05, 3), br, 0, -.32, .02, fig.arms[1]); sl.rotation.set(Math.PI / 2, 0, Math.PI);
 }
 // flower beds in the quadrants
 [[-19, 16.4], [-3.5, 16.9], [-19.5, 21.0]].forEach(([bx, bz], k) => { P(rbox(2.6, .14, 1.2, .05), m('mulch', 0x6c4430), bx, .02, bz); for (let r = 0; r < 3; r++) for (let i = 0; i < 9; i++) flower(bx - 1.1 + i * .275 + (r & 1) * .13, .09, bz - .38 + r * .38, 1.15, r === 1 ? 1 : 0, FCOL[(k * 2 + r) % 7], r === 1 ? .34 : .26); });
@@ -1421,47 +1415,34 @@ const UPWINS = litSet(WIN); litInst(rbox(.62, .78, .06, .02), UPWINS, upWin);
   inst(cyl(.1, .14, 1.0, 8), M.trunk, trunks, true); inst(sph(.62, 16, 12), M.leaf, crowns, true); inst(sph(.62, 16, 12), M.leafD, crownsD, true);
 }
 
-// ---------- characters (soft clay cast, about five heads tall) ----------
+// ---------- characters (vinyl-toy cast) ----------
 function makeChar(o) {
-  const g = G(0, 0, 0, root, o.id), ch = { knee: null };
+  const g = G(0, 0, 0, root, o.id);
   const skin = m('skin_' + hx(o.skin), o.skin, { b: .25, r: .75 });
   const top = m('cloth_' + hx(o.top), o.top), pc = o.pants ?? 0x4a3a33, pants = m('cloth_' + hx(pc), pc), shoe = m('shoes', 0x3a2c26, { r: .6 });
   const hair = o.hairC != null ? m('hair_' + hx(o.hairC), o.hairC, { ds: true, b: 1.3 }) : null;
-  const dm = o.dress && m('dress_' + hx(o.dress), o.dress), km = o.skirt && m('skirt_' + hx(o.skirt), o.skirt), sm = o.shorts && m('shorts_' + hx(o.shorts), o.shorts);
-  const thighM = dm || km || sm ? skin : pants, shinM = dm || km || sm ? skin : pants;
-  // legs: a thigh from the hip, a knee that bends on its own (forward swing and sitting), a shin and a rounded shoe
-  const legs = [-1, 1].map(s => {
-    const p = G(s * .075, HIP, 0, g, 'leg'); P(capg(.068, .2), thighM, 0, -.15, 0, p); if (sm) P(cyl(.076, .074, .15, 12), sm, 0, -.07, 0, p);
-    const k = G(0, -.3, 0, p, 'knee'); P(capg(.055, .2), shinM, 0, -.13, 0, k); P(sph(.06, 14, 10), shoe, 0, -.31, .035, k).scale.set(1, .72, 1.65);
-    k.updateMatrix = function () { const r = p.rotation.x; this.rotation.x = ch.knee ?? (r < 0 ? -r : r * .3); THREE.Object3D.prototype.updateMatrix.call(this); };
-    return p;
-  });
+  const legs = [-1, 1].map(s => { const p = G(s * .085, .22, 0, g, 'leg'); P(capg(.075, .1), pants, 0, -.1, 0, p); P(sph(.085, 12, 8), shoe, 0, -.165, .03, p).scale.set(1, .7, 1.3); return p; });
   const body = G(0, 0, 0, g, 'torso');
-  // hips, a torso that tapers to the waist, rounded shoulders and a neck
-  P(sph(.145, 20, 12), dm || km || sm || pants, 0, .69, 0, body).scale.set(1, .62, .76);
-  P(cyl(.132, .136, .36, 20), top, 0, .86, 0, body).scale.z = .74;
-  { const sh = P(capg(.08, .17), top, 0, 1.02, 0, body); sh.rotation.z = Math.PI / 2; sh.scale.set(1, 1, .8); }
-  P(cyl(.04, .046, .1, 12), skin, 0, 1.12, 0, body);
-  // a dress: a flared skirt from the waist to the knee; a skirt is shorter
-  if (dm) { P(cyl(.118, .2, .38, 20), dm, 0, .58, 0, body); P(tor(.2, .012), m('dressHem', 0xfbf6ec), 0, .39, 0, body).rotation.x = Math.PI / 2; }
-  if (km) P(cyl(.12, .18, .24, 18), km, 0, .6, 0, body);
-  if (o.apron) P(rbox(.21, .44, .03, .012), m('apron_' + hx(o.apron), o.apron), 0, .8, .1, body).rotation.x = -.04;
-  if (o.scarf) { const sc = m('scarf_' + hx(o.scarf), o.scarf); P(tor(.07, .026), sc, 0, 1.1, .005, body).rotation.x = Math.PI / 2; P(sph(.03, 10, 8), sc, .03, 1.06, .085, body); }
-  if (o.buttons) [0, 1, 2].forEach(r => [-1, 1].forEach(s => P(sph(.012, 8, 6), M.creamW, s * .04, 1.0 - r * .075, .099, body)));
-  // arms: a sleeve to the elbow, a forearm with a small natural bend, a simple hand (coats keep their sleeves to the wrist)
-  const foreM = o.buttons ? top : skin, fore = [];
-  const arms = [-1, 1].map(s => { const p = G(s * .16, 1.03, 0, body, 'arm'); P(capg(.042, .14), top, 0, -.1, 0, p); const e = G(0, -.2, 0, p, 'elbow'); e.rotation.x = -.18; P(capg(.036, .13), foreM, 0, -.09, 0, e); P(sph(.04, 12, 10), skin, 0, -.215, .005, e).scale.set(.85, 1.15, .75); fore.push(e); p.rotation.z = s * .1; return p; });
-  const head = G(0, 1.28, 0, body, 'head'), hd = G(0, 0, 0, head); hd.scale.set(HK, HKY, HK);
-  // a calm face: small eyes, soft brows, a nose and a small smile
-  P(sph(.3, 32, 20), skin, 0, 0, 0, hd);
-  [-1, 1].forEach(s => { P(sph(.06, 10, 8), skin, s * .295, -.03, 0, hd); P(sph(.03, 10, 8), M.ink, s * .1, -.02, .284, hd).scale.set(1, 1.2, .5); P(rbox(.085, .02, .02, .008), hair || M.ink, s * .105, .065, .29, hd).rotation.z = s * -.12; });
-  P(sph(.05, 12, 8), skin, 0, -.08, .29, hd).scale.set(.75, .9, .7);
-  P(tor(.032, .01, Math.PI), M.ink, 0, -.155, .27, hd).rotation.set(-.35, 0, Math.PI);
-  const capH = (th, tilt, r = .315) => { P(capHair(r, th), hair, 0, 0, 0, hd).rotation.x = -tilt; };
-  const add = (geo, mat, x, y, z, sx = 1, sy = 1, sz = 1) => { const h = P(geo, mat, x, y, z, hd); h.scale.set(sx, sy, sz); return h; };
-  const glasses = () => { const gm = m('glasses', 0x3b2f2a, { r: .4, nobump: true }); [-1, 1].forEach(s => P(tor(.068, .012), gm, s * .105, -.03, .3, hd)); P(rbox(.06, .015, .015, .005), gm, 0, -.02, .305, hd); };
-  const toque = () => { const w = m('toque', 0xfbf6ec, { b: 1.2 }); P(cyl(.27, .28, .14), w, 0, .23, -.02, hd); P(cyl(.31, .26, .3), w, 0, .43, -.02, hd); [[.13, .1], [-.13, .1], [.13, -.12], [-.13, -.12], [0, 0]].forEach(([x, z], i) => P(sph(i === 4 ? .22 : .19, 20, 12), w, x, .62 + (i === 4 ? .05 : 0), z - .02, hd)); };
-  const beard = () => { P(beardG(), hair, 0, 0, 0, hd); [-1, 1].forEach(s => add(capg(.05, .14), hair, s * .27, -.1, .05, .8, 1, .9)); add(capg(.034, .1), hair, 0, -.118, .287, 1, 1, .6).rotation.z = Math.PI / 2; };
+  P(capg(.21, .16), top, 0, .45, 0, body).scale.z = .9;
+  // a dress: a flared skirt over the hips, bare legs below
+  if (o.dress) { const dm = m('dress_' + hx(o.dress), o.dress); P(cyl(.2, .31, .32, 20), dm, 0, .28, 0, body); P(tor(.3, .018), m('dressHem', 0xfbf6ec), 0, .125, 0, body).rotation.x = Math.PI / 2; }
+  if (o.skirt) { const sm = m('skirt_' + hx(o.skirt), o.skirt); P(cyl(.205, .28, .15, 16), sm, 0, .27, 0, body); }
+  if (o.shorts) { const sm = m('shorts_' + hx(o.shorts), o.shorts); P(cyl(.205, .215, .1, 16), sm, 0, .28, 0, body); legs.forEach(l => P(cyl(.086, .09, .08, 12), sm, 0, -.01, 0, l)); }
+  if (o.dress || o.skirt || o.shorts) legs.forEach(l => l.children[0].material = skin);
+  if (o.apron) { P(rbox(.3, .34, .06, .03), m('apron_' + hx(o.apron), o.apron), 0, .4, .18, body).rotation.x = -.08; }
+  if (o.scarf) { P(tor(.15, .045), m('scarf_' + hx(o.scarf), o.scarf), 0, .72, .02, body).rotation.x = Math.PI / 2; P(sph(.06, 10, 8), m('scarf_' + hx(o.scarf), o.scarf), .05, .66, .16, body); }
+  if (o.buttons) [0, 1].forEach(r => [-1, 1].forEach(s => P(sph(.022, 8, 6), M.creamW, s * .06, .52 - r * .1, .19, body)));
+  const arms = [-1, 1].map(s => { const p = G(s * .22, .62, 0, body, 'arm'); P(capg(.065, .12), top, 0, -.1, 0, p); P(sph(.08, 14, 10), skin, 0, -.22, 0, p); p.rotation.z = s * .18; return p; });
+  const head = G(0, .98, 0, body, 'head');
+  P(sph(.3, 32, 20), skin, 0, 0, 0, head);
+  [-1, 1].forEach(s => { P(sph(.06, 10, 8), skin, s * .295, -.03, 0, head); P(sph(.034, 10, 8), M.ink, s * .105, -.03, .282, head).scale.set(1, 1.15, .55); const c = P(sph(.05, 10, 8), M.blush, s * .18, -.11, .235, head); c.scale.set(1, .65, .4); });
+  P(tor(.04, .011, Math.PI), M.ink, 0, -.125, .27, head).rotation.set(-.35, 0, Math.PI);
+  const capH = (th, tilt, r = .315) => { P(capHair(r, th), hair, 0, 0, 0, head).rotation.x = -tilt; };
+  const add = (geo, mat, x, y, z, sx = 1, sy = 1, sz = 1) => { const h = P(geo, mat, x, y, z, head); h.scale.set(sx, sy, sz); return h; };
+  const glasses = () => { const gm = m('glasses', 0x3b2f2a, { r: .4, nobump: true }); [-1, 1].forEach(s => P(tor(.068, .012), gm, s * .105, -.03, .3, head)); P(rbox(.06, .015, .015, .005), gm, 0, -.02, .305, head); };
+  // a small chin beard: a band of the jaw below the smile, front only (a shell over the whole lower face read as a dark block)
+  const beard = () => P(gc.chinBeard ??= new THREE.SphereGeometry(.31, 20, 6, Math.PI * .32, Math.PI * .36, Math.PI * .72, Math.PI * .17), hair, 0, 0, 0, head);
+  const toque = () => { const w = m('toque', 0xfbf6ec, { b: 1.2 }); P(cyl(.27, .28, .14), w, 0, .23, -.02, head); P(cyl(.31, .26, .3), w, 0, .43, -.02, head); [[.13, .1], [-.13, .1], [.13, -.12], [-.13, -.12], [0, 0]].forEach(([x, z], i) => P(sph(i === 4 ? .22 : .19, 20, 12), w, x, .62 + (i === 4 ? .05 : 0), z - .02, head)); };
   switch (o.hair) {
     case 'toque': toque(); break;
     case 'toqueBeard': toque(); beard(); break;
@@ -1472,17 +1453,17 @@ function makeChar(o) {
     case 'afro': add(sph(.38, 28, 16), hair, 0, .13, -.1); break;
     case 'greybun': capH(Math.PI * .5, .4); add(sph(.12, 16, 10), hair, 0, .34, -.04); glasses(); break;
     case 'puffs': capH(Math.PI * .5, .4); [-1, 1].forEach(s => add(sph(.13, 16, 10), hair, s * .28, .17, -.06)); break;
-    case 'beanie': { capH(Math.PI * .5, .35, .31); const bm = m('beanie_' + hx(o.hatC), o.hatC, { b: 1.5 }); P(capHair(.33, Math.PI * .42), bm, 0, .02, -.02, hd).rotation.x = -.18; P(tor(.29, .045), bm, 0, .1, -.04, hd).rotation.x = Math.PI / 2 - .18; P(sph(.08, 12, 8), m('pompom', PAL.cream, { b: 2 }), 0, .36, -.08, hd); break; }
-    case 'cap': { capH(Math.PI * .5, .35, .31); const cm = m('cap_' + hx(o.hatC), o.hatC, { b: .8 }); P(capHair(.325, Math.PI * .4), cm, 0, .02, 0, hd).rotation.x = -.12; P(rbox(.34, .03, .2, .015), cm, 0, .1, .3, hd).rotation.x = .2; break; }
-    case 'hardhat': { capH(Math.PI * .45, .4); const hh = m('hardhat', 0xf2c230, { r: .4, b: .3 }); P(capHair(.34, Math.PI * .45), hh, 0, .03, 0, hd); P(cyl(.4, .4, .03, 20), hh, 0, .1, .03, hd); break; }
-    case 'sunhat': { capH(Math.PI * .5, .4); const st = m('straw', o.hatC ?? 0xe6cf98, { b: 1.6 }); P(capHair(.31, Math.PI * .42), st, 0, .06, 0, hd); P(cyl(.58, .58, .03, 24), st, 0, .14, 0, hd); P(tor(.31, .03), m('ribbon', 0xc9533b), 0, .16, 0, hd).rotation.x = Math.PI / 2; break; }
+    case 'beanie': { capH(Math.PI * .5, .35, .31); const bm = m('beanie_' + hx(o.hatC), o.hatC, { b: 1.5 }); P(capHair(.33, Math.PI * .42), bm, 0, .02, -.02, head).rotation.x = -.18; P(tor(.29, .045), bm, 0, .1, -.04, head).rotation.x = Math.PI / 2 - .18; P(sph(.08, 12, 8), m('pompom', PAL.cream, { b: 2 }), 0, .36, -.08, head); break; }
+    case 'cap': { capH(Math.PI * .5, .35, .31); const cm = m('cap_' + hx(o.hatC), o.hatC, { b: .8 }); P(capHair(.325, Math.PI * .4), cm, 0, .02, 0, head).rotation.x = -.12; P(rbox(.34, .03, .2, .015), cm, 0, .1, .3, head).rotation.x = .2; break; }
+    case 'hardhat': { capH(Math.PI * .45, .4); const hh = m('hardhat', 0xf2c230, { r: .4, b: .3 }); P(capHair(.34, Math.PI * .45), hh, 0, .03, 0, head); P(cyl(.4, .4, .03, 20), hh, 0, .1, .03, head); break; }
+    case 'sunhat': { capH(Math.PI * .5, .4); const st = m('straw', o.hatC ?? 0xe6cf98, { b: 1.6 }); P(capHair(.31, Math.PI * .42), st, 0, .06, 0, head); P(cyl(.58, .58, .03, 24), st, 0, .14, 0, head); P(tor(.31, .03), m('ribbon', 0xc9533b), 0, .16, 0, head).rotation.x = Math.PI / 2; break; }
     case 'baldGlasses': { [-1, 1].forEach(s => add(sph(.12, 12, 8), hair, s * .25, .02, -.08, .6, .9, 1.1)); glasses(); [-1, 1].forEach(s => add(sph(.06, 10, 8), hair, s * .05, -.095, .285, 1.1, .45, .6).rotation.z = s * .35); break; }
     case 'long': capH(Math.PI * .58, .52, .325); add(capg(.2, .26), hair, 0, -.2, -.17, 1.25, 1, .55); [-1, 1].forEach(s => add(capg(.07, .2), hair, s * .25, -.16, .02, 1, 1, .8)); break;
     case 'pony': capH(Math.PI * .52, .48, .32); add(sph(.1, 12, 8), hair, 0, .14, -.31); { const t = add(capg(.075, .24), hair, 0, -.06, -.4); t.rotation.x = .45; } break;
     case 'beard': capH(Math.PI * .56, .5, .318); beard(); break;
   }
   // a prop in the right hand
-  const hand = G(0, -.2, .04, fore[1], 'prop');
+  const hand = G(0, -.24, .04, arms[1], 'prop');
   switch (o.prop) {
     case 'clip': P(rbox(.2, .26, .025, .01), M.cream, 0, .02, .07, hand); P(rbox(.08, .03, .03, .01), M.walnutL, 0, .15, .07, hand); break;
     case 'spoon': P(cyl(.012, .012, .3, 6), M.steel, 0, .1, .06, hand); P(sph(.045, 10, 8), M.steel, 0, .26, .06, hand).scale.set(1, 1.3, .5); break;
@@ -1493,13 +1474,13 @@ function makeChar(o) {
     case 'racket': P(cyl(.013, .013, .2, 6), M.iron, 0, .04, .07, hand); P(tor(.075, .013), m('racketRim', 0x2f5fa8), 0, .22, .07, hand); P(cyl(.07, .07, .004, 14), m('racketNet', 0xf6efe2, { op: .55, nobump: true }), 0, .22, .07, hand).rotation.x = Math.PI / 2; break;
     case 'paper': P(rbox(.34, .24, .02, .005), M.paper, -.08, .08, .12, hand).rotation.y = .2; break;
     // an open broadsheet held in both hands, folded in a shallow V, a headline and columns on the outside
-    case 'newspaper': { const ink = m('newsInk', 0x7d7368, { nobump: true }), np = G(0, 0, 0, body, 'newspaper'); [-1, 1].forEach(sd => { const pg = G(sd * .125, .9, .36, np); pg.rotation.y = sd * .32; P(rbox(.25, .34, .012, .004), M.paper, 0, 0, 0, pg); P(rbox(.2, .045, .004, .002), m('newsHead', 0x3a3532, { nobump: true }), 0, .12, .008, pg); for (let r = 0; r < 5; r++) P(rbox(.2, .014, .003, .001), ink, 0, .06 - r * .045, .008, pg); }); break; }
-    case 'satchel': P(rbox(.2, .18, .08, .03), m('satchel', 0x6c4430), -.18, .72, .02, body); P(rbox(.03, .5, .03, .01), m('satchel', 0x6c4430), -.02, .92, .1, body).rotation.z = .62; break;
+    case 'newspaper': { const ink = m('newsInk', 0x7d7368, { nobump: true }), np = G(0, 0, 0, body, 'newspaper'); [-1, 1].forEach(sd => { const pg = G(sd * .125, .6, .31, np); pg.rotation.y = sd * .32; P(rbox(.25, .34, .012, .004), M.paper, 0, 0, 0, pg); P(rbox(.2, .045, .004, .002), m('newsHead', 0x3a3532, { nobump: true }), 0, .12, .008, pg); for (let r = 0; r < 5; r++) P(rbox(.2, .014, .003, .001), ink, 0, .06 - r * .045, .008, pg); }); break; }
+    case 'satchel': P(rbox(.3, .26, .12, .04), m('satchel', 0x6c4430), -.18, .2, -.02, body); P(rbox(.04, .5, .04, .01), m('satchel', 0x6c4430), 0, .5, .1, body).rotation.z = .7; break;
   }
   // invisible hit target for taps
   const hit = new THREE.Mesh(cyl(.38, .38, 1.6, 8), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }));
   hit.position.y = .8; g.add(hit);
-  return Object.assign(ch, { g, legs, arms, body, head, hit, news: body.getObjectByName('newspaper'), topH: (/^toque/.test(o.hair || '') ? .62 : o.hair === 'afro' ? .12 : 0) * HKY });
+  return { g, legs, arms, body, head, hit, news: body.getObjectByName('newspaper'), topH: /^toque/.test(o.hair || '') ? .62 : o.hair === 'afro' ? .12 : 0 };
 }
 
 // ---------- the roster: every agent has a character ----------
@@ -1681,7 +1662,7 @@ class Actor {
     const one = this.carry && this.carry.userData.oneHand, shoulder = this.carry && this.carry.userData.shoulder;
     if (shoulder) { c.arms[0].rotation.x = -2.75; c.arms[1].rotation.x = w ? Math.sin(t * 10) * .45 : 0; }
     else if (one) { c.arms[0].rotation.x = -.95; c.arms[1].rotation.x = w ? Math.sin(t * 10) * .45 : 0; c.head.rotation.x = 0; }
-    else if (this.carry || this.mode === 'hold') { c.arms.forEach(a => a.rotation.x = -1.05); }
+    else if (this.carry || this.mode === 'hold') { c.arms.forEach(a => a.rotation.x = -1.45); }
     else if (this.mode === 'read') { c.arms.forEach(a => a.rotation.x = -1.18); c.head.rotation.x = .2; }
     else if (this.mode === 'climb') { c.arms[0].rotation.x = -2.5 + Math.sin(t * 8) * .35; c.arms[1].rotation.x = -2.5 - Math.sin(t * 8) * .35; c.legs[0].rotation.x = -.7 + Math.sin(t * 8) * .5; c.legs[1].rotation.x = -.7 - Math.sin(t * 8) * .5; }
     else if (this.mode === 'slide') { c.arms.forEach(a => a.rotation.x = -2.7); c.head.rotation.x = -.15; }
@@ -1691,25 +1672,23 @@ class Actor {
     c.body.position.y = w ? Math.abs(Math.sin(t * 10)) * .035 : (this.mode === 'work' ? Math.abs(Math.sin(t * 7)) * .02 : Math.sin(t * 1.6) * .008);
     c.body.rotation.z = this.mode === 'work' ? Math.sin(t * 3.5) * .04 : 0;
     this.sync();
-    let yOff = 0; c.knee = null;
+    let yOff = 0;
     if (this.pose && this.mode !== 'walk') {
-      // seatY is where the old short-legged rig sat; the long-legged rig drops by its hip height so every seat keeps its tuning
-      const sc = this.g.scale.y || 1, sy = this.seatY ?? .2;
-      if (this.pose === 'kneel') { c.legs.forEach(l => l.rotation.x = -.2); c.knee = 1.75; yOff = KNEEL_Y * sc; }
-      if (this.pose === 'sit') { c.legs.forEach(l => l.rotation.x = -1.45); c.knee = sitKnee(sy + .145 * sc + (this.lift || 0), sc); yOff = sy - SIT_DROP * sc; }
+      if (this.pose === 'kneel') { c.legs.forEach(l => l.rotation.x = -1.5); yOff = -.1; }
+      if (this.pose === 'sit') { c.legs.forEach(l => l.rotation.x = -1.45); yOff = this.seatY ?? .2; }
     }
     this.g.position.y = .06 + yOff + (this.lift || 0);
     this.g.rotation.x = this.rock && this.mode !== 'walk' ? Math.sin(t * 1.7) * .07 : (this.tilt || 0);
-    if (this.waveUntil > simT) { c.arms[1].rotation.x = 0; c.arms[1].rotation.z = 2.7 + Math.sin(t * 12) * .25; } else c.arms[1].rotation.z = .1;
+    if (this.waveUntil > simT) { c.arms[1].rotation.x = 0; c.arms[1].rotation.z = 2.7 + Math.sin(t * 12) * .25; } else c.arms[1].rotation.z = .18;
     if (this.drag) { const o = this.drag; o.position.set(this.pos.x + Math.sin(this.yaw) * .62, 0, this.pos.z + Math.cos(this.yaw) * .62); o.rotation.y = this.yaw; }
     if (this.carry) {
       // held at the mittens (waist height), pushed out by the object's own radius so it never clips the head
       const o = this.carry;
-      if (!o.userData.hold) { o.rotation.set(0, 0, 0); const sz = new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3()); o.userData.hold = { f: .3 + Math.max(sz.x, sz.z) / 2, y: .8 }; }
-      const h = o.userData.hold, sn = Math.sin(this.yaw), cs = Math.cos(this.yaw), hs = this.g.scale.y || 1;
-      if (shoulder) { const lx = -.2 * hs, lz = 0; o.position.set(this.pos.x + lx * cs + lz * sn, 1.14 * hs + c.body.position.y, this.pos.z - lx * sn + lz * cs); o.rotation.set(0, this.yaw, 0); }
-      else if (one) { const lx = -.22 * hs, lz = .3 * hs; o.position.set(this.pos.x + lx * cs + lz * sn, .78 * hs + c.body.position.y, this.pos.z - lx * sn + lz * cs); o.rotation.set(0, this.yaw, 0); o.rotateX(one.tilt ?? .35); }
-      else { o.position.set(this.pos.x + sn * h.f * hs, h.y * hs + c.body.position.y, this.pos.z + cs * h.f * hs); o.rotation.y = this.yaw; }
+      if (!o.userData.hold) { o.rotation.set(0, 0, 0); const sz = new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3()); o.userData.hold = { f: .24 + Math.max(sz.x, sz.z) / 2, y: .5 }; }
+      const h = o.userData.hold, sn = Math.sin(this.yaw), cs = Math.cos(this.yaw);
+      if (shoulder) { const lx = -.24, lz = 0; o.position.set(this.pos.x + lx * cs + lz * sn, .9 + c.body.position.y, this.pos.z - lx * sn + lz * cs); o.rotation.set(0, this.yaw, 0); }
+      else if (one) { const lx = -.2, lz = .2; o.position.set(this.pos.x + lx * cs + lz * sn, .47 + c.body.position.y, this.pos.z - lx * sn + lz * cs); o.rotation.set(0, this.yaw, 0); o.rotateX(one.tilt ?? .35); }
+      else { o.position.set(this.pos.x + sn * h.f, h.y + c.body.position.y, this.pos.z + cs * h.f); o.rotation.y = this.yaw; }
     }
     if (c.news) c.news.visible = this.mode === 'read';
     if (this.post) this.post(this, dt);
@@ -2537,7 +2516,7 @@ function batUp(a) { a.g.add(bat); bat.position.set(-.16, .5, .24); TB.holder = a
 function tbPost(a) {
   if (a.hopUntil > simT) { a.hopping = true; a.lift = Math.abs(Math.sin(simT * 10)) * .17; a.c.arms.forEach(r => r.rotation.x = -2.9); }
   else if (a.hopping) { a.hopping = false; a.lift = 0; const t = a.townie; if (t.pose === 'sit' && Math.hypot(a.pos.x - t.still[0], a.pos.z - t.still[1]) < .35) a.pose = 'sit'; }
-  if (a.throwT != null && simT - a.throwT < .55) { const k = (simT - a.throwT) / .55; a.c.arms[1].rotation.x = k < .45 ? lerp(-.4, -2.9, k / .45) : lerp(-2.9, -.5, (k - .45) / .55); a.c.arms[1].rotation.z = .1; }
+  if (a.throwT != null && simT - a.throwT < .55) { const k = (simT - a.throwT) / .55; a.c.arms[1].rotation.x = k < .45 ? lerp(-.4, -2.9, k / .45) : lerp(-2.9, -.5, (k - .45) / .55); a.c.arms[1].rotation.z = .18; }
   if (a.catchT != null && simT - a.catchT < .45) a.c.arms.forEach(r => r.rotation.x = -1.5);
   if (TB.holder !== a) return;
   const k = TB.swing < 0 ? 0 : clamp(TB.swing / .3, 0, 1), e = k * k * (3 - 2 * k), th = lerp(-2.6, 2.1, e), ph = lerp(1.25, .08, Math.min(1, e * 1.4));
@@ -2832,8 +2811,8 @@ function makeBike(look, color, loop, speed, home) {
   P(cyl(.022, .022, .4, 6), fm, 0, .6, .29, g).rotation.x = -.62;
   P(rbox(.42, .03, .03, .01), M.iron, 0, .78, .15, g); [-.21, .21].forEach(x => P(cyl(.025, .025, .07, 8), M.iron, x, .78, .15, g).rotation.z = Math.PI / 2);
   P(rbox(.12, .04, .2, .02), M.iron, 0, .6, -.16, g);
-  const kid = makeChar({ id: 'bikekid', ...look }); root.remove(kid.g); g.add(kid.g); kid.g.scale.setScalar(.6); kid.g.position.set(0, .26, -.12);
-  kid.arms.forEach(a => { a.rotation.x = -1.35; a.scale.y = 1.1; });
+  const kid = makeChar({ id: 'bikekid', ...look }); root.remove(kid.g); g.add(kid.g); kid.g.scale.setScalar(.6); kid.g.position.set(0, .44, -.12);
+  kid.arms.forEach(a => { a.rotation.x = -1.35; a.scale.y = 1.9; });
   const b = { name: look.name, what: look.what, look, g, wheels, kid, loop, i: 0, speed, home, mode: 'loop', path: [], pos: new THREE.Vector3(loop[0][0], 0, loop[0][1]), yaw: 0, t: rnd() * 6, waveUntil: 0, gen: 0, seen: 0 };
   kid.hit.userData.bike = b; bikes.push(b); return b;
 }
@@ -2982,7 +2961,7 @@ function townUpdate(dt, now) {
     const ph = b.t * 9; b.kid.legs[0].rotation.x = -.9 + Math.sin(ph) * .6; b.kid.legs[1].rotation.x = -.9 - Math.sin(ph) * .6; b.wheels.forEach(w => w.rotation.x += dt * (b.v ?? b.speed) * 4); if ((b.v ?? b.speed) < .2) { b.kid.legs[0].rotation.x = -.9; b.kid.legs[1].rotation.x = -.9; }
     // Martha waves from her garden and the kid waves back
     if (martha && !martha.hidden && martha.pose === 'kneel' && b.pos.distanceTo(martha.pos) < 3.8 && (martha.lastWave ?? -99) < simT - 6 && (b.marthaAt ?? -99) < simT - 60) { b.marthaAt = simT; marthaHello(b.pos, b.name); b.waveUntil = simT + 1.4; }
-    const wv = b.waveUntil > simT; b.kid.arms[1].rotation.x = wv ? 0 : -1.35; b.kid.arms[1].rotation.z = wv ? 2.7 + Math.sin(now / 80) * .25 : .1; b.kid.arms[1].scale.y = wv ? 1 : 1.1;
+    const wv = b.waveUntil > simT; b.kid.arms[1].rotation.x = wv ? 0 : -1.35; b.kid.arms[1].rotation.z = wv ? 2.7 + Math.sin(now / 80) * .25 : .18; b.kid.arms[1].scale.y = wv ? 1 : 1.9;
   }
   if (dog.owner) {
     const o = dog.owner; dog.g.visible = !o.hidden;
@@ -3092,7 +3071,7 @@ function placeOverlays() {
     o.el.style.display = ''; o.el.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`;
   }
 }
-const headPos = a => () => tmpV.set(a.pos.x, a.pos.y + (a === A.sal ? 1.62 : 1.76) * (a.g.scale.y || 1) + (a.c.topH || 0), a.pos.z);
+const headPos = a => () => tmpV.set(a.pos.x, a.pos.y + (a === A.sal ? 1.5 : 1.62) * (a.g.scale.y || 1) + (a.c.topH || 0), a.pos.z);
 function bubble(a, icon, sec = 1.6, cls = '') {
   if (a._bub) { a._bub.el.remove(); OV.splice(OV.indexOf(a._bub), 1); }
   const el = document.createElement('div'); el.className = 'bub ' + cls; el.innerHTML = svg(icon);
@@ -3705,7 +3684,7 @@ function personInfo(key) {
 const PF = { renderer: null, scene: null, cam: null, model: null, raf: 0, t: 0, canvas: document.adoptNode($('#pfHold').content.firstElementChild) };
 function poseModel(c, info) {
   const g = c.g, arms = c.arms, legs = c.legs, P0 = info.pose, t = P0.town || {}, what = (t.what || '') + ' ' + (info.now || '');
-  const hold = obj => { obj.position.set(0, .8, .38); g.add(obj); arms.forEach(arm => arm.rotation.x = -1.05); };
+  const hold = obj => { obj.position.set(0, .5, .32); g.add(obj); arms.forEach(arm => arm.rotation.x = -1.35); };
   if (P0.crew) {
     if (c.news) c.news.visible = false;
     if (['ticket', 'book', 'clip', 'probe', 'spoon', 'crate'].includes(P0.prop)) { arms[0].rotation.x = -1.0; arms[1].rotation.x = -1.2; c.head.rotation.x = .18; }
@@ -3714,14 +3693,14 @@ function poseModel(c, info) {
   }
   if (P0.bike) { arms[1].rotation.z = 2.7; return 'Waving from the bike path'; }
   if (t.mower) { const mw = mower.clone(true); mw.position.set(0, 0, .75); mw.visible = true; g.add(mw); arms.forEach(arm => arm.rotation.x = -.9); return 'Mowing'; }
-  if (t.mail) { const letter = P(rbox(.2, .14, .02, .01), M.paper, -.2, .88, .4, g); letter.rotation.y = -.3; arms[0].rotation.x = -1.2; return 'Out with the mail'; }
+  if (t.mail) { const letter = P(rbox(.2, .14, .02, .01), M.paper, .12, .62, .3, g); letter.rotation.y = -.3; arms[0].rotation.x = -1.2; return 'Out with the mail'; }
   if (t.name === 'Tess') { const box = G(0, 0, .55, g); P(rbox(.9, .6, .4, .03), M.creamW, 0, .3, 0, box); P(rbox(1.0, .05, .5, .02), m('lemonTop', 0xf3cf72), 0, .62, 0, box); P(cyl(.07, .07, .2, 12), m('pitcher', 0xf6e58a, { op: .8 }), -.25, .75, 0, box); arms.forEach(arm => arm.rotation.x = -.9); return 'Selling lemonade'; }
   if (/run/i.test(t.what || '')) { legs[0].rotation.x = .6; legs[1].rotation.x = -.6; arms[0].rotation.x = -.7; arms[1].rotation.x = .6; c.body.rotation.x = .12; return 'Out for a run'; }
-  if (t.bb?.t != null) { const b = bat.clone(true); b.visible = true; b.position.set(.2, 1.1, .05); b.rotation.set(-.4, 0, -.5); g.add(b); arms[0].rotation.x = -2.2; arms[1].rotation.x = -2.0; return 'Up to bat'; }
+  if (t.bb?.t != null) { const b = bat.clone(true); b.visible = true; b.position.set(.2, .55, -.05); b.rotation.set(-.4, 0, -.5); g.add(b); arms[0].rotation.x = -2.2; arms[1].rotation.x = -2.0; return 'Up to bat'; }
   if (t.bb || t.fan) { arms[0].rotation.x = -2.8; arms[1].rotation.x = -2.8; return t.fan ? 'Cheering' : 'Calling the game'; }
   if (c.news) { c.news.visible = true; arms.forEach(arm => arm.rotation.x = -1.18); c.head.rotation.x = .2; return 'Reading the paper'; }
   if (/fiddle|music/i.test(what)) { arms[0].rotation.x = -2.0; arms[1].rotation.x = -1.4; c.head.rotation.z = .2; return 'Playing a tune'; }
-  if (/garden/i.test(what)) { legs.forEach(l => l.rotation.x = -.2); c.knee = 1.75; g.position.y = KNEEL_Y; arms.forEach(arm => arm.rotation.x = -1.0); return 'Gardening'; }
+  if (/garden/i.test(what)) { legs.forEach(l => l.rotation.x = -1.5); g.position.y = -.1; arms.forEach(arm => arm.rotation.x = -1.0); return 'Gardening'; }
   if (/swing|slide/i.test(what)) { arms[0].rotation.x = -2.8; arms[1].rotation.x = -2.8; return 'Wheee'; }
   arms[1].rotation.z = 2.7; return 'Saying hi';
 }
@@ -3741,7 +3720,7 @@ function renderProfileModel(info) {
   PF.pose = poseModel(c, info); if (info.kid) c.g.scale.setScalar(.72);
   PF.scene.add(c.g); PF.model = c.g;
   // frame the whole character, hat included: center on half their height and back off in proportion
-  const sc = info.kid ? .72 : 1, top = (1.47 + (c.topH || 0)) * sc, center = top / 2 + .05, dist = top * 1.95 + .7;
+  const sc = info.kid ? .72 : 1, top = (1.35 + (c.topH || 0)) * sc, center = top / 2 + .05, dist = top * 1.95 + .7;
   PF.cam.position.set(dist * .27, center + .35, dist); PF.cam.lookAt(0, center, .1);
   PF.renderer.render(PF.scene, PF.cam);
 }
@@ -4511,7 +4490,7 @@ function updateAmbient(dt) {
 function workTag(actor, row) {
   const tag = /\bS(\d+\.\d+)\s+([a-z]+)\b/i.exec(row?.label || ''), step = STEP_WORD[tag?.[2]?.toLowerCase()];
   const text = `${actor.meta.name} · ${step ? `${step} ${tag[1]}` : 'Working'}`;
-  if (!actor.workTagO) { const el = document.createElement('div'); el.className = 'tag active'; actor.workTagO = overlay(el, () => tmpV.set(actor.pos.x, actor.pos.y + 1.88 + (actor.c.topH || 0), actor.pos.z)); }
+  if (!actor.workTagO) { const el = document.createElement('div'); el.className = 'tag active'; actor.workTagO = overlay(el, () => tmpV.set(actor.pos.x, actor.pos.y + 1.75 + (actor.c.topH || 0), actor.pos.z)); }
   actor.workTagO.el.textContent = text; actor.workTagO.on = !actor.hidden;
 }
 function clearWorkTag(actor) { if (actor.workTagO) actor.workTagO.on = false; }
