@@ -109,14 +109,18 @@ a.iconbtn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 
 /* side sheet */
 #pfCanvas{display:block;width:100%;aspect-ratio:1/1;max-height:300px;border-radius:14px;background:radial-gradient(circle at 50% 40%,#fff8ec 0,#f3e5cf 70%,#ead6b8 100%)}
-.pf h4{font-family:var(--display);font-weight:600;font-size:21px;margin:12px 0 2px}
-.pf .sub{color:var(--ink-soft);font-weight:700;font-size:12.5px;margin:0 0 10px}
+.pf .sub{color:var(--ink-soft);font-weight:700;font-size:12.5px;margin:12px 0 10px}
 .pf dl{display:grid;grid-template-columns:auto 1fr;gap:7px 12px;margin:0;font-size:13px}
 .pf dt{color:var(--ink-soft);font-weight:700;font-size:12px}
 .pf dd{margin:0;font-weight:700;min-width:0;overflow-wrap:anywhere}
 .pf dd .pname{font-size:13px;margin-right:10px}
 .pf code{font-size:12px}
-#sheet{position:fixed;z-index:6;top:calc(68px + env(safe-area-inset-top,0px));right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));width:360px;max-width:calc(100vw - 32px);background:var(--card);border-radius:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden}
+#sheet{position:fixed;z-index:6;top:calc(68px + env(safe-area-inset-top,0px));right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));width:360px;max-width:calc(100vw - 32px);display:flex;flex-direction:column;overflow:hidden;border-radius:24px;
+  background:linear-gradient(140deg,rgba(255,253,248,.86) 0%,rgba(255,253,248,.78) 50%,rgba(255,253,248,.84) 100%);-webkit-backdrop-filter:blur(18px) saturate(1.8) brightness(1.05);backdrop-filter:blur(18px) saturate(1.8) brightness(1.05);
+  border:1px solid rgba(255,255,255,.72);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(255,255,255,.3),0 16px 40px rgba(60,40,20,.2),0 2px 6px rgba(60,40,20,.1)}
+/* liquid glass stays readable at night: a dark scene behind it gets a denser frost */
+.nite #sheet{background:linear-gradient(140deg,rgba(255,253,248,.94) 0%,rgba(255,253,248,.89) 50%,rgba(255,253,248,.92) 100%)}
+.nite #tip{background:linear-gradient(140deg,rgba(255,253,248,.9) 0%,rgba(255,253,248,.8) 50%,rgba(255,253,248,.86) 100%)}
 .sh-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 10px}
 .sh-head h3{font-family:var(--display);font-weight:600;font-size:20px;margin:0}
 .sh-close{width:34px;height:34px;border-radius:50%;border:0;background:rgba(74,52,38,.07);cursor:pointer;display:grid;place-items:center}
@@ -275,6 +279,8 @@ button.orow:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
 .hav::before{content:"";position:absolute;left:8px;top:5px;width:20px;height:21px;border-radius:50% 50% 46% 46%;background:radial-gradient(circle at 33% 60%,#2a1d17 0 1.6px,transparent 2.1px),radial-gradient(circle at 67% 60%,#2a1d17 0 1.6px,transparent 2.1px),radial-gradient(ellipse at 50% 82%,rgba(201,83,59,.55) 0 2.2px,transparent 2.8px),linear-gradient(var(--hr) 0 36%,var(--sk) 36%)}
 .hav.kid::before{transform:scale(.86);transform-origin:50% 30%}
 #tip .x:hover{background:rgba(255,255,255,.35)}
+#tip .more{display:block;margin-top:2px;border:0;border-radius:999px;padding:7px 14px;font:inherit;font-size:12.5px;font-weight:800;background:var(--ink);color:var(--cream);cursor:pointer;box-shadow:0 4px 10px rgba(60,40,20,.18)}
+#tip .more:hover{background:#3a2a20}
 @media (max-width:640px){
   .top{right:16px}.top .stat span{display:none}.tr{top:auto;bottom:calc(76px + env(safe-area-inset-bottom,0px))}
   .tracker{order:9;flex:1 1 100%}.tk-steps{display:none}
@@ -711,7 +717,7 @@ function labelSign(parent, text, w, h, x, y, z, bg = '#fbf6ec', fg = '#4a3426', 
 const hemi = new THREE.HemisphereLight(0xfff0d8, 0x8a5a44, 1.05); scene.add(hemi);
 const amb = new THREE.AmbientLight(0xffe6c8, .25); scene.add(amb);
 const sun = new THREE.DirectionalLight(0xffc285, 2.7); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.bias = -.0004; sun.shadow.normalBias = .03; sun.shadow.radius = 3; sun.shadow.camera.near = 1; sun.shadow.camera.far = 80; scene.add(sun, sun.target);
+sun.shadow.bias = -.0004; sun.shadow.normalBias = .03; sun.shadow.radius = 3; sun.shadow.camera.near = 1; sun.shadow.camera.far = 130; scene.add(sun, sun.target);
 const fill = new THREE.DirectionalLight(0xcfe0f0, .35); fill.position.set(-6, 5, 8); scene.add(fill);
 const ovenLight = new THREE.PointLight(0xff8a3d, 0, 4.5, 1.6); scene.add(ovenLight);
 const passLight = new THREE.PointLight(0xffc27a, 1.2, 3.6, 1.8); passLight.position.set(-.5, 1.7, .25); scene.add(passLight);
@@ -1134,6 +1140,13 @@ STORES.forEach(store);
 }
 // Elm Street homes: deep front yards, each house its own style
 const HWIN = m('houseWin', 0x9fb4bf, { r: .25, m: .1, b: .1, e: 0xffcf8a, ei: 0, nobump: true });
+// lit rooms: each window lands in one of LITK buckets by a hash of its position, so the same rooms stay lit frame to frame
+// LITN is how lit each bucket is in the evening (most people up), LITL after hours (a few rooms here and there)
+const LITK = 8, LITN = [1, 1, 1, .9, 1, .8, 1, 0], LITL = [1, 0, 0, .7, 0, 0, 0, 0];
+const litOf = (x, y, z) => { const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453; return Math.floor((s - Math.floor(s)) * LITK) % LITK; };
+const litSet = base => Array.from({ length: LITK }, (_, i) => { const c = base.clone(); c.name = base.name + i; return c; });
+const litInst = (geo, mats, list) => mats.forEach((mat, i) => { const part = list.filter(p => litOf(p[0], p[1], p[2]) === i); if (part.length) inst(geo, mat, part); });
+const HWINS = litSet(HWIN), hwinM = (x, y, z) => HWINS[litOf(x, y, z)];
 const NOWL = m('owlWin', 0x9fb4bf, { r: .25, m: .1, b: .1, e: 0xffd9a0, ei: 0, nobump: true });
 const PORCH = m('porchLight', 0xfff0c8, { e: 0xffd890, ei: 0, nobump: true });
 const DRIVE = m('driveway', 0xc4bcae, { b: 1.4 }), SHUT = m('shutter', 0x3f5a48), STONE = m('stone', 0xbdb3a3, { b: 1.6 }), GRAVEL = m('gravel', 0xcfc2aa, { b: 2 }), YARD = m('yard', 0xa7bf74, { b: 1.8 }), HEDGE = m('hedge', 0x6f8f45, { b: 2.2 });
@@ -1175,7 +1188,7 @@ function house(o) {
   const wy = floors === 2 ? [1.3, 2.85] : [1.3];
   wy.forEach((y, f) => [-1, 1].forEach(k => { const wxp = x + dx + k * (w * .3 + .2); if (Math.abs(wxp - (x + dx)) > .7) hwinAt(wxp, y, front + .04, o.shutters, f === 1 && k === 1 && o.owl); }));
   if (floors === 2) hwinAt(x + dx, 2.85, front + .04, o.shutters);
-  P(rbox(.06, .8, .7, .02), HWIN, w / 2 + .02, 1.3, 0, g);
+  P(rbox(.06, .8, .7, .02), hwinM(x + w / 2, 1.3, cz), w / 2 + .02, 1.3, 0, g);
   // porch
   const pw = o.porch ?? 2.2;
   if (pw) {
@@ -1191,7 +1204,7 @@ function house(o) {
   }
   // signature pieces
   if (o.turret) { const tx = o.turret * (w / 2 - .1), t = G(tx, 0, fz - .3, g); P(cyl(.82, .82, h + .5, 18), wall, 0, (h + .5) / 2 + .2, 0, t); P(cyl(0, 1.02, 1.9, 18), roofM, 0, h + .7 + .95, 0, t); P(sph(.1, 10, 8), m('gold', 0xd8a23c, { m: .5, r: .4 }), 0, h + 2.7, 0, t); hwin.push([x + tx, 2.6, front + .55]); }
-  if (o.bay) { P(rbox(1.5, 1.25, .55, .05), wall, -w / 4, 1.0, fz + .27, g); P(rbox(1.2, .8, .06, .02), HWIN, -w / 4, 1.05, fz + .56, g); P(hipGeo, roofM, -w / 4, 1.62, fz + .27, g).scale.set(1.7, .45, .75); }
+  if (o.bay) { P(rbox(1.5, 1.25, .55, .05), wall, -w / 4, 1.0, fz + .27, g); P(rbox(1.2, .8, .06, .02), hwinM(x - w / 4, 1.05, cz + fz), -w / 4, 1.05, fz + .56, g); P(hipGeo, roofM, -w / 4, 1.62, fz + .27, g).scale.set(1.7, .45, .75); }
   if (o.portico) { [-.65, .65].forEach(p => P(cyl(.09, .1, 2.2, 12), trim, dx + p, 1.3, fz + .55, g)); P(prismGeo(1.8, .55, .9), trim, dx, 2.4, fz + .45, g); }
   if (o.garage) { const gx = w / 2 + 1.35; P(rbox(2.6, 2.3, d - .4, .05), wall, gx, 1.35, -.2, g); P(rbox(2.2, 1.8, .06, .02), trim, gx, 1.1, fz - .2, g); for (let i = 0; i < 4; i++) P(rbox(2.1, .03, .03, .01), STONE, gx, .5 + i * .4, fz - .16, g); const gr = P(prismGeo(d, .9, 2.9), roofM, gx, 2.5, -.2, g); gr.rotation.y = Math.PI / 2; }
   if (o.flowerBoxes) [-1, 1].forEach(k => { const bx = dx + k * (w * .3 + .2); P(rbox(.9, .18, .22, .03), m('fbox', 0x93633f), bx, .78, fz + .1, g); for (let i = 0; i < 7; i++) { const fx = bx - .36 + i * .12; flower(x + fx, .86, cz + fz + .1 + (i & 1 ? .04 : -.04), .75, i % 3 === 1 ? 1 : 0, FCOL[(i + (k > 0 ? 2 : 0)) % 4], .14); } });
@@ -1248,7 +1261,7 @@ const MZ = 52;
   const rm = new THREE.InstancedMesh(rbox(1, .06, .03, .012), M.creamW, rails.length), dd = new THREE.Object3D();
   rails.forEach((r, i) => { dd.position.set(r[0], r[1], r[2]); dd.scale.set(r[3], 1, 1); dd.updateMatrix(); rm.setMatrixAt(i, dd.matrix); }); rm.castShadow = rm.receiveShadow = true; root.add(rm);
 }
-inst(rbox(.7, .8, .06, .02), HWIN, hwin); inst(rbox(.7, .8, .06, .02), NOWL, owl); inst(rbox(.26, .82, .05, .02), SHUT, shut);
+litInst(rbox(.7, .8, .06, .02), HWINS, hwin); inst(rbox(.7, .8, .06, .02), NOWL, owl); inst(rbox(.26, .82, .05, .02), SHUT, shut);
 
 // parked cars sit in driveways, never on the sidewalk
 const PARKED = [[-26, 0x7e9db5], [-6.5, 0xc9533b], [16.4, 0xfbf6ec], [30, 0x6c8a52], [23.5, 0x3a3532], [-20.5, 0xd8a23c], [-7.5, 0x6f8fb0], [24.5, 0xc0392b], [31, 0xe8e1d2], [44, 0x2e6e8e]].map(([hxp, col]) => { const hh = HOUSES.find(q => q.x === hxp); return [hh.drive, hh.carZ, col]; });
@@ -1394,7 +1407,7 @@ function clockHours() { const base = { dawn: 6.2, day: 10.2, night: 20.5 }[tod] 
   const sl = G(1.5, 8.6, 1.5, g); sl.rotation.y = Math.PI / 4; P(cyl(0, .8, .05, 3), m('sliceCheese', 0xf3cf72, { nobump: true }), 0, 0, 0, sl).rotation.x = Math.PI / 2; [[0, -.1], [-.2, .25], [.22, .2]].forEach(([dx, dy]) => P(cyl(.11, .11, .06, 12), m('pepperoni', 0xa8321f), dx, dy, .03, sl).rotation.x = Math.PI / 2);
 }
 inst(rbox(.74, .9, .04, .02), M.creamW, upWin.map(p => [p[0], p[1], p[2] - .01]));
-inst(rbox(.62, .78, .06, .02), WIN, upWin);
+const UPWINS = litSet(WIN); litInst(rbox(.62, .78, .06, .02), UPWINS, upWin);
 // city limits: a wooded edge and hills so the town never ends in a cliff
 {
   const trunks = [], crowns = [], crownsD = [];
@@ -1429,10 +1442,12 @@ function makeChar(o) {
   const capH = (th, tilt, r = .315) => { P(capHair(r, th), hair, 0, 0, 0, head).rotation.x = -tilt; };
   const add = (geo, mat, x, y, z, sx = 1, sy = 1, sz = 1) => { const h = P(geo, mat, x, y, z, head); h.scale.set(sx, sy, sz); return h; };
   const glasses = () => { const gm = m('glasses', 0x3b2f2a, { r: .4, nobump: true }); [-1, 1].forEach(s => P(tor(.068, .012), gm, s * .105, -.03, .3, head)); P(rbox(.06, .015, .015, .005), gm, 0, -.02, .305, head); };
+  // a small chin beard: a band of the jaw below the smile, front only (a shell over the whole lower face read as a dark block)
+  const beard = () => P(gc.chinBeard ??= new THREE.SphereGeometry(.31, 20, 6, Math.PI * .32, Math.PI * .36, Math.PI * .72, Math.PI * .17), hair, 0, 0, 0, head);
   const toque = () => { const w = m('toque', 0xfbf6ec, { b: 1.2 }); P(cyl(.27, .28, .14), w, 0, .23, -.02, head); P(cyl(.31, .26, .3), w, 0, .43, -.02, head); [[.13, .1], [-.13, .1], [.13, -.12], [-.13, -.12], [0, 0]].forEach(([x, z], i) => P(sph(i === 4 ? .22 : .19, 20, 12), w, x, .62 + (i === 4 ? .05 : 0), z - .02, head)); };
   switch (o.hair) {
     case 'toque': toque(); break;
-    case 'toqueBeard': toque(); P(new THREE.SphereGeometry(.318, 32, 16, Math.PI * .1, Math.PI * .8, Math.PI * .55, Math.PI * .4), hair, 0, 0, 0, head); break;
+    case 'toqueBeard': toque(); beard(); break;
     case 'bun': capH(Math.PI * .5, .45); add(sph(.13, 16, 10), hair, 0, .29, -.13); break;
     case 'quiff': capH(Math.PI * .5, .5); add(sph(.16, 16, 10), hair, .04, .27, .1, 1.2, .6, 1); glasses(); break;
     case 'bob': capH(Math.PI * .63, .62, .325); break;
@@ -1447,7 +1462,7 @@ function makeChar(o) {
     case 'baldGlasses': { [-1, 1].forEach(s => add(sph(.12, 12, 8), hair, s * .25, .02, -.08, .6, .9, 1.1)); glasses(); [-1, 1].forEach(s => add(sph(.06, 10, 8), hair, s * .05, -.095, .285, 1.1, .45, .6).rotation.z = s * .35); break; }
     case 'long': capH(Math.PI * .58, .52, .325); add(capg(.2, .26), hair, 0, -.2, -.17, 1.25, 1, .55); [-1, 1].forEach(s => add(capg(.07, .2), hair, s * .25, -.16, .02, 1, 1, .8)); break;
     case 'pony': capH(Math.PI * .52, .48, .32); add(sph(.1, 12, 8), hair, 0, .14, -.31); { const t = add(capg(.075, .24), hair, 0, -.06, -.4); t.rotation.x = .45; } break;
-    case 'beard': capH(Math.PI * .56, .5, .318); P(new THREE.SphereGeometry(.318, 32, 16, Math.PI * .1, Math.PI * .8, Math.PI * .55, Math.PI * .4), hair, 0, 0, 0, head); break;
+    case 'beard': capH(Math.PI * .56, .5, .318); beard(); break;
   }
   // a prop in the right hand
   const hand = G(0, -.24, .04, arms[1], 'prop');
@@ -2989,8 +3004,18 @@ function applyCam() {
   cam.left = -H0 * aspect; cam.right = H0 * aspect; cam.top = H0; cam.bottom = -H0; cam.zoom = view.zoom; cam.updateProjectionMatrix();
   cam.position.set(view.tx + DIR.x * 100, DIR.y * 100, view.tz + DIR.z * 100); cam.lookAt(view.tx, 0, view.tz); cam.updateMatrixWorld();
   const half = H0 * aspect / view.zoom * 1.15 + 3;
-  sun.target.position.set(view.tx, 0, view.tz); sun.position.set(view.tx + 16, 15, view.tz + 11);
   if (Math.abs(half - shadowHalf) > shadowHalf * .08) { shadowHalf = half; const sc = sun.shadow.camera; sc.left = sc.bottom = -half; sc.right = sc.top = half; sc.updateProjectionMatrix(); }
+  placeSun();
+}
+// the sun follows the view, but snapped to whole shadow-map texels in light space, so shadows hold still while panning
+// (a low dawn sun casts long shadows that shimmered as the shadow camera slid by fractions of a texel)
+let sunY = 15; const SUN_F = new THREE.Vector3(), SUN_R = new THREE.Vector3(), SUN_U = new THREE.Vector3(), SUN_T = new THREE.Vector3();
+function placeSun() {
+  SUN_F.set(-16, -sunY, -11).normalize(); SUN_R.crossVectors(SUN_F, UP).normalize(); SUN_U.crossVectors(SUN_R, SUN_F);
+  const tex = 2 * (shadowHalf || 1) / sun.shadow.mapSize.x, T = SUN_T.set(view.tx, 0, view.tz), f = T.dot(SUN_F);
+  const r = Math.round(T.dot(SUN_R) / tex) * tex, u = Math.round(T.dot(SUN_U) / tex) * tex;
+  T.copy(SUN_R).multiplyScalar(r).addScaledVector(SUN_U, u).addScaledVector(SUN_F, f);
+  sun.target.position.copy(T); sun.position.copy(T).addScaledVector(SUN_F, -45);
 }
 const ctx1 = ts1.getContext('2d'), ctx2 = ts2.getContext('2d');
 function resize() {
@@ -3567,11 +3592,14 @@ const TIER = { opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' };
 function crewName(id) { return id === 'front' ? 'Front of house' : (CREWS.find(c => c[0] === id) || [, ''])[1]; }
 function escapeCard(value) { return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]); }
 let tipAnchor = null;
+// one menu at a time: a new popover closes the sheet, and opening the sheet closes the popover
 function showTip(html, anchor) {
+  if (anchor) closeSheet();
   tip.innerHTML = `<button class="sh-close x" aria-label="Close" id="tipX">${svg('close')}</button>` + html; tip.hidden = false;
-  if (anchor) tipAnchor = anchor; $('#tipX').onclick = () => { tip.hidden = true; tipFor = null; tipAnchor = null; };
+  if (anchor) tipAnchor = anchor; $('#tipX').onclick = closeTip;
   placeTip();
 }
+function closeTip() { tip.hidden = true; tipFor = null; tipAnchor = null; }
 // a thought bubble above its target, following it as it moves; flips below when there is no room above
 function placeTip() {
   if (tip.hidden || !tipAnchor) return;
@@ -3706,20 +3734,37 @@ function profileLoop() {
 const personButton = n => `<button type="button" class="pname" data-person="${escapeCard(personKey(n))}">${escapeCard(n)}</button>`;
 // a profile is a screen inside the People sheet, so the scene stays free to pan, zoom and click while it shows
 const profileShown = () => !sheet.hidden && sheet.dataset.kind === 'crew' && !!sheet.dataset.person;
-function openProfile(key) {
+function openProfile(key, pan = false) {
   if (!personInfo(key)) return false;
   if (sheet.hidden || sheet.dataset.kind !== 'crew') openSheet('crew');
   sheet.dataset.tab = key.startsWith('town:') ? 'town' : 'crew'; sheet.dataset.person = key;
-  renderPeopleSheet(); tip.hidden = true; tipFor = null;
+  renderPeopleSheet(); closeTip(); if (pan) panToPerson(key);
   $('#shBody').querySelector('[data-pback]').focus({ preventScroll: true });
   return true;
 }
+// where someone is right now: their spot in the street, or the building they are inside (home, the kitchen)
+function buildingOf(e) { const g = e && (e.h != null ? HS(e.h).g : STORES.find(q => q.kind === e.store)?.g); return g && new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3()); }
+function personSpot(key) {
+  const info = personInfo(key); if (!info) return null;
+  const bike = info.pose.bike && bikes.find(b => b.name === info.name);
+  if (bike) return bike.g.visible ? bike.pos : buildingOf(HOME_OF[info.name]);
+  const a = info.actor;
+  if (a && !a.hidden) return a.pos;
+  if (info.kind === 'crew') return a?.isTownCrew ? buildingOf(HOME_OF[info.name]) || a.pos : new THREE.Vector3(HOME.tx, 0, HOME.tz);
+  return personOf(info.name)?.home ? buildingOf(HOME_OF[info.name]) || a?.pos : a?.pos || buildingOf(HOME_OF[info.name]);
+}
+// pan with the same eased camera move as Zoom to fit; on a wide screen the spot lands in the clear area left of the sheet
+function panToPerson(key) {
+  const p = personSpot(key); if (!p) return;
+  const zoom = Math.max(view.zoom, 1.1), dpx = W > 700 && !sheet.hidden ? (sheet.offsetWidth + 16) / 2 : 0, wpp = (2 * H0 / zoom) / H;
+  animTo({ tx: p.x + RIGHT.x * dpx * wpp, tz: p.z + RIGHT.z * dpx * wpp, zoom }, .9);
+}
 function renderProfile(key) {
   const info = personInfo(key); if (!info) { delete sheet.dataset.person; return false; }
-  renderProfileModel(info);
+  renderProfileModel(info); $('#shTitle').textContent = info.name;
   PF.canvas.setAttribute('aria-label', `${info.name}: ${PF.pose.toLowerCase()}`);
   $('#shBody').innerHTML = `<div class="pf"><button type="button" class="sh-back" data-pback>‹ Go Back</button><div data-pf-canvas></div>
-    <h4 id="pfName">${escapeCard(info.name)}</h4><div class="sub">${escapeCard(info.kind === 'crew' ? `${info.crewLabel || 'Kitchen crew'} · ${PF.pose}` : PF.pose)}</div><dl>
+    <div class="sub">${escapeCard(info.kind === 'crew' ? `${info.crewLabel || 'Kitchen crew'} · ${PF.pose}` : PF.pose)}</div><dl>
     <dt>Role</dt><dd>${escapeCard(info.role)}${info.agent ? `<br><code>${escapeCard(info.agent)}</code>` : ''}</dd>
     <dt>Family</dt><dd>${info.family.length ? info.family.map(personButton).join('') : 'Lives on their own'}</dd>
     <dt>Home</dt><dd>${escapeCard(info.home)}</dd>
@@ -3734,10 +3779,14 @@ function closeProfile() {
   delete sheet.dataset.person; renderPeopleSheet();
   $('#shBody').querySelector(`[data-person="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
 }
-document.addEventListener('keydown', event => { if (event.key === 'Escape' && profileShown()) { event.preventDefault(); closeProfile(); } });
+// Escape closes whatever is open, one level at a time: the popover, then a profile (back to its list), then the sheet
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  if (!tip.hidden) { event.preventDefault(); closeTip(); } else if (profileShown()) { event.preventDefault(); closeProfile(); } else if (!sheet.hidden) { event.preventDefault(); closeSheet(); }
+});
 $('#shBody').addEventListener('click', event => {
   if (event.target.closest('[data-pback]')) return closeProfile();
-  const b = event.target.closest('[data-person]'); if (b) openProfile(b.dataset.person);
+  const b = event.target.closest('[data-person]'); if (b) openProfile(b.dataset.person, true);
 });
 tip.addEventListener('click', event => { const b = event.target.closest('[data-person]'); if (b) openProfile(b.dataset.person); });
 function actorCard(a) {
@@ -3757,26 +3806,30 @@ function actorCard(a) {
   const mt = a.meta, el = Math.max(0, simT - a.since);
   return `<h5>${escapeCard(mt.name)}</h5><div class="sub"><code>${escapeCard(mt.type || mt.id.replace('#2', ''))}</code> · ${crewName(mt.crew)}</div><dl><dt>Model</dt><dd><span class="tier t-${mt.tier}">${TIER[mt.tier]}</span></dd><dt>Now</dt><dd>${escapeCard(a.task)}</dd><dt>For</dt><dd>${el.toFixed(0)}s</dd><dt>Tokens</dt><dd>${sceneMode === 'live' ? 'n/a' : (a.tokens / 1000).toFixed(1) + 'k'}</dd><dt>Role</dt><dd>${escapeCard(mt.role)}</dd></dl>`;
 }
+// a person in the scene gets the small popover first (name, what they are doing, See more); See more opens their profile
+function personTip(key) { const info = personInfo(key); return info && `<h5>${escapeCard(info.name)}</h5><div class="sub">${escapeCard(info.now || 'Somewhere in town')}</div><button type="button" class="more" data-person="${escapeCard(key)}">See more</button>`; }
+const tapCard = a => { const key = personKeyOf(a); return (key && personTip(key)) || actorCard(a); };
 function tap(x, y) {
   ndc.set(x / W * 2 - 1, -(y / H) * 2 + 1); ray.setFromCamera(ndc, cam);
   const hits = ray.intersectObjects([...actors.filter(a => !a.hidden).map(a => a.c.hit), ...bikes.filter(b => b.g.visible).map(b => b.kid.hit), ...clickables], true);
   for (const h of hits) {
-    const a = h.object.userData.actor; if (a) { const key = personKeyOf(a); if (key && openProfile(key)) return; tipFor = a; showTip(actorCard(a), headPos(a)); return; }
-    const bk = h.object.userData.bike; if (bk && openProfile('town:' + bk.name)) return; if (bk) { tipFor = null; showTip(`<h5>${bk.name}</h5><div class="sub">Neighbor kid on a bike</div><dl><dt>Now</dt><dd>${bk.what}</dd></dl>`, () => tmpV.set(bk.pos.x, 1.35, bk.pos.z)); return; }
+    const a = h.object.userData.actor; if (a) { tipFor = a; showTip(tapCard(a), headPos(a)); return; }
+    const bk = h.object.userData.bike; if (bk) { tipFor = null; showTip(personTip('town:' + bk.name) || `<h5>${bk.name}</h5><div class="sub">Neighbor kid on a bike</div><dl><dt>Now</dt><dd>${bk.what}</dd></dl>`, () => tmpV.set(bk.pos.x, 1.35, bk.pos.z)); return; }
     let o = h.object; while (o && !o.userData.card) o = o.parent; if (o) { tipFor = null; const pt = h.point.clone(); pt.y += .5; showTip(o.userData.card(), () => pt); return; }
   }
-  tip.hidden = true; tipFor = null; tipAnchor = null;
+  closeTip();
 }
 let tipFor = null;
 
 // ---------- sheets ----------
 const sheet = $('#sheet');
 const SHEET_BUTTONS = ['#bCrew', '#bOrders', '#bLog', '#bProgress'];
+function closeSheet() { if (sheet.hidden) return; sheet.hidden = true; delete sheet.dataset.person; SHEET_BUTTONS.forEach(id => $(id).classList.remove('on')); }
 function openSheet(kind) {
   const btn = { crew: $('#bCrew'), orders: $('#bOrders'), log: $('#bLog'), progress: $('#bProgress') }[kind]; const was = !sheet.hidden && sheet.dataset.kind === kind;
   SHEET_BUTTONS.forEach(id => $(id).classList.remove('on'));
-  if (was) { sheet.hidden = true; return; }
-  sheet.hidden = false; sheet.dataset.kind = kind; delete sheet.dataset.detail; delete sheet.dataset.person; btn.classList.add('on'); tip.hidden = true;
+  if (was) { closeSheet(); return; }
+  sheet.hidden = false; sheet.dataset.kind = kind; delete sheet.dataset.detail; delete sheet.dataset.person; btn.classList.add('on'); closeTip();
   if (kind === 'crew') renderPeopleSheet();
   else if (kind === 'log') renderLogSheet();
   else if (kind === 'progress') renderProgressSheet();
@@ -3912,7 +3965,7 @@ $('#shBody').addEventListener('click', event => {
   if (pick && sheet.dataset.kind === 'orders' && orderIndex.has(pick.dataset.order)) { sheet.dataset.detail = pick.dataset.order; renderOrdersSheet(); }
 });
 $('#bProgress').onclick = () => openSheet('progress'); $('#bLog').onclick = () => openSheet('log'); $('#bCrew').onclick = () => openSheet('crew'); $('#bOrders').onclick = () => openSheet('orders'); $('#tracker').onclick = () => openSheet('orders');
-$('#shClose').onclick = () => { sheet.hidden = true; SHEET_BUTTONS.forEach(id => $(id).classList.remove('on')); };
+$('#shClose').onclick = closeSheet;
 $('#bFit').onclick = () => animTo(FIT); $('#bHome').onclick = () => animTo(HOME);
 $('#bPause').onclick = () => { paused = !paused; $('#bPause').innerHTML = svg(paused ? 'play' : 'pause') + `<span class="lbl">${paused ? 'Resume' : 'Pause'}</span>`; };
 // ---------- after hours: the crew clocks out, Chef Nico and the review board stay ----------
@@ -4166,8 +4219,7 @@ function clearDemo() {
   $('#tkSteps').replaceChildren(); $('#tkSlices').replaceChildren();
   $('#tracker').setAttribute('aria-label', 'Waiting for live work. Open orders.');
   liveShopStatus = null; STATUS.prep = 'n/a'; setTickets(); renderStats();
-  if (!sheet.hidden) { sheet.hidden = true; SHEET_BUTTONS.forEach(id => $(id).classList.remove('on')); }
-  tip.hidden = true; tipFor = null;
+  closeSheet(); closeTip();
 }
 // A real project drives the clock: the time buttons only work in the sample shop.
 const TIME_LOCK = 'Time follows the real session';
@@ -4515,7 +4567,8 @@ Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
   get phase() { return livePhase; },
   get idle() { return idleMode; },
   get sign() { return { on: signOn, glow: LED.emissiveIntensity, lights: LEDS.map(light => light.intensity), flicker: signFlick, level: signK }; },
-  get lighting() { return { time: tod, night, nightGoal, dawn: dawnK, dawnGoal, sun: sun.intensity, ambient: amb.intensity }; },
+  get lighting() { const lit = mats => { let on = 0, all = 0; root.traverse(o => { const k = mats.indexOf(o.material); if (k < 0) return; const n = o.isInstancedMesh ? o.count : 1; all += n; if (o.material.emissiveIntensity > .4) on += n; }); return { on, of: all }; };
+    return { time: tod, night, nightGoal, dawn: dawnK, dawnGoal, sun: sun.intensity, ambient: amb.intensity, hemi: hemi.intensity, houseWindows: lit(HWINS), upstairsWindows: lit(UPWINS), sunAt: sun.position.toArray() }; },
   get statusBoard() { return { counts: liveShopStatus ? JSON.parse(JSON.stringify(liveShopStatus)) : null, card: root.getObjectByName('board86').userData.card() }; },
   get review() { return { active: reviewActive, ledgerVisible: ledger.visible, members: BOARD.map(actor => ({ character: actor.meta.id, hidden: !!actor.hidden, task: actor.task })) }; },
   get pieces() { return [...buildPieces.values()].map(piece => {
@@ -4537,7 +4590,11 @@ Object.defineProperty(window, '__kitchenScene', { value: Object.freeze({
   get baseCrew() { return BASE_CREW().map(({ actor }) => ({ character: actor.meta.id, name: actor.meta.name, ambient: ambient.has(actor.meta.id),
     task: actor.task, mode: actor.mode, hidden: !!actor.hidden, position: [actor.pos.x, actor.pos.z], tag: actor.workTagO?.on ? actor.workTagO.el.textContent : null })); },
   get oven() { return { on: ovenOn, verifying: liveVerifying }; },
-  get profile() { return profileShown() ? { person: sheet.dataset.person, name: $('#pfName')?.textContent, pose: PF.pose } : null; },
+  get profile() { return profileShown() ? { person: sheet.dataset.person, name: $('#shTitle').textContent, pose: PF.pose } : null; },
+  // which menu is open (at most one): 'tip', 'sheet:<kind>' or null, and the camera target, to check a pan
+  get menu() { return [!tip.hidden && 'tip', !sheet.hidden && 'sheet:' + sheet.dataset.kind].filter(Boolean).join(' + ') || null; },
+  get view() { return { tx: view.tx, tz: view.tz, zoom: view.zoom, moving: !!view.anim }; },
+  spotOf(key) { const p = personSpot(key); return p && [p.x, p.z]; },
   screenOf(target) {
     const house = /^house:(\d+)$/.exec(target), obj = house ? HS(+house[1]).g : null;
     const a = obj ? null : [...castActors.values(), ...townies].find(q => !q.hidden && (q.townie?.name === target || q.meta?.name === target));
@@ -4614,14 +4671,15 @@ function frame(now) {
   night = lerp(night, nightGoal, Math.min(1, rdt * 3));
   const dk = Math.min(night, 1), lt = clamp((night - 1) / .35, 0, 1);
   dawnK = lerp(dawnK, dawnGoal, Math.min(1, rdt * 2.5)); const dw = dawnK, lamp = Math.max(dk, dw * .55);
-  sun.intensity = lerp(lerp(2.7, .45, dk) - lt * .2, 1.85, dw); hemi.intensity = lerp(lerp(1.05, .55, dk) - lt * .15, .8, dw); amb.intensity = lerp(.25, .2, dk); fill.intensity = lerp(lerp(.35, .6, dk) - lt * .15, .75, dw); roomGlow.intensity = Math.max(dk * 6, dw * 4.5);
+  const lift = dk * (1 - lt); // the evening sits a touch brighter than after hours, so the two read apart
+  sun.intensity = lerp(lerp(2.7, .45, dk) - lt * .2 + lift * .08, 1.85, dw); hemi.intensity = lerp(lerp(1.05, .55, dk) - lt * .15 + lift * .07, .8, dw); amb.intensity = lerp(.25, .2, dk) + lift * .04; fill.intensity = lerp(lerp(.35, .6, dk) - lt * .15, .75, dw); roomGlow.intensity = Math.max(dk * 6, dw * 4.5);
   sun.color.lerpColors(SUN_DAY, SUN_DAWN, dw); hemi.color.lerpColors(SKY_DAY, SKY_DAWN, dw); hemi.groundColor.lerpColors(GR_DAY, GR_DAWN, dw); fill.color.copy(dk > .5 ? FILL_NIGHT : FILL_DAY).lerp(FILL_DAWN, dw);
-  sun.position.set(view.tx + 16, lerp(15, 6.5, dw), view.tz + 11); dawnEl.style.opacity = dw.toFixed(3);
+  const sy = lerp(15, 6.5, dw); if (Math.abs(sy - sunY) > 2e-3) { sunY = sy; placeSun(); } const dop = dw.toFixed(3); if (dawnEl.style.opacity !== dop) dawnEl.style.opacity = dop;
   renderer.setClearColor(cTmp.copy(cDay).lerp(cNight, dk).lerp(cLate, lt).lerp(cDawn, dw)); M.lawn.color.copy(cTmp.setHex(0x9fb27a).lerp(lawnNight, dk).lerp(lawnLate, lt).lerp(lawnDawn, dw));
-  nightLights.forEach(L => L.intensity = lamp * 3.2); WIN.emissiveIntensity = Math.max(dk * 1.3 * (1 - lt * .9), dw * .2); HWIN.emissiveIntensity = Math.max(dk * 1.2 * (1 - lt * .7), dw * .55); NOWL.emissiveIntensity = Math.max(dk * 1.3, dw * 1.1);
+  nightLights.forEach(L => L.intensity = lamp * 3.2); WIN.emissiveIntensity = Math.max(dk * 1.3 * (1 - lt * .9), dw * .2); HWINS.forEach((mt, i) => mt.emissiveIntensity = Math.max(dk * 1.2 * lerp(LITN[i], LITL[i], lt), dw * .55)); UPWINS.forEach((mt, i) => mt.emissiveIntensity = Math.max(dk * 1.3 * lerp(LITN[i], LITL[i], lt), dw * .2)); NOWL.emissiveIntensity = Math.max(dk * 1.3, dw * 1.1);
   HEAD.emissiveIntensity = .2 + lamp * 3; TAIL.emissiveIntensity = .4 + lamp * 1.6; mats.lampBulb.emissiveIntensity = .15 + lamp * 3; PORCH.emissiveIntensity = Math.max(dk * 2.4, dw * 1.8);
   bulbs.forEach((b, i) => b.scale.setScalar(1 + Math.sin(now / 600 + i * 1.7) * .06)); M.bulbOff.emissiveIntensity = lerp(.7 + dk * 2.2 * (1 - lt * .6) + Math.sin(now / 400) * .1, .25, dw);
-  passLight.intensity = 1.0 + dk * 1.6 + dw * .6;
+  passLight.intensity = 1.0 + dk * 1.6 + dw * .6; if (document.body.classList.contains('nite') !== dk > .5) document.body.classList.toggle('nite', dk > .5);
   // the LED sign: flickers on when the doors open, fades off at close
   signK = lerp(signK, signOn ? 1 : 0, Math.min(1, rdt * 4)); signFlick += rdt;
   const fl = signOn && signFlick < .91 ? [1, 0, 1, .15, 1, .35, 1][Math.floor(signFlick / .13)] : 1, sk = signK * fl;
@@ -4631,7 +4689,7 @@ function frame(now) {
   renderer.render(scene, cam);
   if (ts1.width && ts1.height) { ctx1.drawImage(glc, 0, 0, ts1.width, ts1.height); ctx2.drawImage(glc, 0, 0, ts2.width, ts2.height); }
   placeOverlays();
-  if (!tip.hidden && tipFor && Math.floor(now / 500) !== Math.floor((now - rdt * 1000) / 500)) { if (tipFor.hidden) { tip.hidden = true; tipFor = null; } else showTip(actorCard(tipFor)); }
+  if (!tip.hidden && tipFor && Math.floor(now / 500) !== Math.floor((now - rdt * 1000) / 500)) { if (tipFor.hidden) { tip.hidden = true; tipFor = null; } else showTip(tapCard(tipFor)); }
   placeTip();
   if (Math.floor(now / 250) !== Math.floor((now - rdt * 1000) / 250)) renderStats();
   if (Math.floor(now / 1000) !== Math.floor((now - rdt * 1000) / 1000)) refreshTownActivity();

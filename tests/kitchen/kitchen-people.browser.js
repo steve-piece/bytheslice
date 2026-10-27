@@ -67,10 +67,13 @@ async function main() {
     assert.match(text, /Line cook, builds code/); assert.match(text, /bytheslice:implementer/); assert.match(text, /The line crew flat, Upstairs on Main Street/);
     assert.match(text, /Family.*Chef Nico.*Dom/s); assert.match(text, /Loves.*Lunch at the diner/s); assert.match(text, /Now/);
     assert.ok(await page.evaluate(() => document.activeElement.matches('[data-pback]')), 'focus lands on the back button');
-    assert.equal(await page.textContent('#shTitle'), 'People');
+    assert.equal(await page.textContent('#shTitle'), 'Ren', 'the sheet title is the person');
+    assert.equal(await page.$('#shBody .pf h4'), null, 'no second name under the portrait');
+    assert.ok(await page.evaluate(() => window.__kitchenScene.view.moving), 'a list name pans the camera to them');
     assert.ok(await page.evaluate(() => { const c = document.getElementById('pfCanvas'), x = c.getContext('webgl2') || c.getContext('webgl'); const px = new Uint8Array(4); x.readPixels(300, 300, 1, 1, x.RGBA, x.UNSIGNED_BYTE, px); return px[3] > 0; }), 'the portrait renders the character');
     if (SHOTS) await page.screenshot({ path: `${SHOTS}-profile-crew.png` });
     await page.click('[data-pback]'); assert.equal(await profile(), null);
+    assert.equal(await page.textContent('#shTitle'), 'People', 'Go Back restores the list title');
     assert.deepEqual(await shown(), ['panel-crew'], 'back returns to the Crew list');
     assert.equal(await page.evaluate(() => document.activeElement.dataset.person), 'crew:implementer', 'focus returns to the name that opened it');
     console.log('PASS profiles: a Crew list name opens the profile screen in the sheet (role, agent, family, home, loves, now) and Back returns to the list');
@@ -93,12 +96,19 @@ async function main() {
     await page.waitForTimeout(300);
     let spot = await page.evaluate(() => window.__kitchenScene.screenOf('Chef Nico'));
     await page.mouse.click(spot.x, spot.y);
-    card = await profile(); assert.ok(card, 'tapping a person opens a profile'); assert.equal(card.name, 'Chef Nico');
+    await page.waitForSelector('#tip:not([hidden]) .more');
+    assert.equal(await profile(), null, 'a scene tap shows the popover, not the profile');
+    assert.match(await page.textContent('#tip h5'), /Chef Nico/);
+    assert.equal(await page.evaluate(() => window.__kitchenScene.menu), 'tip');
+    await page.click('#tip .more');
+    card = await profile(); assert.ok(card, 'See more opens the profile'); assert.equal(card.name, 'Chef Nico');
     assert.match(await page.textContent('#shBody .pf'), /Head chef, leads the session/);
-    assert.ok(!(await page.$eval('#sheet', el => el.hidden)), 'a scene tap opens the People sheet on the profile');
+    assert.equal(await page.evaluate(() => window.__kitchenScene.menu), 'sheet:crew', 'the popover closes when the sheet opens');
     assert.ok(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('#stage'), spot), 'the scene stays clickable while a profile shows');
-    await page.keyboard.press('Escape'); await page.click('#shClose');
-    console.log('PASS profiles: tapping Chef Nico in the scene opens his profile in the sheet, and the scene stays clickable');
+    await page.mouse.click(spot.x, spot.y); await page.waitForSelector('#tip:not([hidden]) .more');
+    assert.equal(await page.evaluate(() => window.__kitchenScene.menu), 'tip', 'a new popover closes the sheet');
+    await page.keyboard.press('Escape'); assert.equal(await page.evaluate(() => window.__kitchenScene.menu), null, 'Escape closes the popover');
+    console.log('PASS profiles: tapping Chef Nico shows his popover, See more opens his profile, and only one menu is open at a time');
 
     // entry point 4, an avatar head in a house card's popover
     await page.evaluate(() => window.__kitchenScene.look(2, -13.5, 1.6)); await page.waitForTimeout(300);
@@ -107,7 +117,8 @@ async function main() {
     await page.waitForSelector('#tip:not([hidden]) .fam [data-person]');
     await page.click('#tip .fam .hav >> nth=0');
     card = await profile(); assert.ok(['Lena', 'Tess', 'Ricky'].includes(card.name), `the avatar opens a household member (${card.name})`);
-    await page.keyboard.press('Escape'); await page.click('#shClose');
+    await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+    assert.equal(await page.evaluate(() => window.__kitchenScene.menu), null, 'Escape steps back to the list, then closes the sheet');
     console.log(`PASS profiles: an avatar head in the Okafor house card opens ${card.name}'s profile`);
 
     // phone width: the card fits and still closes
