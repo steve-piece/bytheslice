@@ -17,7 +17,7 @@ The conductor allows **3 local fix loops per slice** (a loop is one fix dispatch
 
 ## Inputs the orchestrator will provide
 
-- Latest failing verdict (the full structured output from `slice-tester` or `slice-verifier`)
+- Latest failing verdict (the full structured output from `slice-tester` or `slice-verifier`), and/or UI review findings `{id, severity, surface, problem, proposedFix, files}` from `break-ui-runner` (its `Broken` and `Ugly` findings) or `design-critic` (P0 and P1 at the pie boundary or the library gate). For a review finding, its `proposedFix` is the starting point and the fix lands in the component or the data boundary, never in the worst-case fixture: weakening the fixture hides the break instead of fixing it. When any target comes from these reviews the conductor dispatches [`ui-fix-attempter`](frontend/ui-fix-attempter.md) (this role on `opus`) instead of you.
 - Slice diff (files the producer agents wrote/modified)
 - Original stage plan (the spec the slice was implementing)
 - Project rules summary (from rules-loader)

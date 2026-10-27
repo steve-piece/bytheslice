@@ -5,7 +5,7 @@ user-invocable: true
 triggers: ["/bytheslice:sell-slice", "/sell-slice", "sell a slice", "serve a customer", "bake the slice", "/bytheslice:deliver-stage", "/deliver-stage", "deliver the next stage", "ship the next slice", "work the checklist"]
 ---
 <!-- skills/sell-slice/SKILL.md -->
-<!-- The high-touch single-slice delivery loop. Pizza-shop framing: pull one pie off the rack, run it through the line, slice and serve to one customer. v5 shape: an interactive spine (prep gate · recon · build-plan auth · /goal · branch) wrapping Workflow A (produce - the builder/implementer emits the build manifest; on type frontend no implementer runs and state-illustrator emits it at the Workflow B entry) + a human library gate + Workflow B (verify-once = state-illustrator → slice-tester → slice-verifier, with an off-context fix loop). Each static gate runs exactly once. /box-it-up is the handoff. For autonomous whole-roadmap baking, /sell-pie loops one Pie unattended; /sell-slice is the careful per-slice surface. -->
+<!-- The high-touch single-slice delivery loop. Pizza-shop framing: pull one pie off the rack, run it through the line, slice and serve to one customer. v5 shape: an interactive spine (prep gate · recon · build-plan auth · /goal · branch) wrapping Workflow A (produce - the builder/implementer emits the build manifest; on type frontend no implementer runs and state-illustrator emits it at the Workflow B entry) + a human library gate + Workflow B (verify-once = state-illustrator → break-ui-runner → slice-tester → slice-verifier, with an off-context fix loop). Each static gate runs exactly once. /box-it-up is the handoff. For autonomous whole-roadmap baking, /sell-pie loops one Pie unattended; /sell-slice is the careful per-slice surface. -->
 
 # /sell-slice - The High-Touch Single-Slice Delivery Loop
 
@@ -52,6 +52,7 @@ Each subagent is a **registered plugin agent**; its definition file under `./age
 | Workflow B - verify-once (static gates, each once) | [agents/slice-verifier.md](agents/slice-verifier.md) | sonnet | high | write |
 | Fix loop (off-context) | [agents/fix-attempter.md](agents/fix-attempter.md) | sonnet | high | write |
 | Fix loop (2nd fail) | [agents/debug-instrumenter.md](agents/debug-instrumenter.md) | sonnet | high | write |
+| Fix loop, UI review findings (`break-ui-runner`, `design-critic`) | [agents/frontend/ui-fix-attempter.md](agents/frontend/ui-fix-attempter.md) | opus | high | write |
 
 ### Frontend pipeline (Workflow A, `type: frontend`)
 
@@ -62,7 +63,11 @@ Each subagent is a **registered plugin agent**; its definition file under `./age
 | Compose (always) | [agents/frontend/block-composer.md](agents/frontend/block-composer.md) | sonnet | write |
 | Craft (conditional on gaps) | [agents/frontend/component-crafter.md](agents/frontend/component-crafter.md) | sonnet | write |
 | Library Preview Gate | [agents/frontend/library-entry-writer.md](agents/frontend/library-entry-writer.md) | sonnet | write |
-| State coverage + **build manifest** emitter on `frontend` (Workflow B entry) | [agents/frontend/state-illustrator.md](agents/frontend/state-illustrator.md) | sonnet | write |
+| State coverage + dev data switch + **build manifest** emitter on `frontend` (Workflow B entry) | [agents/frontend/state-illustrator.md](agents/frontend/state-illustrator.md) | sonnet | write |
+| Worst-case data review (Workflow B 5.1b, data-bound UI only) | [agents/frontend/break-ui-runner.md](agents/frontend/break-ui-runner.md) | sonnet | readonly on source (writes its report and may extend fixtures) |
+| Design critique of new composite blocks (Library Preview Gate) | [agents/frontend/design-critic.md](agents/frontend/design-critic.md) | sonnet | readonly (writes its report) |
+
+> **UI review skills.** `break-ui-runner` and `design-critic` wrap two vendored third-party skills (break-ui and the impeccable critique), copied verbatim at pinned commits under [`references/vendor/`](references/vendor/README.md). Both are review agents on `sonnet` that return structured findings `{id, severity, surface, problem, proposedFix, files}` and a markdown report with screenshots in the slice's evidence folder. Neither gates a merge on its own: their findings go through the existing verdict, fix-loop and HITL flow. `design-critic` never runs the impeccable launcher or any binary (operator approval through a HITL is the only way it ever runs).
 
 > **Behavioral + rendered review is `slice-tester`'s job; static gates are `slice-verifier`'s.** The rendered design-system match and the console/network checks both run in `slice-tester`'s one behavioral pass.
 
@@ -163,7 +168,7 @@ The skill is an **interactive spine** (Phases 0-3) wrapping two Workflows and on
 - **Spine:** prep gate (Phase 0) · recon (Phase 1) · build-plan auth (Phase 2, auto under loop / `flow.autoApproveBuildPlan`) · `/goal` (Phase 2.5) · branch (Phase 3).
 - **Workflow A - produce** (Phase 4): build the slice + its unit tests; the `implementer` emits the **build manifest** (on `type: frontend` no `implementer` runs, and `state-illustrator` emits it at Phase 5.1). Backend items pipeline / parallelize; frontend runs `modern-ux-expert`, then `layout-architect` serial after it.
 - **Library gate** (Phase 4.5, human): net-new-component preview-first approval.
-- **Workflow B - verify-once** (Phase 5): `state-illustrator → slice-tester → slice-verifier`, each static check exactly once, with an **off-context fix loop**. On `frontend`, `state-illustrator` also emits the **build manifest** the other two consume.
+- **Workflow B - verify-once** (Phase 5): `state-illustrator → break-ui-runner (data-bound UI only) → slice-tester → slice-verifier`, each static check exactly once, with an **off-context fix loop**. On `frontend`, `state-illustrator` also emits the **build manifest** the other two consume.
 - **Closeout** (Phase 6).
 
 ### Phase 0 - Orientation (interactive spine)
@@ -308,10 +313,12 @@ Dispatch `library-entry-writer` with one of two **modes** per item:
 
 Both modes render all variants × all states (default / hover / focus / disabled / loading / empty / error / populated) AND wire the source-path copy buttons through `<EntryHeader sourcePath=…>` / `<EntrySection sourcePath=… sourceLines=…>`.
 
+**Design critique of new composite blocks.** When the gate covers a net-new **composite block** (a section composed of several components: a table with toolbar, a card grid, a form section, a panel; not a single primitive like a button or badge), dispatch [`design-critic`](agents/frontend/design-critic.md) with `scope: "block"`, the block's `/library?tab=<id>` URLs (at most 5), the context files (`PRODUCT.md` / `DESIGN.md`, or the design-system rules file) and the evidence folder `.claude/.bytheslice-state/evidence/<N.M>/design-critique/`. Fold its result into the self-critique block, per entry: the score line, P0 and P1 findings verbatim, and its `open_questions`. A P0 or P1 finding counts as a flagged concern, so in `"self-critique"` mode the gate stops for the operator instead of proceeding; P2 and P3 findings are listed and do not stop it. On **revision**, `component-crafter` gets the critic's findings the operator kept, and the re-run of 4.5 re-dispatches the critic. Skip the critique for single primitives, for modify-mode entries with no layout change, and when `flow.libraryGate` is `"off"`.
+
 **Discover the dev port** before surfacing URLs. Check in order: `lsof -i -P | grep LISTEN | grep node` (already-serving ports), `package.json` `scripts.dev` declared port, framework-specific port hints (`next.config.js`, `proxy.ts`). If still ambiguous, ask the user.
 
 **HARD STOP** (when `flow.libraryGate: "human"`, or `"self-critique"` flagged a concern). Surface a single Phase 4.5 prompt that embeds:
-1. The **self-critique block** from `library-entry-writer`'s output contract - skipped states, untested edge cases, close-but-not-exact tokens, untested compositions - verbatim, per entry.
+1. The **self-critique block** from `library-entry-writer`'s output contract - skipped states, untested edge cases, close-but-not-exact tokens, untested compositions - verbatim, per entry, with the `design-critic` score, P0/P1 findings and open questions for each composite block, and its report path.
 2. A **clickable preview URL block**, one line per entry, in the form `http://localhost:<port>/library?tab=<id>`, with a 1-line note on what's covered.
 3. The explicit ask:
    > "Library is updated. Self-critique above, preview URLs below. Click through, leave comments on anything that needs changing, and tell me whether each entry is **approved**, needs **revision**, or should be **rejected** before I wire `<component name>` into `<production route>`."
@@ -331,7 +338,7 @@ Both modes render all variants × all states (default / hover / focus / disabled
 
 Run as a `pipeline()` `Workflow`; if `Workflow` is unavailable, fall back per `loop-workflow-fallback-pattern.md`. **Workflow B replaces v4's Phases 6/7/8** (basic checks + aggregating test review + CI/CD guardrails) with **two agents, each gate run exactly once.**
 
-The pipeline is **`state-illustrator → slice-tester → slice-verifier`**, with an off-context fix loop:
+The pipeline is **`state-illustrator → break-ui-runner → slice-tester → slice-verifier`**, with an off-context fix loop. `break-ui-runner` runs only on `frontend` / `full-stack` slices with data-bound UI (5.1b):
 
 #### 5.1 - `state-illustrator` (frontend / full-stack with UI only)
 
@@ -342,6 +349,17 @@ Dispatch `state-illustrator` to ensure every interactive production surface has 
 - **Fallback, `mode: "manifest-only"`.** When the build plan lists zero interactive surfaces for a `frontend` slice (a static route, a display-only page), there are no states to fill, but 5.2 and 5.3 still need a manifest. Dispatch `state-illustrator` with `mode: "manifest-only"`: it skips the state work and returns `build_manifest` alone (routes and components declared, affordances empty). If its `summary` says the files on disk are not display-only, re-dispatch it in `full` mode.
 - **On `full-stack`, the `implementer` already emitted the manifest** in Phase 4. `state-illustrator` fills states and returns only the affordances and transitions it added (or `null`); merge them into the implementer's manifest before 5.2, or the backstop at 5.3 counts them in the diff and reports an under-declaration the builder never caused.
 - **A `frontend` slice never reaches 5.2 without a manifest.** If `state-illustrator` returns `needs_human`, or returns `complete` with an empty `build_manifest`, raise it as a `prd_ambiguity` HITL instead of running the tester against nothing. It is an operator question, not a fix-loop failure: it consumes none of the 3 local fix loops.
+
+#### 5.1b - `break-ui-runner` (worst-case data, data-bound UI only)
+
+Run it when the slice is `frontend` or `full-stack` and renders variable data: tables, lists, cards, badges, avatars, breadcrumbs, counts. Skip it when the slice has no data-bound UI (`state-illustrator` returned `data_switch: null`) and say so in the Progress Report.
+
+Boot the dev server (it stays up for 5.2) and dispatch [`break-ui-runner`](agents/frontend/break-ui-runner.md) with the slice id and type, the build manifest from 5.1, `state-illustrator`'s `data_switch`, the dev-server URL and the evidence folder `.claude/.bytheslice-state/evidence/<N.M>/break-ui/`. **Context separation holds here too:** never the builder's reasoning or chat. It measures every data-bound surface under `?data=demo|worst|empty|one|many` at 1440, 768 and 390 wide with DOM reads, labels any check it inferred rather than ran (200% zoom, dark mode, RTL), and returns findings plus a report path.
+
+- **Routing.** `Broken` and `Ugly` findings join the fix loop (5.4) as `fix_targets`, alongside any from 5.2 and 5.3; `break-ui-runner` has no counter of its own. `Fragile` findings and its "Decisions for you" are non-forcing `warnings`: list them in the Progress Report, and the default recommendation stands unless the operator overrides it. It never sets the slice's verdict by itself.
+- **Report fallback.** When its `report_written` is `false` (the host refused a subagent file write), write its `report_markdown` to `report_path` yourself, unchanged. The same holds for `design-critic`.
+- **Fixture writes.** It may extend the fixture modules `state-illustrator` wrote (never a component); stage its `files_changed` like any agent's.
+- **Ledger note.** Record one `bts_note` per run: `break-ui <N.M>: <broken>/<ugly>/<fragile>, report <path>`, so the PR evidence section carries it.
 
 #### 5.2 - `slice-tester` (behavioral verification)
 
@@ -363,7 +381,7 @@ It runs each atomic check once: lint · typecheck · build · unit/integration �
 
 #### 5.4 - Off-context fix loop
 
-If `slice-tester.overall == fail` OR `slice-verifier.overall == fail`, route the union of their `fix_targets` to the fixer **off-context** (the fixer gets the failing verdict + evidence, not the tester's or builder's full chat):
+If `slice-tester.overall == fail` OR `slice-verifier.overall == fail` OR `break-ui-runner` returned any `Broken` or `Ugly` finding, route the union of their `fix_targets` to the fixer **off-context** (the fixer gets the failing verdict + evidence, not the tester's or builder's full chat). **When any fix target comes from `break-ui-runner` or `design-critic`, that loop's fixer is [`ui-fix-attempter`](agents/frontend/ui-fix-attempter.md)** (the same role, registered on `opus`) in place of `fix-attempter`, handling the whole union; the review agents themselves stay on `sonnet`. After the fix, re-dispatch `break-ui-runner` with `mode: "recheck"`, its prior findings and the fix's `files_changed`; it re-measures only the surfaces those findings name.
 
 - 1st fail → `fix-attempter` with the failing verdict(s) + evidence → re-run **only the failed half** (re-dispatch `slice-tester` if a behavioral check failed; re-dispatch `slice-verifier` with its prior verdict and the fix's `files_changed`). **Re-verification hard rule:** `slice-verifier` carries every green check forward and re-runs only the gates the fix patch could change, chosen by the verifier from the fix diff, and lists each in its `rerun: [{gate, reason}]` field. The full suite never re-runs after any fix (1st, 2nd or 3rd).
 - 2nd fail → `debug-instrumenter` adds targeted `// INSTRUMENT` logging and the failing check runs once to capture that output (evidence capture, not a verify) → `fix-attempter` with the richer evidence → re-verify.
@@ -426,6 +444,7 @@ The four blocking HITL categories halt the slice (they are not auto-resolvable):
 
 - the verdict each agent returns (the Appendix A/B/C structured returns);
 - Playwright traces, for failing checks only;
+- the UI review reports under `.claude/.bytheslice-state/evidence/<N.M>/` (gitignored): `break-ui/report.md` and `design-critique/report.md`, each with its own screenshots (break-ui: demo and worst at 1440 and 390 per surface, plus one per finding the measurement alone does not show; design-critic: 1440 and 390 per critiqued surface). They are review reports, not proof files, and their counts reach the PR through one `bts_note` each;
 - one 1280px (desktop) and one 768px screenshot per new UI surface;
 - a checklist note of 3 lines or fewer per slice in `docs/plans/00_master_checklist.md`;
 - one short run log, `.claude/.bytheslice-state/run-log.md` (gitignored): slice start lines, HITL ask and answer times, one self-check line per dispatched agent, and slice PR and merge lines in merge-per-slice mode.
@@ -442,7 +461,7 @@ After each item and at slice closeout:
 
 1. Checklist items completed (with file paths)
 2. Files changed (grouped by package/app)
-3. Verification results: builder tiers 1-2 (lint / typecheck / unit while coding; the slice's own tests / build / DB tests before each commit), `slice-tester` verdict (per-affordance + transitions + seed/cleanup outcome), `slice-verifier` verdict (each static gate + manifest backstop counts + its non-forcing `warnings`, listed)
+3. Verification results: builder tiers 1-2 (lint / typecheck / unit while coding; the slice's own tests / build / DB tests before each commit), `slice-tester` verdict (per-affordance + transitions + seed/cleanup outcome), `slice-verifier` verdict (each static gate + manifest backstop counts + its non-forcing `warnings`, listed), `break-ui-runner` counts by severity with its report path, `Fragile` findings and decisions (or why it was skipped), and the `design-critic` score per composite block when the library gate ran
 4. Subagent run summary (which roles ran, Workflow A review loops, Workflow B fix-loop activity)
 5. Open risks / blockers
 6. Next recommended slice
@@ -484,6 +503,7 @@ Run at the end of every slice. Do not report the slice "ready to ship" until eve
 - [ ] The builder (`implementer`, or `state-illustrator` on `type: frontend`) emitted a complete **build manifest** (§Appendix A) covering every route / affordance / serverAction / transition. A `frontend` slice with an empty manifest is a `prd_ambiguity` HITL, never a pass.
 - [ ] Every task commit landed on a green tier 2 (the task's own tests, build, DB tests when the schema or migrations changed).
 - [ ] `slice-verifier` returned `overall: pass` on its one tier-3 run - lint, typecheck, build, unit/integration, e2e (per `verification.e2e`), design-system static grep, CI-integrity, and the manifest under-declaration backstop all clear.
+- [ ] `break-ui-runner` ran on every data-bound surface (or was skipped with a reason on a slice with no data-bound UI), its `Broken` and `Ugly` findings are fixed and re-checked, and its `Fragile` findings and decisions are listed.
 - [ ] `slice-tester` returned `overall: pass` - every declared affordance exercised, every transition confirmed **both directions on every surface**, and (for data-flow slices) the seed cleaned up with zero residue.
 - [ ] No `[ ]` items remain in the active slice (deferred items moved out-of-scope with a note).
 - [ ] If `debug-instrumenter` ran, every `// INSTRUMENT` line was stripped before final commit.
@@ -497,6 +517,7 @@ Skip only if the slice is `type: backend`, `db-schema`, or `infrastructure` with
 - [ ] Every entry uses `<EntryHeader sourcePath=…>` and `<EntrySection sourcePath=… sourceLines=…>` so the page H1 and every state H3 render a working copy-Markdown-link button.
 - [ ] Every new entry is registered in all three registries (`_registry/tabs.ts` → `LIBRARY_TABS`, `_registry/stories.tsx` → `STORIES`, `_registry/entries.ts` → `entries`). Modify-case entries leave registry rows alone unless `name` / `tags` genuinely changed.
 - [ ] Every existing library component whose user-visible surface (props, copy, content, variants, states, or styles) changed in a production route has its `/library?tab=<id>` entry updated to reflect the change.
+- [ ] Every net-new composite block got a `design-critic` pass (`scope: "block"`) whose score, P0/P1 findings and open questions were embedded in the self-critique block; a P0 or P1 finding stopped the gate for the operator.
 - [ ] Library gate resolved per `flow.libraryGate`: in `"human"` mode the Phase 4.5 prompt embedded the self-critique block AND clickable preview URLs and the user approved before any production-route import; in `"self-critique"` mode the agent cleared its self-critique (or stopped on a flagged concern).
 - [ ] No component imported into a production route, and no user-visible consumer-side edit committed, without library-first review.
 - [ ] Closing-narrative paragraph (what was built · why this shape · what was left out · what reviewers should pay attention to) drafted for the PR description in §3 below.

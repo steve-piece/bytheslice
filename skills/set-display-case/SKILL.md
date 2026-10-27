@@ -138,6 +138,8 @@ Once the gate passes, write these files in the target project:
 
 Use the templates in `references/` as the structural basis. Fill in project-specific values.
 
+**Design-critique context.** `design-critic` (the vendored impeccable critique, run at `/inspect-display`, the Library Preview Gate and each pie boundary) reads `PRODUCT.md` and `DESIGN.md` at the repo root when they exist, otherwise the project's design-system rules file. Make sure one of them exists before returning: `docs/design-system.md` above satisfies it, so record its path as `design_context` in the return contract. If the project already has a `PRODUCT.md`, `DESIGN.md` or another design-rules file (for example `.interface-design/system.md`), keep it, list it in `design_context` too, and never overwrite it. Write no new `PRODUCT.md` or `DESIGN.md` unasked.
+
 ---
 
 ## Step 4: Capture Project-Specific Code Patterns
@@ -225,6 +227,9 @@ artifacts:
   - docs/design-system.md
   - docs/design-bundle/ (Mode A only)
   - <path to project rules file updated>
+design_context:                 # what design-critic reads, in its read order
+  - <PRODUCT.md / DESIGN.md when present>
+  - docs/design-system.md
 needs_human: false | true
 hitl_category: null | "prd_ambiguity" | "external_credentials" | "destructive_operation" | "creative_direction"
 hitl_question: null | "<plain-language question if blocked>"
@@ -250,6 +255,7 @@ This skill does NOT call `ask_user_input_v0` for HITL resolution, it bubbles up 
 - [ ] `app/globals.css` (or `src/app/globals.css`) written with all token definitions
 - [ ] `tailwind.config.ts` written with token bindings
 - [ ] `docs/design-system.md` written with canonical token reference
+- [ ] `design_context` lists the file(s) `design-critic` will read (`PRODUCT.md` / `DESIGN.md` when present, else `docs/design-system.md`); no existing design-rules file was overwritten
 - [ ] `docs/design-bundle/` populated (Mode A only)
 - [ ] Project-specific code patterns captured (only non-null answers written)
 - [ ] Design-system rules block appended to project rules file (CLAUDE.md or AGENTS.md)

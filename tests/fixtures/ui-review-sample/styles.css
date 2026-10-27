@@ -1,0 +1,29 @@
+:root { --bg: #f7f7f8; --card: #fff; --fg: #18181b; --muted: #8b8b93; --line: #e4e4e7; --primary: #2563eb; --ok: #16a34a; --warn: #d97706; --bad: #dc2626; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+.topbar { display: flex; gap: 24px; align-items: center; padding: 12px 24px; background: var(--card); border-bottom: 1px solid var(--line); }
+.topbar nav a { margin-right: 16px; color: var(--muted); text-decoration: none; }
+.topbar nav a[aria-current] { color: var(--fg); }
+.page { max-width: 1100px; margin: 0 auto; padding: 24px; }
+.page-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.page-head h1 { font-size: 20px; margin: 0; }
+.page-head .btn-primary { margin-left: auto; }
+.muted { color: var(--muted); }
+.pad { padding: 24px; }
+.btn-primary { background: var(--primary); color: #fff; border: 0; border-radius: 6px; padding: 8px 12px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+.toolbar { display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); }
+.toolbar input { flex: 1; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }
+.icon-btn { background: none; border: 0; padding: 2px 4px; cursor: pointer; color: var(--muted); }
+.list { height: 360px; overflow: hidden; }
+.row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: #e0e7ff; display: grid; place-items: center; font-weight: 600; font-size: 12px; }
+.who { flex: 1; }
+.name { font-weight: 600; white-space: nowrap; }
+.email { color: var(--muted); }
+.title { width: 180px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; }
+.badge-active { background: #dcfce7; color: var(--ok); }
+.badge-invited { background: #fef3c7; color: var(--warn); }
+.badge-expired { background: #fee2e2; color: var(--bad); }
+.seats { width: 70px; text-align: right; }

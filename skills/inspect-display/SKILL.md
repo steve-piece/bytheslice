@@ -44,6 +44,7 @@ Not the right tool for:
 | Phase | Agent file | Model | Effort | Mode |
 |-------|-----------|-------|--------|------|
 | 2 (the walk itself) | [agents/platform-walker.md](agents/platform-walker.md) | sonnet | high | read-only |
+| 2b (design critique of the main surfaces) | [../sell-slice/agents/frontend/design-critic.md](../sell-slice/agents/frontend/design-critic.md) | sonnet | high | read-only (writes its report) |
 
 The walk itself runs as one sub-agent dispatch; sub-agents have isolated context, which is the right shape for an iterative click-through that would otherwise burn the orchestrator's context window on screenshots.
 
@@ -92,6 +93,17 @@ Dispatch `bytheslice:platform-walker` via the Agent tool ([definition](agents/pl
 
 The sub-agent does the actual walk: route discovery, browser driving, screenshotting, gap detection, ranked-report assembly. It runs in its own context; the orchestrator does not see every screenshot, only the structured return contract.
 
+### Phase 2b: Critique the main surfaces
+
+After `platform-walker` returns, and while the dev server is still up, dispatch `bytheslice:design-critic` ([definition](../sell-slice/agents/frontend/design-critic.md); it wraps the vendored impeccable critique, see [`../sell-slice/references/vendor/README.md`](../sell-slice/references/vendor/README.md)). Critique the **main surfaces, not every route**: pick at most 5 from the walker's route list (the landing route of each primary user flow, the busiest data view, the primary form), skipping auth-walled, 404 and 500 routes. Pass:
+
+- `scope: "inspect"` and those URLs, each with a one-line purpose
+- the walker's screenshot paths for them (the critic reuses them instead of re-capturing)
+- the context files: `PRODUCT.md` / `DESIGN.md` if present, otherwise the project's design-system rules file
+- the output folder `<screenshot dir>/critique/`
+
+The critic runs in no-launcher mode only: Assessment A under a `DEGRADED: single-context` banner and read-only DOM measurements in place of the impeccable detector. It never runs the impeccable launcher or any binary, which keeps this skill read-only. Skip this phase, and say so in the report, when the walk returned `verdict: broken` (fix the breakage first) or reached no renderable route.
+
 ### Phase 3: Cleanup
 
 1. Kill the dev-server PID captured in Phase 1. Fallback sweep: `pkill -f "next dev" || true`, `pkill -f "vite" || true`, `pkill -f "turbo dev" || true`.
@@ -106,6 +118,7 @@ The sub-agent's return contract includes a markdown report path. Surface to the 
 - Top 5 gaps from the ranked list (verbatim, with file paths)
 - Screenshot directory path
 - Total routes walked / 404s found / auth-walled / dynamic-validation failures
+- The design critique: score per critiqued surface (out of the applicable maximum), its P0 and P1 findings, the critique report path, and its `open_questions` asked as short questions with a recommended answer each
 
 If `verdict: drifted` (any user-visible gap was found), prompt the operator:
 
@@ -174,6 +187,7 @@ Walk this at the end of every run. Do not report complete until every box is `[x
 - [ ] Platform-walker sub-agent dispatched and returned.
 - [ ] Structured return contract received with `status` and `verdict`.
 - [ ] Screenshot directory exists and is non-empty.
+- [ ] `design-critic` critiqued at most 5 main surfaces (or Phase 2b was skipped with a reason), with the `DEGRADED: single-context` banner and no launcher run.
 
 ### 4. Cleanup done
 
@@ -211,6 +225,11 @@ top_gaps:
   # up to 10
 report_path: <path to full markdown report>
 screenshot_dir: <path>
+design_critique:                  # null when Phase 2b was skipped
+  report_path: <screenshot dir>/critique/report.md
+  scores: [{surface: <url>, total: <int>, max: <int>}]
+  findings: [{id, severity, surface, problem, proposedFix, files}]   # P0 to P3, ranked
+  open_questions: [{question, options, recommendation}]
 artifacts:
   - <report path>
   - <screenshot dir>
