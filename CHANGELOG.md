@@ -11,6 +11,12 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ## [Unreleased]
 
+---
+
+## [5.7.0] - 2026-10-27
+
+**UI review agents, kitchen polish and two delivery fixes.** Adds the break-ui and impeccable critique review agents (52 registered subagents), a person popover and glass sheet in the kitchen, and fixes for empty slice commits and gitignored checklist flips.
+
 ### Added
 
 - **Two vendored UI review skills.** `skills/sell-slice/references/vendor/` holds break-ui (emilkowalski/skills `2d22863`, MIT) and the impeccable critique (pbakaus/impeccable `d34c87e`, Apache-2.0: `SKILL.src.md`, `critique.md`, the three mode files and `craft-floor.md`), copied verbatim with their LICENSE and NOTICE files and the pinned commits recorded. No upstream installer ran, and impeccable's launcher (a downloaded binary) is not vendored; `tests/vendor/` fails if a script folder or an executable lands there.
@@ -19,6 +25,10 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 - **`ui-fix-attempter` (opus).** `fix-attempter`'s role on the opus tier, dispatched whenever a fix target comes from either review; fixes land in the component or data boundary, never the worst-case fixture.
 - **Dev data switch.** `state-illustrator` Step 3b scaffolds the `?data=` switch and realistic fixture sets on data-bound surfaces, gated on `NODE_ENV === "development"`, with no floating on-screen control. `implementer`, `slice-tester` seeds and `library-entry-writer` fixtures now ask for realistic, varied demo rows, which the critique flags as `Fixture finding:` when they look like placeholders. `/set-display-case` records the critique's context file (`PRODUCT.md` / `DESIGN.md`, else `docs/design-system.md`) as `design_context`.
 - 52 registered subagents (was 49); the Pass role defaults and the kitchen roster list the three new ones. A dry run against a sample frontend slice (`tests/fixtures/ui-review-sample/`) is in `docs/dry-runs/ui-review-skills/`.
+
+### Changed
+
+- **Kitchen people and menus.** Tapping a person in town shows a glass popover with See more; a name in the People lists opens the card and pans the camera to the person, or to the house or store they are in. The sheet title shows the person's name, the sheet uses the liquid glass look, and opening the popover closes the sheet (and the reverse). Night keeps most house windows lit and after hours only a few, chosen by position so they hold. The sun snaps to the shadow-map grid, so dawn shadows stop shimmering while panning. The full-face beard that read as a black block is now a small jaw and chin band.
 
 ### Fixed
 
