@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Team members</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Northwind Ops</div>
+    <nav><a href="#">Overview</a><a href="#" aria-current="page">Team</a><a href="#">Billing</a></nav>
+  </header>
+  <main class="page">
+    <div class="page-head">
+      <h1>Team members</h1>
+      <p class="muted" id="count"></p>
+      <button class="btn-primary">Invite member</button>
+    </div>
+    <div class="card">
+      <div class="toolbar">
+        <input type="search" placeholder="Search members">
+        <button class="icon-btn" title="Filter"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M1 2h12L8 8v4L6 13V8z" fill="currentColor"/></svg></button>
+      </div>
+      <div id="list" class="list"></div>
+    </div>
+  </main>
+  <script type="module" src="team.js"></script>
+</body>
+</html>

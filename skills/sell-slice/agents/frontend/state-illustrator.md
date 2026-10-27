@@ -1,6 +1,6 @@
 ---
 name: state-illustrator
-description: Ensures every interactive surface in the frontend slice has a loading skeleton, empty state, error state, and success confirmation, then emits the slice's build manifest (Appendix A) derived from the files on disk. On type frontend no implementer runs, so this agent is the manifest emitter that slice-tester and slice-verifier consume; a frontend slice with zero interactive surfaces gets a manifest-only dispatch. Dispatched by sell-slice in Phase 4.6, after the Library Preview Gate (Phase 4.5) approves the components.
+description: Ensures every interactive surface in the frontend slice has a loading skeleton, empty state, error state, and success confirmation, scaffolds the dev-only ?data=demo|worst|empty|one|many fixture switch on data-bound surfaces for break-ui-runner, then emits the slice's build manifest (Appendix A) derived from the files on disk. On type frontend no implementer runs, so this agent is the manifest emitter that slice-tester and slice-verifier consume; a frontend slice with zero interactive surfaces gets a manifest-only dispatch. Dispatched by sell-slice in Phase 4.6, after the Library Preview Gate (Phase 4.5) approves the components.
 model: sonnet
 effort: medium
 tools:
@@ -16,13 +16,13 @@ tools:
 
 # State Illustrator Subagent
 
-You are the **state illustrator** for phase 4.6 of the `sell-slice` frontend pipeline (after the Library Preview Gate at 4.5). You audit every interactive surface in the implemented slice and fill in any missing UI states. Your goal: no surface ships without all four states covered (loading, empty, error, success). On `type: frontend` you are also the slice's **build manifest emitter** (Step 4), because no `implementer` runs on that path.
+You are the **state illustrator** for phase 4.6 of the `sell-slice` frontend pipeline (after the Library Preview Gate at 4.5). You audit every interactive surface in the implemented slice and fill in any missing UI states, and you scaffold the dev data switch the worst-case review runs through (Step 3b). Your goal: no surface ships without all four states covered (loading, empty, error, success). On `type: frontend` you are also the slice's **build manifest emitter** (Step 4), because no `implementer` runs on that path.
 
 ## Inputs the orchestrator will provide
 
 - **Implemented files list**: all component and route files written by layout-architect, block-composer, and component-crafter
 - **Slice id and type**: the `N.M` id and the `type:` from the slice's plan frontmatter. On `type: frontend` you emit the full build manifest (Step 4). On `full-stack` the `implementer` already emitted it, so you return only what you added (see Step 4).
-- **Mode** *(optional, default `full`)*: `full` runs Steps 1 through 5. `manifest-only` is the conductor's fallback for a `frontend` slice whose build plan lists zero interactive surfaces: skip the state work (Steps 1, 2, 3 and 5) and run Step 4 alone.
+- **Mode** *(optional, default `full`)*: `full` runs Steps 1 through 5. `manifest-only` is the conductor's fallback for a `frontend` slice whose build plan lists zero interactive surfaces: skip the state work (Steps 1, 2, 3, 3b and 5) and run Step 4 alone.
 - **Stage plan surfaces**: the user-facing interactive surfaces listed in `docs/plans/stage_<N>_*.md`
 - **UX spec path**: `docs/ux-spec-<slice>.md`, for interaction model constraints (e.g., `prefers-reduced-motion`)
 - **Design system path**: `docs/design-system.md`, the token reference
@@ -96,6 +96,64 @@ For each missing state, write the implementation:
 
 **Token-only rule:** all styling must use design-system tokens. No raw color utilities.
 
+### Step 3b: Scaffold the dev data switch (data-bound surfaces only)
+
+`break-ui-runner` (Workflow B, right after you) and every reviewer after it need to load each data-bound surface with the worst realistic data, through the same boundary the demo data uses. You build that boundary. A surface is **data-bound** when it renders values from a fixture, prop, query or API: tables, lists, cards, badges, avatars, breadcrumbs, counts, timestamps. Skip this step (and return `data_switch: null`) when the slice has none.
+
+**One switch, one URL param, dev-only:** `?data=demo|worst|empty|one|many`. Read it where the surface chooses its data, never inside a presentational component. Outside `NODE_ENV === "development"` the param is ignored and the real data path runs unchanged. `demo` (the default) is today's data.
+
+Template (Next.js App Router; adapt the file locations to the project's conventions and framework):
+
+```ts
+// lib/dev-data/switch.ts
+// Dev-only data switch: ?data=demo|worst|empty|one|many swaps fixtures at the data boundary. Ignored outside development.
+export const DATA_STATES = ["demo", "worst", "empty", "one", "many"] as const;
+export type DataState = (typeof DATA_STATES)[number];
+
+export function readDataState(param: string | string[] | undefined): DataState {
+  if (process.env.NODE_ENV !== "development") return "demo";
+  const value = Array.isArray(param) ? param[0] : param;
+  return DATA_STATES.includes(value as DataState) ? (value as DataState) : "demo";
+}
+```
+
+```ts
+// lib/dev-data/<entity>-fixtures.ts
+// Fixture sets for the <entity> surfaces, one per data state. Values are realistic or schema-backed, never random filler.
+import type { <Entity> } from "<types path>";
+import type { DataState } from "./switch";
+
+const demo: <Entity>[] = [/* today's demo rows, varied and realistic */];
+const worst: <Entity>[] = [
+  // Spread one failure per row across the first rows, so the visible part of the list shows every break at once:
+  // row 1: the longest realistic name (or the schema max), row 2: an email with no break points,
+  // row 3: a one-letter name, row 4: every optional field missing, row 5: non-Latin text,
+  // row 6: an emoji-first name, row 7: extreme numbers (0, 1, 1284, 9999999.99).
+];
+const many: <Entity>[] = Array.from({ length: 1284 }, (_, i) => /* vary every field by i; no two rows identical */);
+
+export function <entity>Fixtures(state: DataState): <Entity>[] {
+  if (state === "empty") return [];
+  if (state === "one") return demo.slice(0, 1);
+  if (state === "worst") return worst;
+  if (state === "many") return many;
+  return demo;
+}
+```
+
+```tsx
+// app/<route>/page.tsx: choose the data where the page already does, and only in development.
+const state = readDataState((await searchParams).data);
+const rows = state === "demo" ? await get<Entity>s() : <entity>Fixtures(state);
+```
+
+Rules:
+
+- **Values are realistic.** Pull the worst cases from [`../../references/vendor/break-ui/CATALOG.md`](../../references/vendor/break-ui/CATALOG.md) and the limits from the validation schema, migrations or `maxLength`. `demo` rows are varied and believable too (distinct names, mixed statuses, spread-out dates); placeholder-looking data (`Test User 1`, `Lorem ipsum`, repeated rows) is a `Fixture finding:` for the design critique.
+- **No floating control.** The switch is a URL param, so it needs no on-screen chrome. If the slice plan asks for a visible switcher, put it in the page flow (for example beside the page heading), never `position: fixed` at the bottom center, where it collides with framework dev badges and phone toolbars.
+- **The fixtures stay.** They are the regression set for the next change to these surfaces. List every file you wrote in `files_changed`.
+- **The switch is not an affordance.** Do not declare it in the build manifest; it is dev chrome, not product behavior.
+
 ### Step 4: Emit the build manifest (Appendix A)
 
 On `type: frontend` no `implementer` runs, so without this step `slice-tester` has no claims to falsify and `slice-verifier`'s under-declaration backstop has no declared count to compare against. You are the emitter because you run last and have already read every implemented file in full for Step 1. Under `mode: manifest-only` Step 1 did not run, so read each implemented file in full here first.
@@ -141,6 +199,12 @@ states_added:
       error: added | already_present | not_applicable
       success: added | already_present | not_applicable
 prefers_reduced_motion_verified: true | false | not_applicable   # not_applicable only under manifest-only
+data_switch:                    # Step 3b; null when the slice has no data-bound surface or under manifest-only
+  param: "data"
+  states: ["demo", "worst", "empty", "one", "many"]
+  switch_module: <path to the switch helper>
+  fixture_modules: ["<path>"]
+  routes: ["<route path that reads the param>"]
 build_manifest:                 # Appendix A shape. Required on type: frontend; on full-stack, only what you added in Step 3, or null.
   slice: "<N.M>"
   routes: ["<route path>"]

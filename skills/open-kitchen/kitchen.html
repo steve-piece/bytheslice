@@ -461,6 +461,8 @@ window.kitchenWords = (() => {
     'prd-reviewer': 'critic, reviews the product plan', 'retrospective-reviewer': 'reviewer, looks back on the day',
     'proposal-drafter': 'drafts house-rule changes', 'block-composer': 'builds screens from stock blocks',
     'component-crafter': 'pastry artist, crafts custom components', 'state-illustrator': 'paints empty, loading and error states',
+    'break-ui-runner': 'difficult customer, orders the worst case', 'design-critic': 'food critic, scores the plating',
+    'ui-fix-attempter': 'fixes what the critics send back',
     orchestrator: 'head chef, leads the session', 'box-it-up': 'front of house, hands off finished pies',
   };
   const CREW = { setup: 'opening crew, sets up the project', menu: 'test kitchen, plans the work', case: 'display case crew, builds the UI kit',
@@ -469,7 +471,7 @@ window.kitchenWords = (() => {
   const STEP = { build: 'building', test: 'testing', verify: 'verifying', fix: 'fixing', commit: 'committing', review: 'reviewing', plan: 'planning' };
   const STEP_OF_TYPE = { implementer: 'build', plater: 'build', 'block-composer': 'build', 'component-crafter': 'build', 'layout-architect': 'build',
     'state-illustrator': 'build', 'slice-tester': 'test', 'slice-verifier': 'verify', 'local-gates-runner': 'verify', 'fix-attempter': 'fix',
-    'debug-instrumenter': 'fix', 'spec-reviewer': 'review', 'quality-reviewer': 'review', 'phased-plan-writer': 'plan' };
+    'debug-instrumenter': 'fix', 'ui-fix-attempter': 'fix', 'break-ui-runner': 'test', 'design-critic': 'review', 'spec-reviewer': 'review', 'quality-reviewer': 'review', 'phased-plan-writer': 'plan' };
   const clean = value => String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 120);
   const soft = title => /^[A-Z][a-z]/.test(title) ? title[0].toLowerCase() + title.slice(1) : title;
   function role(character) {
@@ -1490,12 +1492,12 @@ const ROSTER = [
   R('token-expander', 'Tia', 'case', 'sonnet', 'Mixes the brand colors.'), R('bundle-validator', 'Val', 'case', 'haiku', 'Checks the design delivery.'), R('compliance-pre-check', 'Coco', 'case', 'haiku', 'Checks every token is stocked.'),
   R('library-route-scaffolder', 'Lars', 'case', 'sonnet', 'Builds the display case.'), R('block-composer', 'Blake', 'case', 'sonnet', 'Assembles from stock blocks first.'), R('component-crafter', 'Kit', 'case', 'opus', 'Pastry artist. Makes what stock cannot.'),
   R('layout-architect', 'Lyle', 'case', 'sonnet', 'Floor planner.'), R('modern-ux-expert', 'Mo', 'case', 'sonnet', 'Trend scout.'), R('state-illustrator', 'Lu', 'case', 'sonnet', 'Paints the empty, loading and error states.'),
-  R('library-entry-writer', 'Libby', 'case', 'sonnet', 'Window dresser.'),
+  R('library-entry-writer', 'Libby', 'case', 'sonnet', 'Window dresser.'), R('design-critic', 'Celine', 'case', 'sonnet', 'Food critic. Scores the plating, never touches the pan.'),
   R('checklist-curator', 'Ezra', 'line', 'sonnet', 'Expediter. Reads the ticket and splits it by station.'), R('rules-loader', 'Bea', 'line', 'haiku', 'Reads the house rules binder.'), R('discovery', 'Pip', 'line', 'sonnet', 'Runner. Maps the code before anyone cooks.'),
   R('implementer', 'Ren', 'line', 'opus', 'Line cook. Server station.'), R('implementer#2', 'Dom', 'line', 'opus', 'Line cook. Data station (second implementer instance).'), R('plater', 'Pia', 'line', 'sonnet', 'New role. Collects every slice and plates the pie.'),
-  R('fix-attempter', 'Fitz', 'line', 'opus', 'Fixes what comes back.'), R('debug-instrumenter', 'Dee', 'line', 'opus', 'Brings the thermometer probes.'),
+  R('fix-attempter', 'Fitz', 'line', 'opus', 'Fixes what comes back.'), R('debug-instrumenter', 'Dee', 'line', 'opus', 'Brings the thermometer probes.'), R('ui-fix-attempter', 'Uma', 'line', 'opus', 'Fixes what the critics send back.'),
   R('slice-tester', 'Tay', 'pass', 'sonnet', 'Taster. Tries every affordance.'), R('slice-verifier', 'Inez', 'pass', 'sonnet', 'Health inspector. Lint, types, build, tests.'), R('spec-reviewer', 'Spence', 'pass', 'sonnet', 'Checks the plate matches the recipe.'),
-  R('quality-reviewer', 'Quinn', 'pass', 'sonnet', 'Checks the craft.'),
+  R('quality-reviewer', 'Quinn', 'pass', 'sonnet', 'Checks the craft.'), R('break-ui-runner', 'Brody', 'pass', 'sonnet', 'The difficult customer. Orders the worst case on purpose.'),
   R('local-gates-runner', 'Ollie', 'door', 'haiku', 'Runs the oven: the full local gate.'), R('scaffold-discovery', 'Sky', 'door', 'haiku', 'Surveys the building.'), R('framework-detector', 'Fred', 'door', 'haiku', 'Identifies the kitchen equipment.'),
   R('e2e-installer', 'Ed', 'door', 'sonnet', 'Installs the tasting robots.'), R('husky-installer', 'Hux', 'door', 'haiku', 'Fits the door alarm.'), R('lint-config-writer', 'Linda', 'door', 'haiku', 'Posts the hygiene rules.'),
   R('workflow-writer', 'Wren', 'door', 'sonnet', 'Writes the CI routines.'), R('branch-protection-writer', 'Locke', 'door', 'sonnet', 'Locksmith for main.'), R('a11y-discovery-runner', 'Ally', 'door', 'haiku', 'Checks the ramp and the menus.'),

@@ -71,7 +71,7 @@ Override auto-detection with explicit `--standalone` / `--sequential` flags. Per
 
 ## The verify-once model
 
-**Per-slice verify-once is non-negotiable.** Workflow B gates every slice with two agents, and no slice is "done" until both pass - or are intentionally skipped per slice type.
+**Per-slice verify-once is non-negotiable.** Workflow B gates every slice with two agents, and no slice is "done" until both pass - or are intentionally skipped per slice type. On data-bound UI, `break-ui-runner` runs between `state-illustrator` and `slice-tester` (see "UI review skills" below); its findings feed the same fix loop.
 
 | Agent | Type | What it does |
 |---|---|---|
@@ -94,6 +94,15 @@ These two replace the three v4 static verifiers and the v4 frontend visual revie
 - **infrastructure** → probe / harness only, no browser.
 
 `slice-verifier`'s static gates run on every type; foundation slices that produce no behavior skip the tester.
+
+**UI review skills (vendored, pinned).** Two third-party review skills live verbatim under `skills/sell-slice/references/vendor/` with their licenses and pinned commits ([README](../skills/sell-slice/references/vendor/README.md)); ByTheSlice wraps each in a `sonnet` review agent that returns findings `{id, severity, surface, problem, proposedFix, files}` and a markdown report with screenshots in `.claude/.bytheslice-state/evidence/`. Neither gates a merge on its own; findings flow through the existing verdict, fix-loop and HITL flow, and fixes for them run in `ui-fix-attempter` on `opus`.
+
+| Agent | Wraps | Runs | Routing |
+|---|---|---|---|
+| `break-ui-runner` | break-ui (emilkowalski/skills `2d22863`, MIT) | Workflow B, after `state-illustrator` and before `slice-tester`, on frontend and full-stack slices with data-bound UI, through the dev-only `?data=` switch `state-illustrator` scaffolds; DOM-measured at 1440, 768 and 390 | `Broken` and `Ugly` join the 3 local fix loops; `Fragile` and its decisions are non-forcing warnings |
+| `design-critic` | impeccable critique (pbakaus/impeccable `d34c87e`, Apache-2.0), no-launcher mode only | The Library Preview Gate (new composite blocks), once per pie at the `/sell-pie` boundary, and `/inspect-display` Phase 2b; never per slice | P0 and P1 stop the library gate in `self-critique` mode and become one batched HITL at the pie boundary; P2 and P3 are listed |
+
+The impeccable launcher (a downloaded, checksum-verified binary behind `impeccable context`, `detect`, critique storage and the live overlay) is not vendored and never runs: `design-critic` takes the skill's documented launcher-unavailable path, reports under a `DEGRADED: single-context` banner, and replaces the detector with read-only DOM measurements. Running the binary needs explicit operator approval through a HITL.
 
 **Gates run in four tiers, not as a full ladder per slice step.**
 

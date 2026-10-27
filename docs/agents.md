@@ -2,7 +2,7 @@
 
 # 🍕 Agent Roster
 
-Every ByTheSlice subagent in one table, in plain English. ByTheSlice ships 49 subagents, and every one is a registered plugin agent: type `@bytheslice:<name>` in any Claude Code session to aim one at something directly, or just run the skills and let them dispatch. Registration means each agent's model tier, effort level, and tool allowlist (when its file declares one; an agent without a `tools:` list gets every tool) are enforced by the platform, not just suggested.
+Every ByTheSlice subagent in one table, in plain English. ByTheSlice ships 52 subagents, and every one is a registered plugin agent: type `@bytheslice:<name>` in any Claude Code session to aim one at something directly, or just run the skills and let them dispatch. Registration means each agent's model tier, effort level, and tool allowlist (when its file declares one; an agent without a `tools:` list gets every tool) are enforced by the platform, not just suggested.
 
 Bold rows mark the skill each group of agents belongs to.
 
@@ -53,13 +53,16 @@ Bold rows mark the skill each group of agents belongs to.
 | `slice-verifier` | Inez | Runs the full local suite once at the end of the slice (lint, types, build, tests, E2E, design-token grep, CI integrity) and cross-checks the diff to catch anything the manifest under-declared. After a fix it re-runs only the checks that fix could change and says which and why. Its tools let it read and run commands but not edit files. |
 | `fix-attempter` | Fitz | When a check fails, makes the smallest possible fix for that one failure. No refactors, no scope growth, no commits (the conductor commits). At most 3 fix loops per slice before it asks you, and it stops sooner if the same failure comes back unchanged. |
 | `debug-instrumenter` | Dee | If the first fix did not take, adds temporary tagged logging around the failure so the next fix attempt has real data. The tags are stripped once everything is green. |
+| `ui-fix-attempter` | Uma | The same fixer on the bigger model, called in only when the fix targets come from the UI reviewers below (`break-ui-runner`, `design-critic`). Fixes the component or the data boundary, never the worst-case test data. |
 | **🍕 /sell-slice frontend pipeline** | | |
 | `modern-ux-expert` | Mo | Researches how best-in-class products solve this screen and writes a short UX spec with the chosen patterns and a few visual references. |
 | `layout-architect` | Lyle | Runs after `modern-ux-expert`, never alongside it: reads its UX spec, writes the route files and page shells (the skeleton of the screen), and appends the breakpoint plan to that spec, leaving the components' inner workings to others. Stops to ask if the spec is missing. |
 | `block-composer` | Blake | Covers as much of the UI as possible with ready-made shadcn blocks before any custom code, and reports exactly what percent is covered and where the gaps are. When a gap is keyboard-heavy (menus, dialogs, comboboxes, tables), it checks up to 3 installed libraries through Context7 and writes binding component rules so nobody hand-rolls what a dependency already ships. |
 | `component-crafter` | Kit | Hand-builds only the pieces block-composer could not cover, using design tokens exclusively: no raw colors, fonts, or spacing values. Reads block-composer's component rules first and reports every rule it followed or could not follow. |
 | `library-entry-writer` | Libby | Puts every new or visually changed component in the `/library` showroom with all its variants and states, so you approve the look before it touches production routes. Its tools stop at files, read-only shell commands and the shadcn registry, and it never stages or commits. |
-| `state-illustrator` | Lu | Sweeps the UI for missing loading skeletons, empty states, error states, and success confirmations, and fills in the gaps. |
+| `state-illustrator` | Lu | Sweeps the UI for missing loading skeletons, empty states, error states, and success confirmations, and fills in the gaps. On screens that show lists, tables or cards it also adds a dev-only `?data=demo|worst|empty|one|many` switch with realistic test data. |
+| `break-ui-runner` | Brody | The difficult customer. Loads every data-driven screen with the worst realistic data (very long names, emails with no break points, one-letter names, empty and 1,000-row lists, non-Latin text, emoji), measures what breaks at desktop, tablet and phone widths, and writes a report with screenshots. Built on Emil Kowalski's break-ui skill, copied in at a pinned commit. Reports only; the fixer acts on it. |
+| `design-critic` | Celine | The food critic. Scores a few main screens against Nielsen's 10 usability heuristics, ranks the problems and asks you the open questions, using the impeccable critique (pinned copy, run without its downloadable binary). Runs at the library gate for new composite blocks, once per pie before the PR, and in `/inspect-display`. Never edits code. |
 | **🍕 /box-it-up** | | |
 | `ci-fix-attempter` | Dex | When the PR's CI goes red, reads the failing checks and makes the smallest fix that turns them green; `/box-it-up` commits and pushes it. At most 3 rounds per PR, and it stops at the first identical repeat. Never weakens tests to pass. |
 | **🍕 /inspect-display** | | |
