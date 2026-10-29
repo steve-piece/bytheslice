@@ -35,10 +35,10 @@ AI agents tend to scatter explanations across cards, section headers and form fi
 - **Never hide what someone must read before acting:** the consequences of a destructive action stay in its confirm dialog, and validation errors stay inline.
 - **Tooltips are accessible:** a keyboard-focusable trigger, `aria-describedby`, one or two sentences, and the same tooltip component everywhere.
 
-## 5. Tokens first, one meaning one look
+## 5. Tokens first, consistent labeling
 
 - **Tokens are built before any feature UI** (`/set-display-case`, the Prep pie) and every slice uses them; a slice never adds a raw value, and a missing token is added to the design system first.
-- **A semantic map, defined once.** Every role, status, category or other repeated domain value (an admin role, a "planned" vs "completed" workout, a meal type) gets exactly one icon, one color token and one badge variant, recorded in the **Semantic map** section of `docs/design-system.md` and exported from one module (for example `lib/semantics.ts`). Components read from that module; they never pick an icon or color for a domain value inline. The first slice that introduces a value adds it to the map.
+- **Consistent labeling, defined once.** A repeated domain value (a role, a status such as "planned" vs "completed", a type or a category) is presented the same way everywhere it appears: the same label text and the same visual treatment, whatever that treatment is (plain text, a badge, a chip, an icon, a color, or a combination). Not every value needs an icon or a color; the rule is consistency, not decoration. Record each value's label and treatment once in the **Semantic map** section of `docs/design-system.md` and export them from one module (for example `lib/semantics.ts`) that components read instead of choosing a label or treatment inline. The first slice that introduces a value adds it to the map.
 - **Same pattern, same component.** One tooltip, one dialog, one toast, one badge, one empty-state component across the app.
 
 ## 6. Fast input
@@ -75,6 +75,6 @@ AI agents tend to scatter explanations across cards, section headers and form fi
 | `description-sprawl` | Visible explanatory text outside the main content runs over about 140 characters or two lines in a card, section header, form field or empty state: move it to a tooltip |
 | `raw-color` | A component uses a color that is not a token (also the static check's job) |
 | `extra-primary` | A view shows more than one primary-styled action |
-| `semantic-drift` | The same role, status or domain value renders with a different icon, color or badge in two places, or a component picks them inline instead of from the semantic map |
+| `semantic-drift` | The same role, status or domain value appears with a different label or treatment in two places, or a component chooses them inline instead of reading the semantic map |
 | `layout-shift` | Content jumps when data, images or badges load (measured with a layout-shift observer while the page loads) |
 | `copy-drift` | Title case, non-verb buttons ("OK", "Submit"), or two names for one thing |

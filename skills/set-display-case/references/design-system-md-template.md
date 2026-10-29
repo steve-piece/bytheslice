@@ -350,7 +350,7 @@ To regenerate or update this file, run `/set-display-case` with the updated bund
 
 ## Semantic map
 
-One look per meaning. Every role, status, category or other repeated domain value gets exactly one icon, color token and badge variant, exported from one module (for example `lib/semantics.ts`) that every component reads. The first slice that introduces a value adds its row here and in the module.
+Consistent labeling. Every role, status, type or other repeated domain value is shown the same way everywhere: one label and one treatment, whatever fits it (plain text, a badge, a chip, an icon, a color token, or a combination; leave a column empty when the value does not use it). Exported from one module (for example `lib/semantics.ts`) that every component reads. The first slice that introduces a value adds its row here and in the module.
 
-| Value | Icon | Color token | Badge variant | Used for |
-|---|---|---|---|---|
+| Value | Label | Treatment (component and variant) | Icon | Color token | Used for |
+|---|---|---|---|---|---|

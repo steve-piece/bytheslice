@@ -58,7 +58,7 @@ UI changes go through the operator-only `/library` showcase route BEFORE landing
 - Popular web apps that solve the same pattern are the quality bar (name them in the UX spec).
 - Layered surfaces through tokens only: `--background`, `--card`, `--popover`, `--muted` and `--sidebar` stay visibly distinct in light and dark mode, and every text color meets WCAG AA on the layer it sits on.
 - Explanations go into tooltips (an info icon beside the label, or a popover for longer help). Surfaces carry labels, values and actions; headers are a title and at most a one-line subtitle; inline helper text is one short line, only where it prevents an error.
-- One meaning, one look: every role, status or repeated domain value has one icon, color token and badge variant, defined once in the **Semantic map** of `docs/design-system.md` and exported from one module; components never choose them inline. One component per pattern (tooltip, dialog, toast, badge, empty state).
+- Consistent labeling: every role, status, type or other repeated domain value is shown with the same label and the same treatment everywhere (whatever fits: text, badge, chip, icon, color), defined once in the **Semantic map** of `docs/design-system.md` and exported from one module; components never choose them inline, and nothing gets decoration it does not need. One component per pattern (tooltip, dialog, toast, badge, empty state).
 - Fast input: smart defaults, the first field focused, Enter submits, Escape closes, the right input types.
 - No layout shift: skeletons sized like the content, optimistic saves, reserved space for async content.
 - Micro-copy: sentence case, verb buttons ("Save meal"), one icon set, one name per thing.
