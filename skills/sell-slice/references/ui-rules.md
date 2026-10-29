@@ -1,5 +1,5 @@
 <!-- skills/sell-slice/references/ui-rules.md -->
-<!-- The default UI rules every UI agent follows unless the project's design system or the operator says otherwise: modern minimal surfaces, popular web apps as the quality bar, layered surfaces with real contrast through tokens, and descriptions in tooltips. design-critic reviews against them. -->
+<!-- The default UI rules every UI agent follows unless the project's design system or the operator says otherwise: modern minimal surfaces, popular web apps as the quality bar, layered surfaces with real contrast through tokens, descriptions in tooltips, tokens first with one look per meaning, fast input, no layout shift and consistent micro-copy. design-critic reviews against them. -->
 
 # Default UI rules
 
@@ -35,7 +35,33 @@ AI agents tend to scatter explanations across cards, section headers and form fi
 - **Never hide what someone must read before acting:** the consequences of a destructive action stay in its confirm dialog, and validation errors stay inline.
 - **Tooltips are accessible:** a keyboard-focusable trigger, `aria-describedby`, one or two sentences, and the same tooltip component everywhere.
 
-## 5. Navigable
+## 5. Tokens first, one meaning one look
+
+- **Tokens are built before any feature UI** (`/set-display-case`, the Prep pie) and every slice uses them; a slice never adds a raw value, and a missing token is added to the design system first.
+- **A semantic map, defined once.** Every role, status, category or other repeated domain value (an admin role, a "planned" vs "completed" workout, a meal type) gets exactly one icon, one color token and one badge variant, recorded in the **Semantic map** section of `docs/design-system.md` and exported from one module (for example `lib/semantics.ts`). Components read from that module; they never pick an icon or color for a domain value inline. The first slice that introduces a value adds it to the map.
+- **Same pattern, same component.** One tooltip, one dialog, one toast, one badge, one empty-state component across the app.
+
+## 6. Fast input
+
+- Smart defaults: today's date, the last value used, the most common choice preselected.
+- The first field is focused when a form opens; Enter (or Cmd/Ctrl+Enter in a multi-line form) submits; Escape closes.
+- Inputs use the right type and input mode (number, date, email) so mobile keyboards fit the field.
+- Never ask for what the app already knows or can infer.
+
+## 7. No layout shift
+
+- Loading states are skeletons the size of the content, never a spinner that collapses the layout.
+- Saves are optimistic: the change shows at once and rolls back with a message if it fails.
+- Reserve space for images, badges and async counts so nothing jumps when they arrive.
+
+## 8. Consistent micro-copy
+
+- Sentence case everywhere (titles, buttons, labels, menu items).
+- Buttons are verbs that say what happens ("Save meal", "Log workout"), never "OK" or "Submit".
+- One icon set across the app, one stroke weight and size scale; icons accompany labels rather than replace them, except universally known ones in toolbars (with an accessible name and a tooltip).
+- The same thing has the same name everywhere (never "entry" in one place and "record" in another).
+
+## 9. Navigable
 
 - The current location is always visible; primary navigation is at most two levels deep.
 - Every surface is reachable without hover alone, and every action has a visible label or an accessible name.
@@ -49,3 +75,6 @@ AI agents tend to scatter explanations across cards, section headers and form fi
 | `description-sprawl` | Visible explanatory text outside the main content runs over about 140 characters or two lines in a card, section header, form field or empty state: move it to a tooltip |
 | `raw-color` | A component uses a color that is not a token (also the static check's job) |
 | `extra-primary` | A view shows more than one primary-styled action |
+| `semantic-drift` | The same role, status or domain value renders with a different icon, color or badge in two places, or a component picks them inline instead of from the semantic map |
+| `layout-shift` | Content jumps when data, images or badges load (measured with a layout-shift observer while the page loads) |
+| `copy-drift` | Title case, non-verb buttons ("OK", "Submit"), or two names for one thing |

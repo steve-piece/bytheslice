@@ -347,3 +347,10 @@ To regenerate or update this file, run `/set-display-case` with the updated bund
 4. **Color format consistency**: once a color format is chosen (OKLCH, HSL, hex), use it throughout. Document the choice under "Dark Mode — Color Format."
 5. **Unattended runs only**: keep the "Decisions made without review" section and fill one bullet per prompt answered by `run.unattended`. On an attended run, remove the section.
 6. **Spacing and breakpoints**: if using Tailwind defaults, record that decision explicitly and leave the default values as documentation. Do not remove the table: it serves as evidence that the decision was made intentionally.
+
+## Semantic map
+
+One look per meaning. Every role, status, category or other repeated domain value gets exactly one icon, color token and badge variant, exported from one module (for example `lib/semantics.ts`) that every component reads. The first slice that introduces a value adds its row here and in the module.
+
+| Value | Icon | Color token | Badge variant | Used for |
+|---|---|---|---|---|
