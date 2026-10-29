@@ -271,6 +271,13 @@ test('the verdict parser reads JSONC, YAML and nothing at all', () => {
     fixTargets: ['implementer:a.ts: Bold does nothing'],
     rerun: [],
   })
+  // A tester that writes the verdict word in capitals, with prose after it (a 6.0.0 run).
+  expect(
+    parseVerdict('status: complete\noverall: FAIL (blocking a11y contrast, 2 findings). All behavioral checks pass.\n\nslice: "2.3"\nfix_targets:\n- "implementer:components/meals/delete-meal-dialog.tsx: Delete meal contrast 4.12"\n'),
+  ).toEqual({ overall: 'fail', fixTargets: ['implementer:components/meals/delete-meal-dialog.tsx: Delete meal contrast 4.12'], rerun: [], slice: '2.3' })
+  expect(parseVerdict('status: complete\noverall: PASS. Every check passes.\nfix_targets: []').overall).toBe('pass')
+  expect(parseVerdict('overall: "Fail"').overall).toBe('fail')
+  expect(parseVerdict('{"overall":"FAIL"}').overall).toBe('fail')
   expect(parseVerdict('no verdict here')).toEqual({ overall: 'unparsed', fixTargets: [], rerun: [] })
   expect(parseVerdict(undefined).overall).toBe('unparsed')
   expect(parseVerdict('{'.repeat(5000)).overall).toBe('unparsed')

@@ -162,10 +162,14 @@ function watchdogOver(policy: PassPolicy, raw: unknown, overrides: PolicyOverrid
   }
 }
 
+const TIERS = ['haiku', 'sonnet', 'opus']
+
 /**
- * The policy from a parsed config's `pass` key over the defaults. A project
- * role list replaces that role's default (an empty list stops checking its
- * model); `contextMarkers` replaces the default list. Each change is listed.
+ * The policy from a parsed config over the defaults. Top-level `modelTiers`
+ * (camelCase agent names, the tier conductors dispatch with) replaces a role's
+ * default first; then a `pass.spawnPolicy.roles` list replaces it (an empty
+ * list stops checking its model); `contextMarkers` replaces the default list.
+ * Each change is listed.
  */
 export function policyFrom(config: unknown): { policy: PassPolicy; overrides: PolicyOverride[] } {
   const policy: PassPolicy = {
@@ -176,6 +180,15 @@ export function policyFrom(config: unknown): { policy: PassPolicy; overrides: Po
     watchdog: copyWatchdog(DEFAULT_POLICY.watchdog),
   }
   const overrides: PolicyOverride[] = []
+  const tiers = isObject(config) && isObject(config.modelTiers) ? config.modelTiers : {}
+  for (const [name, tier] of Object.entries(tiers)) {
+    const role = name.replace(/^bytheslice:/, '').replace(/[A-Z]/g, c => `-${c.toLowerCase()}`).trim()
+    if (typeof tier !== 'string' || !TIERS.includes(tier) || !(role in policy.roles)) continue
+    const before = policy.roles[role] ?? null
+    if (same(before, [tier])) continue
+    overrides.push({ setting: `roles.${role}`, value: [tier], default: before })
+    policy.roles[role] = [tier]
+  }
   const pass = isObject(config) ? config.pass : undefined
   if (!isObject(pass)) return { policy, overrides }
   const checks = isObject(pass.checks) ? pass.checks : {}

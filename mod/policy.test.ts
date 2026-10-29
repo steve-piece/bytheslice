@@ -50,6 +50,16 @@ test('a project config overrides per role, replaces the markers and lists each c
   expect(read.overrides[1]).toEqual({ setting: 'roles.discovery', value: ['haiku', 'sonnet'], default: ['opus'] })
 })
 
+test('modelTiers sets a role the conductor dispatches with; spawnPolicy.roles still wins', () => {
+  const read = policyFrom({ modelTiers: { fixAttempter: 'opus', tokenExpander: 'sonnet', nobody: 'opus', implementer: 'gpt' } })
+  expect(read.policy.roles['fix-attempter']).toEqual(['opus'])
+  expect(read.policy.roles['token-expander']).toEqual(['sonnet'])
+  expect(read.policy.roles.implementer).toEqual(['opus'])
+  expect(read.overrides.map(o => o.setting)).toEqual(['roles.fix-attempter', 'roles.token-expander'])
+  const both = policyFrom({ modelTiers: { fixAttempter: 'opus' }, pass: { spawnPolicy: { roles: { 'fix-attempter': ['haiku'] } } } })
+  expect(both.policy.roles['fix-attempter']).toEqual(['haiku'])
+})
+
 test('a missing or malformed config gives the defaults; a malformed one says why', () => {
   expect(readPolicy(null)).toEqual({ policy: DEFAULT_POLICY, overrides: [], problem: null })
   const broken = readPolicy('{ "pass": ')

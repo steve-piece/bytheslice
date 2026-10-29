@@ -9,7 +9,7 @@ Each case also runs once without the plugin (the default `with-without` ablation
 | Case | Prompt | Passes when |
 |---|---|---|
 | `new-feature-routes-to-special-order` | add an injury alerts pie | `special-order` runs, no `src/` writes, the reply routes through it |
-| `build-slice-uses-baker` | implement Slice 2.2 | `sell-slice` or `sell-pie` runs, no Agent call other than `bytheslice:*`, `Explore` or `Plan` |
+| `build-slice-uses-baker` | implement Slice 2.2 | `sell-slice` or `sell-pie` runs (6.1.1 dropped the no-other-agents grader: plain agents are fine for research and review) |
 | `one-file-fix-not-blocked` | fix the typo in `src/slates.js` | the typo is fixed in place, no planning skill runs |
 | `question-gets-no-intake-noise` | what does `listGames` return | a plain answer, no skill |
 
