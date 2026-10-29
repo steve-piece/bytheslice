@@ -8,11 +8,27 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 > **Reading the menu:** *Added* = new toppings, *Changed* = recipe tweaks, *Removed* = pulled from the menu, *Fixed* = burnt slices reheated, *Deprecated* = day-old, going away soon.
 
 > [!TIP]
-> **Releases are automatic.** When a version bump reaches `main`, the [release workflow](.github/workflows/release.yml) tags it `vX.Y.Z` and publishes a GitHub release from that version's section here, so every bump needs its section before it merges.
+> **Every PR ships a version.** The [version check](.github/workflows/version-check.yml) fails a pull request to `main` unless it bumps the version in `package.json` and every manifest and adds that version's section here. When it merges, the [release workflow](.github/workflows/release.yml) tags it `vX.Y.Z` and publishes a GitHub release from that section.
 
 ---
 
 ## [Unreleased]
+
+---
+
+## [6.1.2] - 2026-10-29
+
+**Every merge is a tagged release.** Tagging had stopped after 5.1.0, so 20 versions shipped with no tag or release. Those are backfilled, and the repo now enforces a version bump on every pull request and tags each one on merge.
+
+### Added
+
+- **Version check on every pull request** (`.github/workflows/version-check.yml`, `scripts/version-check.js`). It fails unless `package.json` is above `main`'s version, every manifest carries the same version, this file has its section, and no tag for it exists yet.
+- **Release on merge** (`.github/workflows/release.yml`). A version bump that reaches `main` is tagged `vX.Y.Z` (annotated) and released on GitHub with its section here as the notes, read through `scripts/release-notes.js`.
+
+### Fixed
+
+- The 5.1.1 and 5.1.2 entries were missing, and the 1.0.0 heading had no date format; both are filled in.
+- Backfilled on GitHub: tags v1.0.0, v2.2.0, v2.2.1 and v5.1.1 through v6.1.1, each dated to its release commit, a release for every tag that lacked one, and one title style (`vX.Y.Z: Title`) across all releases.
 
 ---
 

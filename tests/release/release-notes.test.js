@@ -1,5 +1,5 @@
 // tests/release/release-notes.test.js
-// The current version has a changelog section the release workflow can publish, and release text keeps the house style.
+// The current version has a changelog section the release workflow can publish, release text keeps the house style, and the version check orders versions.
 'use strict';
 
 const test = require('node:test');
@@ -28,5 +28,14 @@ test('a section stops at the next heading or rule', () => {
 });
 
 test('release text carries no em or en dashes', () => {
-  assert.strictEqual(plain('a — b, pages 3–5, x – y'), 'a, b, pages 3 to 5, x, y');
+  assert.strictEqual(plain('a \u2014 b, pages 3\u20135, x \u2013 y'), 'a, b, pages 3 to 5, x, y');
+});
+
+test('the version check orders versions and reads every manifest version', () => {
+  const { compare, versionsIn } = require('../../scripts/version-check.js');
+  assert.strictEqual(compare('6.1.2', '6.1.1'), 1);
+  assert.strictEqual(compare('6.10.0', '6.9.9'), 1);
+  assert.strictEqual(compare('6.1.1', '6.1.1'), 0);
+  assert.strictEqual(compare('5.9.0', '6.0.0'), -1);
+  assert.deepStrictEqual(versionsIn('{"version": "1.2.3", "plugins": [{"version":"1.2.3"}]}'), ['1.2.3', '1.2.3']);
 });
