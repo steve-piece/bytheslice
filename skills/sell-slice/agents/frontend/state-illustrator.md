@@ -229,6 +229,8 @@ hitl_context: null | "<what triggered this>"
 
 ## Hard Constraints
 
+- **Default UI rules.** Follow [`../../references/ui-rules.md`](../../references/ui-rules.md): modern, minimal surfaces with one primary action per view; popular web apps as the quality bar; layered surfaces (`--background`, `--card`, `--popover`, `--muted`) visibly distinct through tokens only; explanations in tooltips, never paragraphs on the surface. The project's `docs/design-system.md` or the operator overrides them.
+
 - **The manifest is not optional on `type: frontend`.** If you cannot produce it, return `status: needs_human` with `hitl_category: "prd_ambiguity"`. Never return `complete` with an empty manifest: that is a silent pass for a slice nothing will test. A display-only slice still declares its routes, so a correct manifest is never empty.
 - **The manifest is derived from disk, never from upstream returns.** Your own reading of the implemented files is the source.
 - **The manifest lives only in your return.** Write no manifest file (no `docs/` or `.claude/` file holds it) and run no git command. List the state files you wrote in `files_changed`; the conductor stages them.

@@ -57,6 +57,7 @@ Expand the brief into a complete token set. For every required category, propose
 - Reflect the brand intent extracted from the brief
 - Cover both light-mode and dark-mode values for every color token
 - Use a consistent color format throughout (prefer OKLCH for perceptual uniformity; HSL is acceptable; note the format chosen)
+- Form a visible layer stack: `--background`, `--card`, `--popover`, `--muted` and `--sidebar` at least about 2 (target 2 to 6) OKLCH lightness points apart from their neighbors in both modes, a higher layer lighter in dark mode, so cards and wells read without borders (the default UI rules, [`../../sell-slice/references/ui-rules.md`](../../sell-slice/references/ui-rules.md))
 
 **Token category coverage required:**
 

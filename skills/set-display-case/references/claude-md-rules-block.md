@@ -52,10 +52,17 @@ UI changes go through the operator-only `/library` showcase route BEFORE landing
 - **HARD STOP at the preview gate.** No production-route import happens until the user explicitly approves the entry. The orchestrator surfaces a self-critique block (skipped states, untested edge cases, close-but-not-exact tokens) and a clickable `http://localhost:<port>/library?tab=<id>` URL per entry before asking for approval.
 - **Closing narrative.** Stages that land UI write a one-paragraph design-story summary (what was built · why this shape · what was left out · what reviewers should pay attention to) into the commit body, so the PR description carries the rationale forward.
 
+### UI defaults
+
+- Modern, minimal, clean surfaces: one primary action per view, space and surface contrast to group content, one accent color, no decorative effects.
+- Popular web apps that solve the same pattern are the quality bar (name them in the UX spec).
+- Layered surfaces through tokens only: `--background`, `--card`, `--popover`, `--muted` and `--sidebar` stay visibly distinct in light and dark mode, and every text color meets WCAG AA on the layer it sits on.
+- Explanations go into tooltips (an info icon beside the label, or a popover for longer help). Surfaces carry labels, values and actions; headers are a title and at most a one-line subtitle; inline helper text is one short line, only where it prevents an error.
+
 ### Registries first
 
-<!-- Include this subsection only when `ui.registries` is configured; fill in the registry names in order. -->
-UI installs from the configured registries (<registry names, in order>) before stock shadcn, and from either before anything is hand-written: a page over a block over a component. Install with `yes n | npx shadcn@latest add "<full item URL>" --yes`, never `--overwrite`. Never re-create an item a registry offers, never edit an installed item to restyle it (change tokens or pass `className`), and build anything no registry covers with the registry's token vocabulary. Registry blocks are presentational: pass data through their props and delete any `<name>.mock.ts` they shipped.
+<!-- Fill in the operator's own registries in order, or say "the public shadcn registry directory" when they have none. -->
+UI installs pre-built pages, blocks and components before anything is hand-written: from <the operator's registries, in order | the public shadcn registry directory> and then stock shadcn, a page over a block over a component (`node <plugin>/scripts/ui-sources.js` resolves the list, `npx shadcn@latest search` finds items). Install with `yes n | npx shadcn@latest add <item> --yes`, never `--overwrite`. Never re-create an item a registry offers, never edit an installed item to restyle it (change tokens or pass `className`), and build anything no registry covers with the registry's token vocabulary. Registry blocks are presentational: pass data through their props and delete any `<name>.mock.ts` they shipped.
 
 Before adding a new library entry, ask: does an existing primitive already cover this? Should it be extended instead? Is this composition library-worthy or does it belong inline in the consuming feature? Reserve the library for things that recur in 3+ places or have non-trivial behavior worth previewing in isolation.
 

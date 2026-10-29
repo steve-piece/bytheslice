@@ -85,6 +85,9 @@ Read-only DOM measurements in the page (`javascript_tool`), on the same surfaces
 - **Accessible names**: every button, link and form control has a non-empty accessible name (text, `aria-label`, `aria-labelledby`, or a `label`); icon-only controls without one are flagged.
 - **Focus**: Tab through the first 15 stops; flag a stop with no visible focus indicator (computed `outline` and `box-shadow` both none) or an order that jumps across the layout.
 - **Computed colors**: text color against its effective background for body text, muted text and primary actions; report contrast ratios under 4.5:1 (3:1 for large text and UI boundaries).
+- **Surface layers** (the default UI rules, [`../../references/ui-rules.md`](../../references/ui-rules.md)): read the computed background of the page, each card, popover, sidebar and muted well, convert to OKLCH and report adjacent layers under about 2 lightness points apart as `surface-contrast` (in the dark theme too when the app has one).
+- **Description sprawl**: visible explanatory text outside the main content (card bodies, section headers, form field descriptions, empty states) over about 140 characters or two lines is `description-sprawl`; the fix is a tooltip on an info icon beside the label.
+- **Primary actions**: more than one primary-styled action visible in a view is `extra-primary`.
 
 Record numbers, not impressions. Where measurement agrees with Assessment A, say so; where it caught something A missed, add it; where A flagged something the numbers contradict, correct the finding. This is the upstream synthesis step with your measurements in the detector's seat.
 

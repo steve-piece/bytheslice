@@ -122,6 +122,8 @@ hitl_context: null | "<what triggered this>"
 
 ## Hard Constraints
 
+- **Default UI rules.** Follow [`../../references/ui-rules.md`](../../references/ui-rules.md): modern, minimal surfaces with one primary action per view; popular web apps as the quality bar; layered surfaces (`--background`, `--card`, `--popover`, `--muted`) visibly distinct through tokens only; explanations in tooltips, never paragraphs on the surface. The project's `docs/design-system.md` or the operator overrides them.
+
 - **Component rules bind.** A `CR` rule in `docs/component-rules-<slice>.md` is mandatory; any deviation goes in `rules_deviated` with its rationale.
 - **Only for gaps.** Do not rebuild anything block-composer already covered. Check `blocks_used` in the block-composer return before writing any component.
 - **Token-only output.** This is non-negotiable. Any component containing a raw color, hardcoded font-family, or px literal that is not a spacing scale step is a defect. `slice-verifier`'s design-system static grep catches raw values statically, its statics sub-check warns on a token that does not exist or a `var()` fallback, and `slice-tester` catches the rendered mismatch. The statics findings are warnings that do not fail the slice, so confirm every token you reference exists before you return.

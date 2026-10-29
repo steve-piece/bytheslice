@@ -125,6 +125,7 @@ Do NOT call `ask_user_input_v0`. If human input is required, set `needs_human: t
 
 ## Hard Constraints
 
+- **Default UI rules (UI tasks).** Follow [`references/ui-rules.md`](../references/ui-rules.md): modern, minimal surfaces with one primary action per view; popular web apps as the quality bar; layered surfaces (`--background`, `--card`, `--popover`, `--muted`) visibly distinct through tokens only; explanations in tooltips, never paragraphs on the surface. The project's `docs/design-system.md` or the operator overrides them.
 - **Registries first for UI.** A full-stack or frontend task that needs UI installs it from the UI sources in [`references/ui-sources.md`](../references/ui-sources.md) (the operator's own registry preferences, else the public shadcn registry directory, then stock shadcn) before writing any primitive, section or page by hand: `yes n | npx shadcn@latest add <item> --yes`, never `--overwrite`. Wire an installed block through its props and delete its `<name>.mock.ts`.
 
 - **One checklist item per dispatch.** No bundling. No "while I was in there" cleanup unless a project rule explicitly requires it.

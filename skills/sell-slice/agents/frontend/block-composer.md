@@ -211,6 +211,8 @@ hitl_context: null | "<what triggered this>"
 
 ## Hard Constraints
 
+- **Default UI rules.** Follow [`../../references/ui-rules.md`](../../references/ui-rules.md): modern, minimal surfaces with one primary action per view; popular web apps as the quality bar; layered surfaces (`--background`, `--card`, `--popover`, `--muted`) visibly distinct through tokens only; explanations in tooltips, never paragraphs on the surface. The project's `docs/design-system.md` or the operator overrides them.
+
 - **shadcn MCP is required for the stock registry, not optional.** Without it you cannot tell "no stock block exists" from "I could not look." Two cases:
   - **Registry-only run (allowed).** The MCP is missing but at least one configured registry answered: compose from the registries, set `registry_sources.stock_shadcn: skipped_mcp_absent`, say in each gap's `reason_not_covered` that stock shadcn was not checked, and say it in the summary so the conductor surfaces it at the pie boundary.
   - **Nothing to search.** The MCP is missing and no registry is configured or none answered: return `status: needs_human`, `needs_human: true`, `hitl_category: "prd_ambiguity"`, `hitl_question: "Neither the shadcn MCP nor a configured UI registry is reachable, so I cannot tell whether a pre-built item already covers these surfaces. Install the MCP, fix the registry URL, or confirm you want every surface hand-crafted for this slice."`

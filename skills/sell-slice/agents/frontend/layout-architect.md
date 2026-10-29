@@ -113,6 +113,8 @@ hitl_context: null | "<what triggered this>"
 
 ## Hard Constraints
 
+- **Default UI rules.** Follow [`../../references/ui-rules.md`](../../references/ui-rules.md): modern, minimal surfaces with one primary action per view; popular web apps as the quality bar; layered surfaces (`--background`, `--card`, `--popover`, `--muted`) visibly distinct through tokens only; explanations in tooltips, never paragraphs on the surface. The project's `docs/design-system.md` or the operator overrides them.
+
 - **No UX spec, no layout.** A missing `docs/ux-spec-<slice>.md` is `needs_human` (`prd_ambiguity`), never a cue to work from the PRD.
 - **Append-only on the spec.** Add `## Breakpoint Plan`; leave every section `modern-ux-expert` wrote exactly as it was.
 - **Shell level only.** Do not write feature-specific components, data fetching, forms, tables, or state logic. That is block-composer's and component-crafter's domain.

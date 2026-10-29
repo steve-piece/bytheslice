@@ -64,6 +64,7 @@ For each category in `token-checklist.md`, check the following. Record pass/fail
 - [ ] `--card-foreground` in `:root` and `.dark`
 - [ ] `--popover` in `:root` and `.dark`
 - [ ] `--popover-foreground` in `:root` and `.dark`
+- [ ] Layer contrast: convert `--background`, `--card`, `--popover`, `--muted` and `--sidebar` to OKLCH in `:root` and in `.dark`; every adjacent pair (background and card, card and popover, background and muted, background and sidebar) is at least 2 lightness points apart. A pair under 2 fails the category; name the pair and both values
 
 **Brand Colors (required)**
 
