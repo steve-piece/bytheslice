@@ -10,14 +10,14 @@ Bold rows mark the skill each group of agents belongs to.
 |---|---|---|
 | **🍕 /setup-shop** | | |
 | `bootstrap-runner` | Bo | Creates a brand-new project skeleton (Next.js app or monorepo) and makes the first git commit. Only runs when you start from an empty folder. |
-| `ci-cd-detector` | Dot | Peeks at the repo to see whether the standard CI safety nets (test workflows, pre-push hook, PR template) already exist, and lists whatever is missing. |
+| `ci-cd-detector` | Dot | Peeks at the repo to see whether the standard CI safety nets (test workflows, pre-push hook, PR template) already exist, and lists whatever is missing. A lean app needs a smaller set, and the design-system check only when the app has a design system. |
 | `config-generator` | Cora | Turns your setup answers into the `bytheslice.config.json` settings file, so later commands know your preferences without asking again. |
 | **🍕 /create-menu** | | |
 | `brief-analyzer` | Bree | Reads your project brief and spots what is vague or missing, then proposes a short list of questions to ask you before the PRD gets written. |
 | `consistency-checker` | Constance | Proofreads the draft PRD against itself, making sure every feature, requirement, and answer you gave actually shows up in the right section. |
 | `prd-reviewer` | Prue | Final quality check on the finished PRD: compares it against your original materials and returns pass or revise. |
 | **🍕 /cook-pizzas** | | |
-| `stage-decomposer` | Stan | Reads the PRD and proposes how to cut the project into Pies and Slices, then shows you the roadmap for approval before anything is written. For each pie with a user-facing flow it also proposes 3 to 7 user steps, each owned by one slice; a step no slice owns shows up as a warning in that same approval. |
+| `stage-decomposer` | Stan | Reads the PRD and proposes how to cut the project into Pies and Slices, sized to the PRD (a small app gets a few small pies; 20 to 30 slices is a ceiling for big apps, never a target), then shows you the roadmap for approval before anything is written. For each pie with a user-facing flow it also proposes 3 to 7 user steps, each owned by one slice; a step no slice owns shows up as a warning in that same approval. |
 | `rules-assembler` | Russ | Builds the project rules file (CLAUDE.md or AGENTS.md) by layering house rules, your own imports, and design-system rules in the right priority order. |
 | `phased-plan-writer` | Phil | Writes the detailed plan file for one feature slice. Many copies run in parallel, one per slice, and it also handles new slices added later by /special-order. A frontend or full-stack slice that owns a user-flow step gets exactly one user-outcome Exit line, which `slice-tester` checks end to end. |
 | `db-schema-stage-writer` | Deb | Writes the plan for the database-schema slice, adapted to your database tooling (Supabase, Prisma, Drizzle). Only runs if your project has a database. |
@@ -43,14 +43,14 @@ Bold rows mark the skill each group of agents belongs to.
 | `env-verifier` | Vera | Confirms your `.env.local` files actually have every required key filled with real, non-placeholder values. Never reads or logs the values themselves. |
 | `github-secrets-scanner` | Gus | Scans the CI workflows for the secrets they reference, so you know exactly which keys must also be added in GitHub's repository settings. |
 | **🍕 /sell-slice** | | |
-| `discovery` | Pip | Fast, read-only reconnaissance: maps which files, symbols, and callers the slice will touch, so the build plan is grounded in the real codebase. |
+| `discovery` | Pip | Thorough, read-only reconnaissance: maps which files, symbols, and callers the slice will touch, so the build plan is grounded in the real codebase. |
 | `checklist-curator` | Ezra | Picks the next slice off the master checklist, defines pass/fail acceptance tests for it, and proposes the exact checklist update. Suggests, never edits. |
 | `rules-loader` | Bea | Loads the project rules file and `bytheslice.config.json`, and hands back the resolved settings the rest of the pipeline should obey. |
 | `implementer` | Ren | The builder. Writes the code and its unit tests for one checklist item, updates the DB schema first when needed, and declares everything it produced in a build manifest. Runs the quick checks while coding and before each commit, never grades its own work, and hands its changed files to the conductor, which does all the committing. |
 | `spec-reviewer` | Spence | Checks the builder's work against the plan: was the checklist item actually delivered, with no scope creep, following project conventions? |
 | `quality-reviewer` | Quinn | Checks the builder's work for craft: types, tests, edge cases, security smells, and schema-before-queries. Cannot write files, by construction. |
 | `slice-tester` | Tay | The independent QA. Gets only the build manifest and the slice's definition of done (never the builder's chatter), then actually exercises the feature: clicks through the UI at every viewport or round-trips real data, runs a blocking keyboard, focus and contrast pass on UI, and reports evidence per claim (screenshots only at 768 and 1280). |
-| `slice-verifier` | Inez | Runs the full local suite once at the end of the slice (lint, types, build, tests, E2E, design-token grep, CI integrity) and cross-checks the diff to catch anything the manifest under-declared. After a fix it re-runs only the checks that fix could change and says which and why. Its tools let it read and run commands but not edit files. |
+| `slice-verifier` | Inez | Runs the full local suite once at the end of the slice (lint, types, build, tests, E2E, design-token grep, CI integrity; a lean app runs just its one smoke E2E, and a ship-once build runs exactly the commands its CI workflows run) and cross-checks the diff to catch anything the manifest under-declared. After a fix it re-runs only the checks that fix could change and says which and why. Its tools let it read and run commands but not edit files. |
 | `fix-attempter` | Fitz | When a check fails, makes the smallest possible fix for that one failure. No refactors, no scope growth, no commits (the conductor commits). At most 3 fix loops per slice before it asks you, and it stops sooner if the same failure comes back unchanged. |
 | `debug-instrumenter` | Dee | If the first fix did not take, adds temporary tagged logging around the failure so the next fix attempt has real data. The tags are stripped once everything is green. |
 | `ui-fix-attempter` | Uma | The same fixer on the bigger model, called in only when the fix targets come from the UI reviewers below (`break-ui-runner`, `design-critic`). Fixes the component or the data boundary, never the worst-case test data. |

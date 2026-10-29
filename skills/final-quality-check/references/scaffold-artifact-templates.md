@@ -1,5 +1,5 @@
 <!-- skills/final-quality-check/references/scaffold-artifact-templates.md -->
-<!-- Canonical file templates for every artifact final-quality-check writes: husky pre-push, PR template, ci.yml, e2e.yml, e2e-coverage.yml, design-system-compliance.yml, db-schema-drift.yml, regex sweep script, eslint config additions, stylelint config, branch-protection script, and Playwright specs. Lift verbatim and adjust paths for the detected stack. -->
+<!-- Canonical file templates for every artifact final-quality-check writes: husky pre-push, PR template, ci.yml, e2e.yml, e2e-coverage.yml, design-system-compliance.yml, db-schema-drift.yml, regex sweep script, eslint config additions, stylelint config, branch-protection script, and Playwright specs, plus the lean-tier variants at the end. Lift verbatim and adjust paths for the detected stack. -->
 
 # CI/CD Scaffold Artifact Templates
 
@@ -210,19 +210,19 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      - name: Regex sweep — token violations in changed files
+      - name: Regex sweep: token violations in changed files
         run: bash scripts/check-design-system-tokens.sh
 
-      - name: ESLint — token-aware Tailwind check
+      - name: ESLint: token-aware Tailwind check
         run: |
           CHANGED=$(git diff --name-only origin/main...HEAD | grep -E '\.(ts|tsx)$' | tr '\n' ' ')
           if [ -n "$CHANGED" ]; then
             pnpm exec eslint --config .eslintrc.design-system.json --ext .ts,.tsx $CHANGED
           else
-            echo "No TS/TSX files changed — skipping ESLint step."
+            echo "No TS/TSX files changed: skipping ESLint step."
           fi
 
-      - name: Stylelint — CSS file checks
+      - name: Stylelint: CSS file checks
         run: pnpm exec stylelint "**/*.css" --config .stylelintrc.json
 ```
 
@@ -546,7 +546,7 @@ jobs:
 
 ## `.github/workflows/db-schema-drift.yml`
 
-**Conditional — add ONLY if project has a database (Supabase, Prisma, Drizzle, or equivalent).**
+**Conditional: add ONLY if project has a database (Supabase, Prisma, Drizzle, or equivalent).**
 
 Rule: any feature stage that touches DB code must update `db/schema.sql` (or equivalent declarative schema source) FIRST. This job enforces that rule by comparing the declarative schema against what migrations would produce.
 
@@ -693,7 +693,7 @@ test.describe('@regression-core sentinel', () => {
 
 ### `tests/visual/canary.spec.ts`
 
-Canary `@visual` tests — one per standard viewport. Uses Vizzly CLI for diff output (JSON, AI-friendly). Baselines are committed to `tests/visual/baselines/` and regenerated with `pnpm test:e2e:visual --update-snapshots`.
+Canary `@visual` tests: one per standard viewport. Uses Vizzly CLI for diff output (JSON, AI-friendly). Baselines are committed to `tests/visual/baselines/` and regenerated with `pnpm test:e2e:visual --update-snapshots`.
 
 ```ts
 import { test, expect } from '@playwright/test';
@@ -706,14 +706,14 @@ const VIEWPORTS = [
 ] as const;
 
 for (const viewport of VIEWPORTS) {
-  test.describe(`@visual canary — ${viewport.name}`, () => {
+  test.describe(`@visual canary: ${viewport.name}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
     test(`home page visual baseline (${viewport.width}px)`, async ({ page }) => {
       await page.goto('/');
       // Wait for fonts and images to load
       await page.waitForLoadState('networkidle');
-      // Full-page screenshot — do NOT scroll-and-stitch
+      // Full-page screenshot: do NOT scroll-and-stitch
       await expect(page).toHaveScreenshot(
         `home-${viewport.name}.png`,
         {
@@ -791,3 +791,231 @@ Then update `test:e2e:visual` to pipe results through Vizzly:
 ```
 
 Vizzly outputs JSON diffs that can be read by AI agents without image decoding. Diff images are stored in `tests/visual/diffs/` (gitignored). Baselines in `tests/visual/baselines/` are committed and updated by running `pnpm test:e2e:visual --update-snapshots`.
+
+---
+
+## Lean tier
+
+Used when `quality.tier` resolves to `lean` (see the SKILL's "Quality tier"). These replace their standard counterparts; every other standard template is simply not written, except the design-system ones, which are written only when a design system exists. The same substitution rules apply (package manager, app paths, Node version).
+
+### `.husky/pre-push` (lean)
+
+```bash
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Lean tier: the same set CI runs (lint, typecheck, unit tests, build, one smoke
+# spec), plus DB tests only when this push touches the schema or migrations.
+# --no-verify is never the answer: a red hook is fixed, not skipped.
+set -e
+
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm run --if-present test:e2e:smoke
+
+BASE=$(git merge-base HEAD origin/main 2>/dev/null || true)
+if [ -n "$BASE" ] && git diff --name-only "$BASE" HEAD | grep -Eq '(^|/)(migrations|supabase/migrations|prisma|drizzle)/|(^|/)schema\.(sql|prisma|ts)$'; then
+  pnpm run --if-present test:db
+fi
+```
+
+### `.github/pull_request_template.md` (lean)
+
+```markdown
+## Changes
+
+[description]
+
+## CI/CD checklist
+
+- [ ] Unit tests added or updated for every changed behavior
+- [ ] `@smoke` spec still walks the main flow (updated if the flow changed)
+- [ ] No existing CI workflow jobs removed or weakened
+- [ ] Husky `pre-push` hook ran green locally
+- [ ] If any DB code touched: `db/schema.sql` (or equivalent declarative schema) updated first
+```
+
+Add `- [ ] No design-system-compliance violations (`pnpm check:design-system` green)` only when a design system exists.
+
+### `.github/workflows/ci.yml` (lean)
+
+Job order: lint → typecheck → unit-tests → build → e2e-smoke. When a design system exists, insert the standard `design-system-compliance` job (verbatim from the standard `ci.yml`) after `lint` and point `typecheck`'s `needs` at it. When `framework-detector` returned skip-E2E, drop the `e2e-smoke` job.
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+
+  typecheck:
+    name: typecheck
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  unit-tests:
+    name: unit-tests
+    needs: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+
+  build:
+    name: build
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  e2e-smoke:
+    name: e2e-smoke
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e:smoke
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-smoke
+          path: playwright-report/
+          retention-days: 7
+```
+
+The local gates (Phase 4, and `slice-verifier` at each slice end) run this same command list in this order, so a green local run predicts a green CI run.
+
+### `package.json` script additions (lean)
+
+```json
+{
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test --project=smoke"
+  }
+}
+```
+
+Add `"check:design-system": "bash scripts/check-design-system-tokens.sh"` only when a design system exists.
+
+### `playwright.config.ts` (lean)
+
+```ts
+import { defineConfig } from '@playwright/test';
+
+export default defineConfig({
+  testDir: 'e2e',
+  reporter: [['html', { open: 'never' }], ['list']],
+  use: {
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+  },
+  projects: [{ name: 'smoke', grep: /@smoke/ }],
+  webServer: {
+    command: 'pnpm dev',
+    url: 'http://localhost:3000',
+    reuseExistingServer: !process.env.CI,
+  },
+});
+```
+
+The `webServer` block lets the hook and the CI job start the app themselves; swap `pnpm dev` and the port for the detected framework's dev command.
+
+### `e2e/smoke.spec.ts` (lean)
+
+ONE spec over the app's main flow. Start from this skeleton and replace the steps with the main flow named in PRD Section 2 (or the first pie's `**User flow:**` block in the master checklist): open the entry route, do the one thing the app exists for, and assert the result is visible. Keep the console-error guard.
+
+```ts
+import { test, expect } from '@playwright/test';
+
+test.describe('@smoke main flow', () => {
+  test('main flow works end to end', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('console', (m) => {
+      if (m.type() === 'error') errors.push(m.text());
+    });
+
+    await page.goto('/');
+    await expect(page).toHaveTitle(/.+/);
+    // Main flow steps go here: one action per step, one visible assertion at the end.
+
+    expect(errors, `console/page errors: ${errors.join(', ')}`).toHaveLength(0);
+  });
+});
+```
+
+### `scripts/setup-branch-protection.sh` (lean)
+
+The standard script with its `contexts[]` lines replaced by the lean required checks:
+
+```bash
+  -f required_status_checks.contexts[]='CI / lint' \
+  -f required_status_checks.contexts[]='CI / typecheck' \
+  -f required_status_checks.contexts[]='CI / unit-tests' \
+  -f required_status_checks.contexts[]='CI / build' \
+  -f required_status_checks.contexts[]='CI / e2e-smoke' \
+```
+
+Add `CI / design-system-compliance` only when a design system exists, and drop `CI / e2e-smoke` when E2E was skipped.
+
+### `.gitignore` additions (lean)
+
+```gitignore
+# Playwright
+playwright-report/
+test-results/
+.playwright/
+```

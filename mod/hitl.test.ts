@@ -91,6 +91,7 @@ test('the projection lists open items oldest first, and waitedMs from the ledger
     source: 'pass',
     asked: 'pane',
     kind: 'agent-stalled',
+    sid: 's',
     pie: 5,
     slice: '5.5',
     t: START_MS + 9000,

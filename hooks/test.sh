@@ -1108,6 +1108,317 @@ else
 fi
 
 ####################################################################
+# workflow-guard.sh
+####################################################################
+
+echo
+echo "## workflow-guard.sh"
+
+WG="$HERE/workflow-guard.sh"
+WG_HOME=$(mktemp -d)
+
+# Run the guard from a fixture. Args: cwd, json-stdin, then optional VAR=value
+# env pairs. HOME and BTS_HOME point at an empty folder, so no real agent
+# definition or defaults file leaks in. Sets LAST_EXIT, LAST_OUT.
+run_wg() {
+  local cwd="$1" payload="$2"
+  shift 2
+  LAST_OUT=$(cd "$cwd" && printf '%s' "$payload" | env -u CLAUDE_PROJECT_DIR -u BTS_ALLOW_BYPASS -u BTS_HOOKS_DISABLED -u BTS_HOST \
+    HOME="$WG_HOME" BTS_HOME="$WG_HOME/.bytheslice" "$@" bash "$WG" 2>&1)
+  LAST_EXIT=$?
+}
+
+# A PreToolUse payload. Args: cwd, tool, tool_input JSON, then optional extra top-level JSON fields.
+wg_pre() {
+  printf '{"hook_event_name":"PreToolUse","session_id":"s-wg","cwd":%s,"tool_name":"%s","tool_input":%s%s}' \
+    "$(json_str "$1")" "$2" "$3" "${4:+,$4}"
+}
+
+# Assert the guard refused: exit 0, a deny decision, the rule and what it names.
+assert_deny() {
+  local name="$1" needle="$2"
+  assert_exit "$name exits 0" 0
+  assert_contains "$name refuses" '"permissionDecision":"deny"'
+  assert_contains "$name says BLOCKED" "BLOCKED [bytheslice"
+  assert_contains "$name names" "$needle"
+}
+
+# Assert the guard warned and let the call through.
+assert_wg_warn() {
+  local name="$1" needle="$2"
+  assert_exit "$name exits 0" 0
+  assert_contains "$name warns" "WARN [bytheslice"
+  assert_contains "$name names" "$needle"
+  assert_not_contains "$name does not refuse" '"permissionDecision":"deny"'
+}
+
+# The session's latest skill, as kitchen-log.sh records a Skill tool call.
+wg_skill() {
+  mkdir -p "$1/.claude/.bytheslice-state/kitchen"
+  printf '{"t":%s,"sid":"s-wg","ev":"PreToolUse","skill":"%s"}\n' "$(date +%s)000" "$2" >> "$1/.claude/.bytheslice-state/kitchen/activity.jsonl"
+}
+
+mk_wg_fixture() {
+  local d
+  d=$(mk_fixture)
+  mkdir -p "$d/docs/plans"
+  printf '## Pie 1 - Slate\n### Slice 1.1 - Fetch [ ]\nbody\n### Slice 1.2 - Rank [ ]\n' > "$d/docs/plans/00_master_checklist.md"
+  printf '# Stage 7\n' > "$d/docs/plans/stage_7_fetch.md"
+  printf '%s' "$d"
+}
+
+PR_CMD='gh pr create --fill'
+PR_AS_CMD='gh as steve-piece pr create --fill'
+
+FIX=$(mk_wg_fixture)
+NEW_STAGE=$(json_str "$FIX/docs/plans/stage_46_slate.md")
+OLD_STAGE=$(json_str "$FIX/docs/plans/stage_7_fetch.md")
+CHECKLIST_P=$(json_str "$FIX/docs/plans/00_master_checklist.md")
+
+# (a) hand-written stage file
+P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"# Stage 46\"}"); run_wg "$FIX" "$P"
+assert_deny "hand-written stage file" "/special-order"
+P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}"); run_wg "$FIX" "$P" BTS_ALLOW_BYPASS=1
+assert_wg_warn "hand-written stage file under the operator bypass" "operator bypass"
+printf '{\n  // operator choice\n  "enforcement": "warn",\n}\n' > "$FIX/bytheslice.config.json"
+P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}"); run_wg "$FIX" "$P"
+assert_wg_warn "hand-written stage file under enforcement warn" "/special-order"
+rm "$FIX/bytheslice.config.json"
+P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}" '"agent_type":"bytheslice:phased-plan-writer"'); run_wg "$FIX" "$P"
+assert_empty "stage file by bytheslice:phased-plan-writer passes"
+P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}" '"agent_type":"master-checklist-synthesizer"'); run_wg "$FIX" "$P"
+assert_empty "stage file by a bare registered writer passes"
+P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}" '"agent_type":"general-purpose"'); run_wg "$FIX" "$P"
+assert_deny "stage file by a general-purpose subagent" "/special-order"
+wg_skill "$FIX" sell-pie
+P=$(wg_pre "$FIX" Edit "{\"file_path\":$OLD_STAGE,\"old_string\":\"# Stage 7\",\"new_string\":\"# Stage 7\\nbuild note\"}"); run_wg "$FIX" "$P"
+assert_empty "build note on an existing stage file during sell-pie passes"
+P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}"); run_wg "$FIX" "$P"
+assert_deny "new stage file during sell-pie" "/special-order"
+wg_skill "$FIX" bytheslice:special-order
+P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}"); run_wg "$FIX" "$P"
+assert_empty "stage file during special-order passes"
+rm -rf "$FIX/.claude/.bytheslice-state"
+
+# (a) checklist headings
+P=$(wg_pre "$FIX" Edit "{\"file_path\":$CHECKLIST_P,\"old_string\":\"### Slice 1.1 - Fetch [ ]\",\"new_string\":\"### Slice 1.1 - Fetch [x]\"}"); run_wg "$FIX" "$P"
+assert_empty "ticking a slice box passes the heading rule"
+P=$(wg_pre "$FIX" Edit "{\"file_path\":$CHECKLIST_P,\"old_string\":\"body\",\"new_string\":\"body with more detail\"}"); run_wg "$FIX" "$P"
+assert_empty "editing a slice body passes"
+P=$(wg_pre "$FIX" Edit "{\"file_path\":$CHECKLIST_P,\"old_string\":\"### Slice 1.2 - Rank [ ]\",\"new_string\":\"### Slice 1.2 - Rank [ ]\\n### Slice 1.3 - Publish [ ]\"}"); run_wg "$FIX" "$P"
+assert_deny "adding a slice heading by hand" "Slice 1.3"
+P=$(wg_pre "$FIX" Edit "{\"file_path\":$CHECKLIST_P,\"old_string\":\"Rank\",\"new_string\":\"Score\"}"); run_wg "$FIX" "$P"
+assert_deny "renaming a slice heading by hand" "/special-order"
+P=$(wg_pre "$FIX" Write "{\"file_path\":$CHECKLIST_P,\"content\":\"## Pie 1 - Slate\\n### Slice 1.1 - Fetch [ ]\\nbody\\n### Slice 1.2 - Rank [ ]\\n## Pie 11 - Daily slate\\n\"}"); run_wg "$FIX" "$P"
+assert_deny "writing a new pie into the checklist" "Pie 11"
+wg_skill "$FIX" cook-pizzas
+P=$(wg_pre "$FIX" Write "{\"file_path\":$CHECKLIST_P,\"content\":\"## Pie 11 - Daily slate\\n\"}"); run_wg "$FIX" "$P"
+assert_empty "a new pie during cook-pizzas passes"
+rm -rf "$FIX/.claude/.bytheslice-state"
+
+# (a) plan files written from the shell
+SHELL_HEREDOC="cat > docs/plans/stage_46_slate.md <<'EOF'
+# Stage 46
+EOF"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$SHELL_HEREDOC")}"); run_wg "$FIX" "$P"
+assert_deny "a stage file written with a shell heredoc" "plan-shell-write"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "printf '### Slice 1.3 - X\n' >> docs/plans/00_master_checklist.md")}"); run_wg "$FIX" "$P"
+assert_deny "a checklist heading appended from the shell" "00_master_checklist.md"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "sed -i '' 's/1.1 - Fetch \\[ \\]/1.1 - Fetch [x]/' docs/plans/00_master_checklist.md")}"); run_wg "$FIX" "$P"
+assert_deny "a checklist box ticked with sed outside a skill" "/special-order"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "python3 -c \"open('docs/plans/stage_9.md','w').write('x')\"")}"); run_wg "$FIX" "$P"
+assert_deny "a stage file written by a script" "stage_9.md"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "cat docs/plans/stage_7_fetch.md && grep -n Slice docs/plans/00_master_checklist.md && cp docs/plans/stage_7_fetch.md /tmp/x.md")}"); run_wg "$FIX" "$P"
+assert_empty "reading or copying plan files from the shell passes"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$SHELL_HEREDOC")}"); run_wg "$FIX" "$P" BTS_ALLOW_BYPASS=1
+assert_wg_warn "a shell plan write under the operator bypass" "plan-shell-write"
+wg_skill "$FIX" sell-pie
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "echo 'build note' >> docs/plans/stage_7_fetch.md")}"); run_wg "$FIX" "$P"
+assert_empty "appending a build note to an existing stage file during sell-pie passes"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$SHELL_HEREDOC")}"); run_wg "$FIX" "$P"
+assert_deny "a new stage file from the shell during sell-pie" "plan-shell-write"
+wg_skill "$FIX" special-order
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$SHELL_HEREDOC")}"); run_wg "$FIX" "$P"
+assert_empty "a shell plan write during special-order passes"
+rm -rf "$FIX/.claude/.bytheslice-state"
+run_wg "$FIX" "{\"command\":$(json_str "$SHELL_HEREDOC"),\"cwd\":$(json_str "$FIX")}" BTS_HOST=cursor
+assert_contains "cursor: a shell plan write is denied" '"permission":"deny"'
+
+# (b) ad-hoc implementer agents
+P=$(wg_pre "$FIX" Agent '{"description":"build slate","prompt":"x"}'); run_wg "$FIX" "$P"
+assert_deny "ad-hoc general-purpose agent" "/sell-slice"
+P=$(wg_pre "$FIX" Agent '{"subagent_type":"general-purpose","prompt":"x"}'); run_wg "$FIX" "$P" BTS_ALLOW_BYPASS=1
+assert_wg_warn "ad-hoc agent under the operator bypass" "/sell-slice"
+P=$(wg_pre "$FIX" Agent '{"subagent_type":"Explore","prompt":"x"}'); run_wg "$FIX" "$P"
+assert_empty "Explore (read-only) passes"
+P=$(wg_pre "$FIX" Agent '{"subagent_type":"bytheslice:implementer","prompt":"x"}'); run_wg "$FIX" "$P"
+assert_empty "bytheslice:implementer passes"
+mkdir -p "$FIX/.claude/agents"
+printf -- '---\nname: reader\ntools: Read, Grep, Glob\n---\nreads\n' > "$FIX/.claude/agents/reader.md"
+printf -- '---\nname: writer\ntools:\n  - Read\n  - Edit\n---\nwrites\n' > "$FIX/.claude/agents/writer.md"
+P=$(wg_pre "$FIX" Agent '{"subagent_type":"reader","prompt":"x"}'); run_wg "$FIX" "$P"
+assert_empty "a project agent without write tools passes"
+P=$(wg_pre "$FIX" Agent '{"subagent_type":"writer","prompt":"x"}'); run_wg "$FIX" "$P"
+assert_deny "a project agent with Edit" "writer (it has write tools)"
+P=$(wg_pre "$FIX" Agent '{"subagent_type":"someplugin:mystery","prompt":"x"}'); run_wg "$FIX" "$P"
+assert_deny "an agent whose definition is not found" "definition was not found"
+wg_skill "$FIX" sell-slice
+P=$(wg_pre "$FIX" Agent '{"subagent_type":"general-purpose","prompt":"x"}'); run_wg "$FIX" "$P"
+assert_empty "any agent during sell-slice passes"
+rm -rf "$FIX/.claude/.bytheslice-state"
+
+# (c) PR with an unverified slice
+git -C "$FIX" checkout -q -b pie-1-slate
+echo a > "$FIX/a.txt"; git -C "$FIX" add a.txt; git -C "$FIX" commit -q -m "feat(pie-1): 1.1 task 1 fetch"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_CMD")}"); run_wg "$FIX" "$P"
+assert_wg_warn "PR with no ledger at all (the Pass never ran) only warns" "No Pass ledger"
+mkdir -p "$FIX/.bytheslice"; printf '{"v":1,"t":1,"sid":"x","ev":"note","data":{"text":"start"}}\n' > "$FIX/.bytheslice/ledger.jsonl"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_AS_CMD")}"); run_wg "$FIX" "$P"
+assert_deny "PR (gh as <user>) with an unverified slice" "Slice 1.1"
+assert_contains "PR refusal names the skill" "/sell-slice"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_CMD")}"); run_wg "$FIX" "$P"
+assert_deny "PR (plain gh) with an unverified slice" "Slice 1.1"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_CMD")}"); run_wg "$FIX" "$P" BTS_ALLOW_BYPASS=1
+assert_wg_warn "PR under the operator bypass" "Slice 1.1"
+mkdir -p "$FIX/.bytheslice"
+printf '{"v":1,"t":1,"sid":"x","ev":"verdict","pie":1,"slice":"1.1","data":{"gate":"slice-verifier","overall":"pass"}}\n' > "$FIX/.bytheslice/ledger.jsonl"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_CMD")}"); run_wg "$FIX" "$P"
+assert_empty "PR whose slice has a slice-verifier pass"
+git -C "$FIX" checkout -q -b pie-1-untagged main
+echo b > "$FIX/b.txt"; git -C "$FIX" add b.txt; git -C "$FIX" commit -q -m "wip: slate"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "cd . && $PR_CMD")}"); run_wg "$FIX" "$P"
+assert_deny "pie branch PR with untagged commits lists the pie's unverified slices" "Slice 1.2"
+assert_not_contains "verified slice is not listed" "1.1,"
+git -C "$FIX" checkout -q -b feat/misc main
+echo c > "$FIX/c.txt"; git -C "$FIX" add c.txt; git -C "$FIX" commit -q -m "fix typo"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_CMD")}"); run_wg "$FIX" "$P"
+assert_empty "PR with no slice commits off a pie branch passes"
+P=$(wg_pre "$FIX" Bash '{"command":"git status"}'); run_wg "$FIX" "$P"
+assert_empty "other commands pass"
+git -C "$FIX" checkout -q pie-1-untagged
+run_wg "$FIX" "{\"command\":$(json_str "$PR_CMD"),\"cwd\":$(json_str "$FIX")}" BTS_HOST=cursor
+assert_contains "cursor: unverified PR is denied" '"permission":"deny"'
+run_wg "$FIX" "{\"command\":\"ls\",\"cwd\":$(json_str "$FIX")}" BTS_HOST=cursor
+assert_contains "cursor: other commands are allowed" '"permission":"allow"'
+run_wg "$FIX" "{\"command\":$(json_str "$PR_CMD")}" BTS_HOST=cursor BTS_HOOKS_DISABLED=1
+assert_contains "cursor: disabled still answers allow" '"permission":"allow"'
+# Ship-once: one PR from the ship branch carrying pie merge commits and verified slices passes;
+# a deferred slice's commits left the branch, so the guard never sees them.
+git -C "$FIX" checkout -q -b ship/slate main
+git -C "$FIX" checkout -q -b pie-1-ship ship/slate
+echo d > "$FIX/d.txt"; git -C "$FIX" add d.txt; git -C "$FIX" commit -q -m "feat(pie-1): 1.1 task 2 fetch retries"
+git -C "$FIX" checkout -q ship/slate
+git -C "$FIX" merge -q --no-ff pie-1-ship -m "merge(pie-1): Pie 1 Slate into ship/slate"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_AS_CMD")}"); run_wg "$FIX" "$P"
+assert_empty "ship-once PR with every slice verified and a pie merge commit passes"
+echo e > "$FIX/e.txt"; git -C "$FIX" add e.txt; git -C "$FIX" commit -q -m "feat(pie-1): 1.2 task 1 rank"
+P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_AS_CMD")}"); run_wg "$FIX" "$P"
+assert_deny "ship-once PR still carrying an unverified slice" "Slice 1.2"
+git -C "$FIX" checkout -q main
+
+# The operator's switches
+printf '{\n  "enforcement": "block"\n}\n' > "$FIX/bytheslice.config.json"
+P=$(wg_pre "$FIX" Edit "{\"file_path\":$(json_str "$FIX/bytheslice.config.json"),\"old_string\":\"block\",\"new_string\":\"warn\"}"); run_wg "$FIX" "$P"
+assert_deny "agent setting enforcement warn" "operator"
+rm "$FIX/bytheslice.config.json"
+P=$(wg_pre "$FIX" Write "{\"file_path\":$(json_str "$FIX/.claude/settings.local.json"),\"content\":\"{\\\"env\\\":{\\\"BTS_ALLOW_BYPASS\\\":\\\"1\\\"}}\"}"); run_wg "$FIX" "$P"
+assert_deny "agent writing BTS_ALLOW_BYPASS into settings" "operator"
+
+# Worktree: the gitignored checklist lives in the primary checkout
+WT_FIX=$(mk_fixture)
+printf 'docs/plans/\n.claude/\n' > "$WT_FIX/.gitignore"; git -C "$WT_FIX" add .gitignore; git -C "$WT_FIX" commit -q -m ignore
+mkdir -p "$WT_FIX/docs/plans"; printf '## Pie 1 - A\n### Slice 1.1 - B [ ]\n' > "$WT_FIX/docs/plans/00_master_checklist.md"
+git -C "$WT_FIX" worktree add -q -b pie-1-a "$WT_FIX/.claude/worktrees/wt"
+P=$(wg_pre "$WT_FIX/.claude/worktrees/wt" Agent '{"subagent_type":"general-purpose","prompt":"x"}'); run_wg "$WT_FIX/.claude/worktrees/wt" "$P"
+assert_deny "a worktree without plans finds the primary checkout's checklist" "/sell-slice"
+rm -rf "$WT_FIX"
+
+# (d) feature intake context
+run_wg "$FIX" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$FIX"),\"prompt\":\"/goal build a new daily slate pipeline\"}"
+assert_contains "a /goal gets the intake context" "/special-order"
+assert_contains "the intake context is UserPromptSubmit context" '"hookEventName":"UserPromptSubmit"'
+assert_not_contains "the prompt is never refused" "deny"
+run_wg "$FIX" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$FIX"),\"prompt\":\"let's add a new feature for injury alerts\"}"
+assert_contains "a new-feature ask gets the intake context" "/sell-pie"
+run_wg "$FIX" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$FIX"),\"prompt\":\"Implement Slice 1.2 (the ranker) from the checklist.\"}"
+assert_contains "a build-this-slice ask gets the baker route" "/sell-slice 1.2"
+run_wg "$FIX" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$FIX"),\"prompt\":\"/special-order add a new pipeline\"}"
+assert_empty "a /special-order prompt gets no extra context"
+run_wg "$FIX" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$FIX"),\"prompt\":\"why did CI fail?\"}"
+assert_empty "an ordinary prompt gets no context"
+
+# No checklist yet: a whole-app ask is pointed at /pizza-party, nothing else is
+NOPLAN_P=$(mk_fixture)
+run_wg "$NOPLAN_P" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$NOPLAN_P"),\"prompt\":\"/goal build me this application end to end: a private diet and workout log\"}"
+assert_contains "no checklist: a whole-app ask gets the /pizza-party route" "/pizza-party"
+run_wg "$NOPLAN_P" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$NOPLAN_P"),\"prompt\":\"add a new feature for alerts\"}"
+assert_empty "no checklist: a feature ask outside a ByTheSlice project gets nothing"
+run_wg "$NOPLAN_P" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$NOPLAN_P"),\"prompt\":\"build the app\"}"
+assert_empty "no checklist: a plain build ask (not end to end) gets nothing"
+P=$(wg_pre "$FIX" Agent '{"subagent_type":"general-purpose","prompt":"x"}'); wg_skill "$FIX" pizza-party; run_wg "$FIX" "$P"
+assert_empty "any agent during pizza-party passes"
+rm -rf "$NOPLAN_P" "$FIX/.claude/.bytheslice-state"
+
+# Off switches and safety
+P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}"); run_wg "$FIX" "$P" BTS_HOOKS_DISABLED=1
+assert_empty "BTS_HOOKS_DISABLED=1 silences the guard"
+run_wg "$FIX" "not json"
+assert_exit "malformed input exits 0" 0
+assert_empty "malformed input is let through"
+NOPLAN=$(mk_fixture)
+P=$(wg_pre "$NOPLAN" Agent '{"subagent_type":"general-purpose","prompt":"x"}'); run_wg "$NOPLAN" "$P"
+assert_empty "no checklist: the guard stays quiet"
+P=$(wg_pre "$NOPLAN" Write "{\"file_path\":$(json_str "$NOPLAN/docs/plans/stage_1_x.md"),\"content\":\"x\"}"); run_wg "$NOPLAN" "$P"
+assert_empty "no checklist: a stage file write passes"
+rm -rf "$NOPLAN"
+
+# Doctor: the report /setup-shop and /open-kitchen print
+LAST_OUT=$(env -u BTS_HOOKS_DISABLED -u BTS_ALLOW_BYPASS HOME="$WG_HOME" BTS_HOME="$WG_HOME/.bytheslice" node "$HERE/workflow-guard.js" doctor "$FIX")
+assert_contains "doctor: intake missing" "Feature intake: MISSING"
+assert_contains "doctor: enforcement default" "Enforcement: block (default)"
+assert_contains "doctor: hooks active" "Hooks: workflow guard active on"
+printf '# Rules\n<!-- bytheslice:feature-intake:start -->\n## Feature intake\n<!-- bytheslice:feature-intake:end -->\n' > "$FIX/CLAUDE.md"
+LAST_OUT=$(env -u BTS_HOOKS_DISABLED HOME="$WG_HOME" BTS_HOME="$WG_HOME/.bytheslice" BTS_ALLOW_BYPASS=1 node "$HERE/workflow-guard.js" doctor "$FIX")
+assert_contains "doctor: intake present" "Feature intake: present in CLAUDE.md"
+assert_contains "doctor: bypass reported" "BTS_ALLOW_BYPASS=1 is set"
+
+# Intake: writes the Feature intake block, idempotent, replaces a stale copy in place
+INTAKE_FIX=$(mk_fixture)
+LAST_OUT=$(node "$HERE/workflow-guard.js" intake "$INTAKE_FIX")
+assert_contains "intake: creates CLAUDE.md" "created CLAUDE.md"
+LAST_OUT=$(grep -c "bytheslice:feature-intake" "$INTAKE_FIX/CLAUDE.md")
+assert_contains "intake: block has both markers" "2"
+LAST_OUT=$(grep -c "/special-order" "$INTAKE_FIX/CLAUDE.md")
+assert_not_contains "intake: block names /special-order" "0"
+LAST_OUT=$(node "$HERE/workflow-guard.js" intake "$INTAKE_FIX")
+assert_contains "intake: a second run changes nothing" "unchanged in CLAUDE.md"
+printf '# Mine\n<!-- bytheslice:feature-intake:start -->\nold text\n<!-- bytheslice:feature-intake:end -->\nkeep me\n' > "$INTAKE_FIX/CLAUDE.md"
+LAST_OUT=$(node "$HERE/workflow-guard.js" intake "$INTAKE_FIX")
+assert_contains "intake: a stale copy is updated" "updated in CLAUDE.md"
+LAST_OUT=$(cat "$INTAKE_FIX/CLAUDE.md")
+assert_not_contains "intake: the stale text is gone" "old text"
+assert_contains "intake: the user's own lines stay" "keep me"
+# A folder that is not a repo yet, inside a repo with its own checklist and rules: intake stays in the folder.
+mkdir -p "$INTAKE_FIX/docs/plans" "$INTAKE_FIX/sub"; printf '## Pie 1 - A\n' > "$INTAKE_FIX/docs/plans/00_master_checklist.md"
+OUTER_BEFORE=$(cat "$INTAKE_FIX/CLAUDE.md")
+LAST_OUT=$(node "$HERE/workflow-guard.js" intake "$INTAKE_FIX/sub")
+assert_contains "intake: a nested folder gets its own CLAUDE.md" "created CLAUDE.md"
+if [ "$(cat "$INTAKE_FIX/CLAUDE.md")" = "$OUTER_BEFORE" ] && [ -f "$INTAKE_FIX/sub/CLAUDE.md" ]; then
+  PASS=$((PASS+1)); printf '  ✓ intake: the enclosing repo'"'"'s rules file is untouched\n'
+else
+  FAIL=$((FAIL+1)); FAILED_NAMES+=("intake climbed to the enclosing repo"); printf '  ✗ intake climbed to the enclosing repo\n'
+fi
+rm -rf "$INTAKE_FIX/sub" "$INTAKE_FIX/docs"
+rm "$INTAKE_FIX/CLAUDE.md"; printf '# Agents\n' > "$INTAKE_FIX/AGENTS.md"
+LAST_OUT=$(node "$HERE/workflow-guard.js" intake "$INTAKE_FIX")
+assert_contains "intake: an AGENTS.md-only project gets it there" "added to AGENTS.md"
+LAST_OUT=$(env -u BTS_HOOKS_DISABLED -u BTS_ALLOW_BYPASS node "$HERE/workflow-guard.js" doctor "$INTAKE_FIX")
+assert_contains "doctor: reads AGENTS.md too" "Feature intake: present in AGENTS.md"
+rm -rf "$INTAKE_FIX"
+
+rm -rf "$FIX" "$WG_HOME"
+
+####################################################################
 # hooks.json wiring
 ####################################################################
 
@@ -1115,7 +1426,8 @@ echo
 echo "## hooks.json wiring"
 
 # Every command path in hooks.json names a script that exists, and no wired
-# script can block a tool call: no `exit 2`, no block or deny decision.
+# script can block a tool call itself: no `exit 2`, no block or deny decision.
+# The workflow guard's refusals come from workflow-guard.js, whose cases are above.
 WIRED=$(sed -nE 's#.*\$\{CLAUDE_PLUGIN_ROOT\}/hooks/([^"\\]+)\\?".*#\1#p' "$HERE/hooks.json" | sort -u)
 COMMANDS=$(grep -cE '"command"[[:space:]]*:' "$HERE/hooks.json")
 REFS=$(grep -c 'CLAUDE_PLUGIN_ROOT}/hooks/' "$HERE/hooks.json")

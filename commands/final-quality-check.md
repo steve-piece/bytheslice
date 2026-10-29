@@ -20,7 +20,9 @@ The skill bootstraps the CI/CD and E2E baseline that every later feature slice d
 5. Writes ESLint + Stylelint config additions for design-system enforcement.
 6. Runs a scoped, non-blocking shadscan accessibility discovery pass and reports its findings as unverified leads. Never a gate, never auto-fixed.
 7. Provides a branch-protection setup script.
-8. Opens a PR to `main` and verifies all checks pass before returning.
+8. Opens a PR to `main` and verifies all checks pass before returning. Under ship-once delivery (`delivery.mode: "ship-once"`) it makes one local commit instead; the local gates run the same commands CI runs, and the scaffold ships with the app's one PR.
+
+`quality.tier` sizes the line: `standard` (default, everything above), `lean` (CI runs lint, typecheck, unit tests, build and one Playwright smoke spec; no visual baselines, coverage-check or regression-core suite), or `auto` (lean for at most 3 feature pies and no payments). Under `run.unattended: true` the clarifying questions take their recommended answers and nothing waits on a human; every choice is recorded in the order ticket.
 
 ## Preconditions
 
@@ -30,4 +32,4 @@ The skill bootstraps the CI/CD and E2E baseline that every later feature slice d
 
 ## When to use this command
 
-Use `/final-quality-check` directly as an escape hatch — for example, when CI has drifted and you want to re-establish the baseline outside the normal phased flow. The everyday entry point is `/bytheslice:sell-slice`, which runs this sub-skill automatically when the next pending stage has `type: ci-cd`. This skill writes infrastructure, not product code.
+Use `/final-quality-check` directly as an escape hatch, for example, when CI has drifted and you want to re-establish the baseline outside the normal phased flow. The everyday entry point is `/bytheslice:sell-slice`, which runs this sub-skill automatically when the next pending stage has `type: ci-cd`. This skill writes infrastructure, not product code.

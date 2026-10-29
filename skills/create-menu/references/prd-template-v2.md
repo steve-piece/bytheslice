@@ -1,4 +1,4 @@
-# [Project Name] — PRD
+# [Project Name]: PRD
 
 Version: x.x
 Date: YYYY-MM-DD
@@ -15,7 +15,7 @@ Status: Draft | Active
 | Slug | [url-safe-slug] |
 | Owner | [Name or team] |
 | Target launch | [Quarter / date] |
-| Architecture | [Single Next.js app \| Turborepo monorepo] — see Section 4 |
+| Architecture | [Single Next.js app \| Turborepo monorepo]: see Section 4 |
 
 > Unless explicitly overridden in this document, use the **Phased Default Project Setup** for all tech stack, architecture, testing, CI/CD, and coding standards. See `references/project-defaults.md`.
 
@@ -37,7 +37,7 @@ One paragraph. State the core problem, who experiences it, and the cost of not s
 
 ### 1.2 The Users
 
-One paragraph. Describe who will use this product — their role, context, and primary job to be done. Include secondary users if meaningfully different.
+One paragraph. Describe who will use this product: their role, context, and primary job to be done. Include secondary users if meaningfully different.
 
 > If the brief implies multiple distinct user types with different access levels (e.g. end users + admins), describe each in a short paragraph and note the implication for architecture.
 
@@ -70,7 +70,7 @@ List external services or APIs implied by the capabilities above. For each:
 
 ## 3. Non-Functional Requirements
 
-State concrete, testable targets. Avoid vague language like "fast" or "secure" — every item should be measurable.
+State concrete, testable targets. Avoid vague language like "fast" or "secure": every item should be measurable.
 
 ### 3.1 Performance
 
@@ -88,7 +88,7 @@ State concrete, testable targets. Avoid vague language like "fast" or "secure" �
 
 ### 3.3 Security Posture
 
-- Auth model: [e.g., Supabase Auth, email/password + magic link]
+- Auth model: [e.g., email magic link, passkeys, or email/password, through the provider the operator authorized]
 - Authorization: [e.g., row-level security on all user data tables]
 - Data at rest: [encrypted / not required]
 - Data in transit: [TLS 1.2+ / other]
@@ -99,7 +99,7 @@ State concrete, testable targets. Avoid vague language like "fast" or "secure" �
 
 - Browser support: [e.g., last 2 versions of modern browsers]
 - Mobile: [responsive web / native app / not required]
-- Localization: [English only / multi-language — which?]
+- Localization: [English only / multi-language: which?]
 - Data retention: [e.g., user data deleted within 30 days of account deletion]
 
 ---
@@ -116,7 +116,7 @@ State concrete, testable targets. Avoid vague language like "fast" or "secure" �
 
 ### 4.2 Frontend
 
-- Framework: [Next.js App Router | other — with rationale if not default]
+- Framework: [Next.js App Router | other: with rationale if not default]
 - Language: TypeScript strict mode
 - Styling: Tailwind CSS (tokens defined in design-system gate)
 - Component system: shadcn/ui
@@ -124,18 +124,18 @@ State concrete, testable targets. Avoid vague language like "fast" or "secure" �
 
 ### 4.3 Backend & Data
 
-- Database: [Supabase PostgreSQL with RLS | other]
-- Auth: [Supabase Auth | other]
+- Database: [the provider the operator authorized, or a local option such as SQLite; name it]
+- Auth: [the provider or approach the operator authorized, or a local option; name it]
 - Server actions vs API routes: [server actions for mutations; API routes only for external clients]
 - Core entities: [list top-level data objects]
 - Data model notes: [relationships, retention, migration, auditing needs]
 
 ### 4.4 Infrastructure & Environments
 
-- Hosting: [Vercel for apps, Supabase for database and auth]
+- Hosting: [the host the operator authorized, or localhost; name it]
 - Environments: local, preview, staging, production
 - Environment-specific constraints: [any]
-- Required environment variables: [list — must align with Section 6 open questions for any unknowns]
+- Required environment variables: [list: must align with Section 6 open questions for any unknowns]
 
 ### 4.5 Monorepo Structure (if applicable)
 
@@ -159,7 +159,7 @@ packages/
 
 ### 5.1 Voice & Tone
 
-Describe the brand's communication personality in 2–4 adjectives with brief definitions. Example: "Direct (no filler words), Warm (not corporate), Expert (not condescending)."
+Describe the brand's communication personality in 2 to 4 adjectives with brief definitions. Example: "Direct (no filler words), Warm (not corporate), Expert (not condescending)."
 
 ### 5.2 Brand Stance
 
@@ -199,7 +199,7 @@ Items requiring a decision before work begins:
 Working assumptions made during PRD generation. Validate during design or Stage 1:
 
 - `[TBD-ASSUMPTION]` [description of assumption and its impact if wrong]
-- `[TBD-DEFER]` [decision that can be made later — note when]
+- `[TBD-DEFER]` [decision that can be made later: note when]
 
 ---
 
@@ -209,9 +209,9 @@ Anti-drift section. Explicit list of use cases, features, and segments that are 
 
 | Item | Rationale |
 | --- | --- |
-| [Feature or use case] | [Why excluded — deferred / not the right user / complexity tradeoff] |
+| [Feature or use case] | [Why excluded: deferred / not the right user / complexity tradeoff] |
 
-> **Minimum:** at least 2 explicit exclusions. "We didn't think of it" is not a rationale — every exclusion should be a deliberate decision.
+> **Minimum:** at least 2 explicit exclusions. "We didn't think of it" is not a rationale: every exclusion should be a deliberate decision.
 
 ---
 

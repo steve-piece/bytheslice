@@ -50,5 +50,5 @@ hitl_context: null | "<what triggered this>"
 
 - **Readonly.**
 - **Do not attempt to fetch the actual secret values** via the GitHub API. The skill only records names and asks the user to confirm population.
-- **Skip `vars.*` references** — those are GitHub Actions Variables (non-secret), not what this scanner is for.
-- **`no_workflows_found: true`** is acceptable — surface it; the orchestrator just emits an empty GitHub Secrets section.
+- **Skip `vars.*` references**: those are GitHub Actions Variables (non-secret), not what this scanner is for.
+- **`no_workflows_found: true`** is acceptable: surface it; the orchestrator just emits an empty GitHub Secrets section.

@@ -1,6 +1,6 @@
 # Stage Frontmatter Contract
 
-Every stage plan file produced by `cook-pizzas` (and consumed by `sell-slice` / `sell-pie` / `run-the-day`) must begin with this YAML frontmatter block. All fields are mandatory. No omissions, no extras.
+Every stage plan file produced by `cook-pizzas` (and consumed by `sell-slice` / `sell-pie`) must begin with this YAML frontmatter block. All fields are mandatory. No omissions, no extras.
 
 > **v5 Pie/Slice fields.** As of v5.0.0 each stage file also carries `pie`, `slice` (as `"<N.M>"`), and inherits a `review` annotation from its pie. These slot the flat stage into the two-level Pie/Slice hierarchy without removing any v4 field. See [Pie/Slice fields (v5)](#pieslice-fields-v5) below. The dual-read rule means a v4 file that omits them still parses — see [Dual-read: v4 flat vs v5 nested](#dual-read-v4-flat-vs-v5-nested).
 
@@ -33,7 +33,7 @@ completion_criteria:
 | Field | Type | Description |
 |-------|------|-------------|
 | `stage` | integer | Stage number, sequential from 1. Retained in v5 so v4 tooling and the dual-read parser keep working; `pie`/`slice` are the v5 primary keys. |
-| `pie` | integer | **v5.** Which Pie (coherent 3–8-slice chapter) this slice belongs to. Foundation work lives in early pies; features follow. Sequential from 1. |
+| `pie` | integer | **v5.** Which Pie (a coherent chapter, usually 3 to 8 slices, 1 or 2 in a small app) this slice belongs to. Foundation work lives in early pies; features follow. Sequential from 1. |
 | `slice` | string | **v5.** Dotted slice id, quoted, e.g. `"2.6"` — `pie` number, dot, slice index within the pie. Replaces the v4 `vertical \| horizontal` enum (see note above the field table). |
 | `review` | enum | **v5.** `boundary` (default — pie runs autonomously, one HITL at the pie boundary) or `continuous` (forces `/sell-pie` into `/sell-slice` mode for the whole pie — used for Payments, Auth, real-data migrations). Inherited identically by every slice in a pie. |
 | `name` | string | Human-readable stage name in Title Case |
@@ -83,9 +83,9 @@ The four foundation stages are the early slices of **Pie 1** (the foundations pi
 
 ## Pie/Slice fields (v5)
 
-The flat 20–30 stages become a **two-level Pie/Slice hierarchy** in v5. The frontmatter gains three fields to locate each slice in that hierarchy:
+The flat stage list (at most 20 to 30, fewer for a small app) becomes a **two-level Pie/Slice hierarchy** in v5. The frontmatter gains three fields to locate each slice in that hierarchy:
 
-- **`pie`** (int) — the coherent chapter the slice belongs to. A pie is 3–8 slices with low cross-coupling and is the unit of `/sell-pie` autonomy, the HITL checkpoint, the PR, the context-refresh, and the worktree. Foundation work (design system, CI, env, db schema) is in early pies.
+- **`pie`** (int): the coherent chapter the slice belongs to. A pie is usually 3 to 8 slices (1 or 2 in a small app, never padded) with low cross-coupling and is the unit of `/sell-pie` autonomy, the HITL checkpoint, the PR, the context-refresh, and the worktree. Foundation work (design system, CI, env, db schema) is in early pies.
 - **`slice`** (string, `"<N.M>"`) — the dotted id: the slice's pie number, then its index within that pie, e.g. `"2.6"`. Quote it so YAML reads it as a string, not a float. Within a file, `slice`'s leading number always equals `pie`.
 - **`review`** (enum) — a **pie property** inherited identically by every slice in the pie:
   - `boundary` (default) — the pie runs autonomously under `/sell-pie`; the only human checkpoint is at the pie boundary (before the PR merges).
@@ -143,8 +143,8 @@ See `references/templates.md` → "Exit-criteria contract (consumed by `/goal`)"
 ## Cross-skill linking
 
 This contract is referenced by:
-- `skills/cook-pizzas/agents/` — all stage/slice writer agents (emit `pie`/`slice`/`review` per pie)
-- `skills/sell-pie/SKILL.md` — reads `pie`/`slice`/`review` to drive the per-pie loop (refuses flat checklists)
-- `skills/sell-slice/SKILL.md` — receives slice frontmatter as execution context
-- `skills/run-the-day/SKILL.md` — chains `/sell-pie` across pies; routes by `type`
-- `hooks/lib/checklist.sh` — dual-read parser for `## Stage N` and `## Pie N` / `### Slice N.M`
+- `skills/cook-pizzas/agents/`: all stage/slice writer agents (emit `pie`/`slice`/`review` per pie)
+- `skills/sell-pie/SKILL.md`: reads `pie`/`slice`/`review` to drive the per-pie loop (refuses flat checklists)
+- `skills/sell-slice/SKILL.md`: receives slice frontmatter as execution context
+- `skills/pizza-party/SKILL.md`: runs `/sell-pie` once per pie in checklist order; reads no stage frontmatter itself
+- `hooks/lib/checklist.sh`: dual-read parser for `## Stage N` and `## Pie N` / `### Slice N.M`

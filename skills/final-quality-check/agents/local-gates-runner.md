@@ -13,6 +13,8 @@ You are the **local-gates-runner** for `/final-quality-check`. Your job: run eve
 
 - scaffold-discovery's profile (package manager)
 - Whether this is the first run (i.e. visual baselines don't yet exist)
+- `quality_tier`: `standard` (default) or `lean`
+- `design_system_present`: true | false
 
 ## Workflow
 
@@ -23,7 +25,8 @@ You are the **local-gates-runner** for `/final-quality-check`. Your job: run eve
    - `<pm> test` (unit / integration)
    - `<pm> test:e2e:feature`
    - `<pm> test:e2e:regression`
-   - `<pm> test:e2e:visual` — on first run this generates baselines into `tests/visual/baselines/`. Stage the new baselines.
+   - `<pm> test:e2e:visual`: on first run this generates baselines into `tests/visual/baselines/`. Stage the new baselines.
+   **Lean tier (`quality_tier: lean`)** runs the lean CI list instead, in its order: `<pm> lint`, `<pm> typecheck`, `<pm> check:design-system` (only when `design_system_present`), `<pm> test`, `<pm> build`, `<pm> test:e2e:smoke` (when the script exists). Report the gates that did not run as `not_applicable`.
 2. For each command, capture exit code, runtime, and last 50 lines of stderr (or stdout) on failure.
 3. **Continue past failures** so the orchestrator gets the full picture.
 
@@ -60,9 +63,16 @@ gates:
     runtime_seconds: <int>
     failed_specs: [<paths>]
   visual_e2e:
-    status: pass | fail | baselines_generated
+    status: pass | fail | baselines_generated | not_applicable
     runtime_seconds: <int>
     new_baselines: [<paths>]
+  build:            # lean tier
+    status: pass | fail | not_applicable
+    runtime_seconds: <int>
+  smoke_e2e:        # lean tier
+    status: pass | fail | not_applicable
+    runtime_seconds: <int>
+    failed_specs: [<paths>]
 overall: pass | fail
 ```
 
@@ -81,7 +91,7 @@ hitl_context: null | "<what triggered this>"
 
 ## Hard Constraints
 
-- **Do not modify code to make failing gates pass.** That's `fix-attempter`'s job — and only after the orchestrator dispatches it. Your job is to run and report.
+- **Do not modify code to make failing gates pass.** That's `fix-attempter`'s job, and only after the orchestrator dispatches it. Your job is to run and report.
 - **Run all gates even if early ones fail.** Full picture only.
 - **Stage new visual baselines** so the orchestrator can commit them with the rest of the scaffold.
 - **`overall: fail`** does not mean `status: failed`. Reserve `status: failed` for execution errors (missing scripts, missing tooling).

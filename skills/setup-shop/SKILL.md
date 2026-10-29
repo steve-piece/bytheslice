@@ -78,6 +78,8 @@ If the user explicitly asks for first-time install (e.g. "configure my ByTheSlic
 
 **Step 3: CI/CD Baseline Check (REQUIRED, but the SCAFFOLD action is optional).** See [Step 3](#step-3-cicd-baseline-check-flow-b-and-flow-c-only-skipped-in-flow-a) below. Detects whether the baseline exists; offers to scaffold via `/bytheslice:final-quality-check` if not.
 
+**Step 4: Feature intake and enforcement (REQUIRED).** See [Step 4](#step-4-feature-intake-and-enforcement-flow-b-and-flow-c-only) below. Writes the Feature intake rule into the project rules file and confirms the workflow guard is active.
+
 ---
 
 ## Flow C: Existing project (Config + CI/CD baseline)
@@ -86,7 +88,7 @@ If the user explicitly asks for first-time install (e.g. "configure my ByTheSlic
 
 **When this fires:** working directory contains a `package.json`.
 
-Skip Step 1 entirely. Run **Step 2** then **Step 3**. Step 3 is what makes this flow viable for projects that aren't going through the full PRD-to-phased-dev workflow, `special-order` and `sell-slice` need the CI/CD baseline to be present.
+Skip Step 1 entirely. Run **Step 2**, then **Step 3**, then **Step 4**. Step 3 is what makes this flow viable for projects that aren't going through the full PRD-to-phased-dev workflow, `special-order` and `sell-slice` need the CI/CD baseline to be present.
 
 ---
 
@@ -211,7 +213,7 @@ One question per top-level config section. Multi-select where multiple apply, si
 If "Use plugin defaults": leave `modelTiers: {}` in the generated file. If "edit manually": leave `modelTiers: {}` plus a comment block listing the most-overridden agents (`implementer`, `qualityReviewer`, `sliceVerifier`) for the user to fill in.
 
 **Q-stages**
-> "Use the default stage shape (6 tasks max per stage, target 20 to 30 feature stages)? The defaults work for most projects. Lower the task cap for tighter slices; raise the stage band for finer-grained splits."
+> "Use the default stage shape (6 tasks max per stage, at most 20 to 30 feature stages, fewer for a small app)? The defaults work for most projects. Lower the task cap for tighter slices; the band is a ceiling, never a target to pad toward."
 > single_select: ["Yes, use defaults", "No, set custom values"]
 
 If "No": follow up with two text inputs:
@@ -265,20 +267,24 @@ Print the resolved values back to the user before continuing to Step 3.
 
 ## Step 3: CI/CD Baseline Check (Flow B and Flow C only, skipped in Flow A)
 
-Apps that haven't run `/bytheslice:final-quality-check` lack the gates that `/bytheslice:sell-slice` expects (typecheck, lint, design-system-compliance, `@feature` E2E, `@regression-core` E2E, `@visual` E2E, optional `db-schema-drift`). This step detects whether the baseline exists and offers to scaffold it for projects that aren't going through the full PRD-to-phased-dev workflow.
+Apps that haven't run `/bytheslice:final-quality-check` lack the gates that `/bytheslice:sell-slice` expects (typecheck, lint, design-system-compliance, `@feature` E2E, `@regression-core` E2E, `@visual` E2E, optional `db-schema-drift`; under `quality.tier: lean`, lint, typecheck, unit tests, build and one `@smoke` spec). This step detects whether the baseline exists and offers to scaffold it for projects that aren't going through the full PRD-to-phased-dev workflow.
 
 ### Detection
 
 Check the working directory (Flow C) or the newly-scaffolded project root (Flow B) for these markers:
 
-| Marker | What "present" looks like |
-|---|---|
-| `.github/workflows/ci.yml` | Has `typecheck`, `lint`, and at least one test job (unit/integration/e2e) |
-| `.github/workflows/design-system-compliance.yml` | Exists |
-| `.husky/pre-push` | Exists and runs the slice tier (lint, typecheck, test, build); CI runs the full suite |
-| `.github/pull_request_template.md` | Exists |
+First read `quality.tier` from `bytheslice.config.json` (default `standard`; `auto` resolves as [`/final-quality-check` "Quality tier"](../final-quality-check/SKILL.md) documents: `lean` for at most 3 feature pies and no payments work, otherwise `standard`, and `standard` when no master checklist exists yet). The `ci-cd-detector` agent does this and returns the resolved tier.
 
-If ALL four markers are present and look complete, set `ci_cd_ready: true` and skip the rest of Step 3 (just announce: *"CI/CD baseline detected. Proceeding to next-step pointer."*).
+| Marker | `standard`: what "present" looks like | `lean`: what "present" looks like |
+|---|---|---|
+| `.github/workflows/ci.yml` | Has `typecheck`, `lint`, and at least one test job (unit/integration/e2e) | Has `lint`, `typecheck`, `unit-tests`, `build` and `e2e-smoke` (smoke dropped only when E2E was skipped) |
+| `.github/workflows/design-system-compliance.yml` | Exists | Required only when a design system exists (`docs/design-system.md` is present, or the Prep display-case slice is `[x]`); otherwise not a marker |
+| `.husky/pre-push` | Exists and runs the slice tier (lint, typecheck, test, build); CI runs the full suite | Exists and runs the lean set (lint, typecheck, test, build, `test:e2e:smoke`) |
+| `.github/pull_request_template.md` | Exists | Exists (the lean checklist) |
+
+A lean project never needs `e2e.yml`, `e2e-coverage.yml`, `db-schema-drift.yml` or the `@feature` / `@regression-core` / `@visual` suites to count as ready.
+
+If every required marker is present and looks complete (all four under `standard`; three, or four with a design system, under `lean`), set `ci_cd_ready: true` and skip the rest of Step 3 (just announce: *"CI/CD baseline detected. Proceeding to Step 4."*).
 
 If any marker is missing, set `ci_cd_ready: false` and ask the user.
 
@@ -294,7 +300,27 @@ If "No": warn the user and continue:
 
 If the user chose "No": create a sentinel file `.bytheslice/.skip-ci-cd` so future `/bytheslice:setup-shop` runs skip Q-ci-cd-baseline.
 
-### Phase: Print next-step pointer
+## Step 4: Feature intake and enforcement (Flow B and Flow C only)
+
+Every ByTheSlice project routes new work through the framework: new features are documented with `/special-order` and built with `/sell-slice` or `/sell-pie`. This step writes that rule where every agent reads it and confirms the hook that enforces it.
+
+1. Write the Feature intake block into the project rules file (`CLAUDE.md`, or `AGENTS.md` when it is the only one; a missing `CLAUDE.md` is created). The text lives in [references/feature-intake.md](references/feature-intake.md); the script replaces an older copy between its markers and leaves every other line alone:
+
+   ```sh
+   node "${CLAUDE_PLUGIN_ROOT}/hooks/workflow-guard.js" intake "<project-root>"
+   ```
+
+2. Report the guard's state:
+
+   ```sh
+   node "${CLAUDE_PLUGIN_ROOT}/hooks/workflow-guard.js" doctor "<project-root>"
+   ```
+
+   Expect `Feature intake: present in CLAUDE.md`, `Enforcement: block (default)` (or the config's value) and `Hooks: workflow guard active on ...`. Print the lines as they come. When the hooks read off or not wired, say so; this skill never turns them back on or off.
+
+Enforcement is `block` by default: a hand-written stage file or checklist heading, a code-writing Agent call outside `/sell-slice` and `/sell-pie`, and a PR carrying a slice with no `slice-verifier` pass are refused, and a slice marked `[x]` with no verifier pass is refused by the Pass. Only the operator loosens it, with `"enforcement": "warn"` in `bytheslice.config.json` (set by hand) or a relaunch with `BTS_ALLOW_BYPASS=1`. Never write either on the operator's behalf; when they ask for `warn`, tell them the line to add.
+
+## Next-step pointer
 
 For Flow A:
 > Defaults saved at `~/.bytheslice/defaults.json`. To use them on a project, run `/bytheslice:setup-shop` from the project's parent folder (Flow B) or inside the project (Flow C) and answer "Yes" to the Group 1 "use defaults?" question.
@@ -304,6 +330,8 @@ For Flow B:
 >
 > **CI/CD baseline:** <"present" | "scaffold pending, run /bytheslice:final-quality-check next" | "skipped per user choice">
 >
+> **Feature intake:** <the doctor's Feature intake line> · **Enforcement:** <block | warn> · **Hooks:** <active | off | not wired>
+>
 > **Next steps:**
 > 1. `cd <project-name>`
 > 2. (Optional) Edit `bytheslice.config.json` to refine any defaults
@@ -311,12 +339,14 @@ For Flow B:
 > 4. Run `/bytheslice:final-quality-check` (if Step 3 said scaffold pending)
 > 5. Run `/bytheslice:create-menu` to write the PRD (full PRD-to-app flow), OR run `/bytheslice:special-order` later if you only want to bolt features onto an existing master checklist
 >
-> The ByTheSlice pipeline from here is: PRD → phased plans → design system gate → CI/CD scaffold → env setup → optional DB schema → 20-30 vertical-slice feature stages.
+> The ByTheSlice pipeline from here is: PRD → phased plans → design system gate → CI/CD scaffold → env setup → optional DB schema → right-sized vertical-slice feature stages (a few for a small app, up to 20 to 30 for a large one).
 
 For Flow C:
 > Config written to `<project-root>/bytheslice.config.json`. Future ByTheSlice skill runs in this project will honor these settings.
 >
 > **CI/CD baseline:** <"present" | "scaffold pending, run /bytheslice:final-quality-check next" | "skipped per user choice">
+>
+> **Feature intake:** <the doctor's Feature intake line> · **Enforcement:** <block | warn> · **Hooks:** <active | off | not wired>
 >
 > **Next steps:**
 > - **Have a PRD already?** Run `/bytheslice:cook-pizzas` to generate phased plans.
@@ -324,6 +354,17 @@ For Flow C:
 > - **Just want to add a feature or two?** Run `/bytheslice:special-order` directly. Note: without a master checklist (no `docs/plans/`), special-order will redirect you back here. To go from existing-app → special-order flow, run `/bytheslice:create-menu` first to give the complexity assessor grounding context.
 
 ---
+
+## Unattended runs (`run.unattended`)
+
+`/pizza-party` runs this skill with `--unattended --ticket <order ticket path> --config <run config path>`, and nothing here may ask:
+
+- **Flow.** `/pizza-party` picks it: Flow B from the parent folder for a new app (the scaffolder creates `<project-name>/`), Flow C inside an existing app.
+- **Step 1 questions** come from the ticket's **Answers**: Q-bootstrap-name is the app folder's name, Q-bootstrap-stack the **Stack** line (Next.js when it names none), Q-bootstrap-variant single-app unless the ticket says monorepo, Q-bootstrap-roadmap No.
+- **Step 2.** Skip Group 1 and Group 2. Write `bytheslice.config.json` from the run config file `/pizza-party` passed, merged over the recommended Group 2 defaults (the run config's keys win). An existing `bytheslice.config.json` is merged the same way, never asked about.
+- **Step 3.** Skip Q-ci-cd-baseline: `/pizza-party` runs `/final-quality-check` itself in its Phase 5. Report `ci_cd_ready` only.
+- **Step 4** runs as usual (intake, then doctor).
+- Record each of these in the ticket's **Decisions made without you** and return without the next-step pointer's questions.
 
 ## HITL Handling
 
@@ -347,7 +388,7 @@ hitl_context: "Detected existing package.json at the working directory; user exp
 
 - **One umbrella for setup.** Don't fork the Bootstrap-only or Config-only behavior into separate skills; flow detection picks the right path.
 - **Never write `~/.bytheslice/defaults.json` without explicit consent** (Flow A's Q-Flow-A question gates this).
-- **Never overwrite an existing `bytheslice.config.json`** in a project root without surfacing it to the user first. If detected, ask: *"This project already has bytheslice.config.json. Overwrite, merge, or cancel?"*
+- **Never overwrite an existing `bytheslice.config.json`** in a project root without surfacing it to the user first. If detected, ask: *"This project already has bytheslice.config.json. Overwrite, merge, or cancel?"* Under `run.unattended` it is merged instead, never asked (see Unattended runs).
 - **Never delete anything.** Setup is additive.
 
 ---
@@ -366,7 +407,8 @@ hitl_context: "Detected existing package.json at the working directory; user exp
 - [ ] Step 3 (CI/CD baseline check) ran in Flow B and Flow C (skipped in Flow A)
 - [ ] Step 3 detected ci_cd_ready accurately based on the four markers
 - [ ] (Step 3 + ci_cd_ready false + user said no) `.bytheslice/.skip-ci-cd` sentinel file written
-- [ ] Next-step pointer printed to the user, including CI/CD baseline status line
+- [ ] Step 4 ran in Flow B and Flow C: the Feature intake block is in the project rules file and the doctor reports the hooks active
+- [ ] Next-step pointer printed to the user, including the CI/CD baseline, Feature intake, Enforcement and Hooks lines
 
 ---
 
@@ -382,6 +424,7 @@ artifacts:
   - <new project root path, if Flow B>
   - ROADMAP.local.md (if Flow B + Q-bootstrap-roadmap = Yes)
   - .gitignore (modified, if Flow B)
+  - CLAUDE.md or AGENTS.md (Feature intake block, Flow B and C)
 needs_human: false | true
 hitl_category: null | "prd_ambiguity" | "external_credentials" | "destructive_operation" | "creative_direction"
 hitl_question: null | "<plain-language question>"

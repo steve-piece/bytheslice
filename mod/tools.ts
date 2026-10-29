@@ -8,8 +8,10 @@ import { record } from './capture.ts'
 import { registerHitl } from './hitl.ts'
 import { ledgerPath } from './ledger.ts'
 import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
-import { activePie, activeSlice, allDone, boxReady, counts } from './projection.ts'
+import { activePie, activeSlice, allDone, boxReady, counts, refresh } from './projection.ts'
 import { runningFor } from './rail.tsx'
+import { driftLine, readDrift } from './drift.ts'
+import type { StatusDrift } from './drift.ts'
 import { mismatchLine } from './reconcile.ts'
 import { bakersWord } from './team.ts'
 import type { PassBaker, PassChecklist, PassHitlItem, PassLive, PassProjection, PassSliceView, PassTeam } from './types'
@@ -198,6 +200,7 @@ export function statusReport(
     branch: string | null
     now: number
     team?: PassTeam
+    drift?: readonly StatusDrift[]
   },
   scope: 'active' | 'all' = 'active',
 ): string {
@@ -269,6 +272,12 @@ export function statusReport(
     for (const m of mismatches.slice(0, 4)) lines.push(`  - ${mismatchLine(m)}`)
     if (mismatches.length > 4) lines.push(`  and ${mismatches.length - 4} more (pass reconcile lists them all)`)
   }
+  const drift = view.drift ?? []
+  if (drift.length > 0) {
+    lines.push(`Status drift: ${drift.length} (checklist against ${drift[0]?.base ?? 'the default branch'})`)
+    for (const d of drift.slice(0, 4)) lines.push(`  - ${driftLine(d)}`)
+    if (drift.length > 4) lines.push(`  and ${drift.length - 4} more`)
+  }
   lines.push(`Next: ${nextAction(c, p, branch)}`)
   lines.push('These are facts from the ledger; nothing here halts or refuses a step.')
   if (lines.length > STATUS_LINES) {
@@ -286,8 +295,14 @@ async function nowOf($: EngineInterface): Promise<number> {
   }
 }
 
-/** Serves bts_status from the atoms and the projection alone. */
+/**
+ * Serves bts_status from the atoms and the projection, plus one read of the
+ * default branch for status drift. A checklist the atom does not hold yet is
+ * read once more first, so a call that beat the first refresh (or ran in a
+ * worktree before the primary checkout was found) does not say there is none.
+ */
 export async function serveStatus($: EngineInterface, input: Record<string, unknown>): Promise<string> {
+  if ((await read($, checklistAtom)) === null) await refresh($).catch(() => null)
   const [checklist, projection, live, branch, team, now] = await Promise.all([
     read($, checklistAtom),
     read($, ledgerAtom),
@@ -297,7 +312,8 @@ export async function serveStatus($: EngineInterface, input: Record<string, unkn
     nowOf($),
   ])
   const scope = input.scope === 'all' ? 'all' : 'active'
-  return statusReport({ checklist, projection, live, branch, now, team }, scope)
+  const drift = await readDrift($, checklist, projection, branch).catch(() => [])
+  return statusReport({ checklist, projection, live, branch, now, team, drift }, scope)
 }
 
 /** Serves bts_note: appends one note row (text cut to 2,000 characters) and answers `ok`. */

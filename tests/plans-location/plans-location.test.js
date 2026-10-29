@@ -59,7 +59,7 @@ test('merge-per-slice marks gitignored plans only after the merge', () => {
 });
 
 test('every skill that flips the checklist from a worktree links the plans rule', () => {
-  for (const f of ['sell-pie', 'sell-slice', 'box-it-up', 'run-the-day']) {
-    assert.match(read(`skills/${f}/SKILL.md`), /git-worktree-standard\.md`, "Where the plans live"/, f);
+  for (const f of ['sell-pie', 'sell-slice', 'box-it-up', 'pizza-party']) {
+    assert.match(read(`skills/${f}/SKILL.md`), /git-worktree-standard\.md`?, "Where the plans live"/, f);
   }
 });

@@ -161,6 +161,7 @@ export async function respondToStalls($: EngineInterface, stalls: readonly Stall
       source: 'pass',
       asked: 'pane',
       kind: STALL_KIND,
+      aid: stall.aid,
     })
   }
   return steps

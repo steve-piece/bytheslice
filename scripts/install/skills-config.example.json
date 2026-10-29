@@ -1,7 +1,8 @@
 // scripts/install/skills-config.example.json
 // Example JSONC config for selecting individual ByTheSlice skills during installation.
-// v4 skill names: setup-shop, create-menu, cook-pizzas, set-display-case, final-quality-check,
-// open-the-shop, sell-slice, box-it-up, special-order, run-the-day, inspect-display, close-shop.
+// Skill names: setup-shop, create-menu, cook-pizzas, set-display-case, final-quality-check,
+// open-the-shop, sell-pie, sell-slice, box-it-up, special-order, pizza-party, open-kitchen,
+// inspect-display, close-shop.
 {
   "mode": "skills",
   "target": "both",

@@ -1,16 +1,16 @@
 ---
 name: cook-pizzas
-description: "Cook the pre-made pies before the shop opens, transforming a PRD into an ordered roadmap of vertical-slice features, grouped into Pies of 3 to 8 slices. Each Pie is a coherent chapter that bakes autonomously; each Slice is one vertical deliverable. Adds `--repie` to convert a flat v4 checklist into Pies on explicit opt-in."
+description: "Cook the pre-made pies before the shop opens, transforming a PRD into an ordered roadmap of vertical-slice features, grouped into Pies of usually 3 to 8 slices (a small app gets few pies, of 1 or 2 slices when that is all it holds; the 20 to 30 feature-slice band is a ceiling, never a target). Each Pie is a coherent chapter that bakes autonomously; each Slice is one vertical deliverable. Adds `--repie` to convert a flat v4 checklist into Pies on explicit opt-in."
 user-invocable: true
 triggers: ["/bytheslice:cook-pizzas", "/cook-pizzas", "cook the pizzas", "make the pies", "prep the pies", "/bytheslice:plan-phases", "/plan-phases", "plan phases", "break into phases", "phased plan", "create a development plan", "decompose the prd", "repie", "re-pie", "convert flat checklist to pies"]
 ---
 
 <!-- skills/cook-pizzas/SKILL.md -->
-<!-- Pizza-shop framing: cook every pre-made pie that will sit in the display case. v5 two-level decomposition: PRD → Pies (coherent chapters of 3 to 8 slices) → Slices (vertical deliverables). Parallel slice writers run as a schema-validated Workflow; --repie converts a flat v4 checklist on explicit opt-in. -->
+<!-- Pizza-shop framing: cook every pre-made pie that will sit in the display case. v5 two-level decomposition: PRD → Pies (coherent chapters of usually 3 to 8 slices; a small app's pie may hold 1 or 2) → Slices (vertical deliverables), right-sized to the PRD, never padded. Parallel slice writers run as a schema-validated Workflow; --repie converts a flat v4 checklist on explicit opt-in. -->
 
 # Cook the Pizzas: PRD to Pie/Slice Roadmap
 
-Transform a finalized PRD into a complete, ordered roadmap of **Pies** (coherent chapters of 3 to 8 slices) and **Slices** (vertical deliverables), plus a project rules file. A pie is the unit of `/sell-pie` autonomy, the HITL checkpoint, the PR, the context-refresh, and the worktree; a slice is today's "stage", one vertical thing, capped at ~6 tasks / ~15 files.
+Transform a finalized PRD into a complete, ordered roadmap of **Pies** (coherent chapters of usually 3 to 8 slices) and **Slices** (vertical deliverables), plus a project rules file. A pie is the unit of `/sell-pie` autonomy, the HITL checkpoint, the PR, the context-refresh, and the worktree; a slice is today's "stage", one vertical thing, capped at ~6 tasks / ~15 files. The roadmap is right-sized to the PRD: a small brief gets few pies, a small app's pie may hold 1 or 2 slices, and the 20 to 30 feature-slice band is a ceiling for large apps, never a target (an operator-set `stages.targetFeatureStages` still overrides).
 
 ## Mode detection
 
@@ -50,14 +50,14 @@ The two-level decomposition routes structured artifacts between singular-goal su
 - `docs/plans/stage_<N>_<feature>.md`: the feature slices, grouped into Pies 2+.
 - `CLAUDE.md` or `AGENTS.md` (per Q12): the project rules file.
 
-> **v5 change:** the flat 20 to 30 "stages" become a **two-level Pie/Slice structure**. The four foundation stages are the early slices of **Pie 1** (the foundations pie, `review: boundary`, slices `1.1` to `1.4`); their on-disk filenames are unchanged. `/special-order` appends a **new Pie**. Existing flat-v4 projects keep working untouched; `--repie` converts them only on explicit opt-in.
+> **v5 change:** the flat v4 "stages" (20 to 30 at most, for a large app) become a **two-level Pie/Slice structure**. The four foundation stages are the early slices of **Pie 1** (the foundations pie, `review: boundary`, slices `1.1` to `1.4`); their on-disk filenames are unchanged. `/special-order` appends a **new Pie**. Existing flat-v4 projects keep working untouched; `--repie` converts them only on explicit opt-in.
 
 ## Project Config (optional)
 
 Before Phase 1, check for `bytheslice.config.json` at the project root. Honor these keys (see [`skills/setup-shop/references/bytheslice-config-schema.md`](../setup-shop/references/bytheslice-config-schema.md) for the full schema):
 
 - `rules.imports`: when non-empty, **skip Q9** (external rule-file imports) and use these URLs directly
-- `stages.targetFeatureStages`: pass to `stage-decomposer` to tune the splitter (default `"20-30"` feature slices; smaller band = larger slices)
+- `stages.targetFeatureStages`: pass to `stage-decomposer` to tune the splitter. Unset (the default), the roadmap is right-sized to the PRD and the 20 to 30 feature-slice band is only a ceiling for large apps, never padding: a small brief gets few pies, and a pie of a small app may have 1 or 2 slices. Set to any other band, it overrides that sizing and the count must land in it (smaller band = larger slices); the plugin default `"20-30"` that a loader fills in for an unset key is read as the ceiling, not an override
 - `stages.maxTasksPerStage`: pass to the writers (default `6`; warn if user set `> 8`)
 - `mcps.*`: pre-fills Q5 (Supabase MCP) and Q7 (design MCPs) so the elicitation skips already-answered questions
 
@@ -72,6 +72,8 @@ Elicitation is interactive and runs in the orchestrator's own turn; it is **not*
 > The "never call `ask_user_input_v0`" rule in Appendix D applies to **dispatched subagents** (writers, the decomposer), which surface blocking ambiguity via `needs_human` + `hitl_*` instead. The orchestrator skill itself owns all human prompts, including this elicitation.
 
 **Always provide a recommended answer in available options.**
+
+**Unattended runs (`run.unattended: true` in `bytheslice.config.json`, set by `/pizza-party`).** Ask nothing. Read the order ticket `docs/pizza-party/order.md` first and answer each question from its **Answers** where they cover it: Q3 and Q4 from **Database**, Q10 from **Auth**, Q11 from **Host**, Q8 from **Stack** (or `bootstrap.variant`), Q9 from `rules.imports`. Every question the ticket does not cover takes its recommended option, and each such pick is appended to the ticket's "Decisions made without you" section as one line (`- cook-pizzas · Q<n> <topic>: <option> · <why, in a clause>`), never to **Answers**. Q5 and Q7 come from what is actually connected in the session (read-only), recorded the same way. Without `run.unattended`, every question is asked as written.
 
 **Q1: MVP scope**
 > "Is this MVP-only (everything ships in Phase 1) or do you want an MVP + Phase 2 split?"
@@ -121,8 +123,10 @@ Elicitation is interactive and runs in the orchestrator's own turn; it is **not*
 > → drives the auth feature slice scope; if auth present, `phased-plan-writer` injects the dev-mode auth helpers task, bundling localhost auto-login (opt-in via `DEV_AUTH_BYPASS`) + seeded-user switcher banner (see `references/canned-stages/auth-dev-mode-switcher-task.md`)
 
 **Q11: Deployment target**
-> "Deployment target? (Default: Vercel)"
-> single_select: ["Vercel", "AWS", "Fly.io", "Other (I'll specify)"]
+> If PRD Section 4 names a host, use that. Otherwise ask:
+> "Deployment target?"
+> single_select: [<each host whose CLI or MCP is authorized in this session (read-only check, alphabetical)>, "None: localhost for now", "Other (I'll specify)"]
+> No host is a default. Recommend the one PRD Section 4 or the operator already named; with none named, recommend "None: localhost for now". Unattended: the **Host** from the order ticket.
 
 **Q12: Rules file format**
 > "Which project rules file format?"
@@ -153,15 +157,17 @@ The decomposer works top-down:
    - Slice 1.3: env-setup gate
    - Slice 1.4: db-schema foundation (only if Q3 = Yes)
 2. **Features → Slices.** Every PRD Section 2 feature defaults to **≥2 slices**: (a) shell slice: route, layout, empty/loading/error states; (b) data slice: queries, mutations, polish, edge cases. Tiny features (e.g. a static page) may be one slice.
-3. **Group Slices into Pies.** Bundle low-cross-coupling slices into **coherent chapters of 3 to 8 slices** (e.g. "Blog Editor" = the editor frontend slice + the server-actions slice + the publish-flow slice). Each Pie is the unit of `/sell-pie` autonomy, the PR, the worktree, and the HITL checkpoint. Foundations are Pie 1 (tracked via the `## Prep` gate); feature pies are Pie 2 onward.
-4. **Set `review:` per pie.** Default every pie to `review: boundary` (autonomous; one HITL at the pie boundary). Flag a pie `review: continuous` (forces `/sell-pie` into `/sell-slice` mode for the whole pie) when it is sensitive: **Payments, Auth, real-data migrations**, or anything the PRD marks high-risk. The decomposer proposes the `review:` value per pie; the user confirms it at approval.
+3. **Group Slices into Pies.** Bundle low-cross-coupling slices into **coherent chapters of usually 3 to 8 slices** (e.g. "Blog Editor" = the editor frontend slice + the server-actions slice + the publish-flow slice). Each Pie is the unit of `/sell-pie` autonomy, the PR, the worktree, and the HITL checkpoint. Foundations are Pie 1 (tracked via the `## Prep` gate); feature pies are Pie 2 onward. A small app's pie may hold 1 or 2 slices when the app has no more to give it; never pad a pie to reach 3.
+4. **Set `review:` per pie.** Default every pie to `review: boundary` (autonomous; one HITL at the pie boundary). Flag a pie `review: continuous` (forces `/sell-pie` into `/sell-slice` mode for the whole pie) when it is sensitive: **Payments, Auth, real-data migrations**, or anything the PRD marks high-risk. The decomposer proposes the `review:` value per pie; the user confirms it at approval. **Under `run.unattended: true`, every pie is `review: boundary`**, sensitive ones included: the operator chose hands-off for the whole run. Record one ticket decision line naming the pies that would otherwise have been `continuous`.
 5. **Tag each slice:** `mvp:` per Q1; `type:` (`design-system | ci-cd | env-setup | db-schema | frontend | backend | full-stack | infrastructure`); `depends_on:` with only lower-numbered slices, never forward references. Within a pie, a slice's `slice` id is `"<pie>.<index>"` (e.g. `"2.6"`).
-6. **Band check.** Target **20 to 30 feature slices** total (honor `stages.targetFeatureStages`); each pie holds 3 to 8 slices. Cross-check PRD Section 7 (Out of Scope); never propose work the PRD excludes.
+6. **Band check, right-sized.** The **20 to 30 feature-slice band is a ceiling for large apps, not a target.** Size the roadmap to the PRD: a small brief (a private single-user tool, a handful of Section 2 features) gets few pies and few slices, for example 1 to 3 feature pies and well under 20 slices. Never pad to reach the band: no filler slices, no splitting a small feature into shell and data slices when one slice holds it, no pie invented to fill a count. A pie of a small app may hold fewer than 3 slices when the app has no more to give it. `stages.targetFeatureStages`, when set, still overrides this sizing. Cross-check PRD Section 7 (Out of Scope); never propose work the PRD excludes. Pass this right-sizing rule to `stage-decomposer` with the PRD.
 7. **User flow per pie (optional).** For each pie with a user-facing flow, the decomposer returns `user_flow`: 3 to 7 ordered steps, each naming the slice id in that pie that owns it. A backend-only pie has none. The flow is the source of each owning slice's one user-outcome Exit line.
 
 **Present the proposed Pie/Slice tree to the user for approval before writing any files**: pies with their `review:` annotation, slices nested under each pie with type and `depends_on`. The user can re-bundle pies, re-split slices, or override any `review:` value here. Show each pie's `User flow` steps with their owning slice ids.
 
-**Unowned flow steps (a warning, never a block).** When any `user_flow` step has no owning slice id, or names a slice id that does not exist in the proposed tree, add one line to this same approval prompt, listing every such step: `Decomposition warning: unowned flow step(s): "<step>" (Pie N). Recommended: re-bundle now, while it is free.` It is informational: the operator may approve anyway, and the synthesizer then writes the step with `- no owning slice`. It adds no new question and no new human step; when every step is owned, the line is not shown.
+**Under `run.unattended: true` the roadmap is auto-approved.** Show nothing and wait for nothing. Append one decision line to the order ticket (`- cook-pizzas · roadmap approved: <P> pies, <S> feature slices, all review: boundary · unattended run`) and one **Progress** line with the same counts, then go straight to Phase 3.
+
+**Unowned flow steps (a warning, never a block).** When any `user_flow` step has no owning slice id, or names a slice id that does not exist in the proposed tree, add one line to this same approval prompt, listing every such step: `Decomposition warning: unowned flow step(s): "<step>" (Pie N). Recommended: re-bundle now, while it is free.` It is informational: the operator may approve anyway, and the synthesizer then writes the step with `- no owning slice`. It adds no new question and no new human step; when every step is owned, the line is not shown. Under `run.unattended: true`, re-bundle the step into the slice that best owns it when one clearly does; otherwise leave it unowned. Either way, record it as a decision line in the ticket.
 
 ### Phase 3: Write the Slices (schema-validated Workflow)
 
@@ -220,7 +226,7 @@ If the user chose Linear mirroring:
 Runs **only** when invoked as `/cook-pizzas --repie` against an existing **flat v4** checklist. This is the sole path that mutates existing plan files, and it is never silent or automatic.
 
 1. **Confirm the conversion explicitly.** State plainly what will change: flat `## Stage N` headings → nested `## Pie N` / `### Slice N.M`; frontmatter gains `pie`, `slice: "<N.M>"`, `review:`. Show the proposed pie groupings (which stages bundle into which pie, and each pie's `review:` value) and the file-by-file diff plan. **Wait for the user to approve** before writing anything.
-2. **Group the existing stages into Pies.** Apply the same bundling heuristic as Phase 2 step 3: coherent chapters of 3 to 8 slices, low cross-coupling. Foundation stages 1 to 4 become Pie 1's slices 1.1 to 1.4. Renumber the rest into pies, preserving each stage's original `stage:` integer (kept for back-compat + stable sort) and original on-disk filename.
+2. **Group the existing stages into Pies.** Apply the same bundling heuristic as Phase 2 step 3: coherent chapters of usually 3 to 8 slices, low cross-coupling (a small project's pie may hold 1 or 2; never pad). Foundation stages 1 to 4 become Pie 1's slices 1.1 to 1.4. Renumber the rest into pies, preserving each stage's original `stage:` integer (kept for back-compat + stable sort) and original on-disk filename.
 3. **Set `review:` per pie.** Default `boundary`; flag Payments / Auth / real-data-migration pies `continuous`. The user confirms each at step 1.
 4. **Rewrite frontmatter + headings in place.** For each plan file, add `pie`, `slice`, `review` (do **not** remove `stage:`; dual-read keeps it). Update the master checklist headings to the nested shape. Preserve every existing Exit-criteria block verbatim; each slice keeps its own.
 5. **Verify dual-read.** After the rewrite, confirm both the flat (`stage`) and nested (`pie`/`slice`) keys are present and consistent (a slice's `slice` leading number equals its `pie`). Report the conversion summary.
@@ -234,6 +240,7 @@ The orchestrator owns every human prompt; subagents never call `ask_user_input_v
 - **Interactive elicitation (Phase 1)** and the **roadmap approval (Phase 2)** / **`--repie` confirmation (Phase R)** are first-class orchestrator prompts via `ask_user_input_v0`.
 - **Subagent-surfaced HITL.** When `stage-decomposer` or a Phase 3 writer returns `needs_human: true`, halt that branch and surface the agent's `hitl_question` to the user with its `hitl_category` (`prd_ambiguity` | `external_credentials` | `destructive_operation` | `creative_direction`) and `hitl_context`. Resolve, then re-dispatch only the affected branch.
 - A writer that hits the 6-task / ~15-file slice cap returns `hitl_required: true` / `hitl_reason: prd_ambiguity` proposing a split; surface it and re-bundle into the pie before continuing.
+- **Under `run.unattended: true`, nothing here waits on a human.** A writer's proposed split is applied as proposed and re-dispatched; any other writer or decomposer `needs_human` takes the option it recommends (or, with none, the one most consistent with the PRD and the ticket's **Answers**). Each resolution is one decision line in the order ticket. The return is never `needs_human`.
 
 ## Progress Report Format
 
@@ -265,11 +272,12 @@ CLAUDE.md or AGENTS.md (per Q12)
 
 ## Key principles
 
-- **Two levels:** Pies are coherent chapters of 3 to 8 slices with low cross-coupling (the unit of autonomy, PR, worktree, HITL); Slices are vertical deliverables (UI + route + data + tests for one user-facing thing).
+- **Two levels:** Pies are coherent chapters of usually 3 to 8 slices with low cross-coupling (the unit of autonomy, PR, worktree, HITL); Slices are vertical deliverables (UI + route + data + tests for one user-facing thing).
+- **Right-sized, never padded.** The 20 to 30 feature-slice band is a ceiling for large apps, not a target. A small brief gets few pies and few slices, and a pie of a small app may have 1 or 2 slices; no filler slice, no needless shell and data split, no pie invented to fill a count. `stages.targetFeatureStages`, when set, still overrides.
 - **Hard cap per slice:** 6 tasks, ~15 files, completable in one Claude session.
 - **Plans carry contracts, not implementations.** Code fences hold commands, schema DDL, exported signatures and type shapes, and byte-exact config; behaviors, states, edge cases, and test cases are prose. Bodies are the builder's job, written against the real tree. See `agents/phased-plan-writer.md` "Code budget".
 - **One PR per Pie** (not per slice) in the default `pie-pr` delivery mode: per-slice work is commit + push to the pie branch; the PR opens at the pie boundary via `/box-it-up`. Opt-in merge-per-slice delivery (`delivery.mode`, or an explicit autonomous-delivery run instruction) opens and merges one PR per slice instead.
-- **`review:` is a pie property:** `boundary` (default, autonomous) vs `continuous` (forces `/sell-slice` mode). Sensitive pies (Payments, Auth, real-data migrations) are `continuous`.
+- **`review:` is a pie property:** `boundary` (default, autonomous) vs `continuous` (forces `/sell-slice` mode). Sensitive pies (Payments, Auth, real-data migrations) are `continuous`, except under `run.unattended: true`, where every pie is `boundary`.
 - **No forward references:** a slice may only reference packages, tables, or components built in prior slices.
 - **Exit criteria are testable AND transcript-verifiable:** every line in a slice's `**Exit criteria:**` block must be verifiable by reading the conversation alone: a command's exit code, a subagent's `overall: pass`, a captured screenshot, a file path Claude has read. This block is lifted verbatim into the `/goal` condition by `/sell-slice` Phase 2.5 and is what `slice-tester` derives its bespoke plan from. See [`references/templates.md`](references/templates.md) → "Exit-criteria contract (consumed by `/goal`)".
 - **Exit criteria follow the gate tiers:** tier 1 while coding, tier 2 (the slice's own tests, build, DB tests when the schema changes) before each commit, tier 3 (`slice-verifier`, the full local suite) once at slice end, tier 4 (CI's full suite) at the PR. Plans never demand the full ladder per task or a CI-only check per slice. See [`references/templates.md`](references/templates.md) → "Gate tiers".

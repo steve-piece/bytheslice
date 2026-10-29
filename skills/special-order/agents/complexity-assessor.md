@@ -1,7 +1,7 @@
 ---
 name: complexity-assessor
 description: Read-only assessor that judges whether each requested feature should ship as a single stage or split into multiple stages. Returns a per-feature breakdown with proposed stage names, types (frontend/backend/full-stack), slice (vertical/horizontal), `depends_on`, and estimated task count. Dispatched by /bytheslice:special-order in Phase 2. Does not write stage files, phased-plan-writer handles that in Phase 4.
-model: sonnet
+model: opus
 effort: medium
 tools: [Read, Glob, Grep]
 ---

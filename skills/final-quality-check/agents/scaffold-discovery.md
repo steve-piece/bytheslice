@@ -1,7 +1,7 @@
 ---
 name: scaffold-discovery
 description: Phase 0 readonly discovery for /final-quality-check. Detects package manager (pnpm > npm > yarn > bun), app framework (Next.js / Vite / Node API / etc.), monorepo tooling (Turborepo / Nx / single-app), existing .github/workflows/* inventory, and database presence (db/schema.sql / prisma/schema.prisma / Supabase config / Drizzle). Returns a structured profile the downstream scaffold agents read to choose templates and skip already-present artifacts.
-model: haiku
+model: opus
 effort: medium
 disallowedTools: Write, Edit, NotebookEdit
 ---
@@ -70,7 +70,7 @@ database:
 already_present_scaffold_artifacts:
   - path: <workspace-relative>
     artifact: husky-pre-push | pr-template | ci-yml | e2e-yml | design-system-compliance-yml | e2e-coverage-yml | db-schema-drift-yml | branch-protection-script | stylelintrc | eslint-tailwindcss-config
-node_version_recommended: <int — defaults to 20 unless package.json/engines pins something else>
+node_version_recommended: <int: defaults to 20 unless package.json/engines pins something else>
 ```
 
 ## Return Contract
@@ -91,4 +91,4 @@ hitl_context: null | "<what triggered this>"
 - **No npm/pnpm/yarn/bun installs.** Detection only.
 - **No assumptions about app paths.** Walk the filesystem; don't hardcode `apps/web`.
 - **Cap the existing-workflows inventory.** If more than 20 workflow files exist, list the first 20 plus a count of additional ones.
-- **`framework: unknown`** is acceptable — the orchestrator will surface to the user rather than guessing.
+- **`framework: unknown`** is acceptable, the orchestrator will surface to the user rather than guessing.

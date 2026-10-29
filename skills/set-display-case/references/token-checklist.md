@@ -24,6 +24,8 @@ Every token below must have a light-mode value AND a dark-mode value.
 | `--popover` | Popover/dropdown background |
 | `--popover-foreground` | Text on popover |
 
+**Layer contrast (required).** `--background`, `--card`, `--popover`, `--muted` and `--sidebar` form a layer stack, and adjacent layers must be visibly distinct in light AND dark mode: at least about 2 points of OKLCH lightness apart (2 to 6 is the target), with a higher layer lighter in dark mode. `compliance-pre-check` computes the deltas from the values in the CSS entry file and fails the gate on a pair under 2. Every `-foreground` token meets WCAG AA (4.5:1) on its own layer. See the default UI rules ([`../../sell-slice/references/ui-rules.md`](../../sell-slice/references/ui-rules.md)).
+
 ---
 
 ## Brand Colors (required)

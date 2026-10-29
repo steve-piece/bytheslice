@@ -4,6 +4,8 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, Timer } from 'claude-code'
 
+
+import { closeEndedStalls } from './hitl.ts'
 import { roleOf } from './ledger-projection.ts'
 import { DEFAULT_POLICY, budgetMs } from './policy.ts'
 import type { PassAgentMark, PassSeen, PassWatchdog } from './types'
@@ -206,6 +208,9 @@ export async function scan($: EngineInterface): Promise<Stall[]> {
       : await update($, seenAtom, prev => reconcileSeen(prev ?? {}, list, marks, now))
   const stalls = scanAgents(list, seen, now, cfg)
   if (stalls.length > 0) await respondToStalls($, stalls, now)
+  // A stall item whose agent left the list (or ran out) has nothing left to ask about.
+  const live = new Set(list.filter(a => a.status === 'running' || a.status === 'pending' || a.status === 'waiting').map(a => a.id))
+  await closeEndedStalls($, { isLive: aid => live.has(aid) }).catch(() => 0)
   return stalls
 }
 

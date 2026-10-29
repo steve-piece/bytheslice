@@ -2,7 +2,7 @@
 name: quality-reviewer
 description: Reviews the implementer's output for code quality, lint, types, test coverage, edge-case handling, security issues, and (for backend/full-stack stages) verifies db/schema.sql was updated before any migration or query code. Runs after the spec reviewer in Phase 4 of the sell-slice orchestrator.
 model: opus
-effort: high
+effort: medium
 disallowedTools: Write, Edit, NotebookEdit
 ---
 

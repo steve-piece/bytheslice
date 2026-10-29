@@ -39,15 +39,15 @@ checklist_markdown: |
 
   ### Supabase
   Console: https://supabase.com/dashboard
-  - [ ] NEXT_PUBLIC_SUPABASE_URL — apps/web/.env.local
-  - [ ] SUPABASE_SERVICE_ROLE_KEY — apps/web/.env.local
+  - [ ] NEXT_PUBLIC_SUPABASE_URL: apps/web/.env.local
+  - [ ] SUPABASE_SERVICE_ROLE_KEY: apps/web/.env.local
   ...
 
   ## GitHub Secrets (CI workflows)
   Add via repo Settings → Secrets and variables → Actions.
   - [ ] STRIPE_SECRET_KEY (referenced in .github/workflows/ci.yml)
   ...
-services_detected: [<list — Supabase, Stripe, ...>]
+services_detected: [<list: Supabase, Stripe, ...>]
 unknown_keys: [<list of keys with no service match>]
 total_checklist_items: <int>
 ```
@@ -68,6 +68,6 @@ hitl_context: null | "<what triggered this>"
 
 - **Always read both reference files.** Never invent service mappings or console URLs.
 - **Use `- [ ]` task-list checkboxes**, one per line, never a bare `[ ]`. The orchestrator displays this verbatim to the user.
-- **Group keys by service in the catalog's order** — don't sort alphabetically.
+- **Group keys by service in the catalog's order**: don't sort alphabetically.
 - **Unknown-keyed services** still appear in the checklist under "Other / Unknown" so they aren't silently dropped.
-- **Never include the actual key values** — only key names. The template repository keeps `.env.example` files with placeholders only.
+- **Never include the actual key values**: only key names. The template repository keeps `.env.example` files with placeholders only.

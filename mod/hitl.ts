@@ -1,15 +1,19 @@
 // mod/hitl.ts
-// The Pass HITL inbox core: bts_hitl records a question or its answer in the ledger and returns at once; the operator's reply in chat, or the pane's button, answers it too.
+// The Pass HITL inbox core: bts_hitl records a question or its answer in the ledger and returns at once; the operator's reply in chat, or the pane's button, answers it too, and a stall item closes once its agent ended.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, PromptSubmitInput } from 'claude-code'
 
 import { record } from './capture.ts'
-import { readRows } from './ledger.ts'
+import { readRows, sessionId } from './ledger.ts'
+import { refreshLedger } from './live.ts'
 import { notifyHitl } from './notify.ts'
 import type { NotifyOutcome } from './notify.ts'
 import { activePie, activeSlice } from './projection.ts'
-import type { LedgerRow, PassHitlCategory, PassProjection } from './types'
+import type { LedgerRow, PassHitlCategory, PassHitlItem, PassProjection } from './types'
+
+/** The kind a stall's HITL item carries (watchdog-actions.ts raises it). */
+const STALL_KIND = 'agent-stalled'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
 const ledgerAtom = atom({ plugin: 'bytheslice', key: 'pass.ledger' } as const, null)
@@ -26,11 +30,15 @@ export const NEXT_STEP = 'Ask the operator this in chat now and stop; when they 
 /** What an answer records when it came from the operator's reply in chat (never their words). */
 export const REPLY_ANSWER = 'operator replied in chat'
 export const PANE_ANSWER = 'marked answered in pane'
+/** What closes a stall item once its agent ended (`via: 'auto'`). */
+export const ENDED_ANSWER = 'closed by the Pass: the stalled agent ended'
+/** A stall item another session raised closes on its own after this long; its agent cannot outlive the day. */
+export const STALE_STALL_MS = 24 * 60 * 60 * 1000
 /** Prompt origins that are the operator's own words: the terminal, Remote Control, an SDK host (the desktop app), a Slack ping. */
 export const HUMAN_ORIGINS: ReadonlySet<string> = new Set(['composer', 'bridge', 'sdk', 'slack-ping'])
 
 /** Which way an answer arrived. */
-export type HitlVia = 'tool' | 'reply' | 'pane'
+export type HitlVia = 'tool' | 'reply' | 'pane' | 'auto'
 
 /** What raising an item takes: the model's four categories, or `other` for the Pass's own. */
 export type HitlRaise = {
@@ -42,6 +50,8 @@ export type HitlRaise = {
   source: 'agent' | 'pass'
   asked: 'chat' | 'pane'
   kind?: string
+  /** The agent a Pass item is about (a stall), so its end can close the item. */
+  aid?: string
 }
 
 /** A bts_hitl call read: a raise, an answer, or why it is neither. */
@@ -181,6 +191,7 @@ export async function raiseHitl($: EngineInterface, raise: HitlRaise): Promise<H
       source: raise.source,
       asked: raise.asked,
       ...(raise.kind === undefined ? {} : { kind: raise.kind }),
+      ...(raise.aid === undefined ? {} : { aid: raise.aid }),
       notify,
     },
   })
@@ -246,6 +257,52 @@ export async function closeOnReply($: EngineInterface): Promise<number> {
     const done = await answerHitl($, item.id, REPLY_ANSWER, 'reply')
     if (done.ok) closed += 1
   }
+  return closed
+}
+
+/** The agent a stall item is about: its `aid`, else the id its question names (items raised before 5.8). */
+export function stallAgent(item: Pick<PassHitlItem, 'aid' | 'question'>): string | null {
+  if (typeof item.aid === 'string' && item.aid !== '') return item.aid
+  const named = /: (?:agent \S+ (\S+)|teammate \S+ \((\S+)\)) has run/.exec(item.question)
+  return named?.[1] ?? named?.[2] ?? null
+}
+
+/**
+ * Open stall items whose agent has ended: one whose agent id is in `ended`,
+ * one of this session whose agent `isLive` no longer lists, and one another
+ * session raised more than a day ago. Pure.
+ */
+export function endedStalls(
+  open: readonly PassHitlItem[],
+  view: { ended?: ReadonlySet<string>; isLive?: (aid: string) => boolean; session: string | null; now: number },
+): PassHitlItem[] {
+  return open.filter(item => {
+    if (item.kind !== STALL_KIND) return false
+    const aid = stallAgent(item)
+    if (aid !== null && view.ended?.has(aid)) return true
+    if (item.sid !== undefined && item.sid !== view.session) return view.now - item.t > STALE_STALL_MS
+    return aid !== null && view.isLive !== undefined && !view.isLive(aid)
+  })
+}
+
+/**
+ * Closes stall items whose agent ended (`via: 'auto'`), from a SubagentStop's
+ * agent id or the watchdog's agent list. Resolves how many it closed.
+ */
+export async function closeEndedStalls(
+  $: EngineInterface,
+  view: { ended?: ReadonlySet<string>; isLive?: (aid: string) => boolean },
+): Promise<number> {
+  const projection: PassProjection | null = await read($, ledgerAtom).catch(() => null)
+  const open = projection?.hitl?.open ?? []
+  if (!open.some(item => item.kind === STALL_KIND)) return 0
+  const [session, now] = await Promise.all([sessionId($).catch(() => null), nowOf($)])
+  let closed = 0
+  for (const item of endedStalls(open, { ...view, session, now })) {
+    const done = await answerHitl($, item.id, ENDED_ANSWER, 'auto')
+    if (done.ok) closed += 1
+  }
+  if (closed > 0) await refreshLedger($).catch(() => undefined)
   return closed
 }
 

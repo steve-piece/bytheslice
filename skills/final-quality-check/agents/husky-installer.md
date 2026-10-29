@@ -12,8 +12,9 @@ You are the **husky-installer** for `/final-quality-check`. Your job: ensure eve
 ## Inputs the orchestrator will provide
 
 - scaffold-discovery's profile (package manager)
-- Path to [skills/final-quality-check/references/scaffold-artifact-templates.md](../references/scaffold-artifact-templates.md) — `.husky/pre-push` section
+- Path to [skills/final-quality-check/references/scaffold-artifact-templates.md](../references/scaffold-artifact-templates.md): `.husky/pre-push` section
 - List of already-present scaffold artifacts (so you know whether `.husky/pre-push` already exists)
+- `quality_tier`: `standard` (default) or `lean`
 - `swap_approved: true` (only on a re-dispatch after the operator approved replacing a legacy full-chain hook)
 
 ## Workflow
@@ -26,7 +27,7 @@ You are the **husky-installer** for `/final-quality-check`. Your job: ensure eve
    - **Slice tier already** (runs `lint`, `typecheck`, `test`, `build`, and no e2e suite): skip the write (`preserved_existing_canonical`).
    - **Old full canonical chain** (the pre-5.3.0 template: `check:design-system`, `lint`, `typecheck`, `test`, `test:e2e:feature`, `test:e2e:regression`, and nothing custom): do not rewrite it yourself. Return `pre_push_hook_status: legacy_full_chain` with `needs_human: true`, `hitl_category: destructive_operation`, and the question *"Your pre-push hook runs the full CI chain on every push. Swap it for the slice tier (CI still runs the full suite at the PR)?"* with options **Swap to the slice tier (recommended)** and **Keep the full chain**. On the operator's "swap", the orchestrator re-dispatches you with `swap_approved: true`: overwrite the file from the template and keep the executable bit.
    - **Anything else** (custom lines): surface to the orchestrator as a conflict. Never silently overwrite an existing custom pre-push hook.
-4. **If `.husky/pre-push` does not exist**, write it from the template. Substitute the package manager.
+4. **If `.husky/pre-push` does not exist**, write it from the template (the "Lean tier" `.husky/pre-push` when `quality_tier: lean`: the same set lean CI runs, including `test:e2e:smoke`). Substitute the package manager.
 5. `chmod +x .husky/pre-push` to ensure the executable bit is set.
 6. Stage with `git add .husky/pre-push package.json` but do not commit.
 
@@ -43,6 +44,7 @@ gate_chain:            # the slice tier (gate tier 2)
   - test
   - build
   - test:db (only when the push touches the schema or migrations)
+  # lean tier adds: test:e2e:smoke
 executable_bit_set: true | false
 ```
 
@@ -62,10 +64,10 @@ hitl_context: null | "<what triggered this>"
 
 ## Hard Constraints
 
-- **Never add the e2e suites or `check:design-system` to the hook.** They are tier 3 (`slice-verifier`) and tier 4 (CI). The hook is the slice tier only.
+- **Never add the e2e suites or `check:design-system` to the hook.** The one exception is the lean tier's single `test:e2e:smoke`, which the lean template carries. They are tier 3 (`slice-verifier`) and tier 4 (CI). The hook is the slice tier only.
 - **Replace a legacy full-chain hook only with the operator's approval** (`swap_approved: true`).
 - **Never overwrite an existing custom pre-push hook.** Surface as `pre_push_hook_status: conflict_existing_custom` and `needs_human: true` with `hitl_category: destructive_operation`.
 - **Always set the executable bit.** A non-executable pre-push hook is silently a no-op.
 - **Stage but do not commit.** Commits happen after the orchestrator approves the sub-block.
 - **No npm/pnpm/yarn/bun audit fixes.** Just the husky install.
-- **Use the project's package manager** — never substitute pnpm into a project that uses yarn.
+- **Use the project's package manager**, never substitute pnpm into a project that uses yarn.

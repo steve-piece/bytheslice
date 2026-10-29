@@ -6,12 +6,54 @@ This file is the **canonical source of truth** for hook behavior. Every row is o
 
 ## Legend
 
-No ByTheSlice hook blocks: every wired script exits 0, and none prints a block decision (`hooks/test.sh` checks this for every script `hooks.json` wires).
+Every wired script exits 0, and only `workflow-guard.sh` prints a deny decision (`hooks/test.sh` checks this for every script `hooks.json` wires). No hook blocks a prompt.
+
+- **DENY** - hook exits 0 and prints Claude Code hook JSON with `permissionDecision: "deny"` and a reason starting `BLOCKED [bytheslice <rule>]` that names the skill to use and the operator override; the tool call does not run (Cursor: `{"permission":"deny"}`)
 
 - **WARN** - hook exits 0 and prints Claude Code hook JSON whose text starts `WARN`: `hookSpecificOutput.additionalContext` reaches the model, `systemMessage` reaches the person; the tool call proceeds
 - **NOTE** - hook exits 0 and prints plain text, which Claude Code shows in the transcript only
 - **PASS** - hook exits 0 with no output; nothing surfaces to Claude
 - **CONTEXT** - hook exits 0 and prints to stdout; used for SessionStart context injection
+
+## Workflow guard: `workflow-guard.sh`
+
+Applies only when a master checklist exists (in the session's checkout or, from a worktree, the primary checkout). "Skill" is the session's latest ByTheSlice skill in the kitchen activity log; "writer" is the hook input's `agent_type`. Under `enforcement: "warn"` (config) or `BTS_ALLOW_BYPASS=1` (launch env) every **DENY** below is a **WARN** instead.
+
+| Event and input | State | Expected |
+|---|---|---|
+| Write `docs/plans/stage_*.md` (new file) | no skill | **DENY** `plan-file`, names `/special-order` |
+| same | writer `bytheslice:phased-plan-writer` or a bare registered writer | **PASS** |
+| same | writer `general-purpose` | **DENY** |
+| same | skill `special-order` or `cook-pizzas` | **PASS** |
+| same | skill `sell-pie` | **DENY** (new stage files come from planners) |
+| Edit an existing stage file | skill `sell-pie` (build notes) | **PASS** |
+| Edit the checklist ticking a box or changing a slice body | no skill | **PASS** |
+| Edit or Write the checklist adding or renaming a pie or slice heading | no skill | **DENY** `plan-heading`, names the heading and `/special-order` |
+| Bash that writes a plan file (a `>`/`>>` redirect or `tee` into it, `sed -i`/`perl -i` on it, `cp`/`mv`/`install`/`ln` onto it, `touch`/`rm`/`truncate`, a script opening it to write) | no skill | **DENY** `plan-shell-write`, names the file and `/special-order` |
+| same, appending to an existing stage file or the checklist | any ByTheSlice skill | **PASS** (the shell cannot be diffed for headings) |
+| same, a new stage file | skill `sell-pie` | **DENY** |
+| Bash that reads plan files (`cat`, `grep`, `cp` from one to elsewhere) | any | **PASS** |
+| same | skill `cook-pizzas` | **PASS** |
+| Agent with no type, `general-purpose`, or a project agent listing Edit | no skill | **DENY** `adhoc-agent`, names `/sell-slice` |
+| Agent `someplugin:x` whose definition is not found | no skill | **DENY**, says the definition was not found |
+| Agent `Explore`, a project agent without write tools, `bytheslice:implementer` | any | **PASS** |
+| Agent `general-purpose` | skill `sell-slice` | **PASS** |
+| Agent `general-purpose` from a worktree whose plans live in the primary checkout | no skill | **DENY** |
+| Bash `gh pr create` or `gh as <user> pr create`, branch commit `feat(pie-1): 1.1 ...` | ledger has no verifier pass for 1.1 | **DENY** `pr-unverified`, lists `Slice 1.1`, names `/sell-slice` |
+| same | no ledger file at all | **WARN** (`No Pass ledger`), never refused |
+| same | ledger has a `slice-verifier` pass for 1.1 | **PASS** |
+| same on `pie-1-*` with untagged commits | 1.1 verified, 1.2 not | **DENY** listing `Slice 1.2` only |
+| same on a non-pie branch with no slice commits; `git status` | any | **PASS** |
+| same on a ship-once `ship/<app>` branch: pie merge commits (`merge(pie-N): ...`, no slice id) plus slice commits | every slice verified | **PASS** |
+| same | one slice commit unverified | **DENY** listing it |
+| Cursor `beforeShellExecution` `gh pr create` | unverified slice | `{"permission":"deny"}`; other commands and `BTS_HOOKS_DISABLED=1` answer `{"permission":"allow"}` |
+| Edit `bytheslice.config.json` to `"enforcement": "warn"`; Write `.claude/settings.local.json` adding `BTS_ALLOW_BYPASS` | enforcement `block` | **DENY** `operator-switch` |
+| UserPromptSubmit `/goal ...` or "add a new feature ..." | checklist present | **CONTEXT** (`hookSpecificOutput.additionalContext` naming `/special-order`, `/sell-slice`, `/sell-pie`); never refused |
+| UserPromptSubmit "implement Slice 2.2" (build, work on, finish ... Slice N.M) | checklist present | **CONTEXT** naming `/sell-slice N.M` and `/sell-pie` |
+| UserPromptSubmit `/special-order ...` or an ordinary question | any | **PASS** |
+| any | no checklist, `BTS_HOOKS_DISABLED=1`, malformed input | **PASS** |
+| `workflow-guard.js doctor <root>` | | prints `Feature intake: present in CLAUDE.md` or `MISSING`, `Enforcement: block (default)` (bypass noted), `Hooks: workflow guard active on ...` |
+| `workflow-guard.js intake <root>` | no rules file / stale block / `AGENTS.md` only | creates `CLAUDE.md` / replaces the block in place, other lines kept / adds it to `AGENTS.md`; a second run is unchanged |
 
 ## PreToolUse on Bash: `pre-commit-guard.sh`
 

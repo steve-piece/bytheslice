@@ -1,16 +1,16 @@
 // mod/register.tsx
-// The Pass hooks module, wiring only: version gate, ledger capture (file edits as path and role only), checks that warn and never block, the stall watchdog, the HITL inbox, team mode (roster, teammate turns, idle and done), the cross-session strip, the bts tools, the pass command (replay and history included), pane, replay pane, band and hint.
+// The Pass hooks module, wiring only: version gate, ledger capture (file edits as path and role only), checks that warn (one refuses under enforcement block), the stall watchdog, the HITL inbox, team mode (roster, teammate turns, idle and done), the cross-session strip, the bts tools, the pass command (replay and history included), pane, replay pane, band and hint.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import { drawBand, hintProps, pushStatus } from './band.tsx'
 import { captureBash, captureEdit, captureSkill, captureTurn, markSpawn, recordDoneFlips } from './capture.ts'
-import { primeChecks, reportToModel, trackGit, trackSkill, warnResult } from './checks.ts'
+import { primeChecks, refusalOf, reportToModel, trackGit, trackSkill, warnResult } from './checks.ts'
 import { checkFileWrite, checkPush } from './checks-checklist.ts'
 import { checkCommitOnMain, checkFixSpawn, countFix, raiseFixCap } from './checks-git.ts'
 import { checkDrift, checkSpawn, trackSpawn } from './checks-spawn.ts'
-import { closeOnReply, isOperatorReply, serveHitl } from './hitl.ts'
+import { closeEndedStalls, closeOnReply, isOperatorReply, serveHitl } from './hitl.ts'
 import { startSession } from './ledger.ts'
 import { pollAgents, refreshLedger, startPulse } from './live.ts'
 import { notifyPiesReady } from './notify.ts'
@@ -109,10 +109,14 @@ export const register: Register = on => {
     return ended
   }).catch(($, e, next) => next(e))
 
-  // Checks judge before the call from atoms only, always call next, and add any
-  // warning to what the model reads after the result; the call is never refused.
+  // Checks judge before the call from atoms only and add any warning to what the
+  // model reads after the result; the one refusal is a slice marked done with no
+  // verifier pass, under enforcement block.
   on('tool.call', { tool: ['Edit', 'Write'] }, async ($, e, next) => {
     const findings = await checkFileWrite($, e).catch(() => [])
+    // Under enforcement block, a slice marked done with no verifier pass is refused before it runs.
+    const refusal = await refusalOf($, findings).catch(() => null)
+    if (refusal !== null) return { deny: refusal }
     const ran = await next(e)
     if (isChecklistPath(e.file_path)) {
       if (!(await isLimited($))) await reload($).catch(() => false)
@@ -229,6 +233,13 @@ export const register: Register = on => {
   on('classic.TeammateIdle', async ($, e, next) => {
     const out = await next(e)
     if (out.block === undefined) await recordIdle($, e).catch(() => null)
+    return out
+  }).catch(($, e, next) => next(e))
+
+  // A subagent that ended closes any stall item open about it (`via: 'auto'`).
+  on('classic.SubagentStop', async ($, e, next) => {
+    const out = await next(e)
+    if (typeof e.agent_id === 'string' && e.agent_id !== '') await closeEndedStalls($, { ended: new Set([e.agent_id]) }).catch(() => 0)
     return out
   }).catch(($, e, next) => next(e))
 

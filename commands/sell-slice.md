@@ -33,6 +33,6 @@ The skill checks these inline at the start and raises a failed one as a question
 Run `/sell-slice` repeatedly, one fresh chat per slice, until every row in the master checklist is `[x]`. It is the careful, collaborative surface for sensitive or design-heavy work.
 
 - For **autonomous whole-pie baking** (the v5 forefront), use [`/sell-pie`](../skills/sell-pie/SKILL.md); a `review: continuous` pie drops back into `/sell-slice` per slice.
-- For the **whole roadmap** unattended, use [`/run-the-day`](../skills/run-the-day/SKILL.md) (experimental).
+- For the **whole app end to end** (one interview, then every pie with no further stops, one PR and a URL), use [`/pizza-party`](../skills/pizza-party/SKILL.md).
 - To **bolt new features onto an existing checklist**, use [`/special-order`](../skills/special-order/SKILL.md) (it feeds into `sell-slice`).
 - **Shipping** is [`/box-it-up`](../skills/box-it-up/SKILL.md)'s job; `/sell-slice` ends at "slice committed locally, ready for review."

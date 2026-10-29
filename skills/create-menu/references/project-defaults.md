@@ -2,16 +2,18 @@
 
 The canonical Phased stack. Apply these unless a PRD explicitly overrides in section 0.1.
 
+**No vendor is a default.** Hosting, database, auth, email, payments and every other third-party service are **whatever the operator has authorized**: the providers named in the brief, the plan-mode answers, or (under `run.unattended: true`) the order ticket's **Answers** at `docs/pizza-party/order.md`. The vendors named below are examples of each category, listed alphabetically, never a recommendation. When nothing names a provider for a service the app needs, write the category in the PRD and tag the provider `[TBD-ASSUMPTION]` (interactive) or record the pick under the ticket's "Decisions made without you" (unattended), preferring a local option (SQLite, local auth, console email) over an unauthorized vendor.
+
 ---
 
-## Architecture Conditional (Required — Read Before Section 4)
+## Architecture Conditional (Required: Read Before Section 4)
 
 The architecture default is conditional, not fixed. Evaluate based on project scope:
 
 | Project type | Default architecture |
 | --- | --- |
-| Marketing-only single site (no auth, no dashboard, no admin, no client portal) | Single Next.js app — NOT a monorepo |
-| Marketing + any authenticated experience (auth, admin, client dashboard, user portal — any combination) | Turborepo monorepo |
+| Marketing-only single site (no auth, no dashboard, no admin, no client portal) | Single Next.js app: NOT a monorepo |
+| Marketing + any authenticated experience (auth, admin, client dashboard, user portal: any combination) | Turborepo monorepo |
 
 If scope is unclear after reading the brief, surface this in the plan-mode question gate before generating Section 4.
 
@@ -22,7 +24,7 @@ If scope is unclear after reading the brief, surface this in the plan-mode quest
 | Layer | Default |
 | --- | --- |
 | Package management | pnpm |
-| Deployment | Vercel |
+| Deployment | The host the operator authorized (examples: Cloudflare, Fly, Netlify, Railway, Render, Vercel); none named means localhost |
 | Version control | GitHub (feature branches + PRs to `main`) |
 | Node runtime | Node.js LTS |
 
@@ -39,7 +41,7 @@ If scope is unclear after reading the brief, surface this in the plan-mode quest
 - Lucide Icons
 - shadcn/ui
 - Zod
-- Supabase JS client
+- The client library of the chosen database and auth providers (when the app has them)
 
 ## Dev Dependencies
 
@@ -53,12 +55,16 @@ If scope is unclear after reading the brief, surface this in the plan-mode quest
 
 ## 3rd Party Services
 
-| Service | Purpose |
-| --- | --- |
-| Supabase | Database (PostgreSQL), auth, storage, edge functions, RLS |
-| Stripe | Payments, subscriptions, Connect for marketplaces |
-| Resend | Transactional and auth email (with React Email components) |
-| Vercel | App hosting, preview deployments, edge runtime |
+Include a category only when the PRD needs it, and fill its provider from what the operator authorized (see the note at the top). Examples per category are alphabetical and not a recommendation.
+
+| Category | Examples | Local option when none is authorized |
+| --- | --- | --- |
+| Database | Neon, PlanetScale, Supabase, Turso, a self-hosted Postgres | SQLite file, or a local Postgres |
+| Auth | Auth.js, Better Auth, Clerk, Supabase Auth, WorkOS | Local session, or magic-link-to-console |
+| Email | Postmark, Resend, SendGrid, SES | Console logger |
+| Payments | Lemon Squeezy, Paddle, Stripe | None: defer the payment slices |
+| Hosting | Cloudflare, Fly, Netlify, Railway, Render, Vercel | Localhost |
+| File storage | Cloudflare R2, S3, Supabase Storage, UploadThing | Local filesystem (gitignored folder) |
 
 ---
 
@@ -68,8 +74,8 @@ Include only when the PRD calls for them.
 
 | Service | When to Use |
 | --- | --- |
-| Vercel AI SDK | Any LLM or generative AI feature |
-| Vercel AI Gateway | Routing and observability for multi-model LLM calls |
+| An AI SDK (examples: Anthropic SDK, OpenAI SDK, Vercel AI SDK) | Any LLM or generative AI feature |
+| An AI gateway (examples: Cloudflare AI Gateway, OpenRouter, Vercel AI Gateway) | Routing and observability for multi-model LLM calls |
 | Twilio | SMS, OTP, voice |
 | Storybook | Custom UI component libraries |
 | E2B | Sandboxed agent execution in MicroVMs |
@@ -77,6 +83,8 @@ Include only when the PRD calls for them.
 ---
 
 ## Environment Variable Conventions
+
+Naming conventions for the providers below apply only when the operator chose that provider. Any other provider follows its own documented names.
 
 ### Supabase (current naming, post-rename)
 
@@ -113,7 +121,7 @@ The legacy JWT-based `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_
 
 ## Token Category Contract
 
-Every project must define values for all applicable token categories before any UI work begins. This contract is enforced by the design-system gate (Stage 1). Categories list what must exist — actual values vary per project.
+Every project must define values for all applicable token categories before any UI work begins. This contract is enforced by the design-system gate (Stage 1). Categories list what must exist: actual values vary per project.
 
 | Category | Required tokens | Notes |
 | --- | --- | --- |
@@ -124,10 +132,10 @@ Every project must define values for all applicable token categories before any 
 | Charts | `--chart-1` through `--chart-5` minimum | Required when any data visualization is in scope |
 | Sidebar (if app shell) | `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-accent`, `--sidebar-border`, `--sidebar-ring` | Required only if project includes a sidebar shell |
 | Type families | `--font-sans`, `--font-serif`, `--font-mono`; optional `--font-display`, `--font-logo` | `--font-sans` always required |
-| Type scale | EITHER size tokens OR semantic tokens — must pick one and document the choice | Required; record which system is used |
+| Type scale | EITHER size tokens OR semantic tokens: must pick one and document the choice | Required; record which system is used |
 | Weights / leading / tracking | Scale documented | Required |
 | Radius | `--radius` plus `-sm/-md/-lg/-xl/-pill/-full` derivatives | Required |
-| Spacing | Scale documented (Tailwind default acceptable — record decision) | Required |
+| Spacing | Scale documented (Tailwind default acceptable: record decision) | Required |
 | Shadows | `--shadow-sm` through `--shadow-2xl` plus brand-specific | Required |
 | Motion | Duration scale + easing curves | Required for any animated UI |
 | Breakpoints | Documented | Required |
@@ -140,12 +148,12 @@ Design-system gate refuses to complete until all applicable categories are satis
 
 ## Architecture Conventions
 
-- All database tables have RLS policies enabled before launch
+- All database tables have row-level access control (RLS policies where the database supports them) before launch
 - Server actions for mutations; API routes only when serving external clients
 - Shared packages in monorepo for `ui`, `db`, `config`, `utils` (monorepo projects only)
 - Apps live under `apps/`, packages under `packages/` (monorepo projects only)
-- Migrations managed via Supabase CLI, committed to repo
-- Environment files: `.env.local` (dev), Vercel project envs (preview/staging/prod)
+- Migrations managed via the chosen database's tooling, committed to repo
+- Environment files: `.env.local` (dev), the chosen host's environment settings (preview/staging/prod)
 
 ## Testing Conventions
 
@@ -157,9 +165,9 @@ Design-system gate refuses to complete until all applicable categories are satis
 ## CI/CD Conventions
 
 - GitHub Actions for CI (lint, type check, test, build)
-- Vercel for CD (preview per PR, production on merge to `main`)
+- CD through the chosen host (preview per PR where the host supports it, production on merge to `main`)
 - Required PR checks before merge: passing CI, at least 1 review
-- Database migrations run manually via Supabase CLI before deploy
+- Database migrations run with the chosen database's tooling before deploy
 
 ## UX Defaults
 

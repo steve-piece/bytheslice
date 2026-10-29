@@ -29,6 +29,9 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
 
 ```jsonc
 {
+  // "block" (default) | "warn". See `enforcement` below.
+  "enforcement": "block",
+
   // Override per-agent model tier. Falls back to plugin defaults
   // documented in references/model-tier-guide.md.
   // Use the alias names: "haiku", "sonnet", "opus".
@@ -36,7 +39,7 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
     "implementer": "opus",
     "qualityReviewer": "opus",
     "specReviewer": "sonnet",
-    "discovery": "haiku",
+    "discovery": "opus",
     "sliceTester": "sonnet",      // v5, independent behavioral tester
     "sliceVerifier": "sonnet",    // v5, collapsed static-gate verifier
     "checklistCurator": "sonnet",
@@ -50,16 +53,19 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
     "compliancePreCheck": "sonnet",
     "envVerifier": "haiku",
     "prdReviewer": "sonnet",
-    "phasedPlanWriter": "sonnet",
-    "dbSchemaStageWriter": "sonnet",
-    "masterChecklistSynthesizer": "sonnet",
+    "phasedPlanWriter": "opus",
+    "dbSchemaStageWriter": "opus",
+    "masterChecklistSynthesizer": "opus",
+    "complexityAssessor": "opus",
+    "scaffoldDiscovery": "opus",
     "retrospectiveReviewer": "opus"
   },
 
   // Per-stage shape preferences for cook-pizzas + sell-slice.
   "stages": {
     "maxTasksPerStage": 6,            // hard cap per stage; default 6
-    "targetFeatureStages": "20-30"    // splitter aims for this band; "10-15" or "30-40" also reasonable
+    "targetFeatureStages": "20-30"    // unset or "20-30": a ceiling for large apps, never padding (a small brief gets few pies);
+                                      // any other band, e.g. "10-15" or "30-40", is an operator override the count must land in
   },
 
   // Verification knobs consumed by sell-slice's Workflow B (slice-tester +
@@ -89,8 +95,27 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
   // How finished slices reach main, plus the soft per-slice time budget.
   // Read by sell-pie, sell-slice and box-it-up.
   "delivery": {
-    "mode": "pie-pr",                 // "pie-pr" (default: one PR per pie via /box-it-up) | "merge-per-slice"
-    "sliceBudgetHours": 3             // soft wall-clock budget per slice; 0 = off
+    "mode": "pie-pr",                 // "pie-pr" (default: one PR per pie via /box-it-up) | "merge-per-slice" | "ship-once"
+    "sliceBudgetHours": 3,            // soft wall-clock budget per slice; 0 = off
+    "shipBranch": "ship/<repo dir>"   // ship-once only: the local branch every pie merges into
+  },
+
+  // How much test and CI scaffold /final-quality-check writes, and what the local gates run.
+  "quality": {
+    "tier": "standard"                // "standard" | "lean" | "auto"
+  },
+
+  // Shadcn-style UI registries searched before the stock shadcn registry. Empty = stock only.
+  "ui": {
+    "registries": [],                 // the operator's own: "@namespace" strings or { name, item, catalog?, theme?, notes? }
+    "registryFirst": true,
+    "useDirectory": true,             // also search the public shadcn registry directory
+    "directoryTop": 25                // how many of its healthy registries a search covers
+  },
+
+  // Nobody is watching: skills decide, record and continue instead of asking. /pizza-party sets it.
+  "run": {
+    "unattended": false
   },
 
   // Which MCPs the project has installed. Read by sell-slice (frontend pipeline),
@@ -137,19 +162,17 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
     "variant": "single-app",          // "single-app" | "monorepo"
     "stack": "nextjs",                // "nextjs" only in v2.1; more later
     "roadmapFile": "ROADMAP.local.md" // pass null to skip creating the roadmap file
-  },
-
-  // Run-pipeline behavior, periodic platform-walk checkpoints during
-  // autonomous multi-stage runs. Read by /bytheslice:run-the-day only.
-  "runPipeline": {
-    "platformWalkEvery": 5,    // 0 = disabled; positive int = dispatch /inspect-display every N completed stages
-    "haltOn": "broken",        // "broken" (default) | "drifted" | "never", when to pause for human review
-    "checkpointMode": "foreground" // "foreground" (default, visible in progress report) | "background" (logged only)
   }
 }
 ```
 
 ## Keys
+
+### `enforcement`
+
+`"block"` (the default when the key is absent or unreadable) or `"warn"`. Under `block`, the workflow guard hook (`hooks/workflow-guard.sh`) refuses a hand-written `docs/plans/stage_*.md` or a pie or slice heading added to the checklist outside `/special-order` and `/cook-pizzas`, a code-writing Agent call outside `/sell-slice`, `/sell-pie` and `/pizza-party`, and a `gh ... pr create` while a slice on the branch has no `slice-verifier` pass in the ledger; the Pass refuses a slice marked `[x]` with no verifier pass. Under `warn` each of those goes through with a warning. ByTheSlice's own skills and `bytheslice:*` agents are never refused.
+
+Only the operator sets `warn`, by editing this file by hand: the guard refuses an agent's edit that does it, and one that adds `BTS_ALLOW_BYPASS` or `BTS_HOOKS_DISABLED` to `.claude/settings*.json`. The one-session override is launching Claude Code with `BTS_ALLOW_BYPASS=1`, which turns every refusal into a warning. The key is also read from `~/.bytheslice/defaults.json` when the project file does not set it.
 
 ### `modelTiers`
 
@@ -165,7 +188,9 @@ Default `6`. Lower = more, smaller stages. Upper bound `8` (above this stages wo
 
 ### `stages.targetFeatureStages`
 
-Default `"20-30"`. The phased-plan splitter aims for a stage count in this band by tuning the split granularity. Smaller number = larger slices.
+Default `"20-30"`, read as a **ceiling for large apps, never a target to pad toward**. With the key unset (or at the default), `stage-decomposer` right-sizes the roadmap to the PRD: a small brief (a private single-user tool, a handful of Section 2 features) gets few pies and few slices, and a pie of a small app may hold 1 or 2 slices. No filler slices, no shell and data split for a feature one slice holds, no pie invented to fill a count; only a count over 30 is reported `over`.
+
+Set it to any other band (for example `"10-15"` or `"30-40"`) and it is an operator override: the splitter tunes its granularity until the count lands inside that band, and a count below it is reported `under`. Smaller numbers mean larger slices.
 
 ### `verification`
 
@@ -200,7 +225,46 @@ How a finished slice reaches `main`, and how long a slice may run before the con
   - `"merge-per-slice"` - each slice gets its own branch (`pie-N-sN.M-<scope>`) cut from fresh `origin/main` into its own worktree, then its own PR `Slice N.M: <name>`. The conductor waits for CI, runs up to 3 `ci-fix-attempter` rounds on red (still red after 3 halts the loop with a HITL; a slice is never skipped), merges on green with a **merge commit** (never squash), syncs `main` `--ff-only` from the primary checkout, deletes the branch locally and remotely, removes the slice worktree, prunes, and cuts the next slice from the fresh `main`. There is no per-slice merge approval; the operator gets one notice when the pie finishes. If the repo disallows merge commits (`gh repo view --json mergeCommitAllowed`), the loop halts and asks. There is never an integration branch.
   - **A run instruction wins for that run.** When the operator's run instruction explicitly asks for autonomous delivery (for example "merge each slice", "deliver it to main without me"), that run uses `"merge-per-slice"` even if the config says `"pie-pr"`; an instruction asking for one PR per pie likewise overrides a `"merge-per-slice"` config. Invoking `/sell-pie` on its own is not such an instruction.
   - **`review: continuous` pies always use `"pie-pr"`**, whatever this key or the run instruction says.
+  - `"ship-once"` - every gate is local and the app ships in one PR. One local ship branch (`shipBranch`) is cut from `origin/main`; each pie branches from it, its slices run the same Workflow and commit with no push, and `/box-it-up --pie-local` runs the full local check once and merges the pie into the ship branch with `--no-ff` (every slice commit kept, merge subject `merge(pie-N): ...`). After the last pie, `/box-it-up --ship` pushes the ship branch, opens one PR to `main` with every pie's evidence, runs CI once (up to 3 fix rounds) and merges on green with a merge commit. No human merge gate. A `review: continuous` pie bakes hands-off under ship-once. `/pizza-party` uses this mode.
+- **`shipBranch`** *(string, default `"ship/<primary checkout dir name>"`)* - the ship-once branch. Ignored by the other modes.
 - **`sliceBudgetHours`** *(number, default `3`; `0` = off)* - a soft wall-clock budget per slice, counting CI time and excluding time spent waiting on the operator. The slice's start time lives in the run log (`.claude/.bytheslice-state/run-log.md`). When the budget is hit, the conductor lets the current agent finish, then checks in with a `prd_ambiguity` HITL carrying progress, the blocker, and the options (extend, stop).
+
+### `quality`
+
+- **`tier`** *(string, default `"standard"`)* - how much scaffold `/final-quality-check` writes and what the local gates run.
+  - `"standard"` - the full line: CI, `@feature`, `@regression-core` and `@visual` E2E, coverage, design-system compliance, schema drift when a database exists.
+  - `"lean"` - lint, typecheck, unit tests, build and one `@smoke` Playwright spec (`test:e2e:smoke`); design-system compliance only when a design system exists. Pre-push and slice-verifier run the same set.
+  - `"auto"` - lean when the checklist has at most 3 feature pies and nothing touches payments, else standard. `/pizza-party` sets it.
+
+### `ui`
+
+Where the UI phase finds pre-built pages, blocks and components is [`ui-sources.md`](../../sell-slice/references/ui-sources.md): the operator's own registry preferences first, else the public shadcn registry directory (`https://ui.shadcn.com/r/registries.json`), then stock shadcn. `scripts/ui-sources.js` resolves the list.
+
+- **`registries`** *(array, default `[]`)* - the operator's own registries, searched in order before everything else, by `block-composer`, `component-crafter`, the implementer and `/set-display-case`. An entry is a namespace string (`"@magicui"`, any registry in the shadcn directory) or an object for a registry outside it: `name` (label), `catalog` (URL of a machine-readable catalog such as `llms.txt` or a registry meta JSON), `item` (install URL template with `{name}`), optional `theme` (an item installed first on a greenfield project, after which only its brand layer is set), optional `notes` (that registry's install rules). Installs use `yes n | npx shadcn@latest add "<item URL>" --yes`, never `--overwrite`. No registry is a plugin default; keep yours in `~/.bytheslice/defaults.json`:
+
+```jsonc
+{
+  "ui": {
+    "registries": [
+      {
+        "name": "my-kit",
+        "catalog": "https://ui.example.com/llms.txt",
+        "item": "https://ui.example.com/r/{name}.json",
+        "theme": "theme",
+        "notes": "Knob names in https://ui.example.com/registry-meta.json; add ns=mr when the host already has components/ui."
+      }
+    ]
+  }
+}
+```
+
+- **`registryFirst`** *(boolean, default `true` when `registries` is non-empty)* - `false` searches stock shadcn first and uses the registries for what it leaves.
+- **`useDirectory`** *(boolean, default `true`)* - also search the public shadcn registry directory: its healthy React registries (health 90 or more, 30 items or more), best ranked first. `false` keeps the search to the operator's registries and stock shadcn.
+- **`directoryTop`** *(int, default `25`)* - how many directory registries a search covers.
+
+### `run`
+
+- **`unattended`** *(boolean, default `false`)* - nobody is watching. Skills take recommended answers, record each one in the order ticket (`docs/pizza-party/order.md`) or the skill's own decisions section, and continue: no skill returns `needs_human`. A would-be blocker defers the slice instead (row stays `[ ]` with `Status: deferred: <reason>`; under ship-once its commits move to a local `deferred/pie-N-sN.M` branch) and the run returns `complete_with_deferrals`. Fix caps never rise, the workflow guard still refuses shortcuts, and destructive operations on shared resources the operator did not name are skipped. `/pizza-party` sets it together with `delivery.mode: "ship-once"`; in `/sell-pie` and `/box-it-up` it takes effect only under ship-once.
 
 ### `mcps`
 
@@ -222,24 +286,9 @@ URLs to external rule files (the same shape as elicitation Q9). When this array 
 
 Defaults for `/bytheslice:setup-shop`. When present, bootstrap skips its plan-mode question gate and uses these values directly. Useful for repeatable scaffolding (CI / templates).
 
-### `runPipeline`
-
-Controls periodic platform-walk checkpoints during autonomous multi-stage runs (`/bytheslice:run-the-day`). Each key is independent; set only what you want to override.
-
-- **`platformWalkEvery`** *(int, default `0` = disabled)*, dispatch `/bytheslice:inspect-display` every N completed stages. The walk runs **after** the per-stage gate checklist passes for stage N, so a failing gate halts the run before the walk would have run. Recommended values: `5` for 20-stage plans, `10` for plans where individual stages already include heavy per-slice review.
-- **`haltOn`** *(string, default `"broken"`)*, when the walk's `verdict` should pause the autonomous run:
-  - `"broken"` *(default)*, pause only when the walk reports `verdict: broken` (conversion flow or auth broken, or >25% of public routes 404/500). The orchestrator prompts the user with `hitl_category: prd_ambiguity` and the walk's top gaps.
-  - `"drifted"`: pause on `verdict: drifted` OR `broken`. Stricter; useful when shipping toward a UAT date.
-  - `"never"`: log the walk's findings in the progress report but never pause. Truly autonomous.
-- **`checkpointMode`** *(string, default `"foreground"`)*, `"foreground"` includes the walk's verdict + top 3 gaps in the per-stage Progress Report. `"background"` logs the report path silently and omits gap detail from the report unless `haltOn` fires.
-
-The walk is read-only by construction (it never edits code or pushes commits), so the run-the-day gate state is unaffected by checkpoint dispatch on its own. Only the `haltOn` rule influences whether the run advances.
-
-If `platformWalkEvery: 0` (the default), the entire checkpoint flow is a no-op; run-the-day behaves exactly as it did before this config existed.
-
 ## How the plugin reads this file
 
-At session start, every ByTheSlice skill checks for `bytheslice.config.json` at the project root, parses it as JSONC, and merges it with the precedence above. The orchestrator (`/bytheslice:run-the-day`) logs the resolved settings in its first message so the user sees what's in effect.
+At session start, every ByTheSlice skill checks for `bytheslice.config.json` at the project root, parses it as JSONC, and merges it with the precedence above. The conductor (`/sell-pie`, or `/pizza-party` for a whole app) logs any non-default settings in its first message so the user sees what's in effect.
 
 If the file is malformed JSON, the plugin halts with an HITL prompt asking the user to fix it (HITL category `prd_ambiguity`, the closest fit). It does NOT fall through to defaults silently; silent fallthrough on a config error would surprise users.
 

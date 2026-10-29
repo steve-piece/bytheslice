@@ -1,6 +1,6 @@
 {
   "name": "bytheslice",
-  "version": "5.7.0",
+  "version": "6.0.0",
   "private": false,
   "description": "A grab-and-go pizza shop for shipping software. Daily prep, slice-by-slice service, /goal-driven autonomous mode.",
   "bin": {
@@ -19,6 +19,8 @@
     "mod",
     "scripts/install",
     "scripts/ledger-summary.js",
+    "scripts/pizza-party.js",
+    "scripts/ui-sources.js",
     ".cursor-plugin",
     ".claude-plugin",
     "assets/brand",

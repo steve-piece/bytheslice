@@ -22,13 +22,13 @@ const PROJECT = `{
 }`
 
 test('the defaults cover every role with one tier each and the four context markers', () => {
-  expect(Object.keys(DEFAULT_ROLES)).toHaveLength(49)
+  expect(Object.keys(DEFAULT_ROLES)).toHaveLength(52)
   expect(Object.values(DEFAULT_ROLES).every(tiers => tiers.length === 1)).toBe(true)
   expect(DEFAULT_ROLES.implementer).toEqual(['opus'])
   expect(DEFAULT_ROLES['quality-reviewer']).toEqual(['opus'])
   expect(DEFAULT_ROLES['fix-attempter']).toEqual(['sonnet'])
   expect(DEFAULT_ROLES['slice-verifier']).toEqual(['sonnet'])
-  expect(DEFAULT_ROLES.discovery).toEqual(['haiku'])
+  expect(DEFAULT_ROLES.discovery).toEqual(['opus'])
   expect(DEFAULT_MARKERS).toEqual(['files_changed', 'diff --git', 'implementer returned', 'builder transcript'])
   expect(DEFAULT_POLICY).toMatchObject({ enabled: true, requireTester: 'ui-slices' })
 })
@@ -47,7 +47,7 @@ test('a project config overrides per role, replaces the markers and lists each c
     'roles.fix-attempter',
     'contextMarkers',
   ])
-  expect(read.overrides[1]).toEqual({ setting: 'roles.discovery', value: ['haiku', 'sonnet'], default: ['haiku'] })
+  expect(read.overrides[1]).toEqual({ setting: 'roles.discovery', value: ['haiku', 'sonnet'], default: ['opus'] })
 })
 
 test('a missing or malformed config gives the defaults; a malformed one says why', () => {
@@ -83,7 +83,7 @@ test('at session start the policy is read once and each override is recorded onc
     kind: 'policy-override',
     setting: 'roles.discovery',
     value: ['haiku', 'sonnet'],
-    default: ['haiku'],
+    default: ['opus'],
   })
   // A second session over the same ledger records nothing new.
   await start($)

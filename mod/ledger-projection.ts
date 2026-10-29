@@ -202,6 +202,8 @@ export function hitlOf(rows: readonly LedgerRow[]): PassHitl {
         source: data.source === 'pass' ? 'pass' : 'agent',
         asked: data.asked === 'pane' ? 'pane' : 'chat',
         kind: text(data.kind),
+        ...(text(data.aid) === null ? {} : { aid: text(data.aid) as string }),
+        sid: row.sid,
         pie: row.pie ?? null,
         slice: row.slice ?? null,
         t: row.t,

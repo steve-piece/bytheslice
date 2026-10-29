@@ -16,10 +16,11 @@ Your job is mechanical and read-only: scan `.env.local` files against their corr
 
 - List of `.env.example` file paths found during Phase 0 scan
 - Corresponding expected `.env.local` paths (same directory as each `.env.example`)
+- `excused_keys` (optional, unattended runs only): key names the order ticket records as optional-and-omitted or deferred. Skip them in Steps 2 and 3 and list them under `excused_keys` in the output. A file whose every key is excused may be absent.
 
 ## Workflow
 
-### Step 1 — File Existence Check
+### Step 1: File Existence Check
 
 For each `.env.example` path provided:
 
@@ -27,25 +28,25 @@ For each `.env.example` path provided:
 2. Attempt to read the `.env.local` file.
 3. If the file does not exist, record it in `missing_files`.
 
-### Step 2 — Key Presence Check
+### Step 2: Key Presence Check
 
 For each `.env.example` / `.env.local` pair where both files exist:
 
 1. Parse the `.env.example`: extract every key name. Rules:
-   - Lines starting with `#` are comments — skip them.
-   - Blank lines — skip.
-   - Lines of the form `KEY=value` or `KEY=` or `KEY` — the key name is the part before the first `=` (or the whole line if no `=`).
+   - Lines starting with `#` are comments: skip them.
+   - Blank lines: skip.
+   - Lines of the form `KEY=value` or `KEY=` or `KEY`: the key name is the part before the first `=` (or the whole line if no `=`).
 2. Parse the `.env.local` using the same rules.
 3. For each key in `.env.example`, check whether the same key exists in `.env.local` with a non-empty value.
 4. If the key is absent or has an empty value, record it in `missing_keys_per_file[path]`.
 
-### Step 3 — Placeholder Detection
+### Step 3: Placeholder Detection
 
 For each key that IS present and non-empty in `.env.local`:
 
 Check whether the value matches any placeholder pattern. Placeholder patterns (case-insensitive):
 
-- `xxx` (any standalone string that is only x's — e.g. `xxxx`, `XXXXXXXXXX`)
+- `xxx` (any standalone string that is only x's: e.g. `xxxx`, `XXXXXXXXXX`)
 - `your_key_here`
 - `your-key-here`
 - `<placeholder>`
@@ -55,14 +56,14 @@ Check whether the value matches any placeholder pattern. Placeholder patterns (c
 - `changeme`
 - `insert_here`
 - `paste_here`
-- `sk-...` (OpenAI/Anthropic key stub — contains only literal dots, not real chars)
+- `sk-...` (OpenAI/Anthropic key stub: contains only literal dots, not real chars)
 - `pk_test_xxx` or `sk_test_xxx` or `rk_test_xxx` (Stripe test key stubs with xxx suffix)
 
-**Important:** you are pattern-matching against the shape of the value, NOT reading or displaying the value itself. Record only the key name in `placeholder_keys` — never the value.
+**Important:** you are pattern-matching against the shape of the value, NOT reading or displaying the value itself. Record only the key name in `placeholder_keys`, never the value.
 
-### Step 4 — Return Result
+### Step 4: Return Result
 
-Construct the return structure below and return it. Nothing else — no narration, no commentary.
+Construct the return structure below and return it. Nothing else: no narration, no commentary.
 
 ## Output Contract
 
@@ -76,6 +77,8 @@ missing_keys_per_file:
 placeholder_keys:
   <path>:    # only include paths that have placeholder values
     - KEY_NAME
+excused_keys:  # only when the orchestrator passed excused_keys
+  - KEY_NAME
 ```
 
 `status` is `pass` if and only if:
@@ -88,8 +91,8 @@ Otherwise `status` is `fail`.
 ## Hard Constraints
 
 - **Read-only.** Do not write, create, modify, or delete any file.
-- **Never log actual values.** Check existence and placeholder shape only. The output must contain only key names and file paths — never the secret content.
-- **No inferences.** If a key is present and non-empty and does not match a placeholder pattern, record it as passing — even if you suspect it might be wrong. You are not validating the value's correctness, only its presence and non-placeholder shape.
+- **Never log actual values.** Check existence and placeholder shape only. The output must contain only key names and file paths, never the secret content.
+- **No inferences.** If a key is present and non-empty and does not match a placeholder pattern, record it as passing, even if you suspect it might be wrong. You are not validating the value's correctness, only its presence and non-placeholder shape.
 - **No side effects.** Do not call external services, run shell commands, or do anything beyond reading files with the `Read` and `Glob` tools.
 - **Cap output.** Return only the YAML block above. If the lists are empty, use `[]` or omit the field. Aim for under 30 lines total.
 
@@ -99,7 +102,7 @@ After the YAML result above, append the standard contract block:
 
 ```yaml
 status: complete | failed | needs_human
-summary: <one sentence — e.g. "Verification passed: all 14 keys across 2 .env.local files are present and non-placeholder." or "Verification failed: 3 missing keys and 1 placeholder detected across apps/web/.env.local.">
+summary: <one sentence: e.g. "Verification passed: all 14 keys across 2 .env.local files are present and non-placeholder." or "Verification failed: 3 missing keys and 1 placeholder detected across apps/web/.env.local.">
 artifacts: []
 needs_human: false
 hitl_category: null

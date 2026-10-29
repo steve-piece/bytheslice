@@ -1,5 +1,5 @@
 // mod/checks-checklist.ts
-// Pass checks on typed tool input that warn and never block: a slice marked [x] without a verdict, a push of an unverified done slice, a plan write during sell-slice.
+// Pass checks on typed tool input: a slice marked [x] with no verifier pass (refused under enforcement block, else a warning), a push of an unverified done slice, a plan write during sell-slice.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
@@ -162,11 +162,14 @@ export function judgeFlips(flips: readonly Flip[], view: CheckboxView): Finding[
   for (const flip of flips) {
     const slice = findSlice(view.ledger, flip.id)
     if (!verifiedAt(slice, view.head)) {
+      // No pass at all refuses under enforcement block; a pass at another HEAD only warns.
+      const passed = latest(slice, 'slice-verifier')?.overall === 'pass'
       findings.push({
         code: 'checkbox-without-verdict',
         slice: flip.id,
         key: flip.id,
-        text: `Slice ${flip.id} was marked [x] ${verdictReason(slice, view.head)}. The edit went through; run slice-verifier at HEAD before marking a slice done.`,
+        text: `Slice ${flip.id} was marked [x] ${verdictReason(slice, view.head)}. Run slice-verifier at HEAD (through /sell-slice or /sell-pie) before marking a slice done.`,
+        ...(passed ? {} : { deny: true }),
       })
     }
     const type = flip.type ?? typeOf(view.checklist, flip.id)

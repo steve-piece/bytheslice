@@ -12,7 +12,7 @@ triggers: ["/bytheslice:special-order", "/special-order", "custom order", "off-m
 
 # Special Order: Add Features Mid-Flight
 
-Bolt new features onto an existing project without restarting from a fresh PRD. Used after `/bytheslice:run-the-day` has already shipped the original plan, OR for adding ByTheSlice to an existing non-ByTheSlice project.
+Bolt new features onto an existing project without restarting from a fresh PRD. Used after the original plan has shipped (through `/bytheslice:sell-pie`, `/bytheslice:sell-slice` or `/bytheslice:pizza-party`), OR for adding ByTheSlice to an existing non-ByTheSlice project. `/bytheslice:pizza-party` also runs it mid-build to replan a slice that used up its fix loops into smaller slices.
 
 The flow auto-detects which state the project is in and either runs the addition flow directly or redirects you to the right entry point first.
 
@@ -39,8 +39,8 @@ There is no standalone "produce a feature spec without a checklist" mode; that w
 
 | When | File | Model | Effort |
 |---|---|---|---|
-| Step 1 (always) | [`agents/complexity-assessor.md`](agents/complexity-assessor.md) | `sonnet` | medium |
-| Step 2 (always) | [`../cook-pizzas/agents/phased-plan-writer.md`](../cook-pizzas/agents/phased-plan-writer.md) | `sonnet` | medium |
+| Step 1 (always) | [`agents/complexity-assessor.md`](agents/complexity-assessor.md) | `opus` | medium |
+| Step 2 (always) | [`../cook-pizzas/agents/phased-plan-writer.md`](../cook-pizzas/agents/phased-plan-writer.md) | `opus` | medium |
 
 `phased-plan-writer` runs in **incremental mode** for this skill (no PRD context, receives the user's feature description + complexity-assessor output + existing-stages context directly). See its incremental-mode block.
 
@@ -205,7 +205,7 @@ Use the same checklist row format as the existing stages in the file. Do NOT alt
 > **Next steps (pick one):**
 > - **Ship the plan changes as a chore PR first** (recommended for clean separation): run `/bytheslice:box-it-up`. The plan-only PR opens, CI runs (lint / link-check on the new files), you approve merge, the chore branch is cleaned up. Then start a fresh chat and run `/bytheslice:sell-slice` to ship the first new stage.
 > - **Skip the chore PR, start delivery immediately**: switch back to `main` (`git checkout main`), then run `/bytheslice:sell-slice`. The first slice's PR will mix the new plan files with the implementation.
-> - **Multi-stage autonomous delivery (experimental)**: `/bytheslice:run-the-day` drives every new stage end-to-end with per-stage approval pauses. Best for batches you want shipped without per-stage babysitting.
+> - **Multi-stage autonomous delivery**: `/bytheslice:sell-pie` bakes every new stage of the pie end to end in one run (build, test, verify, fix per slice) and stops at the pie boundary for one PR. Best for batches you want shipped without per-stage babysitting.
 >
 > All new stages run the tiered gates: tier 1 while coding, tier 2 (the slice's own tests, build, DB tests when the schema changes) before each commit, tier 3 (`slice-verifier`, the full local suite) once at slice end, and the full CI suite (`@feature` + `@regression-core` + `@visual` + design-system-compliance + db-schema-drift if applicable) once at the PR (tier 4). Visual + design-system-compliance gates require the project to have already run `/bytheslice:final-quality-check`: if absent, the orchestrator will surface that and ask whether to scaffold first.
 
@@ -288,7 +288,7 @@ Then return.
 - [ ] (Path A only) phased-plan-writer dispatched once per new stage (incremental mode)
 - [ ] (Path A only) Master checklist updated with new stage rows (existing rows untouched)
 - [ ] (Path A only) New plan files + master-checklist update committed on a `chore/add-stages-<lo>-<hi>` branch (no push, no PR, handed off to `/bytheslice:box-it-up`)
-- [ ] (Path A only) Handoff message printed with the three next-step options (`/box-it-up` for plan-only chore PR / direct `/sell-slice` / `/run-the-day` for batch)
+- [ ] (Path A only) Handoff message printed with the three next-step options (`/box-it-up` for plan-only chore PR / direct `/sell-slice` / `/sell-pie` for batch)
 - [ ] (Path B only) HITL bubble surfaced; user redirected to /bytheslice:setup-shop
 - [ ] (Path C only) HITL bubble surfaced; user redirected to /bytheslice:setup-shop for bootstrap
 

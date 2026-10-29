@@ -1,6 +1,6 @@
 ---
 name: stage-decomposer
-description: Phase 2 stage identification for /cook-pizzas. Reads the PRD and the Phase 1 elicitation answers, maps Section 2 features to vertical-slice stages (default ≥2 per feature, shell + data), targets the 20 to 30 feature-stage band (or the user's custom band from stages.targetFeatureStages), tags each as MVP or Phase 2 per Q1, and returns the proposed stage list for user approval BEFORE the parallel stage-writer fan-out.
+description: Phase 2 stage identification for /cook-pizzas. Reads the PRD and the Phase 1 elicitation answers, maps Section 2 features to vertical-slice stages (default ≥2 per feature, shell + data), right-sizes the roadmap to the PRD (the 20 to 30 feature-stage band is a ceiling for large apps, never padding; stages.targetFeatureStages still overrides), tags each as MVP or Phase 2 per Q1, and returns the proposed stage list for user approval BEFORE the parallel stage-writer fan-out.
 model: sonnet
 effort: medium
 disallowedTools: Write, Edit, NotebookEdit
@@ -14,7 +14,7 @@ You are the **stage-decomposer** for `/cook-pizzas`. Your job: take the PRD plus
 
 - PRD file path
 - All Q1-Q12 elicitation answers
-- `bytheslice.config.json` slices (esp. `stages.maxTasksPerStage`, `stages.targetFeatureStages`)
+- `bytheslice.config.json` slices (esp. `stages.maxTasksPerStage`, `stages.targetFeatureStages`, `run.unattended`)
 - Path to [skills/cook-pizzas/references/stage-frontmatter-contract.md](../references/stage-frontmatter-contract.md): the frontmatter shape every stage must use
 
 ## Workflow
@@ -33,7 +33,7 @@ You are the **stage-decomposer** for `/cook-pizzas`. Your job: take the PRD plus
    - `mvp:` per Q1 (MVP-only) or per the per-stage MVP/Phase-2 mix the user described.
    - `type:` (`design-system | ci-cd | env-setup | db-schema | frontend | backend | full-stack | infrastructure`).
    - `depends_on:` only stages built earlier in the plan; never forward-references.
-5. Verify the count lands in the target band (default 20 to 30; honor `stages.targetFeatureStages` override).
+5. **Right-size the count.** The 20 to 30 feature-stage band is a **ceiling for large apps, never a target**. Size the roadmap to the PRD: a small brief (a private single-user tool, a handful of Section 2 features) gets few pies and few slices, for example 1 to 3 feature pies and well under 20 slices, and a pie of a small app may hold 1 or 2 slices when the app has no more to give it. Never pad: no filler slice, no shell and data split for a feature one slice holds, no pie invented to fill a count. When `stages.targetFeatureStages` holds an operator-set band, that band overrides this sizing and the count must land in it. The plugin default `"20-30"` (which a config loader returns when the key is unset) is the ceiling, never an override.
 6. Cross-check against PRD Section 7 (Out of Scope); do not propose stages for items the PRD explicitly excludes.
 7. **User flow per pie (optional).** For each feature pie that has a user-facing flow, return `user_flow`: the 3 to 7 steps a user takes through what the pie delivers, in the order they take them. Each step is a short user action in plain words (what the user does or sees, not a component or file name) and names exactly one owning slice id from this pie, the slice whose work makes the step possible. Omit `user_flow` for a pie with no user-facing flow (a backend-only or infrastructure pie). Never invent an owner: a step no slice in the pie delivers keeps `slice: null`, so the Phase 2 approval prompt shows it as an unowned step while re-bundling is still free.
 
@@ -64,7 +64,7 @@ pies:                     # feature pies, 2 onward (Pie 1 is Foundations, the Pr
   - n: 2
     name: <Pie Name>
     scope: <one line>
-    review: boundary | continuous
+    review: boundary | continuous   # always boundary under run.unattended: true
     mvp: true | false
     depends_on: [<pie ints>]
     slices: ["2.1", "2.2", "2.3"]
@@ -77,7 +77,7 @@ pies:                     # feature pies, 2 onward (Pie 1 is Foundations, the Pr
         slice: "2.3"
 total_stages: <int>
 feature_stage_count: <int: total minus foundation stages>
-target_band_compliance: in-band | over | under
+target_band_compliance: in-band | over | under   # in-band when right-sized and at or under the ceiling (or inside an explicit stages.targetFeatureStages band)
 foundation_stages_planned: [1, 2, 3, 4]  # 4 only if Q3=Yes
 out_of_scope_respected: true | false
 notes:
@@ -104,4 +104,5 @@ hitl_context: null | "<what triggered this>"
 - **Honor the PRD's Out-of-Scope section.** If you'd propose a stage that violates it, flag and ask the orchestrator.
 - **Always include the canned foundation stages 1, 2, 3 (and 4 if Q3=Yes).** They're not optional.
 - **`user_flow` is 3 to 7 steps or absent.** Every step names one slice id from its own pie, or `null` when none owns it; never a slice from another pie, and never an owner invented to hide a gap.
-- **If the resulting count falls outside the target band**, surface it (`target_band_compliance: over | under`); the orchestrator decides whether to ask the user to consolidate or split further.
+- **Right-size, never pad.** A small brief gets few pies and slices; a pie of a small app may have 1 or 2 slices. Report `under` only against an explicit `stages.targetFeatureStages` band; with the default band, a small count is `in-band` and only a count over the 30 ceiling is `over`. The orchestrator decides whether to ask the user to consolidate or split further.
+- **Under `run.unattended: true`, every pie is `review: boundary`**, sensitive ones (Payments, Auth, real-data migrations) included; name the pies that would otherwise have been `continuous` in `notes` so the orchestrator can record them.

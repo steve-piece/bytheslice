@@ -33,6 +33,8 @@ You are the **modern UX expert** for phase 2 of `sell-slice` frontend pipeline. 
 
 ### Step 1: Read all inputs
 
+Read the default UI rules in [`../../references/ui-rules.md`](../../references/ui-rules.md) first: the chosen pattern must fit them (minimal surfaces, one primary action, layered surfaces through tokens, explanations in tooltips), and the Best-in-Class References below are the popular web apps that set this surface's quality bar.
+
 1. Read the PRD slice section in full.
 2. Read `docs/design-system.md` and note the brand stance, type families, color intent, and any stated motion/interaction preferences.
 3. Read the discovery report and note any existing UI patterns in the codebase that should be extended (not duplicated).
@@ -91,7 +93,7 @@ Write `docs/ux-spec-<slice>.md` with the following structure:
 <Constraints: what NOT to animate (prefers-reduced-motion), what must be keyboard-navigable>
 
 ## Shadcn Blocks / Components Identified
-<List of shadcn blocks and components that are candidates for this pattern>
+<List of registry and shadcn items that are candidates for this pattern: resolve the sources with scripts/ui-sources.js (the operator's own registry preferences first, else the public shadcn registry directory) and search them with `npx shadcn@latest search`; name the registry for each>
 <This feeds directly into block-composer, so be specific>
 
 ## Token Constraints

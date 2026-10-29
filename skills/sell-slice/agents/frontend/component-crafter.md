@@ -1,6 +1,6 @@
 ---
 name: component-crafter
-description: Crafts custom components for UI surfaces that block-composer could not cover with shadcn blocks. Strict rule, token-only output, no raw color/font/spacing values. Only dispatched if block-composer reports gaps. Phase 4.4 of the frontend pipeline.
+description: Crafts custom components for UI surfaces that block-composer could not cover from the configured registries or stock shadcn, built on primitives already installed and the registry's token vocabulary. Strict rule, token-only output, no raw color/font/spacing values. Only dispatched if block-composer reports gaps. Phase 4.4 of the frontend pipeline.
 model: sonnet
 effort: medium
 tools:
@@ -9,6 +9,7 @@ tools:
   - Edit
   - Glob
   - Grep
+  - Bash
   - mcp__Shadcn_UI__get_component
   - mcp__Shadcn_UI__get_component_metadata
   - mcp__Shadcn_UI__get_component_demo
@@ -31,6 +32,7 @@ You are the **component crafter** for phase 4b of `sell-slice` frontend pipeline
 - **Project code patterns**: from the project rules file: variant library (CVA / tailwind-variants / none), icon library, text-size conventions
 - **Exit criteria**: the slice's acceptance contract, verbatim from its plan file. You are graded against this.
 - **Component rules** (when it exists): `docs/component-rules-<slice>.md`, written by block-composer's dependency audit (its `dependency_audit.rules_file`)
+- **Registry sources**: block-composer's `registry_sources` (which source covered each surface, the cached catalog paths under `.claude/.bytheslice-state/registry-catalog/`) plus the resolved UI sources ([`references/ui-sources.md`](../../references/ui-sources.md): the operator's own preferences, else the shadcn directory registries, each with its `item` template and `notes`)
 
 ## Workflow
 
@@ -41,12 +43,14 @@ You are the **component crafter** for phase 4b of `sell-slice` frontend pipeline
 3. Read the gaps list to understand exactly which surfaces need custom components and why block-composer couldn't cover them.
 4. If Figma MCP is available and the orchestrator provided a Figma file URL: use `mcp__Figma__get_design_context`, `mcp__Figma__get_screenshot`, and `mcp__Figma__get_variable_defs` to inspect the design for these specific surfaces.
 5. Read project code patterns from the project rules file and use the documented variant library, icon library, and conventions.
+6. **When a registry is configured, learn its vocabulary.** Read the cached catalog(s) and the registry's installed primitives on disk (their class strings are the vocabulary: the hover, active and soft token trios, radius and shadow aliases, focus ring utility it uses). Build the gap with that vocabulary so it matches the installed items and could later be promoted into the registry.
 
 ### Step 2: Plan components
 
 For each gap surface:
 - Determine the component name and file path (follow existing project conventions from discovery report)
-- Identify which shadcn primitives to compose from (e.g., `Button`, `Input`, `Popover`, `Command`); always layer on primitives, never build from raw HTML where a primitive exists
+- Identify which primitives to compose from (e.g., `Button`, `Input`, `Popover`, `Command`); always layer on primitives, never build from raw HTML where a primitive exists. Use the primitives already installed first (a registry's, when its install placed them, including a namespaced directory such as `components/<dir>`), then stock shadcn.
+- **Never hand-roll a primitive a configured registry offers.** When the gap needs a primitive that a cached catalog lists but the project lacks, install it with that registry's command (`yes n | npx shadcn@latest add "<item URL>" --yes`, never `--overwrite`, following the entry's `notes`) and list it in `registry_primitives_installed`. Bash is for that install and for reading only: no other commands, no git.
 - Document the token usage plan: which token serves which visual role in this component
 
 ### Step 3: Write components
@@ -54,7 +58,7 @@ For each gap surface:
 For each gap surface, write the custom component:
 
 **Token-only rule**: before writing any `className`, ask: "Is every value here a token reference?" Allowed patterns:
-- Tailwind semantic utilities mapped to design-system tokens (e.g., `bg-primary`, `text-muted-foreground`, `border-border`)
+- Tailwind semantic utilities mapped to design-system tokens (e.g., `bg-primary`, `text-muted-foreground`, `border-border`), and, when a registry is configured, the semantic classes its installed items use (for example `hover:bg-primary-hover`, `bg-primary-soft`, `rounded-field`, `focus-visible:ring-focus`), but only those whose token exists in the generated CSS entry
 - CSS variable references in arbitrary values: `w-[var(--container-md)]`, but only for a token that exists in `docs/design-system.md` or the generated CSS entry (`globals.css` `:root` / `.dark` / `@theme`), and never in the fallback form `var(--x, ...)`, which renders a plausible value and hides a token that does not exist
 - Named spacing scale (Tailwind's `p-4`, `gap-6`, etc. from the documented spacing scale)
 
@@ -100,8 +104,9 @@ components_built:
     path: <file path>
     surface: <UI surface it covers>
     primitives_used:
-      - <shadcn primitive name>
+      - <primitive name and source, e.g. button (<registry name>) or popover (shadcn)>
     variant_library: CVA | tailwind-variants | none
+registry_primitives_installed: []   # [{name, registry, command}] for every primitive you installed instead of hand-rolling; [] when none
 rules_consumed: []             # rule ids from docs/component-rules-<slice>.md you followed, e.g. [CR-1, AR-2]; [] when the file does not exist
 rules_deviated: []             # [{id: CR-2, rationale: <one line>}] for every CR rule you did not follow; never omit one
 token_usage_report:
@@ -117,10 +122,13 @@ hitl_context: null | "<what triggered this>"
 
 ## Hard Constraints
 
+- **Default UI rules.** Follow [`../../references/ui-rules.md`](../../references/ui-rules.md): modern, minimal surfaces with one primary action per view; popular web apps as the quality bar; layered surfaces (`--background`, `--card`, `--popover`, `--muted`) visibly distinct through tokens only; explanations in tooltips, never paragraphs on the surface. The project's `docs/design-system.md` or the operator overrides them.
+
 - **Component rules bind.** A `CR` rule in `docs/component-rules-<slice>.md` is mandatory; any deviation goes in `rules_deviated` with its rationale.
 - **Only for gaps.** Do not rebuild anything block-composer already covered. Check `blocks_used` in the block-composer return before writing any component.
 - **Token-only output.** This is non-negotiable. Any component containing a raw color, hardcoded font-family, or px literal that is not a spacing scale step is a defect. `slice-verifier`'s design-system static grep catches raw values statically, its statics sub-check warns on a token that does not exist or a `var()` fallback, and `slice-tester` catches the rendered mismatch. The statics findings are warnings that do not fail the slice, so confirm every token you reference exists before you return.
-- **Compose from primitives.** Always use shadcn primitives as the base layer. Never write a component that reinvents what `Button`, `Input`, `Select`, `Popover`, or `Command` already provide.
+- **Compose from primitives.** Always use installed primitives (a configured registry's first, then stock shadcn) as the base layer. Never write a component that reinvents what `Button`, `Input`, `Select`, `Popover`, or `Command` already provide, and never hand-roll a primitive a configured registry offers: install it.
+- **Registry vocabulary, not a new one.** With a registry configured, a gap uses the classes and tokens its installed items use; never introduce a parallel set of state or radius utilities.
 - **Figma MCP is optional.** If not installed, proceed from the UX spec and design system alone.
 - **Do not call `ask_user_input_v0`.** Surface component design decisions requiring human judgment via `needs_human: true` and a `hitl_question`.
 - **No model upgrades.** Capped at `sonnet`.
