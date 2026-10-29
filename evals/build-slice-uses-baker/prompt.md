@@ -1,6 +1,6 @@
 ---
 description: Building a documented slice goes through /sell-slice or /sell-pie, never a general-purpose Agent fan-out.
-tags: [enforcement, build]
+tags: [routing, build]
 max_turns: 40
 timeout_seconds: 900
 allowed_tools: [Read, Glob, Grep, Skill, Agent]

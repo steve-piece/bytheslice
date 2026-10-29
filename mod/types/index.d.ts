@@ -137,7 +137,7 @@ export type PassPieView = {
   ciFixLoop: number
 }
 
-/** One warning a Pass check raised, as the ledger's `warn` rows keep it; a refusal under enforcement block is one too, marked `blocked`. */
+/** One warning a Pass check raised, as the ledger's `warn` rows keep it. */
 export type PassFinding = { code: string; slice: string | null; text: string; t: number }
 
 /** A slice where the checklist and the ledger disagree. Facts to read, never a refusal. */
@@ -214,17 +214,7 @@ export type PassPolicy = {
   contextMarkers: string[]
   /** The stall watchdog's thresholds. */
   watchdog: PassWatchdog
-  /**
-   * `block` (the default) refuses an edit that marks a slice `[x]` with no
-   * slice-verifier pass; `warn` lets it through with a warning. Top-level
-   * `enforcement` in bytheslice.config.json, the key the workflow guard hook reads.
-   */
-  enforcement?: PassEnforcement
-  /** True when the session was launched with BTS_ALLOW_BYPASS=1: every refusal is a warning. */
-  bypass?: boolean
 }
-
-export type PassEnforcement = 'block' | 'warn'
 
 /**
  * When an agent loop last showed activity (a tool call or a turn start), when

@@ -1,6 +1,6 @@
 ---
 name: rules-assembler
-description: Assembles the project rules file (CLAUDE.md or AGENTS.md per Q12) for /cook-pizzas. Layers content in the canonical precedence order, ByTheSlice baseline (highest), project-specific imports from Q9, design-system rules block (added later by /set-display-case), external rule files (lowest). Reads architecture-conventions.md to inject the matching Variant A or B section, and the Supabase security baseline if Q4 = Supabase + Q5 = Yes. Writes the file with a clear precedence header and section markers, and always writes the enforced Feature intake block through hooks/workflow-guard.js intake.
+description: Assembles the project rules file (CLAUDE.md or AGENTS.md per Q12) for /cook-pizzas. Layers content in the canonical precedence order, ByTheSlice baseline (highest), project-specific imports from Q9, design-system rules block (added later by /set-display-case), external rule files (lowest). Reads architecture-conventions.md to inject the matching Variant A or B section, and the Supabase security baseline if Q4 = Supabase + Q5 = Yes. Writes the file with a clear precedence header and section markers, and always writes the Feature intake block through hooks/workflow-nudge.js intake.
 model: sonnet
 effort: medium
 ---
@@ -46,9 +46,9 @@ You are the **rules-assembler** for `/cook-pizzas`. Your job: produce a clean, l
    - Append the Q9 imports (each as its own subsection).
    - Each import is fetched via web fetch if URL, or read if local path.
 
-   **Section: Feature intake (enforced)**
-   - Run `node "${CLAUDE_PLUGIN_ROOT}/hooks/workflow-guard.js" intake "<project root>"` once the file exists. It copies the block from [skills/setup-shop/references/feature-intake.md](../../setup-shop/references/feature-intake.md) between its `<!-- bytheslice:feature-intake:start -->` and `:end -->` markers, replacing an older copy and touching nothing else. Never paraphrase or hand-write the block: that file is its one source.
-   - The block routes every new feature, requirement or multi-file fix through `/special-order`, builds documented slices only through `/sell-slice` or `/sell-pie`, and allows no PR for slice work without a `slice-verifier` pass in the ledger.
+   **Section: Feature intake**
+   - Run `node "${CLAUDE_PLUGIN_ROOT}/hooks/workflow-nudge.js" intake "<project root>"` once the file exists. It copies the block from [skills/setup-shop/references/feature-intake.md](../../setup-shop/references/feature-intake.md) between its `<!-- bytheslice:feature-intake:start -->` and `:end -->` markers, replacing an older copy and touching nothing else. Never paraphrase or hand-write the block: that file is its one source.
+   - The block routes every new feature, requirement or multi-file fix through `/special-order`, builds documented slices through `/sell-slice` or `/sell-pie`, and expects no PR for slice work without a `slice-verifier` pass in the ledger.
 
    **Placeholder section for design-system rules**
    - Empty section labeled "Design System Rules — populated by `set-display-case`". This anchor is what `set-display-case` later fills.
@@ -67,7 +67,7 @@ sections_written:
   - architecture_baseline_variant_<a|b>
   - supabase_security_baseline   # only if applicable
   - bytheslice_workflow_notes
-  - feature_intake               # always; written by workflow-guard.js intake
+  - feature_intake               # always; written by workflow-nudge.js intake
   - project_specific_imports     # one entry per Q9 URL
   - design_system_placeholder
   - ci_cd_operational_placeholder

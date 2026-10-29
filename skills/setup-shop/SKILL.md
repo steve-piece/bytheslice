@@ -78,7 +78,7 @@ If the user explicitly asks for first-time install (e.g. "configure my ByTheSlic
 
 **Step 3: CI/CD Baseline Check (REQUIRED, but the SCAFFOLD action is optional).** See [Step 3](#step-3-cicd-baseline-check-flow-b-and-flow-c-only-skipped-in-flow-a) below. Detects whether the baseline exists; offers to scaffold via `/bytheslice:final-quality-check` if not.
 
-**Step 4: Feature intake and enforcement (REQUIRED).** See [Step 4](#step-4-feature-intake-and-enforcement-flow-b-and-flow-c-only) below. Writes the Feature intake rule into the project rules file and confirms the workflow guard is active.
+**Step 4: Feature intake (REQUIRED).** See [Step 4](#step-4-feature-intake-flow-b-and-flow-c-only) below. Writes the Feature intake rule into the project rules file and confirms the workflow nudge is wired.
 
 ---
 
@@ -300,25 +300,25 @@ If "No": warn the user and continue:
 
 If the user chose "No": create a sentinel file `.bytheslice/.skip-ci-cd` so future `/bytheslice:setup-shop` runs skip Q-ci-cd-baseline.
 
-## Step 4: Feature intake and enforcement (Flow B and Flow C only)
+## Step 4: Feature intake (Flow B and Flow C only)
 
-Every ByTheSlice project routes new work through the framework: new features are documented with `/special-order` and built with `/sell-slice` or `/sell-pie`. This step writes that rule where every agent reads it and confirms the hook that enforces it.
+Every ByTheSlice project routes new work through the framework: new features are documented with `/special-order` and built with `/sell-slice` or `/sell-pie`. This step writes that rule where every agent reads it and confirms the prompt hook that repeats it.
 
 1. Write the Feature intake block into the project rules file (`CLAUDE.md`, or `AGENTS.md` when it is the only one; a missing `CLAUDE.md` is created). The text lives in [references/feature-intake.md](references/feature-intake.md); the script replaces an older copy between its markers and leaves every other line alone:
 
    ```sh
-   node "${CLAUDE_PLUGIN_ROOT}/hooks/workflow-guard.js" intake "<project-root>"
+   node "${CLAUDE_PLUGIN_ROOT}/hooks/workflow-nudge.js" intake "<project-root>"
    ```
 
-2. Report the guard's state:
+2. Report its state:
 
    ```sh
-   node "${CLAUDE_PLUGIN_ROOT}/hooks/workflow-guard.js" doctor "<project-root>"
+   node "${CLAUDE_PLUGIN_ROOT}/hooks/workflow-nudge.js" doctor "<project-root>"
    ```
 
-   Expect `Feature intake: present in CLAUDE.md`, `Enforcement: block (default)` (or the config's value) and `Hooks: workflow guard active on ...`. Print the lines as they come. When the hooks read off or not wired, say so; this skill never turns them back on or off.
+   Expect `Feature intake: present in CLAUDE.md` and `Hooks: workflow nudge active on UserPromptSubmit ...`. Print the lines as they come. When the hooks read off or not wired, say so; this skill never turns them back on or off.
 
-Enforcement is `block` by default: a hand-written stage file or checklist heading, a code-writing Agent call outside `/sell-slice` and `/sell-pie`, and a PR carrying a slice with no `slice-verifier` pass are refused, and a slice marked `[x]` with no verifier pass is refused by the Pass. Only the operator loosens it, with `"enforcement": "warn"` in `bytheslice.config.json` (set by hand) or a relaunch with `BTS_ALLOW_BYPASS=1`. Never write either on the operator's behalf; when they ask for `warn`, tell them the line to add.
+Nothing refuses a shortcut: the rule and the nudge inform the model, and the Pass warns when a slice is marked `[x]` with no verifier pass.
 
 ## Next-step pointer
 

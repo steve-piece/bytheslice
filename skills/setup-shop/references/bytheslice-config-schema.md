@@ -29,9 +29,6 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
 
 ```jsonc
 {
-  // "block" (default) | "warn". See `enforcement` below.
-  "enforcement": "block",
-
   // Override per-agent model tier. Falls back to plugin defaults
   // documented in references/model-tier-guide.md.
   // Use the alias names: "haiku", "sonnet", "opus".
@@ -168,12 +165,6 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
 
 ## Keys
 
-### `enforcement`
-
-`"block"` (the default when the key is absent or unreadable) or `"warn"`. Under `block`, the workflow guard hook (`hooks/workflow-guard.sh`) refuses a hand-written `docs/plans/stage_*.md` or a pie or slice heading added to the checklist outside `/special-order` and `/cook-pizzas`, a code-writing Agent call outside `/sell-slice`, `/sell-pie` and `/pizza-party`, and a `gh ... pr create` while a slice on the branch has no `slice-verifier` pass in the ledger; the Pass refuses a slice marked `[x]` with no verifier pass. Under `warn` each of those goes through with a warning. ByTheSlice's own skills and `bytheslice:*` agents are never refused.
-
-Only the operator sets `warn`, by editing this file by hand: the guard refuses an agent's edit that does it, and one that adds `BTS_ALLOW_BYPASS` or `BTS_HOOKS_DISABLED` to `.claude/settings*.json`. The one-session override is launching Claude Code with `BTS_ALLOW_BYPASS=1`, which turns every refusal into a warning. The key is also read from `~/.bytheslice/defaults.json` when the project file does not set it.
-
 ### `modelTiers`
 
 Maps agent name → tier alias. Agent names use camelCase (e.g. `qualityReviewer`, `sliceVerifier`). Values must be one of `"haiku" | "sonnet" | "opus"`. Unknown agent names are ignored (with a one-line warning at session start).
@@ -264,7 +255,7 @@ Where the UI phase finds pre-built pages, blocks and components is [`ui-sources.
 
 ### `run`
 
-- **`unattended`** *(boolean, default `false`)* - nobody is watching. Skills take recommended answers, record each one in the order ticket (`docs/pizza-party/order.md`) or the skill's own decisions section, and continue: no skill returns `needs_human`. A would-be blocker defers the slice instead (row stays `[ ]` with `Status: deferred: <reason>`; under ship-once its commits move to a local `deferred/pie-N-sN.M` branch) and the run returns `complete_with_deferrals`. Fix caps never rise, the workflow guard still refuses shortcuts, and destructive operations on shared resources the operator did not name are skipped. `/pizza-party` sets it together with `delivery.mode: "ship-once"`; in `/sell-pie` and `/box-it-up` it takes effect only under ship-once.
+- **`unattended`** *(boolean, default `false`)* - nobody is watching. Skills take recommended answers, record each one in the order ticket (`docs/pizza-party/order.md`) or the skill's own decisions section, and continue: no skill returns `needs_human`. A would-be blocker defers the slice instead (row stays `[ ]` with `Status: deferred: <reason>`; under ship-once its commits move to a local `deferred/pie-N-sN.M` branch) and the run returns `complete_with_deferrals`. Fix caps never rise, slices still go through the bakers, and destructive operations on shared resources the operator did not name are skipped. `/pizza-party` sets it together with `delivery.mode: "ship-once"`; in `/sell-pie` and `/box-it-up` it takes effect only under ship-once.
 
 ### `mcps`
 

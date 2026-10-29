@@ -5,7 +5,7 @@
 
 The under-the-hood reference for ByTheSlice. The [README](../README.md) covers the day-to-day motion; this doc covers *why the kitchen works the way it does* - the rules the plugin enforces, the verification model, and how legacy projects migrate.
 
-> These aren't suggestions. The skills and their structured agent contracts carry them; the workflow guard hook refuses the shortcuts around the framework (enforcement `block`, the default), and the rest of the hooks and the Pass mod watch for slips and warn.
+> These aren't suggestions. The skills and their structured agent contracts carry them, and the Pass mod watches for slips and warns. Nothing refuses a tool call: the model decides, with the rules in front of it.
 
 ## Contents
 
@@ -16,7 +16,7 @@ The under-the-hood reference for ByTheSlice. The [README](../README.md) covers t
 - [Design-system delivery](#design-system-delivery)
 - [Orchestration principles](#orchestration-principles)
 - [Evidence, not proof ledgers](#evidence-not-proof-ledgers)
-- [Hook enforcement](#hook-enforcement)
+- [Hooks](#hooks)
 - [The Pass mod](#the-pass-mod)
 - [Live kitchen](#live-kitchen)
 - [The lobby](#the-lobby)
@@ -137,7 +137,7 @@ The split exists so you can run a manual visual UAT or local code review between
 
 All of the above is the default `pie-pr` delivery mode. **Merge-per-slice delivery** is opt-in: an explicit autonomous-delivery run instruction, or `delivery.mode: "merge-per-slice"` in `bytheslice.config.json` (the run instruction wins for that run; `review: continuous` pies always stay on the default). Each slice then gets branch `pie-<n>-s<n>.<m>-<scope>` cut from fresh `origin/main` into its own worktree, its own PR `Slice N.M: <name>`, CI per slice with up to 3 fix rounds (still red halts the loop, never skips), and a merge commit on green with no per-slice approval. Cleanup runs from the primary checkout after every merge, and the next slice is cut from the fresh `main`. The operator gets one notice per finished pie. There is never an integration branch.
 
-**Ship-once delivery** (`delivery.mode: "ship-once"`, what `/pizza-party` uses) keeps every gate local and ships the app in one PR. A local ship branch (`delivery.shipBranch`, default `ship/<repo>`) is cut once from `origin/main`; each pie branches from it, its slices commit with no push, and `/box-it-up --pie-local` runs the full local check (every command the project's `ci.yml` and, at the standard tier, `e2e.yml` run, never a subset) and merges the pie into the ship branch with `--no-ff`. After the last pie `/box-it-up --ship` pushes the ship branch, opens one PR to `main` with every pie's evidence, runs CI once and merges on green. Under `run.unattended` nothing waits on a human: a stuck slice's commits move to a local `deferred/pie-N-sN.M` branch so nothing unverified reaches the ship PR, which the workflow guard would refuse. Every other generated workflow that runs on pull requests (`e2e-coverage.yml`, `db-schema-drift.yml`, `design-system-compliance.yml`, when present) runs too, so nothing can fail only in CI on the ship PR.
+**Ship-once delivery** (`delivery.mode: "ship-once"`, what `/pizza-party` uses) keeps every gate local and ships the app in one PR. A local ship branch (`delivery.shipBranch`, default `ship/<repo>`) is cut once from `origin/main`; each pie branches from it, its slices commit with no push, and `/box-it-up --pie-local` runs the full local check (every command the project's `ci.yml` and, at the standard tier, `e2e.yml` run, never a subset) and merges the pie into the ship branch with `--no-ff`. After the last pie `/box-it-up --ship` pushes the ship branch, opens one PR to `main` with every pie's evidence, runs CI once and merges on green. Under `run.unattended` nothing waits on a human: a stuck slice's commits move to a local `deferred/pie-N-sN.M` branch so nothing unverified reaches the ship PR. Every other generated workflow that runs on pull requests (`e2e-coverage.yml`, `db-schema-drift.yml`, `design-system-compliance.yml`, when present) runs too, so nothing can fail only in CI on the ship PR.
 
 **Only the conductor makes git writes, `git add` included.** The builder, fixers, `library-entry-writer` and `ci-fix-attempter` return `files_changed`; the conductor stages exactly those paths (never `git add -A`), commits and pushes, on the registered and fallback paths alike. Pie cleanup after a merge runs from the primary checkout: `pull --ff-only`, `worktree remove`, `branch -d`, remote delete, `worktree prune`, with the checklist flip already committed on the branch before the PR merged.
 
@@ -184,18 +184,16 @@ Existing operational state files stay, because they drive behavior rather than p
 
 ---
 
-## Hook enforcement
+## Hooks
 
-Skill preconditions are checked inline by each skill at the start and raised as a question to the operator, never a refusal. Every script in [`hooks/`](../hooks/) exits 0 and never blocks a prompt; a warning reaches the model as hook context. Since 5.8 one hook refuses tool calls:
+Hooks run only where nothing else can do the job (6.1). Skill preconditions are checked inline by each skill and raised as a question to the operator. No hook refuses a tool call or blocks a prompt, and every script exits 0. Claude Code wires two:
 
-- [`workflow-guard.sh`](../hooks/workflow-guard.sh) (Node, [`workflow-guard.js`](../hooks/workflow-guard.js)) keeps new work on the framework in any project with a master checklist. **Feature intake:** a new feature, requirement or multi-file fix is documented with `/special-order` first, then built only through `/sell-slice` or `/sell-pie`, and no slice work reaches a PR without a `slice-verifier` pass in the ledger. The guard refuses a created or hand-edited `docs/plans/stage_*.md` and a pie or slice heading added or renamed in the checklist outside `/special-order` and `/cook-pizzas` (or their writer agents), whether through Write or Edit or from the shell (a redirect, `tee`, `sed -i`, a copy onto the file, a script); a code-writing Agent call (any type with Write, Edit or NotebookEdit, an unknown definition counted as one) outside `/sell-slice`, `/sell-pie` and `/pizza-party`; and `gh ... pr create` (including `gh as <user> pr create`) while a slice named by a branch commit, or every slice of a `pie-N` branch's pie, has no verifier pass (a project with no ledger at all only warns). On `UserPromptSubmit` a `/goal` or a new-feature ask gets the intake rule as context. ByTheSlice's own `bytheslice:*` agents always pass. `enforcement: "block" | "warn"` in `bytheslice.config.json` (default `block`) is the switch, and launching with `BTS_ALLOW_BYPASS=1` turns refusals into warnings for a session; both are the operator's, and the guard refuses an agent's edit that sets either. The active skill is read from the session's kitchen activity rows. `/setup-shop` writes the Feature intake block into the project rules file (`workflow-guard.js intake`) and `/open-kitchen` re-checks it (`workflow-guard.js doctor`).
-- [`kitchen-log.sh`](../hooks/kitchen-log.sh) logs kitchen activity (the Pass mod tracks the active skill itself).
+- [`workflow-nudge.sh`](../hooks/workflow-nudge.sh) (Node, [`workflow-nudge.js`](../hooks/workflow-nudge.js)) on `UserPromptSubmit`: in a project with a master checklist, a `/goal` or a new-feature ask gets the **Feature intake** rule as context (document with `/special-order`, build with `/sell-slice` or `/sell-pie`), and a "build Slice N.M" ask gets the `/sell-slice` route; with no checklist yet, an ask for a whole app end to end gets the `/pizza-party` route. `/setup-shop` writes the Feature intake block into the project rules file (`workflow-nudge.js intake`) and `/open-kitchen` re-checks it (`workflow-nudge.js doctor`).
 - [`shop-status.sh`](../hooks/shop-status.sh) injects the checklist summary at session start, and again after a resume or a compaction, so a compacted session re-orients.
-- [`pre-commit-guard.sh`](../hooks/pre-commit-guard.sh) warns on `git commit` on `main` (or on a branch it cannot tell); the commit is not stopped.
-- [`lobby-signal.sh`](../hooks/lobby-signal.sh) registers ByTheSlice projects and records per-session flags for [the lobby](#the-lobby), silently.
-- Editing a stage plan mid-delivery draws a warning from the Pass mod (`plan-write-during-bake`), on Claude Code hosts that load it.
 
-Slice 5.4 retired the hooks the mod covers or that never fired; `hooks/README.md` keeps the inventory and what each retirement means on a host without the mod. Hooks dual-read flat `## Stage N` and nested `## Pie N` / `### Slice N.M` checklists; the regression suite lives at `hooks/test.sh`. Disable per-session with `BTS_HOOKS_DISABLED=1`. See [`hooks/README.md`](../hooks/README.md).
+[`kitchen-log.sh`](../hooks/kitchen-log.sh) (kitchen activity) and [`lobby-signal.sh`](../hooks/lobby-signal.sh) ([the lobby](#the-lobby)) are not hooks on Claude Code: the Pass hands them each event's envelope (`mod/relay.ts`). Cursor, which has no mods, still runs them, and `shop-status.sh`, from `hooks-cursor.json`. A commit on `main` draws the Pass's `commit-on-main` warning; editing a stage plan mid-delivery draws `plan-write-during-bake`.
+
+The regression suite lives at `hooks/test.sh`. Disable per-session with `BTS_HOOKS_DISABLED=1`. See [`hooks/README.md`](../hooks/README.md).
 
 > **v5 note:** the `Stop`-gate and `commit-checklist-correlator` hooks were deleted - `/loop` + the pie-completion `/goal` own loop continuation natively.
 
@@ -203,7 +201,7 @@ Slice 5.4 retired the hooks the mod covers or that never fired; `hooks/README.md
 
 ## The Pass mod
 
-The Pass is the plugin's Claude Code mod: a live ticket rail (pane, band, prompt hint, toasts) and a set of checks that **warn**, plus one refusal under `enforcement: "block"`: a slice marked `[x]` with no `slice-verifier` pass (5.8). The design and every as-built note live in [`pass-mod-spec.md`](pass-mod-spec.md); this section is the summary of what shipped in 5.4.0.
+The Pass is the plugin's Claude Code mod: a live ticket rail (pane, band, prompt hint, toasts) and a set of checks that **warn** and never refuse (6.1 dropped the one refusal 5.8 added). It also runs the kitchen and Lobby logging scripts on the session's events (6.1). The design and every as-built note live in [`pass-mod-spec.md`](pass-mod-spec.md); this section is the summary of what shipped in 5.4.0.
 
 **Packaging.** The mod lives inside the plugin. [`hooks/hooks.json`](../hooks/hooks.json) names `../mod/register.tsx` under `modules` beside its `hooks` block, `.claude-plugin/plugin.json` points `types` at `mod/types/index.d.ts`, and the npm package ships `mod`, `scripts/ledger-summary.js` and `docs/pass-mod-spec.md`. Cursor never loads the mod: `.cursor-plugin/plugin.json` points it at `hooks/hooks-cursor.json`, which runs the shop status, the commit guard and the lobby signal in Cursor's own hook format. The mod needs Claude Code 2.1.299 or later; on anything older it stays inert and logs one line. Every mod hook registers a `.catch` that passes the call through, so a mod error never stops a tool call. `claude plugin validate .` and `claude plugin test .` (including the seeded-violation suite on both the `terminal` and `desktop` surfaces) are its gating checks.
 

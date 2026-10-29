@@ -35,8 +35,6 @@ const UI = ['## Pie 7 - Screens [ ]', '### Slice 7.1 - Order screen [ ]', 'Statu
 /** One seeded violation: how to set the world up, and the call or spawn that commits it. */
 type Seed = {
   code: string
-  /** True for a check enforcement block refuses: the act resolves true when the call was refused. */
-  refused?: boolean
   init?: Partial<World>
   before?: (world: World) => void
   /** Resolves true when the call or spawn completed: a result present, no deny. */
@@ -44,8 +42,6 @@ type Seed = {
 }
 
 const completedCall = (ran: { deny?: unknown; result?: unknown }): boolean => ran.deny === undefined && ran.result !== undefined
-const refusedCall = (ran: { deny?: unknown; result?: unknown }, code: string): boolean =>
-  typeof ran.deny === 'string' && ran.deny.includes(code) && ran.result === undefined
 const completedSpawn = (started: { deny?: unknown; agentId?: unknown; model?: unknown }): boolean =>
   started.deny === undefined && typeof started.agentId === 'string' && typeof started.model === 'string'
 
@@ -56,16 +52,14 @@ const SEEDS: Seed[] = [
   },
   {
     code: 'checkbox-without-verdict',
-    refused: true,
     act: async $ =>
-      refusedCall(
+      completedCall(
         await $.tool.call({
           tool: 'Edit',
           file_path: CHECKLIST,
           old_string: '### Slice 5.1 - Pass pane and band [ ]',
           new_string: '### Slice 5.1 - Pass pane and band [x]',
         }),
-        'checkbox-without-verdict',
       ),
   },
   {
@@ -122,7 +116,7 @@ const SEEDS: Seed[] = [
 
 for (const surface of SURFACES) {
   for (const seed of SEEDS) {
-    test(`seeded ${seed.code} on ${surface}: one warn row, one toast, and the call ${seed.refused ? 'refused' : 'completed'}`, async ($, on) => {
+    test(`seeded ${seed.code} on ${surface}: one warn row, one toast, and the call completed`, async ($, on) => {
       const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE, ...seed.init })
       seed.before?.(world)
       engineLoops(on, ['agent-1'])

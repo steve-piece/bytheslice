@@ -1,6 +1,6 @@
 ---
-description: A one-file bug fix is made directly; enforcement must not push it through /special-order.
-tags: [enforcement, false-positive]
+description: A one-file bug fix is made directly; the intake rule must not push it through /special-order.
+tags: [routing, false-positive]
 max_turns: 15
 timeout_seconds: 300
 allowed_tools: [Read, Glob, Grep, Skill]

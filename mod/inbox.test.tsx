@@ -5,7 +5,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { CHECKLIST_FIXTURE } from './fixtures/checklist.fixture.ts'
 import { ANSWER_LABEL } from './rail.tsx'
-import { LEDGER, START_MS, WARN_MODE, bandTarget, hitl, ledgerLine, ledgerText, paneTarget, rowsOf, stage } from './testing.tsx'
+import { LEDGER, START_MS, bandTarget, hitl, ledgerLine, ledgerText, paneTarget, rowsOf, stage } from './testing.tsx'
 import { HITL_TITLE, PIE_TITLE, isBlocking, piesReady } from './notify.ts'
 import { parseChecklist } from './checklist.ts'
 
@@ -113,7 +113,7 @@ test('the last slice of a pie flipping to done sends Pie N is ready once', async
     '',
   ].join('\n')
   const after = before.replace('### Slice 7.2 - Two [ ]\nStatus: Not Started', '### Slice 7.2 - Two [x]\nStatus: Completed')
-  const { world, start } = stage(on, { checklist: before, files: { ...WARN_MODE } })
+  const { world, start } = stage(on, { checklist: before })
   on('tool.call', () => {
     world.checklist = after
     return { result: { filePath: 'docs/plans/00_master_checklist.md' } }

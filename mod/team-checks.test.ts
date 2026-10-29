@@ -9,7 +9,6 @@ import { DEFAULT_POLICY, readPolicy } from './policy.ts'
 import {
   CWD,
   TEAM,
-  WARN_MODE,
   agentCall,
   bashResult,
   endTurn,
@@ -46,8 +45,8 @@ test('a teammate commit on main warns exactly as the lead does, and the Bash res
   expect(warnsOf(world)).toEqual([['commit-on-main', null]])
 })
 
-test('a teammate ticking a slice with no verifier pass warns under enforcement warn, and the edit completes', async ($, on) => {
-  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE, files: { ...WARN_MODE } })
+test('a teammate ticking a slice with no verifier pass warns, and the edit completes', async ($, on) => {
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
   engineLoops(on, ['tm-5'])
   const edited = { filePath: CHECKLIST, structuredPatch: [] }
   on('tool.call', () => ({ result: edited }))

@@ -28,19 +28,21 @@ Under `/pizza-party` every phase runs with `run.unattended: true`. Each place a 
 | CI red after 3 rounds on the final PR | Leave the PR open, record its URL, deploy from the ship branch only if the host supports a branch deploy, and report |
 | A Claude Code permission prompt | Checked once before the interview (Phase 0); the run cannot answer one mid-way |
 
-Fix caps never rise, the workflow guard still refuses the shortcuts (hand-written plans, ad-hoc code-writing agents, PRs with unverified slices), and `enforcement` is never loosened by the run. Those are rails, not stops: a refusal reroutes the work, it never waits.
+Fix caps never rise, and every slice still goes through the bakers so it carries a slice-verifier pass. Those are rails, not stops: they reroute the work, they never wait.
 
 ## Phase 0: Preflight (silent)
 
 1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/pizza-party.js" preflight "<target folder>"`. It reports git, node, the package managers, `gh` auth, and which host and database CLIs are logged in (alphabetical, none preferred), all read-only.
 2. Add what the session itself can reach: connected MCP servers whose names say a host or database (a Vercel, Netlify, Cloudflare, Supabase or Neon server, for example) count as authorized.
 3. Read `~/.bytheslice/defaults.json` for any defaults the operator keeps, and resolve the UI sources once with `node "${CLAUDE_PLUGIN_ROOT}/scripts/ui-sources.js" "<target folder>"`: the operator's own registry preferences when they have any, else the public shadcn registry directory. No question about it in the interview.
-4. **Permission mode.** If this session would stop on tool permission prompts (it is not in a mode that runs edits and shell commands without asking), make that the interview's first question: switch to a no-prompt mode now (the operator does it; name the setting), or continue knowing the run may pause on a prompt.
+4. **Permission mode.** If this session would stop on tool permission prompts (it is not in a mode that runs edits and shell commands without asking), make that the interview's first question: switch to a no-prompt mode now (the operator does it; name the setting), or continue knowing the run may pause on a prompt. Under auto mode, Claude Code's own permission check may refuse creating the GitHub repository or pushing to it (it reads them as an upload): ask whether the operator wants to add an allow rule for the repo-create command now (give the exact rule, in `permissions.allow` of `~/.claude/settings.json`; the operator adds it), or let the run build locally and leave the repo and PR for the end. The run never works around a refusal.
 5. **Target folder.** An empty or missing folder is a new app (Flow B). A folder with a master checklist resumes: skip to the first phase the ticket's **Progress** does not mark done. A non-empty folder without a checklist is an existing app: run Phases 2 to 9 on it (Flow C) without bootstrapping.
 
 Never narrate passing checks.
 
 ## Phase 1: The interview (the only stop)
+
+The interview always runs, also under `/goal` and in a loop: a goal's "keep going" covers the stops after the interview, never the interview itself. Skip a question only when the brief or the operator's own words already answer it, and skip the whole interview only when the operator says so in words ("no questions", "decide everything").
 
 Ask everything now, with `AskUserQuestion`: many short questions, one decision each, options of one to four words, a recommended first option. Several calls of up to four questions each are fine. Ask only what the brief leaves open and what changes the build:
 
@@ -70,7 +72,7 @@ Then write the ticket: the brief verbatim, the **Answers**, and an **Acceptance*
 ```
 
    `libraryGate: "off"` is safe here because ship-once runs the design critique at every pie boundary and fixes its P0 and P1 findings itself. The operator's own `ui.registries` in `~/.bytheslice/defaults.json` still apply first.
-2. Run `/setup-shop --unattended --ticket <ticket path> --config <config path>`: Flow B from the parent folder for a new app (the scaffolder creates the app folder), Flow C inside an existing one. It scaffolds, commits on `main`, merges the run config into `bytheslice.config.json`, writes the Feature intake block and reports the guard's state, all without asking.
+2. Run `/setup-shop --unattended --ticket <ticket path> --config <config path>`: Flow B from the parent folder for a new app (the scaffolder creates the app folder), Flow C inside an existing one. It scaffolds, commits on `main`, merges the run config into `bytheslice.config.json` and writes the Feature intake block, all without asking.
 3. Move the ticket to `<app>/docs/pizza-party/order.md` (and delete the `pending/<name>/` folder). From here on every phase runs inside the app folder.
 4. Create the private GitHub repository and push `main`: `gh repo create <name> --private --source . --remote origin --push` (use the wrapper form the operator's environment requires for `gh`, if any). Then cut the ship branch, `ship/<name>` (`delivery.shipBranch`), from `origin/main`. Plans stay where [git-worktree-standard.md, "Where the plans live"](../cook-pizzas/references/git-worktree-standard.md) puts them: with the default gitignored `docs/plans/`, every checklist flip happens in this primary checkout's `$PLANS`, never in a pie worktree.
 
@@ -97,7 +99,7 @@ For each pie in checklist order, run `/sell-pie <n>`. Under ship-once each pie b
 
 ## Phase 7: Ship (one PR)
 
-When the last pie returns `ship_ready: true`, run `/box-it-up --ship` with the ship branch, the app name, `run.unattended` and the collected `blocked` list: it pushes the ship branch, opens one PR to `main` with every pie's evidence, runs CI once (up to 3 fix rounds), merges on green with a merge commit, and syncs `main`. The workflow guard refuses this PR while any slice on the branch lacks a slice-verifier pass, which is why deferred slices never stay on it. Red after 3 rounds, or a conflict with `main`: the PR stays open and comes back as a blocker with its URL (see the no-stop table).
+When the last pie returns `ship_ready: true`, run `/box-it-up --ship` with the ship branch, the app name, `run.unattended` and the collected `blocked` list: it pushes the ship branch, opens one PR to `main` with every pie's evidence, runs CI once (up to 3 fix rounds), merges on green with a merge commit, and syncs `main`. Every slice on the branch carries a slice-verifier pass, which is why deferred slices never stay on it. Red after 3 rounds, or a conflict with `main`: the PR stays open and comes back as a blocker with its URL (see the no-stop table).
 
 ## Phase 8: Deliver (deploy, or the next best link)
 
@@ -125,7 +127,7 @@ Run record: ~/.bytheslice/pizza-party/runs.jsonl
 - **One interview, then no stops.** Nothing after Phase 1 asks the operator anything. Decide, record, continue.
 - **Thin conductor.** The conductor never writes app code, plans, tests or PR bodies itself; the skills and their agents do. Its own writes are the ticket, `bytheslice.config.json`, the ship branch and the run record.
 - **No vendor by default.** Hosts, databases and auth come from what the operator has authorized and chose in the interview; with none, local fallbacks. Never recommend or assume a provider the operator has not authorized.
-- **Rails stay on.** The workflow guard, the fix caps, verify-once and the Pass's checkbox rule all apply; a refusal reroutes the work. Never loosen `enforcement`, never set `BTS_ALLOW_BYPASS`, never raise a cap.
+- **Rails stay on.** The fix caps, verify-once and the Pass's checkbox warning all apply; a slice is marked done only after its slice-verifier pass. Never raise a cap.
 - **Shared resources are read-only unless named.** Only what the interview named (a new schema, a new project) is created or changed.
 - **No secret in any file the run writes** besides `.env.local`, and that one is written by provider tooling, never by the agent's own text.
 - **Sequential pies.** One `/sell-pie` at a time.

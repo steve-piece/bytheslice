@@ -15,8 +15,8 @@ set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SHOP_STATUS="$HERE/shop-status.sh"
-COMMIT_GUARD="$HERE/pre-commit-guard.sh"
 KITCHEN_LOG="$HERE/kitchen-log.sh"
+JSON_NODE=$(command -v node || printf 'node')
 
 PASS=0
 FAIL=0
@@ -58,26 +58,6 @@ json_str() {
   s=${s//\"/\\\"}
   s=${s//$'\n'/\\n}
   printf '"%s"' "$s"
-}
-
-# Run pre-commit-guard on a raw Bash command, so tests need no hand-escaped
-# JSON. Args: cwd (process cwd and input .cwd), project dir, command.
-# Sets globals: LAST_EXIT, LAST_OUT.
-run_guard() {
-  local cwd="$1" proj="$2" cmd="$3"
-  CLAUDE_PROJECT_DIR=$proj run_hook_in "$cwd" "$COMMIT_GUARD" \
-    "{\"tool_input\":{\"command\":$(json_str "$cmd")},\"cwd\":$(json_str "$cwd")}"
-}
-
-# Make a primary checkout on main with two linked worktrees on feature
-# branches under .claude/worktrees/ (one path contains a space, to exercise
-# quoting). Mirrors the layout Claude Code creates. Echoes the primary path.
-mk_worktree_fixture() {
-  local d
-  d=$(mk_fixture)
-  git -C "$d" worktree add -q -b feat/wt "$d/.claude/worktrees/wt"
-  git -C "$d" worktree add -q -b feat/wt-space "$d/.claude/worktrees/wt space"
-  printf '%s' "$d"
 }
 
 # Assert exit code. Args: name, expected-exit.
@@ -137,219 +117,6 @@ assert_not_contains() {
       ;;
   esac
 }
-
-####################################################################
-# pre-commit-guard.sh
-####################################################################
-
-echo
-echo "## pre-commit-guard.sh"
-
-# Assert the guard warned: exit 0, a WARN line, and Claude Code hook JSON
-# whose additionalContext (model) and systemMessage (person) carry the text.
-# Args: name, needle the warning must contain.
-assert_warn() {
-  local name="$1" needle="$2"
-  assert_exit "$name exits 0" 0
-  assert_contains "$name warns" "WARN [bytheslice]"
-  assert_contains "$name names" "$needle"
-  if printf '%s' "$LAST_OUT" | "$JSON_NODE" -e '
-    let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
-      const o = JSON.parse(s), h = o.hookSpecificOutput || {}
-      process.exit(h.hookEventName === "PreToolUse" && /^WARN /.test(h.additionalContext) && o.systemMessage === h.additionalContext ? 0 : 1)
-    })' 2>/dev/null; then
-    PASS=$((PASS+1)); printf '  ✓ %s is hook JSON for the model and the person\n' "$name"
-  else
-    FAIL=$((FAIL+1)); FAILED_NAMES+=("$name (not hook JSON)"); printf '  ✗ %s is not hook JSON: %s\n' "$name" "$LAST_OUT"
-  fi
-}
-JSON_NODE=$(command -v node || printf 'node')
-
-# git commit on main → WARN naming main, exit 0, staged files listed
-FIX=$(mk_fixture)
-echo x > "$FIX/a.txt" && git -C "$FIX" add a.txt
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
-assert_warn "commit on main" "git commit on main"
-assert_contains "commit on main keeps the staged summary" "a.txt"
-rm -rf "$FIX"
-
-# git commit on master → WARN naming master
-FIX=$(mk_fixture)
-git -C "$FIX" branch -q -m master
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
-assert_warn "commit on master" "git commit on master"
-rm -rf "$FIX"
-
-# git commit on feature branch → NOTE: staged file list, no warning
-FIX=$(mk_fixture)
-git -C "$FIX" checkout -q -b feat/x
-echo x > "$FIX/a.txt" && git -C "$FIX" add a.txt
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
-assert_exit "commit on feature branch" 0
-assert_contains "commit on feature branch staged summary" "staged files on branch feat/x"
-assert_not_contains "commit on feature branch no warning" "WARN"
-rm -rf "$FIX"
-
-# hook cwd outside any repo → branch unknown; the project dir's main is never
-# named (the 5.3 false positive read CLAUDE_PROJECT_DIR here)
-FIX=$(mk_fixture)
-NOREPO=$(mktemp -d)
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$NOREPO" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
-assert_warn "commit outside any repo" "branch unknown"
-assert_not_contains "commit outside any repo never names the project dir" "on main"
-rm -rf "$FIX" "$NOREPO"
-
-# scratch repo created in the same command, project dir on main → branch
-# unknown, not main (the false positive the operator reported in 5.3)
-FIX=$(mk_fixture)
-SCRATCH=$(mktemp -d)
-run_guard "$FIX" "$FIX" "S=$SCRATCH/new; mkdir -p \$S && cd \$S && git init -q && git commit -m x"
-assert_warn "scratch repo via \$VAR" "branch unknown"
-assert_not_contains "scratch repo via \$VAR never names the primary" "on main"
-run_guard "$FIX" "$FIX" "mkdir -p $SCRATCH/lit && cd $SCRATCH/new2 && git init -q && git commit -m x"
-assert_warn "scratch repo path that does not exist yet" "branch unknown"
-rm -rf "$FIX" "$SCRATCH"
-
-# a branch switch earlier in the command moves HEAD → branch unknown
-FIX=$(mk_fixture)
-run_guard "$FIX" "$FIX" "git switch -c feat/y && git commit -m x"
-assert_warn "switch before commit" "branch unknown"
-run_guard "$FIX" "$FIX" "git checkout -q feat/y && git commit -m x"
-assert_warn "checkout before commit" "branch unknown"
-rm -rf "$FIX"
-
-# non-git-commit → PASS
-FIX=$(mk_fixture)
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"npm test"}}'
-assert_exit "non-commit pass" 0
-assert_empty "non-commit silent"
-rm -rf "$FIX"
-
-# git commit-tree / git -C <dir> status are not commits → PASS
-FIX=$(mk_fixture)
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit-tree HEAD^{tree} -m x"}}'
-assert_exit "commit-tree is not a commit" 0
-assert_empty "commit-tree silent"
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git -C $FIX status\"}}"
-assert_exit "git -C status is not a commit" 0
-assert_empty "git -C status silent"
-rm -rf "$FIX"
-
-# BTS_HOOKS_DISABLED → PASS
-FIX=$(mk_fixture)
-BTS_HOOKS_DISABLED=1 CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
-assert_exit "commit-guard disabled" 0
-assert_empty "commit-guard disabled silent"
-rm -rf "$FIX"
-
-# Worktree regression (2026-10-05): CLAUDE_PROJECT_DIR is the primary checkout
-# on main, but the commit runs inside a linked worktree on a feature branch.
-# The guard must read the worktree's HEAD, not the primary's.
-FIX=$(mk_worktree_fixture)
-WT="$FIX/.claude/worktrees/wt"
-WTS="$FIX/.claude/worktrees/wt space"
-
-# Each worktree form: exit 0 and no warning.
-assert_no_warn() {
-  assert_exit "$1" 0
-  assert_not_contains "$1 no warning" "WARN"
-}
-
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git -C $WT commit -m test\"},\"cwd\":\"$FIX\"}"
-assert_no_warn "worktree: git -C <wt> commit"
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd $WT && git add -A && git commit -m test\"},\"cwd\":\"$FIX\"}"
-assert_no_warn "worktree: cd <wt> && git commit"
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd .claude/worktrees/wt; git commit -m test\"},\"cwd\":\"$FIX\"}"
-assert_no_warn "worktree: relative cd"
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd \\\"$WTS\\\" && git commit -m test\"},\"cwd\":\"$FIX\"}"
-assert_no_warn "worktree: quoted cd with space"
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git -C '$WTS' commit -m test\"},\"cwd\":\"$FIX\"}"
-assert_no_warn "worktree: single-quoted git -C with space"
-HOME=$FIX CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd ~/.claude/worktrees/wt && git commit -m test\"},\"cwd\":\"$FIX\"}"
-assert_no_warn "worktree: tilde cd"
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$WT" "$COMMIT_GUARD" '{"tool_input":{"command":"git commit -m test"}}'
-assert_no_warn "worktree: hook process cwd in wt"
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git commit -m test\"},\"cwd\":\"$WT\"}"
-assert_no_warn "worktree: input cwd in wt"
-
-# Still warns on real main commits: from inside the worktree, target the primary
-CLAUDE_PROJECT_DIR=$WT run_hook_in "$WT" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git -C $FIX commit -m test\"},\"cwd\":\"$WT\"}"
-assert_warn "worktree: git -C <primary on main> commit" "git commit on main"
-CLAUDE_PROJECT_DIR=$WT run_hook_in "$WT" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"cd $FIX && git commit -m test\"},\"cwd\":\"$WT\"}"
-assert_warn "worktree: cd <primary on main> && git commit" "git commit on main"
-CLAUDE_PROJECT_DIR=$FIX run_hook_in "$FIX" "$COMMIT_GUARD" "{\"tool_input\":{\"command\":\"git commit -m test\"},\"cwd\":\"$FIX\"}"
-assert_warn "worktree: plain commit in primary on main" "git commit on main"
-
-# jq-less fallback parses escaped quotes and cwd the same way
-mkdir -p "$FIX/nojq-bin"
-for b in bash git sed cat head dirname mktemp pwd printf tr; do
-  p=$(command -v "$b") && ln -sf "$p" "$FIX/nojq-bin/$b"
-done
-LAST_OUT=$(cd "$FIX" && printf '%s' "{\"tool_input\":{\"command\":\"cd \\\"$WTS\\\" && git commit -m test\"},\"cwd\":\"$FIX\"}" \
-  | PATH="$FIX/nojq-bin" CLAUDE_PROJECT_DIR=$FIX "$FIX/nojq-bin/bash" "$COMMIT_GUARD" 2>&1)
-LAST_EXIT=$?
-assert_no_warn "worktree: jq-less quoted cd"
-LAST_OUT=$(cd "$FIX" && printf '%s' "{\"tool_input\":{\"command\":\"git commit -m \\\"msg\\\"\"},\"cwd\":\"$FIX\"}" \
-  | PATH="$FIX/nojq-bin" CLAUDE_PROJECT_DIR=$FIX "$FIX/nojq-bin/bash" "$COMMIT_GUARD" 2>&1)
-LAST_EXIT=$?
-assert_warn "worktree: jq-less commit on main" "git commit on main"
-LAST_OUT=$(cd "$WT" && printf '%s' "{\"tool_input\":{\"command\":\"git -C ../wt\\\\ space/../../.. commit -m x\"},\"cwd\":\"$WT\"}" \
-  | PATH="$FIX/nojq-bin" CLAUDE_PROJECT_DIR=$WT "$FIX/nojq-bin/bash" "$COMMIT_GUARD" 2>&1)
-LAST_EXIT=$?
-assert_warn "worktree: jq-less backslash-escaped -C path to main" "git commit on main"
-
-# Shell forms that must not let a main commit pass unwarned. Each one fooled
-# the first cut of the resolver, which modeled only the first commit in the
-# command and only a plain `cd <dir>` sequence before it.
-run_guard "$FIX" "$FIX" "git -C $WT commit -m a && git -C $FIX commit -m b"
-assert_warn "worktree: second commit on main" "git commit on main"
-run_guard "$FIX" "$FIX" "cd $WT && git commit -m a && cd $FIX && git commit -m b"
-assert_warn "worktree: cd back to main for a second commit" "git commit on main"
-run_guard "$FIX" "$FIX" "cd $WT && cd - && git commit -m x"
-assert_warn "worktree: cd - back to main" "git commit on main"
-run_guard "$WT" "$WT" "pushd $FIX && git commit -m x"
-assert_warn "worktree: pushd to main" "git commit on main"
-run_guard "$WT" "$WT" "cd -P $FIX && git commit -m x"
-assert_warn "worktree: cd -P to main" "git commit on main"
-run_guard "$WT" "$WT" "git --git-dir=$FIX/.git --work-tree=$FIX commit -m x"
-assert_warn "worktree: --git-dir=<main>" "git commit on main"
-run_guard "$WT" "$WT" "git --git-dir $FIX/.git --work-tree $FIX commit -m x"
-assert_warn "worktree: --git-dir <main> (space form)" "git commit on main"
-run_guard "$WT" "$WT" "GIT_DIR=$FIX/.git git commit -m x"
-assert_warn "worktree: GIT_DIR=<main>" "git commit on main"
-run_guard "$FIX" "$FIX" "/usr/bin/git commit -m x"
-assert_warn "worktree: path-qualified git on main" "git commit on main"
-run_guard "$FIX" "$FIX" "echo \`git commit -m x\`"
-assert_warn "worktree: backtick commit on main" "git commit on main"
-run_guard "$WT" "$WT" "bash -c 'cd $FIX && git commit -m x'"
-assert_warn "worktree: bash -c cd to main" "git commit on main"
-run_guard "$WT" "$WT" "git -C ../wt\\ space/../../.. commit -m x"
-assert_warn "worktree: backslash-escaped -C path to main" "git commit on main"
-
-# Forms the guard cannot follow warn "branch unknown" (formerly fail-closed
-# blocks), and never name a directory the commit does not run in.
-run_guard "$FIX" "$FIX" "(cd $WT && make) && git commit -m x"
-assert_warn "worktree: subshell cd is not followed" "branch unknown"
-run_guard "$WT" "$FIX" "cd \"\$MAIN\" && git commit -m x"
-assert_warn "worktree: unresolvable cd" "branch unknown"
-assert_not_contains "worktree: unresolvable cd never names the project dir" "on main"
-run_guard "$WT" "$WT" "git -C \"\$(git rev-parse --show-toplevel)\" commit -m x"
-assert_warn "worktree: \$(...) -C path" "branch unknown"
-run_guard "$WT" "$WT" "pushd $FIX && popd && git commit -m x"
-assert_warn "worktree: popd" "branch unknown"
-
-# ...without warning on the ordinary worktree forms next to them
-run_guard "$FIX" "$FIX" "pushd $WT && git commit -m x"
-assert_no_warn "worktree: pushd to wt"
-run_guard "$FIX" "$FIX" "cd .claude/worktrees/wt\\ space && git commit -m x"
-assert_no_warn "worktree: backslash-escaped cd to wt"
-run_guard "$FIX" "$FIX" "git --git-dir=$FIX/.git/worktrees/wt --work-tree=$WT commit -m x"
-assert_no_warn "worktree: --git-dir=<wt gitdir>"
-run_guard "$FIX" "$FIX" "(cd $WT && git commit -m x)"
-assert_no_warn "worktree: commit inside a subshell cd"
-run_guard "$FIX" "$FIX" "cd $WT && git commit -m \"\$(printf 'a\\nb')\" && git log -1"
-assert_no_warn "worktree: \$(...) message after the commit"
-rm -rf "$FIX"
 
 ####################################################################
 # shop-status.sh
@@ -795,38 +562,13 @@ EOF
   kitchen_assert "kitchen interrupted acquisition permits subsequent writer" 'rows.length===1 && rows[0].sid==="after-interruption" && fs.readdirSync(require("path").dirname(log)).join(",")==="activity.jsonl"'
   rm -rf "$FIX"
 
-  # Validate the actual hook registration surface, including duplicate entries.
+  # Claude Code runs kitchen-log.sh from the Pass (mod/relay.ts, tested there), not hooks.json.
+  if grep -q 'kitchen-log.sh' "$HERE/hooks.json"; then
+    FAIL=$((FAIL+1)); FAILED_NAMES+=("kitchen-log.sh still in hooks.json"); printf '  ✗ kitchen-log.sh still in hooks.json\n'
+  else
+    PASS=$((PASS+1)); printf '  ✓ kitchen-log.sh is relayed by the Pass, not wired in hooks.json\n'
+  fi
   FIX=$(mk_fixture)
-  KITCHEN_WIRING=$("$KITCHEN_NODE" -e '
-    const fs=require("fs"), hooks=JSON.parse(fs.readFileSync(process.argv[1],"utf8")).hooks;
-    const actual=[];
-    for(const [ev, groups] of Object.entries(hooks)) for(const group of groups)
-      for(const hook of group.hooks) if(hook.command.includes("/hooks/kitchen-log.sh")) {
-        if(hook.async !== undefined && hook.async !== false) process.exit(1);
-        actual.push(ev + ":" + (group.matcher || ""));
-      }
-    const expected=["SessionStart:","SubagentStart:","SubagentStop:","PreToolUse:Agent","PostToolUse:Agent","PreToolUse:Skill","UserPromptExpansion:","Stop:"];
-    if(JSON.stringify(actual.sort()) !== JSON.stringify(expected.sort())) process.exit(1);
-    process.stdout.write("registered");
-  ' "$HERE/hooks.json")
-  LAST_EXIT=$?
-  assert_exit "kitchen exactly eight synchronous hook registrations" 0
-  LAST_OUT=$("$KITCHEN_NODE" -e '
-    const fs=require("fs"),cp=require("child_process"),path=require("path");
-    const hooks=JSON.parse(fs.readFileSync(process.argv[1],"utf8")).hooks;
-    const stop=hooks.Stop.flatMap(g=>g.hooks).find(h=>h.command.includes("/hooks/kitchen-log.sh"));
-    const result=cp.spawnSync(process.argv[3],["-c",stop.command],{
-      env:{...process.env,CLAUDE_PROJECT_DIR:process.argv[2],CLAUDE_PLUGIN_ROOT:path.dirname(path.dirname(process.argv[1]))},
-      input:JSON.stringify({hook_event_name:"Stop",session_id:"synchronous-stop"}),encoding:"utf8"
-    });
-    if(result.status!==0 || result.stdout!=="" || result.stderr!=="") process.exit(1);
-    const log=path.join(process.argv[2],".claude/.bytheslice-state/kitchen/activity.jsonl");
-    const rows=fs.readFileSync(log,"utf8").trim().split("\n").map(JSON.parse);
-    if(rows.length!==1 || rows[0].ev!=="Stop" || rows[0].sid!=="synchronous-stop") process.exit(1);
-  ' "$HERE/hooks.json" "$FIX" "$KITCHEN_BASH" 2>&1)
-  LAST_EXIT=$?
-  assert_exit "kitchen registered Stop row exists before command returns" 0
-  assert_empty "kitchen registered synchronous Stop stays silent"
   rm -rf "$FIX"
 fi
 
@@ -1108,54 +850,23 @@ else
 fi
 
 ####################################################################
-# workflow-guard.sh
+# workflow-nudge.sh
 ####################################################################
 
 echo
-echo "## workflow-guard.sh"
+echo "## workflow-nudge.sh"
 
-WG="$HERE/workflow-guard.sh"
+WG="$HERE/workflow-nudge.sh"
 WG_HOME=$(mktemp -d)
 
-# Run the guard from a fixture. Args: cwd, json-stdin, then optional VAR=value
-# env pairs. HOME and BTS_HOME point at an empty folder, so no real agent
-# definition or defaults file leaks in. Sets LAST_EXIT, LAST_OUT.
+# Run the nudge from a fixture. Args: cwd, json-stdin, then optional VAR=value
+# env pairs. Sets LAST_EXIT, LAST_OUT.
 run_wg() {
   local cwd="$1" payload="$2"
   shift 2
-  LAST_OUT=$(cd "$cwd" && printf '%s' "$payload" | env -u CLAUDE_PROJECT_DIR -u BTS_ALLOW_BYPASS -u BTS_HOOKS_DISABLED -u BTS_HOST \
+  LAST_OUT=$(cd "$cwd" && printf '%s' "$payload" | env -u CLAUDE_PROJECT_DIR -u BTS_HOOKS_DISABLED -u BTS_HOST \
     HOME="$WG_HOME" BTS_HOME="$WG_HOME/.bytheslice" "$@" bash "$WG" 2>&1)
   LAST_EXIT=$?
-}
-
-# A PreToolUse payload. Args: cwd, tool, tool_input JSON, then optional extra top-level JSON fields.
-wg_pre() {
-  printf '{"hook_event_name":"PreToolUse","session_id":"s-wg","cwd":%s,"tool_name":"%s","tool_input":%s%s}' \
-    "$(json_str "$1")" "$2" "$3" "${4:+,$4}"
-}
-
-# Assert the guard refused: exit 0, a deny decision, the rule and what it names.
-assert_deny() {
-  local name="$1" needle="$2"
-  assert_exit "$name exits 0" 0
-  assert_contains "$name refuses" '"permissionDecision":"deny"'
-  assert_contains "$name says BLOCKED" "BLOCKED [bytheslice"
-  assert_contains "$name names" "$needle"
-}
-
-# Assert the guard warned and let the call through.
-assert_wg_warn() {
-  local name="$1" needle="$2"
-  assert_exit "$name exits 0" 0
-  assert_contains "$name warns" "WARN [bytheslice"
-  assert_contains "$name names" "$needle"
-  assert_not_contains "$name does not refuse" '"permissionDecision":"deny"'
-}
-
-# The session's latest skill, as kitchen-log.sh records a Skill tool call.
-wg_skill() {
-  mkdir -p "$1/.claude/.bytheslice-state/kitchen"
-  printf '{"t":%s,"sid":"s-wg","ev":"PreToolUse","skill":"%s"}\n' "$(date +%s)000" "$2" >> "$1/.claude/.bytheslice-state/kitchen/activity.jsonl"
 }
 
 mk_wg_fixture() {
@@ -1163,175 +874,10 @@ mk_wg_fixture() {
   d=$(mk_fixture)
   mkdir -p "$d/docs/plans"
   printf '## Pie 1 - Slate\n### Slice 1.1 - Fetch [ ]\nbody\n### Slice 1.2 - Rank [ ]\n' > "$d/docs/plans/00_master_checklist.md"
-  printf '# Stage 7\n' > "$d/docs/plans/stage_7_fetch.md"
   printf '%s' "$d"
 }
 
-PR_CMD='gh pr create --fill'
-PR_AS_CMD='gh as steve-piece pr create --fill'
-
 FIX=$(mk_wg_fixture)
-NEW_STAGE=$(json_str "$FIX/docs/plans/stage_46_slate.md")
-OLD_STAGE=$(json_str "$FIX/docs/plans/stage_7_fetch.md")
-CHECKLIST_P=$(json_str "$FIX/docs/plans/00_master_checklist.md")
-
-# (a) hand-written stage file
-P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"# Stage 46\"}"); run_wg "$FIX" "$P"
-assert_deny "hand-written stage file" "/special-order"
-P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}"); run_wg "$FIX" "$P" BTS_ALLOW_BYPASS=1
-assert_wg_warn "hand-written stage file under the operator bypass" "operator bypass"
-printf '{\n  // operator choice\n  "enforcement": "warn",\n}\n' > "$FIX/bytheslice.config.json"
-P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}"); run_wg "$FIX" "$P"
-assert_wg_warn "hand-written stage file under enforcement warn" "/special-order"
-rm "$FIX/bytheslice.config.json"
-P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}" '"agent_type":"bytheslice:phased-plan-writer"'); run_wg "$FIX" "$P"
-assert_empty "stage file by bytheslice:phased-plan-writer passes"
-P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}" '"agent_type":"master-checklist-synthesizer"'); run_wg "$FIX" "$P"
-assert_empty "stage file by a bare registered writer passes"
-P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}" '"agent_type":"general-purpose"'); run_wg "$FIX" "$P"
-assert_deny "stage file by a general-purpose subagent" "/special-order"
-wg_skill "$FIX" sell-pie
-P=$(wg_pre "$FIX" Edit "{\"file_path\":$OLD_STAGE,\"old_string\":\"# Stage 7\",\"new_string\":\"# Stage 7\\nbuild note\"}"); run_wg "$FIX" "$P"
-assert_empty "build note on an existing stage file during sell-pie passes"
-P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}"); run_wg "$FIX" "$P"
-assert_deny "new stage file during sell-pie" "/special-order"
-wg_skill "$FIX" bytheslice:special-order
-P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}"); run_wg "$FIX" "$P"
-assert_empty "stage file during special-order passes"
-rm -rf "$FIX/.claude/.bytheslice-state"
-
-# (a) checklist headings
-P=$(wg_pre "$FIX" Edit "{\"file_path\":$CHECKLIST_P,\"old_string\":\"### Slice 1.1 - Fetch [ ]\",\"new_string\":\"### Slice 1.1 - Fetch [x]\"}"); run_wg "$FIX" "$P"
-assert_empty "ticking a slice box passes the heading rule"
-P=$(wg_pre "$FIX" Edit "{\"file_path\":$CHECKLIST_P,\"old_string\":\"body\",\"new_string\":\"body with more detail\"}"); run_wg "$FIX" "$P"
-assert_empty "editing a slice body passes"
-P=$(wg_pre "$FIX" Edit "{\"file_path\":$CHECKLIST_P,\"old_string\":\"### Slice 1.2 - Rank [ ]\",\"new_string\":\"### Slice 1.2 - Rank [ ]\\n### Slice 1.3 - Publish [ ]\"}"); run_wg "$FIX" "$P"
-assert_deny "adding a slice heading by hand" "Slice 1.3"
-P=$(wg_pre "$FIX" Edit "{\"file_path\":$CHECKLIST_P,\"old_string\":\"Rank\",\"new_string\":\"Score\"}"); run_wg "$FIX" "$P"
-assert_deny "renaming a slice heading by hand" "/special-order"
-P=$(wg_pre "$FIX" Write "{\"file_path\":$CHECKLIST_P,\"content\":\"## Pie 1 - Slate\\n### Slice 1.1 - Fetch [ ]\\nbody\\n### Slice 1.2 - Rank [ ]\\n## Pie 11 - Daily slate\\n\"}"); run_wg "$FIX" "$P"
-assert_deny "writing a new pie into the checklist" "Pie 11"
-wg_skill "$FIX" cook-pizzas
-P=$(wg_pre "$FIX" Write "{\"file_path\":$CHECKLIST_P,\"content\":\"## Pie 11 - Daily slate\\n\"}"); run_wg "$FIX" "$P"
-assert_empty "a new pie during cook-pizzas passes"
-rm -rf "$FIX/.claude/.bytheslice-state"
-
-# (a) plan files written from the shell
-SHELL_HEREDOC="cat > docs/plans/stage_46_slate.md <<'EOF'
-# Stage 46
-EOF"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$SHELL_HEREDOC")}"); run_wg "$FIX" "$P"
-assert_deny "a stage file written with a shell heredoc" "plan-shell-write"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "printf '### Slice 1.3 - X\n' >> docs/plans/00_master_checklist.md")}"); run_wg "$FIX" "$P"
-assert_deny "a checklist heading appended from the shell" "00_master_checklist.md"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "sed -i '' 's/1.1 - Fetch \\[ \\]/1.1 - Fetch [x]/' docs/plans/00_master_checklist.md")}"); run_wg "$FIX" "$P"
-assert_deny "a checklist box ticked with sed outside a skill" "/special-order"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "python3 -c \"open('docs/plans/stage_9.md','w').write('x')\"")}"); run_wg "$FIX" "$P"
-assert_deny "a stage file written by a script" "stage_9.md"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "cat docs/plans/stage_7_fetch.md && grep -n Slice docs/plans/00_master_checklist.md && cp docs/plans/stage_7_fetch.md /tmp/x.md")}"); run_wg "$FIX" "$P"
-assert_empty "reading or copying plan files from the shell passes"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$SHELL_HEREDOC")}"); run_wg "$FIX" "$P" BTS_ALLOW_BYPASS=1
-assert_wg_warn "a shell plan write under the operator bypass" "plan-shell-write"
-wg_skill "$FIX" sell-pie
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "echo 'build note' >> docs/plans/stage_7_fetch.md")}"); run_wg "$FIX" "$P"
-assert_empty "appending a build note to an existing stage file during sell-pie passes"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$SHELL_HEREDOC")}"); run_wg "$FIX" "$P"
-assert_deny "a new stage file from the shell during sell-pie" "plan-shell-write"
-wg_skill "$FIX" special-order
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$SHELL_HEREDOC")}"); run_wg "$FIX" "$P"
-assert_empty "a shell plan write during special-order passes"
-rm -rf "$FIX/.claude/.bytheslice-state"
-run_wg "$FIX" "{\"command\":$(json_str "$SHELL_HEREDOC"),\"cwd\":$(json_str "$FIX")}" BTS_HOST=cursor
-assert_contains "cursor: a shell plan write is denied" '"permission":"deny"'
-
-# (b) ad-hoc implementer agents
-P=$(wg_pre "$FIX" Agent '{"description":"build slate","prompt":"x"}'); run_wg "$FIX" "$P"
-assert_deny "ad-hoc general-purpose agent" "/sell-slice"
-P=$(wg_pre "$FIX" Agent '{"subagent_type":"general-purpose","prompt":"x"}'); run_wg "$FIX" "$P" BTS_ALLOW_BYPASS=1
-assert_wg_warn "ad-hoc agent under the operator bypass" "/sell-slice"
-P=$(wg_pre "$FIX" Agent '{"subagent_type":"Explore","prompt":"x"}'); run_wg "$FIX" "$P"
-assert_empty "Explore (read-only) passes"
-P=$(wg_pre "$FIX" Agent '{"subagent_type":"bytheslice:implementer","prompt":"x"}'); run_wg "$FIX" "$P"
-assert_empty "bytheslice:implementer passes"
-mkdir -p "$FIX/.claude/agents"
-printf -- '---\nname: reader\ntools: Read, Grep, Glob\n---\nreads\n' > "$FIX/.claude/agents/reader.md"
-printf -- '---\nname: writer\ntools:\n  - Read\n  - Edit\n---\nwrites\n' > "$FIX/.claude/agents/writer.md"
-P=$(wg_pre "$FIX" Agent '{"subagent_type":"reader","prompt":"x"}'); run_wg "$FIX" "$P"
-assert_empty "a project agent without write tools passes"
-P=$(wg_pre "$FIX" Agent '{"subagent_type":"writer","prompt":"x"}'); run_wg "$FIX" "$P"
-assert_deny "a project agent with Edit" "writer (it has write tools)"
-P=$(wg_pre "$FIX" Agent '{"subagent_type":"someplugin:mystery","prompt":"x"}'); run_wg "$FIX" "$P"
-assert_deny "an agent whose definition is not found" "definition was not found"
-wg_skill "$FIX" sell-slice
-P=$(wg_pre "$FIX" Agent '{"subagent_type":"general-purpose","prompt":"x"}'); run_wg "$FIX" "$P"
-assert_empty "any agent during sell-slice passes"
-rm -rf "$FIX/.claude/.bytheslice-state"
-
-# (c) PR with an unverified slice
-git -C "$FIX" checkout -q -b pie-1-slate
-echo a > "$FIX/a.txt"; git -C "$FIX" add a.txt; git -C "$FIX" commit -q -m "feat(pie-1): 1.1 task 1 fetch"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_CMD")}"); run_wg "$FIX" "$P"
-assert_wg_warn "PR with no ledger at all (the Pass never ran) only warns" "No Pass ledger"
-mkdir -p "$FIX/.bytheslice"; printf '{"v":1,"t":1,"sid":"x","ev":"note","data":{"text":"start"}}\n' > "$FIX/.bytheslice/ledger.jsonl"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_AS_CMD")}"); run_wg "$FIX" "$P"
-assert_deny "PR (gh as <user>) with an unverified slice" "Slice 1.1"
-assert_contains "PR refusal names the skill" "/sell-slice"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_CMD")}"); run_wg "$FIX" "$P"
-assert_deny "PR (plain gh) with an unverified slice" "Slice 1.1"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_CMD")}"); run_wg "$FIX" "$P" BTS_ALLOW_BYPASS=1
-assert_wg_warn "PR under the operator bypass" "Slice 1.1"
-mkdir -p "$FIX/.bytheslice"
-printf '{"v":1,"t":1,"sid":"x","ev":"verdict","pie":1,"slice":"1.1","data":{"gate":"slice-verifier","overall":"pass"}}\n' > "$FIX/.bytheslice/ledger.jsonl"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_CMD")}"); run_wg "$FIX" "$P"
-assert_empty "PR whose slice has a slice-verifier pass"
-git -C "$FIX" checkout -q -b pie-1-untagged main
-echo b > "$FIX/b.txt"; git -C "$FIX" add b.txt; git -C "$FIX" commit -q -m "wip: slate"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "cd . && $PR_CMD")}"); run_wg "$FIX" "$P"
-assert_deny "pie branch PR with untagged commits lists the pie's unverified slices" "Slice 1.2"
-assert_not_contains "verified slice is not listed" "1.1,"
-git -C "$FIX" checkout -q -b feat/misc main
-echo c > "$FIX/c.txt"; git -C "$FIX" add c.txt; git -C "$FIX" commit -q -m "fix typo"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_CMD")}"); run_wg "$FIX" "$P"
-assert_empty "PR with no slice commits off a pie branch passes"
-P=$(wg_pre "$FIX" Bash '{"command":"git status"}'); run_wg "$FIX" "$P"
-assert_empty "other commands pass"
-git -C "$FIX" checkout -q pie-1-untagged
-run_wg "$FIX" "{\"command\":$(json_str "$PR_CMD"),\"cwd\":$(json_str "$FIX")}" BTS_HOST=cursor
-assert_contains "cursor: unverified PR is denied" '"permission":"deny"'
-run_wg "$FIX" "{\"command\":\"ls\",\"cwd\":$(json_str "$FIX")}" BTS_HOST=cursor
-assert_contains "cursor: other commands are allowed" '"permission":"allow"'
-run_wg "$FIX" "{\"command\":$(json_str "$PR_CMD")}" BTS_HOST=cursor BTS_HOOKS_DISABLED=1
-assert_contains "cursor: disabled still answers allow" '"permission":"allow"'
-# Ship-once: one PR from the ship branch carrying pie merge commits and verified slices passes;
-# a deferred slice's commits left the branch, so the guard never sees them.
-git -C "$FIX" checkout -q -b ship/slate main
-git -C "$FIX" checkout -q -b pie-1-ship ship/slate
-echo d > "$FIX/d.txt"; git -C "$FIX" add d.txt; git -C "$FIX" commit -q -m "feat(pie-1): 1.1 task 2 fetch retries"
-git -C "$FIX" checkout -q ship/slate
-git -C "$FIX" merge -q --no-ff pie-1-ship -m "merge(pie-1): Pie 1 Slate into ship/slate"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_AS_CMD")}"); run_wg "$FIX" "$P"
-assert_empty "ship-once PR with every slice verified and a pie merge commit passes"
-echo e > "$FIX/e.txt"; git -C "$FIX" add e.txt; git -C "$FIX" commit -q -m "feat(pie-1): 1.2 task 1 rank"
-P=$(wg_pre "$FIX" Bash "{\"command\":$(json_str "$PR_AS_CMD")}"); run_wg "$FIX" "$P"
-assert_deny "ship-once PR still carrying an unverified slice" "Slice 1.2"
-git -C "$FIX" checkout -q main
-
-# The operator's switches
-printf '{\n  "enforcement": "block"\n}\n' > "$FIX/bytheslice.config.json"
-P=$(wg_pre "$FIX" Edit "{\"file_path\":$(json_str "$FIX/bytheslice.config.json"),\"old_string\":\"block\",\"new_string\":\"warn\"}"); run_wg "$FIX" "$P"
-assert_deny "agent setting enforcement warn" "operator"
-rm "$FIX/bytheslice.config.json"
-P=$(wg_pre "$FIX" Write "{\"file_path\":$(json_str "$FIX/.claude/settings.local.json"),\"content\":\"{\\\"env\\\":{\\\"BTS_ALLOW_BYPASS\\\":\\\"1\\\"}}\"}"); run_wg "$FIX" "$P"
-assert_deny "agent writing BTS_ALLOW_BYPASS into settings" "operator"
-
-# Worktree: the gitignored checklist lives in the primary checkout
-WT_FIX=$(mk_fixture)
-printf 'docs/plans/\n.claude/\n' > "$WT_FIX/.gitignore"; git -C "$WT_FIX" add .gitignore; git -C "$WT_FIX" commit -q -m ignore
-mkdir -p "$WT_FIX/docs/plans"; printf '## Pie 1 - A\n### Slice 1.1 - B [ ]\n' > "$WT_FIX/docs/plans/00_master_checklist.md"
-git -C "$WT_FIX" worktree add -q -b pie-1-a "$WT_FIX/.claude/worktrees/wt"
-P=$(wg_pre "$WT_FIX/.claude/worktrees/wt" Agent '{"subagent_type":"general-purpose","prompt":"x"}'); run_wg "$WT_FIX/.claude/worktrees/wt" "$P"
-assert_deny "a worktree without plans finds the primary checkout's checklist" "/sell-slice"
-rm -rf "$WT_FIX"
 
 # (d) feature intake context
 run_wg "$FIX" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$FIX"),\"prompt\":\"/goal build a new daily slate pipeline\"}"
@@ -1355,45 +901,43 @@ run_wg "$NOPLAN_P" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str
 assert_empty "no checklist: a feature ask outside a ByTheSlice project gets nothing"
 run_wg "$NOPLAN_P" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$NOPLAN_P"),\"prompt\":\"build the app\"}"
 assert_empty "no checklist: a plain build ask (not end to end) gets nothing"
-P=$(wg_pre "$FIX" Agent '{"subagent_type":"general-purpose","prompt":"x"}'); wg_skill "$FIX" pizza-party; run_wg "$FIX" "$P"
-assert_empty "any agent during pizza-party passes"
-rm -rf "$NOPLAN_P" "$FIX/.claude/.bytheslice-state"
+rm -rf "$NOPLAN_P"
 
-# Off switches and safety
-P=$(wg_pre "$FIX" Write "{\"file_path\":$NEW_STAGE,\"content\":\"x\"}"); run_wg "$FIX" "$P" BTS_HOOKS_DISABLED=1
-assert_empty "BTS_HOOKS_DISABLED=1 silences the guard"
+# Never a refusal, whatever the event
+run_wg "$FIX" "{\"hook_event_name\":\"PreToolUse\",\"cwd\":$(json_str "$FIX"),\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":$(json_str "$FIX/docs/plans/stage_46_x.md"),\"content\":\"x\"}}"
+assert_empty "a tool call gets nothing (the nudge only reads prompts)"
+run_wg "$FIX" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$FIX"),\"prompt\":\"/goal add a new feature\"}" BTS_HOOKS_DISABLED=1
+assert_empty "BTS_HOOKS_DISABLED=1 silences the nudge"
 run_wg "$FIX" "not json"
 assert_exit "malformed input exits 0" 0
-assert_empty "malformed input is let through"
-NOPLAN=$(mk_fixture)
-P=$(wg_pre "$NOPLAN" Agent '{"subagent_type":"general-purpose","prompt":"x"}'); run_wg "$NOPLAN" "$P"
-assert_empty "no checklist: the guard stays quiet"
-P=$(wg_pre "$NOPLAN" Write "{\"file_path\":$(json_str "$NOPLAN/docs/plans/stage_1_x.md"),\"content\":\"x\"}"); run_wg "$NOPLAN" "$P"
-assert_empty "no checklist: a stage file write passes"
-rm -rf "$NOPLAN"
+assert_empty "malformed input adds nothing"
+if grep -nE 'permissionDecision|"deny"|exit[[:space:]]+2' "$HERE/workflow-nudge.js" "$WG" >/dev/null; then
+  FAIL=$((FAIL+1)); FAILED_NAMES+=("workflow nudge can refuse"); printf '  ✗ workflow nudge can refuse\n'
+else
+  PASS=$((PASS+1)); printf '  ✓ the workflow nudge has no refusal path\n'
+fi
 
 # Doctor: the report /setup-shop and /open-kitchen print
-LAST_OUT=$(env -u BTS_HOOKS_DISABLED -u BTS_ALLOW_BYPASS HOME="$WG_HOME" BTS_HOME="$WG_HOME/.bytheslice" node "$HERE/workflow-guard.js" doctor "$FIX")
+LAST_OUT=$(env -u BTS_HOOKS_DISABLED HOME="$WG_HOME" BTS_HOME="$WG_HOME/.bytheslice" node "$HERE/workflow-nudge.js" doctor "$FIX")
 assert_contains "doctor: intake missing" "Feature intake: MISSING"
-assert_contains "doctor: enforcement default" "Enforcement: block (default)"
-assert_contains "doctor: hooks active" "Hooks: workflow guard active on"
+assert_contains "doctor: nudge active" "Hooks: workflow nudge active on UserPromptSubmit"
+assert_not_contains "doctor: no enforcement line" "Enforcement"
 printf '# Rules\n<!-- bytheslice:feature-intake:start -->\n## Feature intake\n<!-- bytheslice:feature-intake:end -->\n' > "$FIX/CLAUDE.md"
-LAST_OUT=$(env -u BTS_HOOKS_DISABLED HOME="$WG_HOME" BTS_HOME="$WG_HOME/.bytheslice" BTS_ALLOW_BYPASS=1 node "$HERE/workflow-guard.js" doctor "$FIX")
+LAST_OUT=$(env -u BTS_HOOKS_DISABLED HOME="$WG_HOME" BTS_HOME="$WG_HOME/.bytheslice" node "$HERE/workflow-nudge.js" doctor "$FIX")
 assert_contains "doctor: intake present" "Feature intake: present in CLAUDE.md"
-assert_contains "doctor: bypass reported" "BTS_ALLOW_BYPASS=1 is set"
 
 # Intake: writes the Feature intake block, idempotent, replaces a stale copy in place
 INTAKE_FIX=$(mk_fixture)
-LAST_OUT=$(node "$HERE/workflow-guard.js" intake "$INTAKE_FIX")
+LAST_OUT=$(node "$HERE/workflow-nudge.js" intake "$INTAKE_FIX")
 assert_contains "intake: creates CLAUDE.md" "created CLAUDE.md"
 LAST_OUT=$(grep -c "bytheslice:feature-intake" "$INTAKE_FIX/CLAUDE.md")
 assert_contains "intake: block has both markers" "2"
 LAST_OUT=$(grep -c "/special-order" "$INTAKE_FIX/CLAUDE.md")
 assert_not_contains "intake: block names /special-order" "0"
-LAST_OUT=$(node "$HERE/workflow-guard.js" intake "$INTAKE_FIX")
+LAST_OUT=$(node "$HERE/workflow-nudge.js" intake "$INTAKE_FIX")
 assert_contains "intake: a second run changes nothing" "unchanged in CLAUDE.md"
 printf '# Mine\n<!-- bytheslice:feature-intake:start -->\nold text\n<!-- bytheslice:feature-intake:end -->\nkeep me\n' > "$INTAKE_FIX/CLAUDE.md"
-LAST_OUT=$(node "$HERE/workflow-guard.js" intake "$INTAKE_FIX")
+LAST_OUT=$(node "$HERE/workflow-nudge.js" intake "$INTAKE_FIX")
 assert_contains "intake: a stale copy is updated" "updated in CLAUDE.md"
 LAST_OUT=$(cat "$INTAKE_FIX/CLAUDE.md")
 assert_not_contains "intake: the stale text is gone" "old text"
@@ -1401,7 +945,7 @@ assert_contains "intake: the user's own lines stay" "keep me"
 # A folder that is not a repo yet, inside a repo with its own checklist and rules: intake stays in the folder.
 mkdir -p "$INTAKE_FIX/docs/plans" "$INTAKE_FIX/sub"; printf '## Pie 1 - A\n' > "$INTAKE_FIX/docs/plans/00_master_checklist.md"
 OUTER_BEFORE=$(cat "$INTAKE_FIX/CLAUDE.md")
-LAST_OUT=$(node "$HERE/workflow-guard.js" intake "$INTAKE_FIX/sub")
+LAST_OUT=$(node "$HERE/workflow-nudge.js" intake "$INTAKE_FIX/sub")
 assert_contains "intake: a nested folder gets its own CLAUDE.md" "created CLAUDE.md"
 if [ "$(cat "$INTAKE_FIX/CLAUDE.md")" = "$OUTER_BEFORE" ] && [ -f "$INTAKE_FIX/sub/CLAUDE.md" ]; then
   PASS=$((PASS+1)); printf '  ✓ intake: the enclosing repo'"'"'s rules file is untouched\n'
@@ -1410,9 +954,9 @@ else
 fi
 rm -rf "$INTAKE_FIX/sub" "$INTAKE_FIX/docs"
 rm "$INTAKE_FIX/CLAUDE.md"; printf '# Agents\n' > "$INTAKE_FIX/AGENTS.md"
-LAST_OUT=$(node "$HERE/workflow-guard.js" intake "$INTAKE_FIX")
+LAST_OUT=$(node "$HERE/workflow-nudge.js" intake "$INTAKE_FIX")
 assert_contains "intake: an AGENTS.md-only project gets it there" "added to AGENTS.md"
-LAST_OUT=$(env -u BTS_HOOKS_DISABLED -u BTS_ALLOW_BYPASS node "$HERE/workflow-guard.js" doctor "$INTAKE_FIX")
+LAST_OUT=$(env -u BTS_HOOKS_DISABLED node "$HERE/workflow-nudge.js" doctor "$INTAKE_FIX")
 assert_contains "doctor: reads AGENTS.md too" "Feature intake: present in AGENTS.md"
 rm -rf "$INTAKE_FIX"
 
@@ -1427,7 +971,6 @@ echo "## hooks.json wiring"
 
 # Every command path in hooks.json names a script that exists, and no wired
 # script can block a tool call itself: no `exit 2`, no block or deny decision.
-# The workflow guard's refusals come from workflow-guard.js, whose cases are above.
 WIRED=$(sed -nE 's#.*\$\{CLAUDE_PLUGIN_ROOT\}/hooks/([^"\\]+)\\?".*#\1#p' "$HERE/hooks.json" | sort -u)
 COMMANDS=$(grep -cE '"command"[[:space:]]*:' "$HERE/hooks.json")
 REFS=$(grep -c 'CLAUDE_PLUGIN_ROOT}/hooks/' "$HERE/hooks.json")
@@ -1461,23 +1004,11 @@ for lib in "$HERE"/lib/*.sh; do
   fi
 done
 
-# lobby-signal.sh runs on exactly the six Lobby events, Notification and
-# UserPromptSubmit included, synchronously in the kitchen-log.sh command form.
-if "$JSON_NODE" -e '
-  const hooks = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).hooks;
-  const got = [];
-  for (const [ev, groups] of Object.entries(hooks)) for (const g of groups) for (const h of g.hooks) {
-    if (!h.command.includes("/hooks/lobby-signal.sh")) continue;
-    if (h.command !== "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/lobby-signal.sh\"" || h.timeout !== 5 || g.matcher ||
-        (h.async !== undefined && h.async !== false)) process.exit(1);
-    got.push(ev);
-  }
-  const want = ["SessionStart", "SubagentStart", "SubagentStop", "Stop", "UserPromptSubmit", "Notification"];
-  process.exit(JSON.stringify(got.sort()) === JSON.stringify(want.sort()) ? 0 : 1);
-' "$HERE/hooks.json" 2>/dev/null; then
-  PASS=$((PASS+1)); printf '  ✓ lobby-signal.sh wired once each on SessionStart, SubagentStart, SubagentStop, Stop, UserPromptSubmit and Notification\n'
+# Claude Code runs lobby-signal.sh from the Pass (mod/relay.ts, tested there), not hooks.json.
+if grep -q 'lobby-signal.sh' "$HERE/hooks.json"; then
+  FAIL=$((FAIL+1)); FAILED_NAMES+=("lobby-signal.sh still in hooks.json"); printf '  ✗ lobby-signal.sh still in hooks.json\n'
 else
-  FAIL=$((FAIL+1)); FAILED_NAMES+=("lobby-signal.sh wiring"); printf '  ✗ lobby-signal.sh wiring (want the six Lobby events, Notification and UserPromptSubmit included)\n'
+  PASS=$((PASS+1)); printf '  ✓ lobby-signal.sh is relayed by the Pass, not wired in hooks.json\n'
 fi
 
 echo
@@ -1511,20 +1042,7 @@ if "$JSON_NODE" -e '
   process.exit(JSON.stringify(got.sort()) === JSON.stringify(["beforeSubmitPrompt", "sessionStart", "stop", "subagentStart", "subagentStop"]) ? 0 : 1);
 ' "$CURSOR_HOOKS" 2>/dev/null; then cursor_ok "hooks-cursor.json runs lobby-signal.sh on sessionStart, beforeSubmitPrompt, subagentStart, subagentStop and stop"; else cursor_no "hooks-cursor.json lobby-signal.sh events"; fi
 
-# Cursor blocks a shell command whose hook prints no JSON or JSON off schema,
-# so every Cursor guard run must print a valid allow.
-cursor_allow() { # name, stdin, extra env assignment (may be empty), expect-substring
-  local out
-  out=$(cd "$FIX" && printf '%s' "$2" | env BTS_HOST=cursor $3 bash "$COMMIT_GUARD" 2>/dev/null)
-  if printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["permission"]=="allow"' 2>/dev/null \
-    && { [ -z "$4" ] || printf '%s' "$out" | grep -q "$4"; }; then cursor_ok "$1"; else cursor_no "$1 ($out)"; fi
-}
 FIX=$(mk_fixture)
-cursor_allow "cursor guard: commit on main allows and warns" "{\"command\":\"git commit -m x\",\"cwd\":\"$FIX\"}" "" "git commit on main"
-cursor_allow "cursor guard: non-commit allows" "{\"command\":\"ls\",\"cwd\":\"$FIX\"}" "" ""
-cursor_allow "cursor guard: disabled still allows" "{\"command\":\"git commit -m x\"}" "BTS_HOOKS_DISABLED=1" ""
-cursor_allow "cursor guard: unreadable input still allows" "not json" "" ""
-
 OUT=$(cd "$FIX" && env -u CLAUDE_PROJECT_DIR BTS_HOST=cursor bash "$SHOP_STATUS" </dev/null 2>/dev/null)
 if [ "$OUT" = "{}" ]; then cursor_ok "cursor shop-status: no checklist prints {}"; else cursor_no "cursor shop-status no checklist ($OUT)"; fi
 mkdir -p "$FIX/docs/plans"; printf '## Pie 1: A\n### Slice 1.1: B\n- [ ] x\n' > "$FIX/docs/plans/00_master_checklist.md"

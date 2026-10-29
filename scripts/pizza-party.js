@@ -43,20 +43,29 @@ function has(bin) {
   return spawnSync('/bin/sh', ['-c', `command -v ${bin}`], { stdio: 'ignore' }).status === 0;
 }
 
+/** The folder itself, else its nearest existing parent: a check run in a missing folder fails before it starts. */
+function existingDir(dir) {
+  let at = dir;
+  while (!fs.existsSync(at) && path.dirname(at) !== at) at = path.dirname(at);
+  return at;
+}
+
 /** What this machine can do for an unattended build, as JSON on stdout. */
 function preflight(root) {
-  const cwd = path.resolve(root || process.cwd());
+  const target = path.resolve(root || process.cwd());
+  // A new app's folder does not exist yet: the provider checks run from its nearest parent.
+  const cwd = existingDir(target);
   const tools = {};
   for (const bin of ['git', 'node', 'pnpm', 'npm', 'gh', 'npx']) tools[bin] = has(bin);
   const out = {
-    root: cwd,
+    root: target,
     tools,
     github: tools.gh && succeeds('gh', ['auth', 'status'], cwd),
     hosts: [],
     databases: [],
-    folder: { exists: fs.existsSync(cwd), empty: !fs.existsSync(cwd) || fs.readdirSync(cwd).filter(n => n !== '.DS_Store').length === 0 },
-    checklist: fs.existsSync(path.join(cwd, 'docs', 'plans', '00_master_checklist.md')),
-    ticket: fs.existsSync(path.join(cwd, TICKET)),
+    folder: { exists: fs.existsSync(target), empty: !fs.existsSync(target) || fs.readdirSync(target).filter(n => n !== '.DS_Store').length === 0 },
+    checklist: fs.existsSync(path.join(target, 'docs', 'plans', '00_master_checklist.md')),
+    ticket: fs.existsSync(path.join(target, TICKET)),
   };
   for (const [kind, list] of Object.entries(PROVIDERS)) {
     for (const p of list) {
