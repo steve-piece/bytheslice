@@ -1,0 +1,29 @@
+# Every pull request to main ships a new version: package.json above main's, every
+# manifest in lockstep, a CHANGELOG.md section for it, and no tag for it yet. On merge,
+# release.yml tags and releases that version.
+name: Version check
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check the version bump
+        run: node scripts/version-check.js "origin/${{ github.base_ref }}"
+
+      - name: Release notes test
+        run: node --test tests/release/*.test.js tests/manifest-lockstep/*.test.js

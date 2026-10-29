@@ -7,9 +7,28 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 > [!NOTE]
 > **Reading the menu:** *Added* = new toppings, *Changed* = recipe tweaks, *Removed* = pulled from the menu, *Fixed* = burnt slices reheated, *Deprecated* = day-old, going away soon.
 
+> [!TIP]
+> **Every PR ships a version.** The [version check](.github/workflows/version-check.yml) fails a pull request to `main` unless it bumps the version in `package.json` and every manifest and adds that version's section here. When it merges, the [release workflow](.github/workflows/release.yml) tags it `vX.Y.Z` and publishes a GitHub release from that section.
+
 ---
 
 ## [Unreleased]
+
+---
+
+## [6.1.2] - 2026-10-29
+
+**Every merge is a tagged release.** Tagging had stopped after 5.1.0, so 20 versions shipped with no tag or release. Those are backfilled, and the repo now enforces a version bump on every pull request and tags each one on merge.
+
+### Added
+
+- **Version check on every pull request** (`.github/workflows/version-check.yml`, `scripts/version-check.js`). It fails unless `package.json` is above `main`'s version, every manifest carries the same version, this file has its section, and no tag for it exists yet.
+- **Release on merge** (`.github/workflows/release.yml`). A version bump that reaches `main` is tagged `vX.Y.Z` (annotated) and released on GitHub with its section here as the notes, read through `scripts/release-notes.js`.
+
+### Fixed
+
+- The 5.1.1 and 5.1.2 entries were missing, and the 1.0.0 heading had no date format; both are filled in.
+- Backfilled on GitHub: tags v1.0.0, v2.2.0, v2.2.1 and v5.1.1 through v6.1.1, each dated to its release commit, a release for every tag that lacked one, and one title style (`vX.Y.Z: Title`) across all releases.
 
 ---
 
@@ -397,6 +416,26 @@ On 2026-10-28 an agent in another project, on ByTheSlice 5.7.0, was asked throug
 
 ---
 
+## [5.1.2] - 2026-09-09
+
+**The plugin loads on Claude Code 2.1.263.** Released without notes of its own; 5.1.3 carries the full story.
+
+### Fixed
+
+- `plugin.json` no longer points at `./hooks/hooks.json`. The runtime loads that file on its own, so the pointer read as a duplicate and the plugin failed to load.
+
+---
+
+## [5.1.1] - 2026-09-09
+
+**Hooks wrapped for the current hook schema.** Released without notes of its own; 5.1.3 carries the full story.
+
+### Fixed
+
+- `hooks/hooks.json` wraps its events under a top-level `"hooks"` key. Claude Code 2.1.263 rejected the old shape and skipped the whole plugin, so every `/bytheslice:*` command read as unknown.
+
+---
+
 ## [5.1.0] - 2026-07-22
 
 **Native agent registration.** The 54 markdown subagent definitions stop being read-and-paste prompt templates: 48 live agents are now declared in `plugin.json`'s `agents` array, so the platform itself enforces every `model`, `effort`, and tool allowlist that was previously advisory frontmatter. Skills dispatch by type (`bytheslice:<name>`), passing only task inputs as the prompt; read-and-paste survives as the documented fallback for Cursor and hosts without plugin-agent support.
@@ -769,6 +808,6 @@ If you have an existing v1 project:
 
 ---
 
-## [1.0.0]  2026-04
+## [1.0.0] - 2026-03-27
 
 Initial release. PRD generation, phased planning, and CI/CD hardening skills.
