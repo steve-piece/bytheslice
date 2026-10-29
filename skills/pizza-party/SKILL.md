@@ -9,7 +9,7 @@ triggers: ["/bytheslice:pizza-party", "/pizza-party", "pizza party", "build this
 
 # /pizza-party
 
-`/pizza-party` takes a brief ("a private app for logging my diet and workouts, with a database and an agent plugin") and returns a finished app and a URL. The operator answers **one interview** at the start; after that nothing waits on a human. That is the contract the operator opts into: they accept the risk of decisions made without them in exchange for a working app instead of a question that sat unanswered for ten hours.
+`/pizza-party` takes a brief ("a private app for tracking my reading list, with a database and an agent plugin") and returns a finished app and a URL. The operator answers **one interview** at the start; after that nothing waits on a human. That is the contract the operator opts into: they accept the risk of decisions made without them in exchange for a working app instead of a question that sat unanswered for ten hours.
 
 The conductor is **thin**. It holds no implementation context: it runs the existing skills in order, each of which does its own work in subagents and Workflows, and it keeps its own state in the **order ticket** (`docs/pizza-party/order.md`, format in [references/order-ticket.md](references/order-ticket.md)) so a compaction costs nothing. At every phase boundary call `bts_status` when the tool is available, and after a compaction read the ticket's **Progress** section before anything else.
 

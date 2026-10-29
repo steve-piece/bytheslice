@@ -142,7 +142,7 @@ Full read-through of every plugin file against 17 audit categories. Fixes applie
 
 ### HA-1: README Installation Section — Plugin Name
 
-**File:** `/Users/stevenlight/phased-dev-workflow/README.md` line 14
+**File:** `README.md` line 14
 
 **Issue:** Installation command reads `/add-plugin phased-dev-workflow`. After the plugin is published/renamed to "bytheslice" in the marketplace, this should become `/add-plugin bytheslice`.
 
@@ -152,7 +152,7 @@ Full read-through of every plugin file against 17 audit categories. Fixes applie
 
 ### HA-2: Model Version Strings in model-tier-guide.md
 
-**File:** `/Users/stevenlight/phased-dev-workflow/references/model-tier-guide.md` lines 68–70 (env var override examples)
+**File:** `references/model-tier-guide.md` lines 68–70 (env var override examples)
 
 **Issue:** The env var override documentation contains explicit version strings:
 ```
@@ -180,9 +180,9 @@ These are intentional examples showing how to pin to specific versions. However,
 
 ### HA-4: README Local Path Reference
 
-**File:** `/Users/stevenlight/phased-dev-workflow/README.md`
+**File:** `README.md`
 
-**Issue:** The README contains `Local clone: /Users/stevenlight/phased-dev-workflow` — a user-specific absolute path. This is appropriate for a personal workflow file but may look odd if the README is published publicly.
+**Issue:** The README contains `Local clone: <local clone path>` — a user-specific absolute path. This is appropriate for a personal workflow file but may look odd if the README is published publicly.
 
 **Action:** Review before any public release of the plugin documentation.
 
