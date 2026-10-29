@@ -1,0 +1,45 @@
+# Tags and releases each version bump that reaches main: the version in package.json
+# becomes an annotated vX.Y.Z tag and a GitHub release whose notes are that version's
+# CHANGELOG.md section. A version already tagged is left alone, so ordinary merges do nothing.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Tag and release the package.json version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="v$version"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag already exists; nothing to release."
+            exit 0
+          fi
+          title=$(node scripts/release-notes.js "$version" --title)
+          node scripts/release-notes.js "$version" > "$RUNNER_TEMP/notes.md"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "$title"
+          git push origin "$tag"
+          gh release create "$tag" --title "$title" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag

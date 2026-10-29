@@ -7,6 +7,9 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 > [!NOTE]
 > **Reading the menu:** *Added* = new toppings, *Changed* = recipe tweaks, *Removed* = pulled from the menu, *Fixed* = burnt slices reheated, *Deprecated* = day-old, going away soon.
 
+> [!TIP]
+> **Releases are automatic.** When a version bump reaches `main`, the [release workflow](.github/workflows/release.yml) tags it `vX.Y.Z` and publishes a GitHub release from that version's section here, so every bump needs its section before it merges.
+
 ---
 
 ## [Unreleased]
@@ -397,6 +400,26 @@ On 2026-10-28 an agent in another project, on ByTheSlice 5.7.0, was asked throug
 
 ---
 
+## [5.1.2] - 2026-09-09
+
+**The plugin loads on Claude Code 2.1.263.** Released without notes of its own; 5.1.3 carries the full story.
+
+### Fixed
+
+- `plugin.json` no longer points at `./hooks/hooks.json`. The runtime loads that file on its own, so the pointer read as a duplicate and the plugin failed to load.
+
+---
+
+## [5.1.1] - 2026-09-09
+
+**Hooks wrapped for the current hook schema.** Released without notes of its own; 5.1.3 carries the full story.
+
+### Fixed
+
+- `hooks/hooks.json` wraps its events under a top-level `"hooks"` key. Claude Code 2.1.263 rejected the old shape and skipped the whole plugin, so every `/bytheslice:*` command read as unknown.
+
+---
+
 ## [5.1.0] - 2026-07-22
 
 **Native agent registration.** The 54 markdown subagent definitions stop being read-and-paste prompt templates: 48 live agents are now declared in `plugin.json`'s `agents` array, so the platform itself enforces every `model`, `effort`, and tool allowlist that was previously advisory frontmatter. Skills dispatch by type (`bytheslice:<name>`), passing only task inputs as the prompt; read-and-paste survives as the documented fallback for Cursor and hosts without plugin-agent support.
@@ -769,6 +792,6 @@ If you have an existing v1 project:
 
 ---
 
-## [1.0.0]  2026-04
+## [1.0.0] - 2026-03-27
 
 Initial release. PRD generation, phased planning, and CI/CD hardening skills.
