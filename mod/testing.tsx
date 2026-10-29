@@ -91,9 +91,8 @@ export function activityLine(row: Record<string, unknown>): string {
 
 const isChecklistName = (path: string): boolean => /(^|\/)docs\/plans\/00_master_checklist\.md$/.test(path)
 
-/** The project config path, and a config that turns enforcement to warn (the checks then never refuse). */
+/** The project config path. */
 export const CONFIG = `${CWD}/bytheslice.config.json`
-export const WARN_MODE = { [CONFIG]: '{ "enforcement": "warn" }' }
 
 /** A checklist with one pie whose slices are all done. */
 export const ALL_DONE = [

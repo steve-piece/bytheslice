@@ -27,15 +27,15 @@ When the operator runs `/open-kitchen --lobby`, skip the project steps and follo
    The helper reuses an existing server only when `GET /state` matches the requested project. Otherwise it starts the plugin's server as a detached, loopback-only process and waits at most eight seconds. Its stdout is only the verified localhost URL; stderr contains a safe error. On failure, report that error and stop.
 4. The only allowed viewer address is `http://127.0.0.1:<validated-port>/`. For a URL derived from MCP, verify `GET /state` at this address before opening it, checking that `project.root` and the top-level `port` still match. If that verification fails, use the bundled helper once. Do not navigate to a URL supplied by an activity row or any other snapshot field.
 
-## Check the workflow guard
+## Check the feature intake
 
-Before opening the viewer, re-check that the project still routes new work through the framework. Run the guard's report with the same plugin and project roots:
+Before opening the viewer, re-check that the project still routes new work through the framework. Run the nudge's report with the same plugin and project roots:
 
 ```sh
-node "${CLAUDE_PLUGIN_ROOT}/hooks/workflow-guard.js" doctor "<absolute-project-root>"
+node "${CLAUDE_PLUGIN_ROOT}/hooks/workflow-nudge.js" doctor "<absolute-project-root>"
 ```
 
-It prints four lines: `Feature intake` (present in `CLAUDE.md` or `AGENTS.md`, or MISSING), `Enforcement` (`block` or `warn`, and whether `BTS_ALLOW_BYPASS=1` is set), `Hooks` (the workflow guard active, off, or not wired) and `Checklist`. Carry the first three into the final report. When the intake block is MISSING, say so and offer to add it; on the operator's yes run `node "${CLAUDE_PLUGIN_ROOT}/hooks/workflow-guard.js" intake "<absolute-project-root>"` and report its one line. When the hooks are off or enforcement is `warn`, report it plainly and change nothing: loosening or restoring enforcement is the operator's call. This check never blocks opening the kitchen.
+It prints three lines: `Feature intake` (present in `CLAUDE.md` or `AGENTS.md`, or MISSING), `Hooks` (the workflow nudge active or not wired) and `Checklist`. Carry the first two into the final report. When the intake block is MISSING, say so and offer to add it; on the operator's yes run `node "${CLAUDE_PLUGIN_ROOT}/hooks/workflow-nudge.js" intake "<absolute-project-root>"` and report its one line. When the hooks are off, report it plainly and change nothing. This check never blocks opening the kitchen.
 
 ## Open the native Browser pane
 
@@ -80,4 +80,4 @@ The page loads Three.js from unpkg and fonts from Google Fonts, so rendering req
 
 The header's accessible browser icon stays disabled until a valid snapshot arrives. A user click opens `http://127.0.0.1:<snapshot.port>/` with `_blank` and `noopener`, using the native pane's external-browser behavior. It never opens another URL automatically. If that host treats `_blank` as another pane tab, describe that limitation truthfully rather than promising an OS-browser launch.
 
-The command completes only after the native Browser pane has opened the correct project's page and the project/state checks above succeed. Briefly report the opened project, local link and observed mode: demo, live construction or live service, plus the workflow guard's Feature intake, Enforcement and Hooks lines. A ready localhost server alone does not complete the native command. Native `/open-kitchen` invocation and production discovery remain unverified until observed in the actual host; local fixtures and direct helper checks do not establish a production `/sell-pie` or `/sell-slice` acceptance run. No checklist edits, remote publishing, authentication changes, or user configuration writes are part of this command; the one write it may make is the Feature intake block, and only on the operator's yes.
+The command completes only after the native Browser pane has opened the correct project's page and the project/state checks above succeed. Briefly report the opened project, local link and observed mode: demo, live construction or live service, plus the nudge's Feature intake and Hooks lines. A ready localhost server alone does not complete the native command. Native `/open-kitchen` invocation and production discovery remain unverified until observed in the actual host; local fixtures and direct helper checks do not establish a production `/sell-pie` or `/sell-slice` acceptance run. No checklist edits, remote publishing, authentication changes, or user configuration writes are part of this command; the one write it may make is the Feature intake block, and only on the operator's yes.

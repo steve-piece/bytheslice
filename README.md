@@ -326,7 +326,7 @@ Full schema and precedence rules: [`bytheslice-config-schema.md`](skills/setup-s
 
 ## Architecture & conventions
 
-The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once**, **context-separated** dispatch, **preview-first** library delivery, and **enforced feature intake**: new work is documented with `/special-order` and built through `/sell-slice` or `/sell-pie`, and the workflow guard hook refuses the shortcuts by default (`enforcement: "block"`); the other hooks and Pass checks warn. The full reference lives in **[docs/architecture.md](docs/architecture.md)**:
+The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once**, **context-separated** dispatch, **preview-first** library delivery, and **feature intake**: new work is documented with `/special-order` and built through `/sell-slice` or `/sell-pie`. Nothing refuses a shortcut: one prompt hook adds the rule as context, and the Pass checks warn. The full reference lives in **[docs/architecture.md](docs/architecture.md)**:
 
 - [**Pies & Slices**](docs/architecture.md#pies--slices-the-two-level-checklist) - the two-level checklist, caps, the Prep gate
 - [**Mode detection**](docs/architecture.md#mode-detection-standalone-vs-sequential) - standalone vs sequential, per-skill posture table
@@ -334,7 +334,7 @@ The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once*
 - [**Delivery & git**](docs/architecture.md#delivery--git-selling-vs-boxing) - selling vs boxing, one pie per PR, worktrees
 - [**Design-system delivery**](docs/architecture.md#design-system-delivery) - preview-first library gate, visual review tooling
 - [**Orchestration principles**](docs/architecture.md#orchestration-principles) - subagent-driven, exit-criteria contract, HITL bubbling, model tiers
-- [**Hook enforcement**](docs/architecture.md#hook-enforcement) - what the [`hooks/`](hooks/) layer logs and warns about (it blocks nothing)
+- [**Hooks**](docs/architecture.md#hooks) - the two hooks the plugin keeps, and why (neither blocks anything)
 - [**The Pass mod**](docs/architecture.md#the-pass-mod) - packaging, the ledger, the warn-only checks, spawn policy, watchdog, HITL inbox, team mode
 - [**Legacy & migration**](docs/architecture.md#legacy--migration) - flat v4 / v3 projects, `--repie`
 - [**Agent roster**](docs/agents.md) - ByTheSlice ships 52 registered subagents; every one in plain English

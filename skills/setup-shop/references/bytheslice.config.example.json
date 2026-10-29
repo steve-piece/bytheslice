@@ -3,11 +3,6 @@
 // See references/bytheslice-config-schema.md in the ByTheSlice plugin
 // for the full schema and precedence rules.
 {
-  // The workflow guard: "block" (default) refuses hand-written plan files, ad-hoc
-  // code-writing agents and PRs with unverified slices; "warn" only warns.
-  // The operator sets this by hand; an agent is refused when it tries.
-  // "enforcement": "block",
-
   // Override per-agent model tier. Omit any agent to use the plugin default.
   // Aliases: "haiku" | "sonnet" | "opus".
   "modelTiers": {

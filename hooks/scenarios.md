@@ -6,77 +6,26 @@ This file is the **canonical source of truth** for hook behavior. Every row is o
 
 ## Legend
 
-Every wired script exits 0, and only `workflow-guard.sh` prints a deny decision (`hooks/test.sh` checks this for every script `hooks.json` wires). No hook blocks a prompt.
-
-- **DENY** - hook exits 0 and prints Claude Code hook JSON with `permissionDecision: "deny"` and a reason starting `BLOCKED [bytheslice <rule>]` that names the skill to use and the operator override; the tool call does not run (Cursor: `{"permission":"deny"}`)
+Every wired script exits 0 and none prints a deny decision (`hooks/test.sh` checks this for every script `hooks.json` wires). No hook refuses a tool call or blocks a prompt.
 
 - **WARN** - hook exits 0 and prints Claude Code hook JSON whose text starts `WARN`: `hookSpecificOutput.additionalContext` reaches the model, `systemMessage` reaches the person; the tool call proceeds
 - **NOTE** - hook exits 0 and prints plain text, which Claude Code shows in the transcript only
 - **PASS** - hook exits 0 with no output; nothing surfaces to Claude
 - **CONTEXT** - hook exits 0 and prints to stdout; used for SessionStart context injection
 
-## Workflow guard: `workflow-guard.sh`
+## Workflow nudge: `workflow-nudge.sh`
 
-Applies only when a master checklist exists (in the session's checkout or, from a worktree, the primary checkout). "Skill" is the session's latest ByTheSlice skill in the kitchen activity log; "writer" is the hook input's `agent_type`. Under `enforcement: "warn"` (config) or `BTS_ALLOW_BYPASS=1` (launch env) every **DENY** below is a **WARN** instead.
+`UserPromptSubmit` only; context, never a refusal.
 
-| Event and input | State | Expected |
+| Input | State | Expected |
 |---|---|---|
-| Write `docs/plans/stage_*.md` (new file) | no skill | **DENY** `plan-file`, names `/special-order` |
-| same | writer `bytheslice:phased-plan-writer` or a bare registered writer | **PASS** |
-| same | writer `general-purpose` | **DENY** |
-| same | skill `special-order` or `cook-pizzas` | **PASS** |
-| same | skill `sell-pie` | **DENY** (new stage files come from planners) |
-| Edit an existing stage file | skill `sell-pie` (build notes) | **PASS** |
-| Edit the checklist ticking a box or changing a slice body | no skill | **PASS** |
-| Edit or Write the checklist adding or renaming a pie or slice heading | no skill | **DENY** `plan-heading`, names the heading and `/special-order` |
-| Bash that writes a plan file (a `>`/`>>` redirect or `tee` into it, `sed -i`/`perl -i` on it, `cp`/`mv`/`install`/`ln` onto it, `touch`/`rm`/`truncate`, a script opening it to write) | no skill | **DENY** `plan-shell-write`, names the file and `/special-order` |
-| same, appending to an existing stage file or the checklist | any ByTheSlice skill | **PASS** (the shell cannot be diffed for headings) |
-| same, a new stage file | skill `sell-pie` | **DENY** |
-| Bash that reads plan files (`cat`, `grep`, `cp` from one to elsewhere) | any | **PASS** |
-| same | skill `cook-pizzas` | **PASS** |
-| Agent with no type, `general-purpose`, or a project agent listing Edit | no skill | **DENY** `adhoc-agent`, names `/sell-slice` |
-| Agent `someplugin:x` whose definition is not found | no skill | **DENY**, says the definition was not found |
-| Agent `Explore`, a project agent without write tools, `bytheslice:implementer` | any | **PASS** |
-| Agent `general-purpose` | skill `sell-slice` | **PASS** |
-| Agent `general-purpose` from a worktree whose plans live in the primary checkout | no skill | **DENY** |
-| Bash `gh pr create` or `gh as <user> pr create`, branch commit `feat(pie-1): 1.1 ...` | ledger has no verifier pass for 1.1 | **DENY** `pr-unverified`, lists `Slice 1.1`, names `/sell-slice` |
-| same | no ledger file at all | **WARN** (`No Pass ledger`), never refused |
-| same | ledger has a `slice-verifier` pass for 1.1 | **PASS** |
-| same on `pie-1-*` with untagged commits | 1.1 verified, 1.2 not | **DENY** listing `Slice 1.2` only |
-| same on a non-pie branch with no slice commits; `git status` | any | **PASS** |
-| same on a ship-once `ship/<app>` branch: pie merge commits (`merge(pie-N): ...`, no slice id) plus slice commits | every slice verified | **PASS** |
-| same | one slice commit unverified | **DENY** listing it |
-| Cursor `beforeShellExecution` `gh pr create` | unverified slice | `{"permission":"deny"}`; other commands and `BTS_HOOKS_DISABLED=1` answer `{"permission":"allow"}` |
-| Edit `bytheslice.config.json` to `"enforcement": "warn"`; Write `.claude/settings.local.json` adding `BTS_ALLOW_BYPASS` | enforcement `block` | **DENY** `operator-switch` |
-| UserPromptSubmit `/goal ...` or "add a new feature ..." | checklist present | **CONTEXT** (`hookSpecificOutput.additionalContext` naming `/special-order`, `/sell-slice`, `/sell-pie`); never refused |
+| UserPromptSubmit `/goal ...` or "add a new feature ..." | checklist present | **CONTEXT** (`hookSpecificOutput.additionalContext` naming `/special-order`, `/sell-slice`, `/sell-pie`) |
 | UserPromptSubmit "implement Slice 2.2" (build, work on, finish ... Slice N.M) | checklist present | **CONTEXT** naming `/sell-slice N.M` and `/sell-pie` |
+| UserPromptSubmit "build me this app end to end ..." | no checklist | **CONTEXT** naming `/pizza-party` |
 | UserPromptSubmit `/special-order ...` or an ordinary question | any | **PASS** |
-| any | no checklist, `BTS_HOOKS_DISABLED=1`, malformed input | **PASS** |
-| `workflow-guard.js doctor <root>` | | prints `Feature intake: present in CLAUDE.md` or `MISSING`, `Enforcement: block (default)` (bypass noted), `Hooks: workflow guard active on ...` |
-| `workflow-guard.js intake <root>` | no rules file / stale block / `AGENTS.md` only | creates `CLAUDE.md` / replaces the block in place, other lines kept / adds it to `AGENTS.md`; a second run is unchanged |
-
-## PreToolUse on Bash: `pre-commit-guard.sh`
-
-The branch is read from the repository the commit runs in, resolved in this order: `cd` / `pushd` steps before the commit (`cd -` included), `git -C <dir>` or `--git-dir` on the commit itself, then the hook input's `.cwd` (or the process cwd). It never falls back to `$CLAUDE_PROJECT_DIR`: the project dir is not where the command runs, and in 5.3 that fallback named a scratch repo's commit as a commit on the primary checkout's `main`. A primary checkout on `main` with the commit running in a linked worktree on a feature branch is a feature-branch commit. Every `git commit` in a command is checked. When the target cannot be told from the command text (a `cd` inside a subshell or `bash -c` that ends before the commit, `popd`, a `$VAR` or `$(...)` path, `git checkout` / `git switch` earlier in the command, a path that does not exist yet, or a directory outside any git repo), the guard warns "branch unknown" instead of guessing.
-
-| Bash command | Branch | Expected |
-|---|---|---|
-| `git commit -m "..."` | `main` or `master` | **WARN**: "git commit on main/master (<dir>)", plus the staged file list; exit 0 |
-| `git commit -m "..."` | feature branch | **NOTE**: staged file list |
-| `git -C <worktree> commit`, `cd <worktree> && git commit` (quoted, relative, or `~` paths) | primary on `main`, worktree on feature branch | **NOTE** (no warning) |
-| `git commit` with hook cwd (or input `.cwd`) inside a worktree | primary on `main`, worktree on feature branch | **NOTE** (no warning) |
-| `git -C <primary> commit`, `cd <primary> && git commit` | primary on `main`, run from a worktree | **WARN** naming `main` |
-| `git commit` with hook cwd outside any repo | `$CLAUDE_PROJECT_DIR` on `main` | **WARN** "branch unknown"; never names the project dir's `main` |
-| `S=<scratch>; mkdir -p $S && cd $S && git init && git commit` | primary on `main` | **WARN** "branch unknown"; never names the primary's `main` |
-| `git -C <worktree> commit && git -C <primary> commit`, `cd <wt> && git commit && cd <primary> && git commit` | primary on `main` | **WARN** naming `main` (every commit is checked) |
-| `cd <wt> && cd - && git commit` | cwd is the primary on `main` | **WARN** naming `main` |
-| `(cd <worktree> && make) && git commit` | cwd is the primary on `main` | **WARN** "branch unknown" (a subshell cd is not followed) |
-| `pushd <primary>`, `cd -P <primary>`, `--git-dir <primary>/.git`, `GIT_DIR=<primary>/.git`, `/usr/bin/git commit`, `` `git commit` ``, `bash -c 'cd <primary> && git commit'`, backslash-escaped paths | primary on `main`, run from a worktree | **WARN** naming `main` |
-| `cd "$VAR" && git commit`, `git -C "$(...)" commit`, `popd && git commit` | any | **WARN** "branch unknown" |
-| `git switch -c <branch> && git commit`, `git checkout <branch> && git commit` | cwd on `main` | **WARN** "branch unknown" (an earlier switch moves HEAD before the commit) |
-| `git status`, `git -C <dir> status`, `git commit-tree` | any | **PASS** (not a git commit) |
-| `npm test` | any | **PASS** |
-| any command | `BTS_HOOKS_DISABLED=1` | **PASS** |
+| any tool event, `BTS_HOOKS_DISABLED=1`, malformed input | any | **PASS** |
+| `workflow-nudge.js doctor <root>` | | prints `Feature intake: present in CLAUDE.md` or `MISSING`, `Hooks: workflow nudge active on UserPromptSubmit ...`, `Checklist: ...` |
+| `workflow-nudge.js intake <root>` | no rules file / stale block / `AGENTS.md` only | creates `CLAUDE.md` / replaces the block in place, other lines kept / adds it to `AGENTS.md`; a second run is unchanged |
 
 ## SessionStart: `shop-status.sh`
 
@@ -154,13 +103,13 @@ Machine-level files for the Lobby, under `${BTS_HOME:-$HOME/.bytheslice}`: `proj
 | Every `command` in `hooks.json` | names a script that exists under `hooks/` |
 | Every script `hooks.json` wires | contains no `exit 2` and prints no block decision (`"decision": "block"`, `"permissionDecision": "deny"`) |
 | Every sourced `lib/*.sh` | contains no `exit 2` |
-| `kitchen-log.sh` registrations | exactly eight (asserted with the kitchen rows above) |
-| `lobby-signal.sh` registrations | exactly one each on `SessionStart`, `SubagentStart`, `SubagentStop`, `Stop`, `UserPromptSubmit` and `Notification`: no matcher, timeout 5, synchronous |
+| `kitchen-log.sh` and `lobby-signal.sh` | absent from `hooks.json`: the Pass relays their events (`mod/relay.ts`, asserted in `mod/relay.test.ts`) |
+| Wired hooks | `workflow-nudge.sh` on `UserPromptSubmit` and `shop-status.sh` on `SessionStart`, nothing else |
 | `hooks-cursor.json` | `lobby-signal.sh` with `BTS_HOST=cursor` on `sessionStart`, `beforeSubmitPrompt`, `subagentStart`, `subagentStop` and `stop` (Cursor has no Notification equivalent) |
 
 ## Notes
 
-- Every hook honors `BTS_HOOKS_DISABLED=1` as the first action after `set -u`. That's the supported per-session disable. Under `BTS_HOST=cursor`, `pre-commit-guard.sh` and `lobby-signal.sh` first arm the JSON answer Cursor needs, then honor it.
-- Every hook tolerates missing `jq`; `pre-commit-guard.sh` falls back to `sed`, while `kitchen-log.sh` and `lobby-signal.sh` use Node or silently skip writing when neither parser is available.
+- Every hook honors `BTS_HOOKS_DISABLED=1` as the first action after `set -u`. That's the supported per-session disable. Under `BTS_HOST=cursor`, `lobby-signal.sh` first arms the JSON answer Cursor needs, then honor it.
+- Every hook tolerates missing `jq`: `kitchen-log.sh` and `lobby-signal.sh` use Node or silently skip writing when neither parser is available.
 - All per-project state lives under `.claude/.bytheslice-state/` (gitignored). The one machine-level exception is the Lobby's `${BTS_HOME:-$HOME/.bytheslice}` (`projects.json`, `signals/`), written only by `lobby-signal.sh`.
 - All awk in the hooks is POSIX-portable (BSD awk on macOS has no gawk extensions such as the 3-argument `match()`).

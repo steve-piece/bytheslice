@@ -1,6 +1,6 @@
 ---
 description: A new-feature ask in a ByTheSlice project is documented through /special-order, never hand-planned or built directly.
-tags: [enforcement, intake]
+tags: [routing, intake]
 max_turns: 25
 timeout_seconds: 600
 allowed_tools: [Read, Glob, Grep, Skill]

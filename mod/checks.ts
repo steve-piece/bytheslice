@@ -1,5 +1,5 @@
 // mod/checks.ts
-// The Pass warning plumbing: report a finding (warn row, toast, band style, model note), the refusal under enforcement block, the atoms checks read, and the policy at session start.
+// The Pass warning plumbing: report a finding (warn row, toast, band style, model note), the atoms checks read, and the policy at session start.
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Timer, ToolCallResult } from 'claude-code'
@@ -20,7 +20,7 @@ const reportedAtom = atom({ plugin: 'bytheslice', key: 'pass.reported' } as cons
 const warningAtom = atom({ plugin: 'bytheslice', key: 'pass.warning' } as const, null)
 
 /** One thing a check noticed. `key` names the instance: the same code and key report once a minute. */
-export type Finding = { code: string; text: string; slice?: string; key: string; deny?: boolean }
+export type Finding = { code: string; text: string; slice?: string; key: string }
 
 /** A code and key report at most once in this window. */
 export const REPORT_WINDOW_MS = 60000
@@ -115,7 +115,7 @@ export async function checksOn($: EngineInterface): Promise<PassPolicy | null> {
  * band's warning style for five minutes, and the text the model should read.
  * The same code and key report at most once a minute: a repeat resolves null.
  */
-export async function report($: EngineInterface, finding: Finding, blocked = false): Promise<string | null> {
+export async function report($: EngineInterface, finding: Finding): Promise<string | null> {
   const now = await nowOf($)
   const id = `${finding.code}|${finding.key}`
   try {
@@ -134,7 +134,7 @@ export async function report($: EngineInterface, finding: Finding, blocked = fal
     ev: 'warn',
     ...(pie === undefined ? {} : { pie }),
     ...(finding.slice === undefined ? {} : { slice: finding.slice }),
-    data: { code: finding.code, text: finding.text, ...(blocked ? { blocked: true } : {}) },
+    data: { code: finding.code, text: finding.text },
   })
   try {
     $.ui.toast(toastText(finding), { timeoutMs: WARN_TOAST_MS })
@@ -145,28 +145,6 @@ export async function report($: EngineInterface, finding: Finding, blocked = fal
   await update($, warningAtom, () => warning).catch(() => undefined)
   await refreshLedger($)
   return modelText(finding)
-}
-
-/** What the model reads when the Pass refuses a call: the rule, and that only the operator can loosen it. */
-export function refusalText(finding: Finding): string {
-  return (
-    `The Pass refused this (${finding.code}): ${finding.text} ` +
-    'Operator override only: "enforcement": "warn" in bytheslice.config.json, set by hand, or a relaunch with BTS_ALLOW_BYPASS=1. Never set either yourself.'
-  )
-}
-
-/**
- * Under enforcement `block`, the refusal for findings that ask for one: each
- * is reported (a `warn` row marked `blocked`, a toast) and the texts joined
- * for the deny. Null under `warn`, with checks off, or when none asks.
- */
-export async function refusalOf($: EngineInterface, findings: readonly Finding[]): Promise<string | null> {
-  const blocking = findings.filter(finding => finding.deny === true)
-  if (blocking.length === 0) return null
-  const policy = await checksOn($)
-  if (!policy || (policy.enforcement ?? 'block') !== 'block') return null
-  for (const finding of blocking) await report($, finding, true).catch(() => null)
-  return blocking.map(refusalText).join('\n')
 }
 
 /** Reports each finding in order; resolves the texts that were not repeats. */

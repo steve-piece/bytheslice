@@ -5,10 +5,6 @@
       { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/shop-status.sh\"", "timeout": 3 },
       { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/lobby-signal.sh\"", "timeout": 5 }
     ],
-    "beforeShellExecution": [
-      { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/pre-commit-guard.sh\"", "timeout": 3 },
-      { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/workflow-guard.sh\"", "timeout": 10 }
-    ],
     "beforeSubmitPrompt": [
       { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/lobby-signal.sh\"", "timeout": 5 }
     ],

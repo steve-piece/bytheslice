@@ -1,12 +1,12 @@
 // mod/register.tsx
-// The Pass hooks module, wiring only: version gate, ledger capture (file edits as path and role only), checks that warn (one refuses under enforcement block), the stall watchdog, the HITL inbox, team mode (roster, teammate turns, idle and done), the cross-session strip, the bts tools, the pass command (replay and history included), pane, replay pane, band and hint.
+// The Pass hooks module, wiring only: version gate, ledger capture (file edits as path and role only), checks that warn (never refuse), the stall watchdog, the HITL inbox, team mode (roster, teammate turns, idle and done), the cross-session strip, the kitchen and Lobby logging relay, the bts tools, the pass command (replay and history included), pane, replay pane, band and hint.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import { drawBand, hintProps, pushStatus } from './band.tsx'
 import { captureBash, captureEdit, captureSkill, captureTurn, markSpawn, recordDoneFlips } from './capture.ts'
-import { primeChecks, refusalOf, reportToModel, trackGit, trackSkill, warnResult } from './checks.ts'
+import { primeChecks, reportToModel, trackGit, trackSkill, warnResult } from './checks.ts'
 import { checkFileWrite, checkPush } from './checks-checklist.ts'
 import { checkCommitOnMain, checkFixSpawn, countFix, raiseFixCap } from './checks-git.ts'
 import { checkDrift, checkSpawn, trackSpawn } from './checks-spawn.ts'
@@ -17,6 +17,7 @@ import { notifyPiesReady } from './notify.ts'
 import { gate, isChecklistPath, isLimited, refresh, watchChecklist } from './projection.ts'
 import { checksText, drawPane, openPane, togglePane } from './rail.tsx'
 import { reconcileText } from './reconcile.ts'
+import { relay } from './relay.ts'
 import { REPLAY_PANE, drawReplay, openReplay } from './replay.tsx'
 import { clearStrip, pulseStrip, resetStrip } from './strip.ts'
 import { historyText } from './history.ts'
@@ -110,13 +111,9 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e))
 
   // Checks judge before the call from atoms only and add any warning to what the
-  // model reads after the result; the one refusal is a slice marked done with no
-  // verifier pass, under enforcement block.
+  // model reads after the result. Nothing is refused.
   on('tool.call', { tool: ['Edit', 'Write'] }, async ($, e, next) => {
     const findings = await checkFileWrite($, e).catch(() => [])
-    // Under enforcement block, a slice marked done with no verifier pass is refused before it runs.
-    const refusal = await refusalOf($, findings).catch(() => null)
-    if (refusal !== null) return { deny: refusal }
     const ran = await next(e)
     if (isChecklistPath(e.file_path)) {
       if (!(await isLimited($))) await reload($).catch(() => false)
@@ -236,8 +233,10 @@ export const register: Register = on => {
     return out
   }).catch(($, e, next) => next(e))
 
-  // A subagent that ended closes any stall item open about it (`via: 'auto'`).
+  // A subagent that ended closes any stall item open about it (`via: 'auto'`),
+  // after its kitchen and Lobby rows are written.
   on('classic.SubagentStop', async ($, e, next) => {
+    await relay($, 'SubagentStop', inputOf(e)).catch(() => 0)
     const out = await next(e)
     if (typeof e.agent_id === 'string' && e.agent_id !== '') await closeEndedStalls($, { ended: new Set([e.agent_id]) }).catch(() => 0)
     return out
@@ -250,10 +249,42 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e))
 
   on('classic.UserPromptExpansion', async ($, e, next) => {
+    await relay($, 'UserPromptExpansion', inputOf(e)).catch(() => 0)
     const expanded = await next(e)
     await trackSkill($, e.command_name).catch(() => null)
     await captureSkill($, e.command_name).catch(() => [])
     return expanded
+  }).catch(($, e, next) => next(e))
+
+  // The kitchen feed and the Lobby: each event's envelope goes to its logging
+  // script, which writes and prints nothing back; the event goes on unchanged.
+  on('classic.SessionStart', async ($, e, next) => {
+    await relay($, 'SessionStart', inputOf(e)).catch(() => 0)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+  on('classic.UserPromptSubmit', async ($, e, next) => {
+    await relay($, 'UserPromptSubmit', inputOf(e)).catch(() => 0)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+  on('classic.SubagentStart', async ($, e, next) => {
+    await relay($, 'SubagentStart', inputOf(e)).catch(() => 0)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+  on('classic.PreToolUse', async ($, e, next) => {
+    await relay($, 'PreToolUse', inputOf(e)).catch(() => 0)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+  on('classic.PostToolUse', async ($, e, next) => {
+    await relay($, 'PostToolUse', inputOf(e)).catch(() => 0)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+  on('classic.Stop', async ($, e, next) => {
+    await relay($, 'Stop', inputOf(e)).catch(() => 0)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+  on('classic.Notification', async ($, e, next) => {
+    await relay($, 'Notification', inputOf(e)).catch(() => 0)
+    return next(e)
   }).catch(($, e, next) => next(e))
 
   on('command.run', { command: 'pass' }, async ($, e) => {

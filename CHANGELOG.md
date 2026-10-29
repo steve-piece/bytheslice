@@ -13,6 +13,33 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [6.1.0] - 2026-10-29
+
+**Fewer hooks, no refusals.** The plugin keeps only the hooks that have to be hooks, and nothing it ships refuses a tool call any more: the rules and the prompt nudge inform the model, the Pass warns, and the model decides. The first `/pizza-party` benchmark run also surfaced two run bugs, fixed here.
+
+> [!IMPORTANT]
+> **Behavior change.** The 6.0.0 refusals are gone: hand-written plan files, code-writing agents outside the bakers, `gh pr create` with an unverified slice, and a slice marked `[x]` with no verifier pass all go through (the last still draws the Pass's `checkbox-without-verdict` warning). The `enforcement` config key and `BTS_ALLOW_BYPASS` are removed; an old `enforcement` line is ignored.
+
+### Changed
+
+- **The workflow guard is now a nudge.** `hooks/workflow-guard.*` is renamed `hooks/workflow-nudge.*` and runs on `UserPromptSubmit` only: the Feature intake rule for a `/goal` or new-feature prompt, the `/sell-slice` route for "build Slice N.M", the `/pizza-party` route for a whole-app ask. Its `doctor` and `intake` commands stay, minus the Enforcement line. The three `PreToolUse` registrations and Cursor's `beforeShellExecution` entry are gone.
+- **The Pass never refuses.** `checkbox-without-verdict` warns like every other check; `refusalOf`, `Finding.deny` and the policy's `enforcement` and `bypass` fields are removed.
+- **Logging moved into the Pass.** `kitchen-log.sh` and `lobby-signal.sh` no longer sit in `hooks.json`: the Pass hands each classic event's envelope to them (`mod/relay.ts`), so Claude Code wires two hooks (`workflow-nudge.sh`, `shop-status.sh`) instead of twenty. Cursor still runs the scripts from `hooks-cursor.json`. On Claude Code below 2.1.299 the kitchen feed and Lobby signals stop.
+- **The pizza-party interview always runs**, under `/goal` and loops too; a goal's keep-going covers the stops after it. Skipped only when the operator says so in words.
+- **Pizza-party preflight names the auto-mode repo refusal.** Under auto mode Claude Code may refuse creating the GitHub repo or pushing to it; the interview now offers the allow rule up front, and the run never works around a refusal.
+- The Feature intake block drops "(enforced)" and the override paragraph, and ends with "use judgment".
+
+### Removed
+
+- `hooks/pre-commit-guard.sh`: it warned on every scaffold commit of a new app. The Pass's `commit-on-main` warning covers Claude Code.
+- The evals that tested behavior after a refusal: `pr-unverified-stops`, `refused-plan-write-no-workaround`, `checkbox-without-verdict-refused`.
+
+### Fixed
+
+- **Preflight checks ran inside a folder that did not exist yet.** For a new app every provider check (`gh auth status`, the host and database CLIs) failed to start, so GitHub and every provider read as signed out. They now run from the nearest existing parent.
+
+---
+
 ## [6.0.0] - 2026-10-29
 
 **Pizza party, enforced feature intake, enforcement on by default.** `/pizza-party` builds a whole app from a brief with one interview and no stops after it, replacing `/run-the-day`. New work in a ByTheSlice project must be documented with `/special-order` and built through `/sell-slice`, `/sell-pie` or `/pizza-party`, and a hook now refuses the shortcuts instead of warning. Discovery and plan-writing agents move to Opus, and every Opus agent runs at medium effort.
