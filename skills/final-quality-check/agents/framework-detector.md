@@ -40,7 +40,7 @@ target_apps_for_e2e:
 viewports: [375, 768, 1280, 1920]
 reuse_existing_e2e_install: true | false  # true if framework already installed
 notes:
-  - <one line each — e.g. "no UI detected, recommend Supertest for API integration tests">
+  - <one line each: e.g. "no UI detected, recommend Supertest for API integration tests">
 ```
 
 ## Return Contract
@@ -58,7 +58,7 @@ hitl_context: null | "<what triggered this>"
 ## Hard Constraints
 
 - **Readonly.** No installs, no file writes.
-- **No installing alternative frameworks** if Playwright is missing — that's e2e-installer's job.
+- **No installing alternative frameworks** if Playwright is missing: that's e2e-installer's job.
 - **Default Playwright** for any browser stack unless the user explicitly opted into something else.
 - **No assumption that every monorepo app needs E2E.** Marketing sites with 3 static pages may not warrant a full @feature suite.
 - **Cap notes at 5 lines.** Concise.

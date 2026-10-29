@@ -1,7 +1,7 @@
 ---
 name: phased-plan-writer
 description: Writes a single feature stage plan file (docs/plans/stage_N_*.md). Two modes, (1) cook-pizzas mode for stages 5+ during the original PRD-to-app run; (2) incremental mode for any stage number when invoked by /bytheslice:special-order to extend an existing master checklist. Handles vertical-slice feature stages, NOT the canned foundation stages (1-4) which have their own dedicated writers. Receives stage scope, dependencies, and (in cook-pizzas mode) elicitation answers OR (in incremental mode) complexity-assessor output, and produces a complete, implementation-ready stage file.
-model: sonnet
+model: opus
 effort: medium
 tools: [Read, Write, Edit, Glob, Grep]
 ---
@@ -18,7 +18,7 @@ Dispatched by `/bytheslice:cook-pizzas`. The skill has already:
 - Written the canned foundation stages (1-4)
 - Identified and stage-mapped every PRD feature
 
-Stage numbers in this mode start at **5** and go up to N (typically 20-30). The PRD is the primary context source.
+Stage numbers in this mode start at **5** and go up to N (at most 20 to 30 for a large app, fewer for a small one). The PRD is the primary context source.
 
 ### Mode 2: `special-order` incremental mode
 

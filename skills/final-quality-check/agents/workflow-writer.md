@@ -15,6 +15,9 @@ You are the **workflow-writer** for `/final-quality-check`. Your job: lay down t
 - framework-detector's plan
 - Path to [skills/final-quality-check/references/scaffold-artifact-templates.md](../references/scaffold-artifact-templates.md)
 - List of already-present workflow files (from discovery)
+- `quality_tier`: `standard` (default) or `lean`
+- `design_system_present`: true | false
+- `e2e_skipped`: true when framework-detector chose skip-E2E
 
 ## Workflow
 
@@ -31,7 +34,8 @@ You are the **workflow-writer** for `/final-quality-check`. Your job: lay down t
    - DB schema-diff command (Supabase: `supabase db diff`; Prisma: `prisma migrate diff`; Drizzle: `drizzle-kit check`)
 3. **Do not overwrite an existing workflow file.** If `discovery.already_present_scaffold_artifacts` includes any of the target paths, skip that file and add it to `skipped` in your output.
 4. **Skip db-schema-drift.yml entirely if `database.type: none`.**
-5. Write each new file under `.github/workflows/`. Stage with `git add` but do not commit.
+5. **Lean tier (`quality_tier: lean`):** write only `ci.yml` from the templates file's "Lean tier" section (lint, typecheck, unit-tests, build, e2e-smoke; the `design-system-compliance` job inserted only when `design_system_present`; `e2e-smoke` dropped when `e2e_skipped`), plus `design-system-compliance.yml` only when `design_system_present`. Never write `e2e.yml`, `e2e-coverage.yml` or `db-schema-drift.yml` under lean. The lean required checks are `CI / lint`, `CI / typecheck`, `CI / unit-tests`, `CI / build`, `CI / e2e-smoke` (unless skipped), plus `CI / design-system-compliance` when present.
+6. Write each new file under `.github/workflows/`. Stage with `git add` but do not commit.
 
 ## Output Contract
 
@@ -60,6 +64,7 @@ required_check_names_for_branch_protection:
   - "E2E / visual"
   - "E2E / coverage-check"
   # plus "CI / db-schema-drift" if DB present
+  # lean tier: the lean list from step 5 instead
 ```
 
 ## Return Contract
@@ -80,6 +85,6 @@ hitl_context: null | "<what triggered this>"
 - **Always read the templates file.** Never re-derive workflow content from memory.
 - **Never overwrite an existing workflow file.** Skip and report. The orchestrator decides whether to surface to the user.
 - **Never weaken existing workflows.** This agent adds; it does not subtract.
-- **`E2E / coverage-check` job name is fixed** — branch-protection-writer depends on this exact string.
+- **`E2E / coverage-check` job name is fixed** (standard tier): branch-protection-writer depends on this exact string.
 - **Stage but do not commit.** The orchestrator commits at the end of the workflow sub-block.
 - **Skip db-schema-drift.yml** if `database.type: none`. Never write a no-op DB workflow.

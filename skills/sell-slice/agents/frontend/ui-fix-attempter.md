@@ -2,7 +2,7 @@
 name: ui-fix-attempter
 description: The opus-tier fix-attempter for UI review findings. Same job, inputs, loop rules, error-signature bail and return contract as fix-attempter, dispatched instead of it whenever a fix target comes from break-ui-runner (Broken or Ugly) or design-critic (P0 or P1), at any of the 3 local fix loops or at the pie-boundary critique fix rounds. Fixes land in the component or the data boundary, never in the worst-case fixture. Makes no git writes; returns files_changed.
 model: opus
-effort: high
+effort: medium
 ---
 
 # UI Fix Attempter Subagent

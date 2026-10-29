@@ -13,28 +13,31 @@ You are the **e2e-installer** for `/final-quality-check`. Your job: install the 
 
 - framework-detector's plan (`e2e_framework`, `e2e_config_strategy`, `target_apps_for_e2e`, `viewports`, `reuse_existing_e2e_install`)
 - scaffold-discovery's profile (package manager, monorepo tooling)
-- Path to [skills/final-quality-check/references/scaffold-artifact-templates.md](../references/scaffold-artifact-templates.md) — pull spec templates verbatim
+- Path to [skills/final-quality-check/references/scaffold-artifact-templates.md](../references/scaffold-artifact-templates.md): pull spec templates verbatim
 - Workspace root path
+- `quality_tier`: `standard` (default) or `lean`, already resolved by the orchestrator
+- `design_system_present`: true | false
 
 ## Workflow
 
 1. **If `reuse_existing_e2e_install: true`:** skip the install step; only add missing scripts and missing specs. Never re-init.
 2. **Otherwise install the framework.** For Playwright: `<pm> add -D @playwright/test && <pm> exec playwright install --with-deps`.
 3. Add the canonical scripts to root `package.json` (preserve existing entries; add any missing ones):
-   - `test:e2e` — runs the full E2E suite
-   - `test:e2e:feature` — `--grep @feature`
-   - `test:e2e:regression` — `--grep @regression-core`
-   - `test:e2e:visual` — `--grep @visual`
-   - `check:design-system` — wraps the design-system regex sweep + eslint-plugin-tailwindcss + stylelint
+   - `test:e2e`: runs the full E2E suite
+   - `test:e2e:feature`: `--grep @feature`
+   - `test:e2e:regression`: `--grep @regression-core`
+   - `test:e2e:visual`: `--grep @visual`
+   - `check:design-system`: wraps the design-system regex sweep + eslint-plugin-tailwindcss + stylelint
 4. Write baseline tests using the templates in `scaffold-artifact-templates.md`:
    - `tests/e2e/smoke.feature.spec.ts` tagged `@feature`
    - `tests/e2e/regression-core.spec.ts` tagged `@regression-core`
-   - `tests/visual/canary.visual.spec.ts` tagged `@visual` — one test per viewport in the framework-detector plan
+   - `tests/visual/canary.visual.spec.ts` tagged `@visual`: one test per viewport in the framework-detector plan
 5. Create `tests/visual/baselines/` as a committed directory. Add a `.gitkeep` if needed so git tracks it.
 6. If a monorepo task runner exists (`turbo.json` / `nx.json`), wire the new E2E tasks in:
-   - `turbo.json` — add `test:e2e:feature`, `test:e2e:regression`, `test:e2e:visual` to the pipeline with appropriate `dependsOn` / `cache: false` flags.
-   - `nx.json` — register the targets.
-7. **Do not commit.** Stage with `git add` and let the orchestrator commit at the end of the sub-block.
+   - `turbo.json`: add `test:e2e:feature`, `test:e2e:regression`, `test:e2e:visual` to the pipeline with appropriate `dependsOn` / `cache: false` flags.
+   - `nx.json`: register the targets.
+7. **Lean tier (`quality_tier: lean`)** replaces steps 3 to 6: add only `test:e2e` and `test:e2e:smoke` (plus `check:design-system` when `design_system_present`), write the lean `playwright.config.ts` and ONE `e2e/smoke.spec.ts` tagged `@smoke` from the templates file's "Lean tier" section, with its steps filled in from the main flow the orchestrator passes (PRD Section 2 or the first feature pie's user flow). No `@feature`, `@regression-core` or `@visual` spec and no `tests/visual/baselines/`. Wire only `test:e2e:smoke` into a monorepo runner.
+8. **Do not commit.** Stage with `git add` and let the orchestrator commit at the end of the sub-block.
 
 ## Output Contract
 
@@ -46,8 +49,8 @@ install:
 package_json_scripts_added: [<script names>]
 specs_written:
   - path: <workspace-relative>
-    tag: feature | regression-core | visual
-    viewports: [<list — visual only>]
+    tag: feature | regression-core | visual | smoke
+    viewports: [<list: visual only>]
 visual_baselines_dir: <path>
 monorepo_runner_wired: true | false | not_applicable
 runner_config_path: <path or null>
@@ -72,5 +75,6 @@ hitl_context: null | "<what triggered this>"
 - **Never re-init Playwright** if a config already exists. Reuse and add specs only.
 - **Never delete or rename existing scripts** in `package.json`. Add only.
 - **Never commit.** Stage only.
-- **Visual baselines directory must be committed even if empty** — Vizzly populates it on first run. A `.gitkeep` is acceptable.
+- **Lean writes exactly one spec.** Never add a second smoke spec or any visual baseline under `quality_tier: lean`.
+- **Visual baselines directory must be committed even if empty** (standard tier only): Vizzly populates it on first run. A `.gitkeep` is acceptable.
 - **No new dependencies beyond the E2E framework itself.** If the templates reference a helper library, surface it as `needs_human: true` with `hitl_category: external_credentials`.

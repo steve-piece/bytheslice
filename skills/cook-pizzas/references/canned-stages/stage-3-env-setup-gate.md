@@ -25,6 +25,8 @@ completion_criteria:
 
 **Architecture:** This is a blocking gate. No feature stage (5+) should begin until every environment variable is populated and `local_dev_boots` is confirmed. The `open-the-shop` skill is the execution surface for this stage.
 
+**Unattended runs:** `hitl_required: true` stays as written; it is what an interactive `/sell-pie` or `/sell-slice` run honors. Under `run.unattended` (`/pizza-party`), the Prep pie never goes through `/sell-pie`: the conductor runs `/open-the-shop`'s provider path directly (pizza-party Phase 5), where provider tooling writes `.env.local` and a service with no authorized provider gets a local substitute or a recorded deferral. So the flag never defers this stage in an unattended run.
+
 **Architecture note (project-specific):** [project-specific — from Q4, Q5, Q8, Q10, Q11]
 - Architecture variant: single-app | monorepo (from Q8)
 - Auth provider: [from Q10]
@@ -39,6 +41,8 @@ completion_criteria:
 - Stage 2 (ci-cd-scaffold): complete
 
 > **HITL note:** This stage is `hitl_required: true` because external credentials require human action — creating accounts, generating API keys, configuring OAuth redirect URIs. The orchestrator will pause and prompt you before this stage begins.
+
+> **Unattended variant (`run.unattended: true`, set by `/pizza-party`):** nothing pauses. `/open-the-shop` takes its provider-provisioned path (`skills/open-the-shop/references/provider-provisioning.md` in the plugin): the providers the operator authorized before the run, and chose in the order ticket's **Answers**, write `.env.local` through their own tooling piped into `merge-env.js`, so the agent never sees or prints a value. A required service with no authorized provider gets a local substitute (SQLite or a local database, a local session or magic-link-to-console auth, a console email logger, the local filesystem for storage), recorded in the ticket. A required service with neither defers the slices that need it (row stays `[ ]`, `**Status:** deferred: needs <service> credentials`) instead of blocking the run. An optional key is left out and excused. Every choice is one line under "Decisions made without you".
 
 ---
 
@@ -66,9 +70,9 @@ Env var groups to populate (project-specific list — from Q4/Q10/Q11 + PRD Sect
 
 ---
 
-### Task 2: Human setup (HITL)
+### Task 2: Human setup (HITL), or provider provisioning (unattended)
 
-> The orchestrator pauses here. The human must:
+> **Interactive (the default):** the orchestrator pauses here. The human must:
 
 - [ ] Create accounts / projects for each external service
 - [ ] Generate API keys and credentials
@@ -76,6 +80,13 @@ Env var groups to populate (project-specific list — from Q4/Q10/Q11 + PRD Sect
 - [ ] Populate `.env.local` (single-app) or per-app `.env.local` files (monorepo)
 
 Once all variables are populated, signal the orchestrator to continue.
+
+> **Unattended (`run.unattended: true`):** no pause. Run the provider-provisioned path instead:
+
+- [ ] Confirm each provider the ticket's **Answers** chose is authorized (its read-only check passes, or its MCP is connected)
+- [ ] Fill `.env.local` from that provider's tooling through `merge-env.js` (fill only missing keys; never read, echo or print a value)
+- [ ] For each key still missing: excuse it (optional), write a local substitute (required, substitute exists), or defer the slices that need it (required, no substitute)
+- [ ] Record every pick, substitute, excused key and deferral in the order ticket
 
 ---
 
@@ -86,6 +97,7 @@ Once all variables are populated, signal the orchestrator to continue.
 - [ ] Confirm auth provider is reachable (check health endpoint or test sign-in)
 - [ ] Confirm any additional services from PRD Section 4 are reachable
 - [ ] Run `pnpm test` (or equivalent); confirm passing
+- [ ] Under the lean quality tier, also run `pnpm test:e2e:smoke` once: the smoke spec is the first e2e run that needs a populated env
 
 **Commit:** `env: verify all services reachable in local dev`
 
@@ -98,3 +110,7 @@ Once all variables are populated, signal the orchestrator to continue.
 - Database connection verified
 - Auth provider reachable
 - `pnpm test` passes
+
+**Exit criteria (unattended variant, in place of "All vars populated"):**
+- Every key in `.env.example` is populated in `.env.local` by provider tooling or a recorded local substitute, or excused as optional, or its slices are deferred with the reason recorded
+- No secret value appears in any file but `.env.local`, or in the transcript

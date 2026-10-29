@@ -37,7 +37,7 @@ Either primitive may be unavailable for several reasons (see the tables below). 
 
 **How to detect**: probe each primitive once at startup of the skill that needs it.
 
-- **`/loop`** — only `/sell-pie` (and `/run-the-day`, which chains it) needs it. Invoke `/loop` (or check for the scheduling tools / a `CLAUDE_CODE_DISABLE_CRON` env signal). If it schedules / acknowledges → **available**; drive the pie with it per `/sell-pie`'s Workflow phase. If it errors or is absent → fall back to the **manual self-paced loop** below.
+- **`/loop`**: only `/sell-pie` (and `/pizza-party`, which runs it once per pie) needs it. Invoke `/loop` (or check for the scheduling tools / a `CLAUDE_CODE_DISABLE_CRON` env signal). If it schedules / acknowledges → **available**; drive the pie with it per `/sell-pie`'s Workflow phase. If it errors or is absent → fall back to the **manual self-paced loop** below.
 - **`Workflow`** — `/cook-pizzas` Phase 3 and `/sell-slice` Workflows A/B need it. Attempt the Workflow (or check `disableWorkflows` / `CLAUDE_CODE_DISABLE_WORKFLOWS`). If it launches a background run → **available**; use it normally. If it's disabled or absent → fall back to **in-context dispatch with manual schema validation** below.
 
 The two are independent: a host may have `Workflow` but not `/loop`, or vice versa. Detect and fall back per primitive.

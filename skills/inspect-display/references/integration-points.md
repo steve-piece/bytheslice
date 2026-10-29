@@ -7,34 +7,33 @@ This skill ships as a **standalone, operator-invoked** command in its first slic
 
 ---
 
-## 1. `/run-the-day` periodic checkpoint (proposed: next slice)
+## 1. `/pizza-party` per-pie checkpoint (proposed: next slice)
 
-**Problem:** `/run-the-day` runs in autonomous multi-stage mode without a human in the loop. A regression introduced in stage 7 might not be noticed until stage 15, by which point the autonomous run has racked up 8 commits that all build on the broken foundation.
+**Problem:** `/pizza-party` bakes every pie with no human in the loop after its interview. Each slice is verified and each pie gets a design critique at its boundary, but nothing walks the whole product until Phase 8's smoke check against the order ticket's Acceptance list. A cross-cutting regression introduced in pie 2 (a broken nav, an auth redirect loop) might not be noticed until pie 5, by which point several pies build on the broken foundation.
 
-**Proposal:** Add a configurable checkpoint that dispatches `inspect-display` every N stages.
+**Proposal:** Add a configurable checkpoint that dispatches `inspect-display` after every N pies merge into the ship branch (Phase 6).
 
-**Config addition** (`bytheslice.config.json`):
+**Config** (`bytheslice.config.json`): a new `runPipeline` block. The old one, read only by `/run-the-day`, was removed from the schema in 6.0.0; this proposal would bring it back for pies:
 
 ```jsonc
 {
   "runPipeline": {
-    "platformWalkEvery": 5,     // 0 = disabled
-    "haltOn": "broken",         // "drifted" | "broken" | "never"
+    "platformWalkEvery": 2,     // pies between walks; 0 = disabled
     "checkpointMode": "background" // "background" | "foreground"
   }
 }
 ```
 
+`haltOn` does not fit here: `/pizza-party` never pauses after its interview. A walk verdict instead resolves like any other would-be stop under its no-stop rule:
+- `verdict: broken`: one fix through `/special-order` (a new slice covering the top gaps), baked before the next pie; still broken, record it under **Deferred** in the order ticket and continue.
+- `verdict: drifted`: record the top gaps under **Decisions made without you** and continue.
+- `verdict: clean`: one **Progress** line.
+
 **Skill changes:**
-- `skills/run-the-day/SKILL.md`: add Phase 2.5 between stage dispatches that dispatches `inspect-display` if `stageIndex % platformWalkEvery == 0`
-- `skills/setup-shop/references/bytheslice-config-schema.md`: document the new `runPipeline.platformWalkEvery` etc. keys
+- `skills/pizza-party/SKILL.md`: in Phase 6, after a pie merges, dispatch `inspect-display` if `pieIndex % platformWalkEvery == 0`, and apply the verdict rules above
+- `skills/setup-shop/references/bytheslice-config-schema.md`: document the new `runPipeline` block (pies, no `haltOn`)
 
-**Halt rules:**
-- `haltOn: "broken"` (default), pause for user input if `verdict: broken`
-- `haltOn: "drifted"`: pause if `verdict: drifted` OR `broken`
-- `haltOn: "never"`: log the report but never pause (truly autonomous)
-
-**File scope:** ~4 files, well under the slice cap. Eligible for its own slice once this slice (the standalone skill) is merged and proven.
+**File scope:** ~3 files, well under the slice cap. Eligible for its own slice once this skill (standalone) is proven.
 
 ---
 

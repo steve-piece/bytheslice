@@ -131,6 +131,11 @@ async function nowOf($: EngineInterface): Promise<number> {
 
 /** The ledger's absolute path: `<primary checkout>/.bytheslice/ledger.jsonl`. */
 export async function ledgerPath($: EngineInterface): Promise<string> {
+  return `${(await primaryRoot($)).replace(/\/$/, '')}/${LEDGER_DIR}/${LEDGER_FILE}`
+}
+
+/** The primary checkout every worktree of the project shares (the session directory outside git). */
+export async function primaryRoot($: EngineInterface): Promise<string> {
   const cwd = await cwdOf($)
   let root = roots.get(cwd)
   if (root === undefined) {
@@ -150,7 +155,7 @@ export async function ledgerPath($: EngineInterface): Promise<string> {
       root = cwd
     }
   }
-  return `${root.replace(/\/$/, '')}/${LEDGER_DIR}/${LEDGER_FILE}`
+  return root
 }
 
 /** The id rows carry: the session's own id (the transcript's name), else one minted once per load. */

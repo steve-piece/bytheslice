@@ -60,14 +60,14 @@ Six things, in order, once per project:
 |---|---|---|
 | [`/setup-shop`](skills/setup-shop/SKILL.md) | Unlock the doors, fire up the oven. | Bootstraps a new project or drops ByTheSlice into an existing one. |
 | [`/create-menu`](skills/create-menu/SKILL.md) | Decide which pies to serve. | Turns a free-form brief into a structured PRD. |
-| [`/cook-pizzas`](skills/cook-pizzas/SKILL.md) | Pre-bake every pie on the menu. | Decomposes the PRD into Pies (3-8 slices each) + a nested master checklist. |
+| [`/cook-pizzas`](skills/cook-pizzas/SKILL.md) | Pre-bake every pie on the menu. | Decomposes the PRD into right-sized Pies (usually 3 to 8 slices each; a small app gets few) + a nested master checklist. |
 | [`/set-display-case`](skills/set-display-case/SKILL.md) | Build the case the pies sit in. | Generates the design system - tokens, components, the `/library` preview route. |
 | [`/final-quality-check`](skills/final-quality-check/SKILL.md) | Install the quality line. | Wires CI/CD, E2E tests, design-system compliance, visual regression. |
 | [`/open-the-shop`](skills/open-the-shop/SKILL.md) | Flip the OPEN sign, stock ingredients. | Sets up env vars + external service credentials. The most hands-on prep step. |
 
 ### 🛎️ Step 2: Serve customers *(the everyday loop)*
 
-Where you'll spend most of your time. **`/sell-pie`** is the forefront motion - bake a whole Pie autonomously, then box it at the boundary. Reach for **`/sell-slice`** when one slice needs a careful, hands-on touch.
+Where you'll spend most of your time. **`/sell-pie`** is the forefront motion - bake a whole Pie autonomously, then box it at the boundary. Reach for **`/sell-slice`** when one slice needs a careful, hands-on touch. Want the whole app without the loop? **`/pizza-party`** runs Steps 1 and 2 end to end after one interview (see Step 3).
 
 | Command | In pizza terms | What it does |
 |---|---|---|
@@ -86,7 +86,7 @@ On-demand, no particular order:
 | [`/special-order`](skills/special-order/SKILL.md) | Cook something off-menu on the spot. | Bolts new features onto an in-progress project - writes fresh stage files, hands off to `/sell-slice`. |
 | [`/open-kitchen`](skills/open-kitchen/SKILL.md) | Watch the shop at work. | Opens the project's local read-only 3D kitchen in the host's native Browser pane when available. `--lobby` opens the lobby: every ByTheSlice project on this machine on one page. |
 | [`/inspect-display`](skills/inspect-display/SKILL.md) | Eyeball every pie on the tray. | Read-only audit of the running app - every route, every page, captured to a report. |
-| [`/run-the-day`](skills/run-the-day/SKILL.md) ⚠️ | Auto-pilot the whole day's service. | Thin chainer that drives `/sell-pie` across every Pie in sequence. *Experimental - fine for short roadmaps, drifts across many pies.* |
+| [`/pizza-party`](skills/pizza-party/SKILL.md) | Cater the whole party in one order. | Brief to deployed app: one interview, then setup, PRD, roadmap and every Pie through `/sell-pie` with all gates local, one PR, a deploy (or artifact / localhost link) and a run record, with no further stops. |
 | [`/close-shop`](skills/close-shop/SKILL.md) ⚠️ | Sit down and debrief after service. | Friction retro on the workflow itself - drafts plugin improvements back to disk. *Experimental.* |
 
 > [!IMPORTANT]
@@ -120,6 +120,8 @@ npx bytheslice install --target both
 ```
 
 Repeat step 3 until the master checklist is empty. That's the whole motion.
+
+Or hand over the whole order at once: `/bytheslice:pizza-party <brief>` asks its questions once up front, then runs every step above, ships one PR and hands back a URL.
 
 > [!NOTE]
 > Every command also works without the `/bytheslice:` prefix in Claude Code if no other plugin claims it (e.g. just `/sell-slice`). Old v3 names (`/deliver-stage`, `/ship-pr`, etc.) still work for one release as backward-compat aliases.
@@ -287,7 +289,7 @@ flowchart TD
 - [ ] step
 ```
 
-A **Pie** is a coherent chapter of 3-8 slices; a **Slice** is one vertical deliverable. `/sell-slice`'s prep gate **refuses to start feature work until every Pie-1 / Prep box is `[x]`**. For the full hierarchy, caps, and how legacy flat-v4 / v3 checklists are handled, see [**Architecture & conventions**](#architecture--conventions).
+A **Pie** is a coherent chapter of usually 3 to 8 slices (a small app gets few pies, of 1 or 2 slices when that is all it holds); a **Slice** is one vertical deliverable. `/sell-slice`'s prep gate **refuses to start feature work until every Pie-1 / Prep box is `[x]`**. For the full hierarchy, caps, and how legacy flat-v4 / v3 checklists are handled, see [**Architecture & conventions**](#architecture--conventions).
 
 > [!NOTE]
 > **Hard caps per slice:** 6 tasks, ~10-15 files changed, completable in one fresh agent session. Override `stages.maxTasksPerStage` in `bytheslice.config.json` if you really need a bigger slice - but the cap exists for a reason.
@@ -302,17 +304,17 @@ Drop a `bytheslice.config.json` at your project root to override defaults:
 {
   "modelTiers":   { "implementer": "opus", "qualityReviewer": "opus",
                     "sliceTester": "sonnet", "sliceVerifier": "sonnet" },
-  "stages":       { "maxTasksPerStage": 6, "targetFeatureStages": "20-30" },
+  "stages":       { "maxTasksPerStage": 6, "targetFeatureStages": "20-30" },  // the default band is a ceiling for large apps, never padding; any other band overrides
   "verification": { "viewports": [375, 768, 1280],
                     "e2e": { "feature": "always", "regressionCore": "critical-only", "visual": "off" } },
   "flow":         { "autoApproveBuildPlan": false, "libraryGate": "self-critique" },
   "review":       { "default": "boundary" },   // per-pie override via the `<!-- review: -->` annotation
-  "delivery":     { "mode": "pie-pr", "sliceBudgetHours": 3 },  // "merge-per-slice" = one PR per slice, merged on green CI; budget 0 = off
+  "delivery":     { "mode": "pie-pr", "sliceBudgetHours": 3 },  // "merge-per-slice" = one PR per slice, merged on green CI; "ship-once" (/pizza-party) = all gates local, one PR at the end; budget 0 = off
   "mcps":         { "shadcn": true, "magic": false, "figma": false, "chromeDevTools": true },
   "visualReview": { "tools": ["claude-in-chrome", "chrome-devtools-mcp", "playwright"], "vizzly": false },
   "hitl":         { "additionalCategories": [] },
   "rules":        { "imports": [] },
-  "runPipeline":  { "platformWalkEvery": 5, "haltOn": "broken" }
+  "run":          { "unattended": false }   // /pizza-party sets true: every prompt takes its recommended answer, recorded in the order ticket
 }
 ```
 
@@ -324,7 +326,7 @@ Full schema and precedence rules: [`bytheslice-config-schema.md`](skills/setup-s
 
 ## Architecture & conventions
 
-The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once**, **context-separated** dispatch, **preview-first** library delivery, and **warn-only** hooks and Pass checks that never block. The full reference lives in **[docs/architecture.md](docs/architecture.md)**:
+The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once**, **context-separated** dispatch, **preview-first** library delivery, and **enforced feature intake**: new work is documented with `/special-order` and built through `/sell-slice` or `/sell-pie`, and the workflow guard hook refuses the shortcuts by default (`enforcement: "block"`); the other hooks and Pass checks warn. The full reference lives in **[docs/architecture.md](docs/architecture.md)**:
 
 - [**Pies & Slices**](docs/architecture.md#pies--slices-the-two-level-checklist) - the two-level checklist, caps, the Prep gate
 - [**Mode detection**](docs/architecture.md#mode-detection-standalone-vs-sequential) - standalone vs sequential, per-skill posture table
@@ -342,11 +344,10 @@ The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once*
 ## Experimental skills
 
 > [!WARNING]
-> Not currently reliable in Claude Code or Cursor - agent attention drifts on long-running multi-stage tasks. Curious how they hold up in systems with stronger long-horizon multi-agent orchestration.
+> Not yet reliable in Claude Code or Cursor. Treat its output as a draft for you to review.
 
-`/sell-pie` (one Pie per run, stopping at the boundary) is the autonomous surface and is **not** experimental. The experimental part is unattended *whole-roadmap* automation:
+`/sell-pie` (one Pie per run) and `/pizza-party` (the whole app, end to end) are the autonomous surfaces and are **not** experimental. `/pizza-party` keeps a thin conductor and its state in an order ticket on disk, so a long run survives compaction. One skill is still experimental:
 
-- **`/run-the-day`** - thin chainer that drives `/sell-pie` across **every** Pie until the checklist is green.
 - **`/close-shop`** - after-service retrospective that drafts plugin improvements back to disk.
 
 Running in **Cursor or any host without `/loop`, `Workflow`, or `/goal`?** The skills don't silently drop the logic - they fall back to in-context self-pacing with manual schema validation, and every agent prompt carries its own model tier, effort and tool limits as a header. See the [Cursor / non-Claude-Code fallback](docs/architecture.md#cursor--non-claude-code-fallback) section.
@@ -379,7 +380,7 @@ Technically yes (the orchestrator will accept a HITL override with `destructive_
 <details>
 <summary><b>How many times will it try to fix a failure?</b></summary>
 
-At most **3 local fix loops per slice** (a loop is one fix plus its re-check: a targeted fix, then debug logging plus a fix, then a fix with all the evidence) and, separately, **3 CI fix rounds per PR**. After that the kitchen stops and asks you, with the full evidence. Telling it "continue until verified", "never stop" or "fully automated" does not raise the cap; only your explicit reply at that question can grant more attempts.
+At most **3 local fix loops per slice** (a loop is one fix plus its re-check: a targeted fix, then debug logging plus a fix, then a fix with all the evidence) and, separately, **3 CI fix rounds per PR**. After that the kitchen stops and asks you, with the full evidence. (Under `/pizza-party`, which never stops after its interview, a slice that runs out of loops gets one replan through `/special-order` into smaller slices; if those still fail, it is deferred and listed in the final report.) Telling it "continue until verified", "never stop" or "fully automated" does not raise the cap; only your explicit reply at that question can grant more attempts.
 
 </details>
 

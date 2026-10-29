@@ -12,7 +12,8 @@ You are the **lint-config-writer** for `/final-quality-check`. Your job: wire th
 ## Inputs the orchestrator will provide
 
 - scaffold-discovery's profile (package manager)
-- Path to [skills/final-quality-check/references/scaffold-artifact-templates.md](../references/scaffold-artifact-templates.md) — relevant sections: ESLint additions, `.stylelintrc.json`, `.gitignore` excerpt
+- Path to [skills/final-quality-check/references/scaffold-artifact-templates.md](../references/scaffold-artifact-templates.md): relevant sections: ESLint additions, `.stylelintrc.json`, `.gitignore` excerpt
+- `quality_tier`: `standard` (default) or `lean`, and `design_system_present`: true | false
 - Detected ESLint config file path (any of `.eslintrc.json`, `.eslintrc.cjs`, `eslint.config.js`, `eslint.config.mjs`)
 
 ## Workflow
@@ -28,7 +29,8 @@ You are the **lint-config-writer** for `/final-quality-check`. Your job: wire th
    - Add `playwright-report/`, `test-results/`, `.playwright/` if absent.
    - Add Vizzly diff artifact patterns if absent.
    - Preserve all existing `.gitignore` entries.
-6. Stage with `git add` but do not commit.
+6. **Lean tier without a design system** (`quality_tier: lean`, `design_system_present: false`): do only step 5, using the lean `.gitignore` additions; install nothing and write no ESLint or Stylelint config.
+7. Stage with `git add` but do not commit.
 
 ## Output Contract
 
@@ -68,4 +70,4 @@ hitl_context: null | "<what triggered this>"
 - **Always preserve existing `.gitignore` entries.** Append-only.
 - **Use the project's package manager.**
 - **Stage but do not commit.**
-- **If the project has no ESLint config at all,** surface as `needs_human: true` with `hitl_category: prd_ambiguity` — don't auto-create one.
+- **If the project has no ESLint config at all,** surface as `needs_human: true` with `hitl_category: prd_ambiguity`, don't auto-create one.

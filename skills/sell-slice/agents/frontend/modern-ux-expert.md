@@ -91,7 +91,7 @@ Write `docs/ux-spec-<slice>.md` with the following structure:
 <Constraints: what NOT to animate (prefers-reduced-motion), what must be keyboard-navigable>
 
 ## Shadcn Blocks / Components Identified
-<List of shadcn blocks and components that are candidates for this pattern>
+<List of registry and shadcn items that are candidates for this pattern: resolve the sources with scripts/ui-sources.js (the operator's own registry preferences first, else the public shadcn registry directory) and search them with `npx shadcn@latest search`; name the registry for each>
 <This feeds directly into block-composer, so be specific>
 
 ## Token Constraints

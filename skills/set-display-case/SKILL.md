@@ -43,8 +43,8 @@ Read all of these before beginning:
 | Step | Agent file | Model | Effort | Mode |
 | --- | --- | --- | --- | --- |
 | Mode A, Step 1 | [agents/bundle-validator.md](agents/bundle-validator.md) | sonnet | medium | readonly |
-| Mode B, Step 1 | [agents/token-expander.md](agents/token-expander.md) | opus | high | write |
-| Step 2 (always) | [agents/compliance-pre-check.md](agents/compliance-pre-check.md) | haiku | low | readonly |
+| Mode B, Step 1 | [agents/token-expander.md](agents/token-expander.md) | opus | medium | write |
+| Step 2 (always) | [agents/compliance-pre-check.md](agents/compliance-pre-check.md) | sonnet | medium | readonly |
 | Step 6 (always) | [agents/library-route-scaffolder.md](agents/library-route-scaffolder.md) | sonnet | medium | write |
 
 ---
@@ -55,6 +55,8 @@ Honor these `bytheslice.config.json` keys when present (see [`skills/setup-shop/
 
 - `mcps.shadcn`, `mcps.figma`, `mcps.magic`, declarative MCP availability for the bundle-validator and token-expander agents
 - `modelTiers.tokenExpander`, `modelTiers.bundleValidator`, `modelTiers.compliancePreCheck`, override agent model tiers for THIS run
+- `ui.registries`, the operator's own registry preferences (namespaces such as `"@magicui"`, or `{ name, catalog, item, theme?, notes? }` objects; see [`ui-sources.md`](../sell-slice/references/ui-sources.md)). The public shadcn directory never supplies a theme; only an operator entry with a `theme` does. Mode B installs the first entry's `theme` item on a greenfield project (see "Registry theme" below). Empty or absent: today's behavior, no theme install.
+- `run.unattended`, `true` when nobody is watching the run (`/pizza-party` sets it). Every operator prompt in this skill then takes its recommended answer and records it (see "Unattended runs" below). HITL bubbles in the return contract still bubble.
 
 ---
 
@@ -85,14 +87,38 @@ No bundle provided. Skill generates the token system from a brand brief.
 **Detection:** No bundle folder, no design export, only a brand description, colors, or a quick brief.
 
 **Flow:**
-1. Collect brand brief from user if not already in context (via `ask_user_input_v0`)
-2. Dispatch `bytheslice:token-expander` (opus, high effort, enforced by registration) to generate a complete token system
-3. Surface the generated token system to the user for approval via `ask_user_input_v0`
-4. If user requests changes: apply them and re-surface (cap at 2 rounds; third round → HITL `creative_direction`)
-5. Dispatch `bytheslice:compliance-pre-check` to verify completeness on the approved tokens
-6. Write output artifacts from approved token set
-7. Capture project-specific code patterns (Step 4 below)
-8. Append rules block to project rules file
+1. Collect brand brief from user if not already in context (via `ask_user_input_v0`; unattended, read it from the project's PRD or brief docs, and bubble `prd_ambiguity` only when none exists)
+2. **Registry theme (greenfield only).** If `ui.registries` has an entry with a `theme` item and the project is greenfield, install the theme and point `token-expander` at its brand layer (see "Registry theme" below). Otherwise skip this step.
+3. Dispatch `bytheslice:token-expander` (opus, medium effort, enforced by registration): `mode: full` generates a complete token system; `mode: brand-layer` (after step 2) proposes values only for the theme's documented brand layer
+4. Surface the generated tokens to the user for approval via `ask_user_input_v0`. **Unattended:** take the generated tokens as approved, record the choice under "Decisions made without review" in `docs/design-system.md`, and continue
+5. If user requests changes: apply them and re-surface (cap at 2 rounds; third round → HITL `creative_direction`)
+6. Dispatch `bytheslice:compliance-pre-check` to verify completeness on the approved tokens
+7. Write output artifacts from approved token set
+8. Capture project-specific code patterns (Step 4 below)
+9. Append rules block to project rules file
+
+#### Registry theme
+
+A configured registry can ship a full token contract as a `theme` item, built so a rebrand edits only a small documented **brand layer** (brand colors, neutral hue, radius, elevation, focus knobs) and derives everything else. On a greenfield project that beats inventing a token file: the installed registry items then render against the contract they were built for.
+
+- **Which theme.** The first `ui.registries` entry, in order, that names a `theme`. No entry names one: skip this section.
+- **Greenfield only.** The project has no design system of its own: its CSS entry holds no tokens, or only the stock values `shadcn init` wrote. A project with its own tokens never gets a theme item (it overwrites host tokens); its registry installs bring only the missing tokens through the registry's own bridge, and Mode B runs `mode: full` as before.
+- **Preflight.** The project must be shadcn-initialized (`components.json`). If not, run `npx shadcn@latest init`; stop with `prd_ambiguity` if it asks something the project cannot answer.
+- **Install.** `yes n | npx shadcn@latest add "<item template with {name} = theme>" --yes`. Never `--overwrite`: `yes n` keeps every existing file and lets the rest install in a shell with no terminal.
+- **Find the brand layer.** Read the entry's `notes` and the comments the theme wrote into the CSS entry. Pass the brand-layer variable names and their installed values to `token-expander` with `mode: brand-layer`. If no brand layer is documented, fall back to `mode: full` and record that the theme was installed without one.
+- **Write only the brand layer.** After approval, set the brand-layer values in the CSS entry; never restate the derived tokens or the theme's formulas. `docs/design-system.md` records the theme source (registry, item, install command) under Provenance and documents the derived token vocabulary the registry's items use.
+- `compliance-pre-check` still gates the result. A category the theme does not cover goes back to `token-expander` (`missing_categories`) and lands in the theme's own extension point, never a second token file.
+
+#### Unattended runs
+
+When `run.unattended: true`, every operator prompt in this skill takes its recommended answer instead of waiting:
+
+- **Step 1 mode question:** Mode A when a bundle is present, else Mode B.
+- **Mode A gap prompt:** dispatch `token-expander` with `missing_categories` and take its values.
+- **Mode B token approval:** take the generated tokens.
+- **Step 4 Q-A to Q-E:** the option marked **(Recommended)**.
+
+Each answer taken this way is one bullet under `## Decisions made without review` at the end of `docs/design-system.md`: the question, the answer taken, and one line on how to revisit it (re-run `/set-display-case`, or edit the brand layer). The section is what the operator reads first when they come back. The 2-round revision cap never triggers (nobody requests a revision), and the HITL triggers below still bubble: a missing brief or an unreadable bundle is not a prompt the flag can answer.
 
 ---
 
@@ -132,7 +158,7 @@ Once the gate passes, write these files in the target project:
 | Artifact | Path | Notes |
 | --- | --- | --- |
 | CSS token file | per detected stack (see [`framework-detect.md`](../setup-shop/references/framework-detect.md)) | `app/globals.css` (next-app) / `styles/globals.css` (next-pages) / `src/index.css` (vite-react) / `src/app.css` (sveltekit) / `src/styles/global.css` (astro) |
-| Tailwind config | `tailwind.config.ts` | Token bindings; extends theme |
+| Tailwind config | `tailwind.config.ts` | Token bindings; extends theme. Skip it when the CSS entry already maps tokens with `@theme` (Tailwind v4, or a registry theme that ships its own mapping) |
 | Design system doc | `docs/design-system.md` | Canonical human-readable reference |
 | Bundle audit trail | `docs/design-bundle/` | Mode A only, copy of the Claude Design export |
 
@@ -146,27 +172,27 @@ Use the templates in `references/` as the structural basis. Fill in project-spec
 
 Prompt the user for these visual code patterns using `ask_user_input_v0`. Ask only if relevant to the project type (e.g., skip numeric column treatment for a marketing site). Present as `single_select` where possible.
 
-**Always provide a recommended answer in available options.**
+**Always provide a recommended answer in available options.** The recommended option is the one the project (or the registry items it installed) already uses; otherwise the option marked **(Recommended)** below. Unattended runs take it without asking (see "Unattended runs").
 
 **Q-A, Variant library**
 > "Which variant utility library will you use for component variants?"
-> single_select: ["CVA (class-variance-authority)", "tv (tailwind-variants)", "None, plain className logic"]
+> single_select: ["CVA (class-variance-authority) (Recommended)", "tv (tailwind-variants)", "None, plain className logic"]
 
 **Q-B, Status indicator pattern**
 > "How should status/state indicators look throughout the UI?"
-> single_select: ["Soft pill badges", "Outlined badges", "Icon-only indicators", "None yet, decide per component"]
+> single_select: ["Soft pill badges (Recommended)", "Outlined badges", "Icon-only indicators", "None yet, decide per component"]
 
 **Q-C, Numeric column treatment** (skip for marketing sites)
 > "How should numbers in data tables be rendered?"
-> single_select: ["tabular-nums (fixed-width, aligned)", "Proportional (default)", "No data tables in this project"]
+> single_select: ["tabular-nums (fixed-width, aligned) (Recommended)", "Proportional (default)", "No data tables in this project"]
 
 **Q-D, Icon library**
 > "Which icon library?"
-> single_select: ["Lucide", "Phosphor", "Radix Icons", "Heroicons", "Custom / project-specific"]
+> single_select: ["Lucide (Recommended)", "Phosphor", "Radix Icons", "Heroicons", "Custom / project-specific"]
 
 **Q-E, Default text size for data-dense UI** (skip for marketing sites)
 > "What default text size for data-dense views (tables, sidebars, forms)?"
-> single_select: ["text-sm (14px)", "text-base (16px)", "No data-dense UI in this project"]
+> single_select: ["text-sm (14px) (Recommended)", "text-base (16px)", "No data-dense UI in this project"]
 
 **Rules for code-pattern capture:**
 - If the user answers "None yet", "No data tables", "No data-dense UI", or an equivalent non-answer: **omit that entry from the rules block entirely**. Do not invent defaults.
@@ -230,6 +256,8 @@ artifacts:
 design_context:                 # what design-critic reads, in its read order
   - <PRODUCT.md / DESIGN.md when present>
   - docs/design-system.md
+registry_theme: null | { registry: <name>, item: <theme item>, command: <install command run> }
+unattended_decisions: []        # one line per prompt answered by run.unattended; [] when attended
 needs_human: false | true
 hitl_category: null | "prd_ambiguity" | "external_credentials" | "destructive_operation" | "creative_direction"
 hitl_question: null | "<plain-language question if blocked>"
@@ -248,7 +276,8 @@ This skill does NOT call `ask_user_input_v0` for HITL resolution, it bubbles up 
 ## Completion Checklist
 
 - [ ] Input mode determined (bundle-first or brief-first)
-- [ ] Bundle validated OR token system generated and user-approved
+- [ ] Bundle validated OR token system generated and user-approved (or, unattended, taken and recorded under "Decisions made without review")
+- [ ] Greenfield + a configured registry `theme`: theme installed with `yes n | npx shadcn@latest add ... --yes` (never `--overwrite`) and only its brand layer set; no parallel token file invented
 - [ ] `compliance-pre-check` returned `status: pass` for all token categories
 - [ ] Sidebar tokens included if project has an app shell
 - [ ] Dark mode tokens defined for every color token

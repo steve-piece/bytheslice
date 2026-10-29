@@ -19,7 +19,7 @@ function driver() {
   const roster = {
     implementer: { id: 'implementer', name: 'Ren', crew: 'line', tier: 'opus' },
     'implementer#2': { id: 'implementer#2', name: 'Dom', crew: 'line', tier: 'opus' },
-    discovery: { id: 'discovery', name: 'Pip', crew: 'line', tier: 'sonnet' },
+    discovery: { id: 'discovery', name: 'Pip', crew: 'line', tier: 'opus' },
     'brief-analyzer': { id: 'brief-analyzer', name: 'Bree', crew: 'menu', tier: 'sonnet' },
   };
   const cast = window.createKitchenCastDriver({ roster, emit: (type, event) => events.push({ type, ...event }),

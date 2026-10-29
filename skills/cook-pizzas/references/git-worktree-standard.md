@@ -27,8 +27,9 @@ The generic guidance is "one worktree per agent, merge each into main." ByTheSli
 |---|---|---|
 | **One worktree per Pie** | ✅ the standard | `/sell-pie` cuts `pie-<n>-<scope>` into **one** worktree. Its slices run **sequentially** in that worktree, *not* one worktree per slice (except in merge-per-slice mode, next row). `/sell-slice` (standalone) cuts one worktree for its one slice. |
 | **One worktree per Slice** | merge-per-slice mode only | When `delivery.mode` resolves to `merge-per-slice` (opt-in), each slice gets its own branch `pie-N-sN.M-<scope>` cut from fresh `origin/main` into its own worktree, merges through its own PR, and is removed before the next slice is cut. Still one worktree at a time: slices stay sequential. |
+| **One worktree per Pie, based on the ship branch** | ship-once mode only | When `delivery.mode` resolves to `ship-once` (opt-in, `/pizza-party`), a long-lived local ship branch (`delivery.shipBranch`, default `ship/<repo dir name>`) is cut once from fresh `origin/main` and checked out in the primary checkout. Each pie branch `pie-<n>-<scope>` is cut from that **local** ship branch into its own worktree; slices run sequentially in it, unpushed. |
 | **One worktree per agent** (`isolation:'worktree'`) | ⚠️ escape hatch only | Use **only** when a `Workflow` runs agents **in parallel that mutate overlapping files**. Most ByTheSlice fan-out is **disjoint-file** (each agent owns distinct paths) and needs **no** isolation; the migration Workflow and `cook-pizzas`' plan-writers prove it. Worktree-per-agent costs disk + setup; don't pay it unless writes would actually collide. |
-| **Merge** | pie branch → `main`, one PR | There are **no** sub-worktree→pie merges. Slices commit to the pie branch; the **pie branch** merges to `main` via one PR at the boundary (`/box-it-up`). In merge-per-slice mode, each **slice branch** merges to `main` via its own PR with a merge commit on green CI. Never an integration branch. |
+| **Merge** | pie branch → `main`, one PR | There are **no** sub-worktree→pie merges. Slices commit to the pie branch; the **pie branch** merges to `main` via one PR at the boundary (`/box-it-up`). In merge-per-slice mode, each **slice branch** merges to `main` via its own PR with a merge commit on green CI. In ship-once mode, each **pie branch** merges into the local ship branch with `git merge --no-ff` (no PR, local gates only), and the ship branch merges to `main` through one PR with a merge commit on green CI after the last pie. Never an integration branch other than the ship-once ship branch. |
 
 > Decision rule: **disjoint files → no isolation, just a file-ownership partition. Overlapping files in parallel → `isolation:'worktree'`. Sequential → the shared pie worktree.**
 
@@ -44,6 +45,7 @@ git worktree add -b pie-<n>-<scope> <path> origin/main      # cut from the REMOT
 ```
 
 - **Start-point is `origin/main`** (the just-fetched ref), so the worktree is current even if local `main` has drifted. Never `git worktree add … main`.
+- **Ship-once exception:** the ship branch itself is cut from fresh `origin/main` (`git fetch origin` then `git switch -c <ship-branch> origin/main` in the primary checkout), and every pie worktree is then cut from the **local** ship branch (`git worktree add -b pie-<n>-<scope> <path> <ship-branch>`). The ship branch is the only base that is never on the remote until the final ship PR; it is current because only the pie merges move it.
 - **Branch + folder are both unique per unit of work** (`pie-<n>-<scope>` / `pie-<n>-s<n>.<m>-<scope>` in merge-per-slice mode / `feat/stage-<n>-<scope>`). Unique branch ⇒ no Branch-Exclusivity clash; unique folder ⇒ a private `index.lock` ⇒ no lock contention.
 - **Path convention:** sibling worktrees under the session's worktree root (e.g. `.claude/worktrees/<name>`), never nested inside the main checkout.
 - Never create a worktree on, or commit directly to, `main`/`master`.
@@ -64,6 +66,7 @@ fi
 - **Ignored (the default):** read the checklist and every stage plan from `$PLANS`, and hand agents working in a worktree absolute `$PLANS/...` paths. Flip checklist rows and status lines in `$PLANS/00_master_checklist.md` and commit nothing for the flip. Never copy plans into a worktree: the copy is deleted with the worktree, and every flip made in it is lost.
 - **Tracked:** read and flip the worktree's copy and commit the flip on the branch, so it reaches `main` with the merge.
 - **Merge-per-slice with ignored plans:** flip a slice row only after its PR has merged, so a slice that halts or stays red keeps `[ ]` and the next run resumes it.
+- **Ship-once with ignored plans:** the primary checkout sits on the ship branch, and `$PLANS` is still its `docs/plans/`. Flip slice rows there as each slice clears its gates, and flip the pie's status only after `/box-it-up --pie-local` has merged the pie into the ship branch. An unattended deferral writes `**Status:** deferred: <reason>` there and leaves the row `[ ]`.
 
 ## 3. Phase 2: Run (the Swarm)
 
@@ -79,6 +82,7 @@ fi
 
 - **Verify against the spec, not the author.** A separate agent compares the staged diff against the slice's Exit criteria / the living spec (the `slice-tester` + `slice-verifier` independence). Drift is caught here, before the work enters `main`.
 - **Merge = pie branch → `main` via one PR, preserving per-slice commits** (default `pie-pr` mode). Use `--rebase`/merge-commit, **never `--squash`** for a pie (PR = Pie, commit = Slice; squashing destroys that mapping). A branch holding an empty commit (a slice close made with `--allow-empty`) always takes a merge commit, because GitHub's rebase-merge drops empty commits; `/box-it-up`'s `pick-merge-strategy.js` decides. Sync `main` with `--ff-only` after. This is where silent overwrites become normal, resolvable git conflicts.
+- **Ship-once mode:** pie branch → local ship branch with `git -C "$PRIMARY" merge --no-ff` once the full local check is green (no PR, no push, no human gate), then `worktree remove`, `branch -d`, `worktree prune` (no remote delete: the pie branch was never pushed). After the last pie, the ship branch → `main` via one PR, merged on green CI with a **merge commit** (never squash or rebase, which would flatten the pie merges); then `switch main`, `pull --ff-only`, delete the ship branch local and remote.
 - **Merge-per-slice mode:** slice branch → `main` via one PR per slice, merged on green CI with a **merge commit** (`gh pr merge --merge`; never squash, never rebase). If the repo disallows merge commits, halt and ask. The next slice is cut from the freshly synced `main`.
 - **Cleanup runs from the primary checkout, in this order** (`PRIMARY=$(git worktree list --porcelain | sed -n '1s/^worktree //p')`). `main` is checked out there, so `git checkout main` inside a worktree fails, and git refuses to delete a branch a worktree still holds:
   ```bash
@@ -95,12 +99,12 @@ fi
 
 ## 5. Invariants (the hard rules: what a guard hook would enforce)
 
-1. **Fresh-main:** every worktree is cut from `origin/main` after `git fetch`, never local `main`.
-2. **One-per-Pie default; one-per-Slice in merge-per-slice mode; per-agent isolation only for parallel overlapping writes.**
+1. **Fresh-main:** every worktree is cut from `origin/main` after `git fetch`, never local `main`. (Ship-once: the ship branch is cut from fresh `origin/main`, and pie worktrees from the local ship branch.)
+2. **One-per-Pie default (and ship-once); one-per-Slice in merge-per-slice mode; per-agent isolation only for parallel overlapping writes.**
 3. **Never seed a production DB**: the `slice-tester` non-prod guard is blocking.
-4. **Never `--squash` a pie or a slice**: preserve per-slice commits (merge-per-slice mode always uses a merge commit).
+4. **Never `--squash` a pie or a slice**: preserve per-slice commits (merge-per-slice mode always uses a merge commit; ship-once merges each pie with `--no-ff` and the ship PR with a merge commit).
 5. **Never `rm -rf` a worktree**: `git worktree remove` + `prune`.
-6. **Never bake on `main`/`master`**: feature/pie/slice branch only. (The merge-per-slice conductor waits on `main` between slices but never builds or commits there.)
+6. **Never bake on `main`/`master`**: feature/pie/slice branch only. (The merge-per-slice conductor waits on `main` between slices but never builds or commits there. The ship-once primary checkout holds the ship branch, which takes only pie merge commits, and CI fix commits on the final ship PR.)
 7. **Clean up from the primary checkout**: `pull --ff-only`, `worktree remove`, `branch -d`, remote delete, `prune`, in that order, after every merge.
 8. **Gitignored plans stay in the primary checkout**: read and flip them only at `$PLANS` (section 2, "Where the plans live"), never in a worktree copy.
 

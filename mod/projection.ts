@@ -5,6 +5,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Timer } from 'claude-code'
 
 import { parseChecklist } from './checklist.ts'
+import { primaryRoot } from './ledger.ts'
 import type { PassChecklist, PassPie, PassSlice } from './types'
 
 export const CHECKLIST_PATH = 'docs/plans/00_master_checklist.md'
@@ -72,9 +73,22 @@ export function isOlder(version: string | undefined): boolean {
   return false
 }
 
+/**
+ * Where the checklist is: the session directory's own, else the primary
+ * checkout's. A worktree cut from origin holds no gitignored docs/plans, and
+ * bts_status there read "no checklist" while the primary checkout had one.
+ */
+export async function checklistFile($: EngineInterface): Promise<string> {
+  if (await $.fs.exists(CHECKLIST_PATH).catch(() => false)) return CHECKLIST_PATH
+  const root = await primaryRoot($).catch(() => null)
+  const shared = root === null ? null : `${root.replace(/\/$/, '')}/${CHECKLIST_PATH}`
+  if (shared !== null && (await $.fs.exists(shared).catch(() => false))) return shared
+  return CHECKLIST_PATH
+}
+
 async function readText($: EngineInterface): Promise<string | null> {
   try {
-    return await $.fs.read(CHECKLIST_PATH)
+    return await $.fs.read(await checklistFile($))
   } catch {
     return null
   }
@@ -165,7 +179,7 @@ export async function gate($: EngineInterface): Promise<boolean> {
 
 async function mtimeOf($: EngineInterface): Promise<number | null> {
   try {
-    return (await $.fs.stat(CHECKLIST_PATH)).mtimeMs
+    return (await $.fs.stat(await checklistFile($))).mtimeMs
   } catch {
     return null
   }

@@ -3,6 +3,11 @@
 // See references/bytheslice-config-schema.md in the ByTheSlice plugin
 // for the full schema and precedence rules.
 {
+  // The workflow guard: "block" (default) refuses hand-written plan files, ad-hoc
+  // code-writing agents and PRs with unverified slices; "warn" only warns.
+  // The operator sets this by hand; an agent is refused when it tries.
+  // "enforcement": "block",
+
   // Override per-agent model tier. Omit any agent to use the plugin default.
   // Aliases: "haiku" | "sonnet" | "opus".
   "modelTiers": {
@@ -15,7 +20,8 @@
   // Per-stage shape preferences.
   "stages": {
     // "maxTasksPerStage": 6,
-    // "targetFeatureStages": "20-30"
+    // "targetFeatureStages": "20-30"     // default: a ceiling for large apps, never padding; a small brief gets few pies.
+                                         // Any other band (e.g. "10-15") is an override the count must land in.
   },
 
   // Verification knobs for sell-slice Workflow B / sell-pie per-slice loop.
@@ -41,8 +47,25 @@
 
   // How finished slices reach main, plus the soft per-slice time budget.
   "delivery": {
-    // "mode": "pie-pr",                     // "pie-pr" (one PR per pie) | "merge-per-slice" (one PR per slice, merged on green CI)
-    // "sliceBudgetHours": 3                 // soft per-slice wall-clock budget; 0 = off
+    // "mode": "pie-pr",                     // "pie-pr" (one PR per pie) | "merge-per-slice" (one PR per slice, merged on green CI) | "ship-once" (local gates, one PR for the app)
+    // "sliceBudgetHours": 3,                // soft per-slice wall-clock budget; 0 = off
+    // "shipBranch": "ship/my-app"           // ship-once only
+  },
+
+  // Test and CI scaffold size: "standard" | "lean" (lint, typecheck, unit, build, one smoke spec) | "auto".
+  "quality": {
+    // "tier": "standard"
+  },
+
+  // Your own shadcn-style registries, searched before stock shadcn. See the schema doc for the entry shape.
+  "ui": {
+    // "registries": [],
+    // "registryFirst": true
+  },
+
+  // Unattended runs decide, record and continue instead of asking. /pizza-party sets this.
+  "run": {
+    // "unattended": false
   },
 
   // Declare which MCPs the project has installed.
@@ -80,13 +103,5 @@
     // "variant": "single-app",
     // "stack": "nextjs",
     // "roadmapFile": "ROADMAP.local.md"
-  },
-
-  // Run-pipeline checkpoints: dispatch /inspect-display every N stages
-  // during autonomous multi-stage runs. Read by /bytheslice:run-the-day.
-  "runPipeline": {
-    // "platformWalkEvery": 5,           // 0 = disabled
-    // "haltOn": "broken",               // "broken" | "drifted" | "never"
-    // "checkpointMode": "foreground"    // "foreground" | "background"
   }
 }

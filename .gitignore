@@ -18,3 +18,6 @@ docs/plans/
 
 # The Pass ledger (one per project, append-only, never committed).
 .bytheslice/
+
+# Plugin eval results (claude plugin eval)
+evals/results/

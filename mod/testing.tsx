@@ -64,6 +64,10 @@ export type World = {
   run?: (argv: string[], stdin?: string) => { exitCode?: number; stdout?: string; stderr?: string } | undefined
   /** What `$.store` holds, shared by every session the test starts; a test reads it directly. */
   store: Record<string, unknown>
+  /** When set, the one absolute path that holds the checklist (a worktree without docs/plans); unset, any checklist path does. */
+  checklistAt?: string
+  /** What `$.env.get` answers, by variable name. */
+  env?: Record<string, string>
 }
 
 /** The rows a world file holds, parsed; a torn line is left out. */
@@ -85,7 +89,11 @@ export function activityLine(row: Record<string, unknown>): string {
   return `${JSON.stringify(row)}\n`
 }
 
-const isChecklist = (path: string): boolean => /(^|\/)docs\/plans\/00_master_checklist\.md$/.test(path)
+const isChecklistName = (path: string): boolean => /(^|\/)docs\/plans\/00_master_checklist\.md$/.test(path)
+
+/** The project config path, and a config that turns enforcement to warn (the checks then never refuse). */
+export const CONFIG = `${CWD}/bytheslice.config.json`
+export const WARN_MODE = { [CONFIG]: '{ "enforcement": "warn" }' }
 
 /** A checklist with one pie whose slices are all done. */
 export const ALL_DONE = [
@@ -155,6 +163,7 @@ export function stage(on: On, init: Partial<World> = {}) {
       ...(world.costUsd === null ? {} : { cost: { usd: world.costUsd } }),
     },
   }))
+  const isChecklist = (path: string): boolean => isChecklistName(path) && (world.checklistAt === undefined || abs(path) === world.checklistAt)
   on('fs.read', (_$, e) => {
     if (isChecklist(e.path)) {
       if (world.checklist === null) throw missing()
@@ -190,6 +199,9 @@ export function stage(on: On, init: Partial<World> = {}) {
       world.files[path] = (world.files[path] ?? '') + (e.init?.stdin ?? '')
       return out(0, e.init?.stdin ?? '')
     }
+    // A test's own answer comes first; the world's git answers below cover the rest.
+    const answered = world.run?.(argv, e.init?.stdin)
+    if (answered !== undefined) return out(answered.exitCode ?? 0, answered.stdout ?? '', answered.stderr ?? '')
     if (line.startsWith('git rev-parse') && line.includes('--git-common-dir')) {
       return world.commonDir === null ? out(128, '', 'fatal: not a git repository') : out(0, `${world.commonDir}\n`)
     }
@@ -200,14 +212,13 @@ export function stage(on: On, init: Partial<World> = {}) {
     if (argv[0] === 'git' && argv[1] === 'log') {
       return world.head === null ? out(128) : out(0, `${world.head}\n${world.refs}\n${world.subject}\n`)
     }
-    const answered = world.run?.(argv, e.init?.stdin)
-    if (answered !== undefined) return out(answered.exitCode ?? 0, answered.stdout ?? '', answered.stderr ?? '')
     if (argv[0] === 'tail') {
       const path = argv[argv.length - 1] ?? ''
       return out(0, world.files[path] ?? '')
     }
     return out(127, '', `${argv[0]}: not found`)
   })
+  on('env.get', (_$, e) => ({ value: world.env?.[e.name] }))
   on('store.get', (_$, e) => ({ value: world.store[e.key] }))
   on('store.set', (_$, e) => {
     world.store[e.key] = JSON.parse(JSON.stringify(e.value)) as unknown

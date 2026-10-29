@@ -1,11 +1,11 @@
 // mod/policy.ts
-// The Pass check, spawn and watchdog policy: role defaults mirroring each agent's model frontmatter, the watchdog thresholds, the bytheslice.config.json reader and override notes.
+// The Pass check, spawn and watchdog policy, and the enforcement mode: role defaults mirroring each agent's model frontmatter, the watchdog thresholds, the bytheslice.config.json reader and override notes.
 
 import type { EngineInterface } from 'claude-code'
 
 import { stripJsonc } from './jsonc.ts'
 import { appendRow, readRows } from './ledger.ts'
-import type { PassPolicy, PassRequireTester, PassWatchdog } from './types'
+import type { PassEnforcement, PassPolicy, PassRequireTester, PassWatchdog } from './types'
 
 // No runtime import from 'claude-code' here: tests/pass/policy-parity.test.js
 // loads this file in plain Node to hold DEFAULT_ROLES to the agent frontmatter.
@@ -31,12 +31,12 @@ export const DEFAULT_ROLES: Readonly<Record<string, readonly string[]>> = {
   'checklist-generator': ['haiku'],
   'ci-cd-detector': ['haiku'],
   'ci-fix-attempter': ['sonnet'],
-  'complexity-assessor': ['sonnet'],
+  'complexity-assessor': ['opus'],
   'compliance-pre-check': ['sonnet'],
   'component-crafter': ['sonnet'],
   'config-generator': ['haiku'],
   'consistency-checker': ['haiku'],
-  'db-schema-stage-writer': ['sonnet'],
+  'db-schema-stage-writer': ['opus'],
   'debug-instrumenter': ['sonnet'],
   'design-critic': ['sonnet'],
   'e2e-installer': ['sonnet'],
@@ -45,17 +45,17 @@ export const DEFAULT_ROLES: Readonly<Record<string, readonly string[]>> = {
   'fix-attempter': ['sonnet'],
   'framework-detector': ['haiku'],
   'github-secrets-scanner': ['haiku'],
-  discovery: ['haiku'],
+  discovery: ['opus'],
   'husky-installer': ['haiku'],
   'layout-architect': ['sonnet'],
   'library-entry-writer': ['sonnet'],
   'library-route-scaffolder': ['sonnet'],
   'lint-config-writer': ['haiku'],
   'local-gates-runner': ['sonnet'],
-  'master-checklist-synthesizer': ['sonnet'],
+  'master-checklist-synthesizer': ['opus'],
   'modern-ux-expert': ['sonnet'],
   implementer: ['opus'],
-  'phased-plan-writer': ['sonnet'],
+  'phased-plan-writer': ['opus'],
   'platform-walker': ['sonnet'],
   'prd-reviewer': ['sonnet'],
   'proposal-drafter': ['sonnet'],
@@ -63,7 +63,7 @@ export const DEFAULT_ROLES: Readonly<Record<string, readonly string[]>> = {
   'retrospective-reviewer': ['opus'],
   'rules-assembler': ['sonnet'],
   'rules-loader': ['haiku'],
-  'scaffold-discovery': ['haiku'],
+  'scaffold-discovery': ['opus'],
   'slice-tester': ['sonnet'],
   'slice-verifier': ['sonnet'],
   'spec-reviewer': ['sonnet'],
@@ -115,7 +115,10 @@ export const DEFAULT_POLICY: PassPolicy = {
   },
   contextMarkers: [...DEFAULT_MARKERS],
   watchdog: copyWatchdog(DEFAULT_WATCHDOG),
+  enforcement: 'block',
 }
+
+const ENFORCEMENT: readonly PassEnforcement[] = ['block', 'warn']
 
 /** How long a role may run before idling counts as a stall: its own budget, else `default`. */
 export function budgetMs(role: string, watchdog: PassWatchdog): number {
@@ -174,8 +177,15 @@ export function policyFrom(config: unknown): { policy: PassPolicy; overrides: Po
     roles: Object.fromEntries(Object.entries(DEFAULT_POLICY.roles).map(([role, tiers]) => [role, [...tiers]])),
     contextMarkers: [...DEFAULT_POLICY.contextMarkers],
     watchdog: copyWatchdog(DEFAULT_POLICY.watchdog),
+    enforcement: DEFAULT_POLICY.enforcement ?? 'block',
   }
   const overrides: PolicyOverride[] = []
+  // Top level, beside `pass`: the workflow guard hook reads the same key.
+  const enforcement = isObject(config) ? config.enforcement : undefined
+  if (typeof enforcement === 'string' && (ENFORCEMENT as readonly string[]).includes(enforcement) && enforcement !== policy.enforcement) {
+    overrides.push({ setting: 'enforcement', value: enforcement, default: policy.enforcement })
+    policy.enforcement = enforcement as PassEnforcement
+  }
   const pass = isObject(config) ? config.pass : undefined
   if (!isObject(pass)) return { policy, overrides }
   const checks = isObject(pass.checks) ? pass.checks : {}
@@ -275,5 +285,8 @@ export async function loadPolicy($: EngineInterface, options: { record?: boolean
     }
   }
   if (options.record === true) await recordOverrides($, read.overrides).catch(() => 0)
+  // The operator's launch switch: every refusal becomes a warning for this session.
+  const bypass = await $.env.get('BTS_ALLOW_BYPASS').catch(() => undefined)
+  if (bypass === '1') return { ...read.policy, enforcement: 'warn', bypass: true }
   return read.policy
 }

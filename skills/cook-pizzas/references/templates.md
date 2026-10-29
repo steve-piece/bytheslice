@@ -91,7 +91,7 @@ Exit criteria:
 
 ---
 
-<!-- Repeat ### Slice N.M for the pie's 3 to 8 slices, then repeat ## Pie N for each pie. -->
+<!-- Repeat ### Slice N.M for each of the pie's slices (usually 3 to 8; a small app's pie may hold 1 or 2, never padded), then repeat ## Pie N for each pie. -->
 <!-- The pie PR opens at the boundary (one PR per pie); per-slice work is commit + push only. -->
 
 ## MVP Summary

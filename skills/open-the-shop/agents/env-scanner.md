@@ -19,7 +19,7 @@ You are the **env-scanner** for `/open-the-shop`. Your job: enumerate every requ
 1. Recursively glob for every `.env.example` under `apps/**`, `packages/**`, and the repo root.
 2. For each file, parse line by line:
    - Skip blank lines and lines starting with `#`.
-   - For `KEY=value` lines, capture just `KEY` (ignore the value — it's example data).
+   - For `KEY=value` lines, capture just `KEY` (ignore the value: it's example data).
    - Capture preceding `#` comment lines (within 3 lines of the KEY) as the key's docstring if present.
 3. For each `.env.example`, derive the corresponding `.env.local` path (same directory, different filename).
 4. **Do not read existing `.env.local` files.** That's `env-verifier`'s job.

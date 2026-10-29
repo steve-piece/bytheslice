@@ -20,6 +20,15 @@ Generate a complete, canonical PRD from a free-form project brief. This skill us
 
 The PRD it produces feeds the next step (`/cook-pizzas`), but that handoff is a user action, not a skill-to-skill coordination.
 
+## Unattended runs (`run.unattended: true`)
+
+When `bytheslice.config.json` sets `run.unattended: true` (`/pizza-party` does), nothing in this skill waits on a human; the operator accepted that risk by launching the run. Interactive behavior is unchanged when the key is absent.
+
+1. **Read the order ticket first.** Before Step 1, read `docs/pizza-party/order.md`: its **Brief** is the project brief, and its **Answers** (host, database, auth, look, and the extra interview questions) answer every clarifying question they cover.
+2. **Anything the ticket does not cover** takes the recommended option. Append one line per such pick to the ticket's "Decisions made without you" section (`- create-menu · <what was decided> · <why, in a clause>`), never to **Answers**. The pick also lands in PRD Section 6 like any plan-mode answer.
+3. **Providers come only from the ticket.** Host, database, auth and every other service are the ones the **Answers** name; a service the app needs that the ticket does not name gets a local option (see `project-defaults.md`), recorded as a decision.
+4. **The reviewer loop never escalates.** After 2 `revise` iterations, keep the best draft, list every open reviewer item in Section 6 as `[TBD-ASSUMPTION]` (or `[TBD-DEFER]`), and continue. Never `needs_human`.
+
 ## Inputs
 
 Collect before generating:
@@ -36,13 +45,13 @@ Read both before entering plan mode:
 | File | Used For |
 | --- | --- |
 | [references/prd-template-v2.md](references/prd-template-v2.md) | Section structure, headings, and prompts |
-| [references/project-defaults.md](references/project-defaults.md) | Default tech stack, services, architecture conditional, token contract |
+| [references/project-defaults.md](references/project-defaults.md) | Default tech stack, service categories (providers come from what the operator authorized), architecture conditional, token contract |
 
 ---
 
 ## Step 1: Plan-Mode Question Gate (REQUIRED)
 
-After reading the brief and any uploaded specs, MUST enter plan mode before generating any PRD content.
+After reading the brief and any uploaded specs, MUST enter plan mode before generating any PRD content. Under `run.unattended: true`, skip plan mode and the prompts: resolve the same questions from the order ticket, then by recommended option, as in "Unattended runs" above.
 
 **Analyze the brief for ambiguities, then generate 3 to 7 clarifying questions.** Do not generate more than 7. Cover only what is genuinely ambiguous after inference from context and defaults. Present questions ONE AT A TIME using `ask_user_input_v0` (use `single_select` or `multi_select` where possible; avoid free-text when a choice set is realistic).
 
@@ -109,7 +118,7 @@ When parsing the project brief, extract these signals and route them to the righ
 8. Write the complete PRD as a single markdown file to `docs/prd-[project-slug].md`.
 9. Dispatch `bytheslice:prd-reviewer` as the final step: pass the draft PRD plus all source materials.
 10. If reviewer returns `verdict: revise`, apply suggestions and re-run the reviewer. Cap at 2 iterations.
-11. If still `revise` after 2 iterations, return `needs_human: true` with `hitl_category: prd_ambiguity`.
+11. If still `revise` after 2 iterations, return `needs_human: true` with `hitl_category: prd_ambiguity`. Under `run.unattended: true`, instead keep the best draft, list the open items in Section 6, and continue.
 12. End the response with a generation summary (see format below).
 
 ---
@@ -155,7 +164,7 @@ If any check fails, fix the gap before writing the file or explicitly flag it wi
 | Situation | Action |
 | --- | --- |
 | Tech stack not specified | Apply defaults from `project-defaults.md` |
-| Integrations not mentioned | List defaults (Supabase, Stripe, Resend); mark optional ones `[TBD-DEFER]` |
+| Integrations not mentioned | List only the categories the brief implies (database, auth, email, payments); name the provider the operator authorized, or tag it `[TBD-ASSUMPTION]` (unattended: the ticket's provider, else a local option, recorded). Never fill in a vendor nobody authorized |
 | Data model not described | Enumerate entities implied by the brief; mark attributes `[TBD-ASSUMPTION]` |
 | Personas vague | Draft 1 to 2 personas from context; mark with `[Inferred: ...]` |
 | Auth model unspecified | Ask in plan-mode gate (affects architecture conditional) |
@@ -173,7 +182,7 @@ After writing the PRD, dispatch `bytheslice:prd-reviewer` ([definition](agents/p
 - All source materials: brief, uploaded specs, brand assets, API docs, visual references
 - Plan-mode question answers
 
-The reviewer returns a structured verdict. On `verdict: revise`, apply the `suggested_revisions` list and re-dispatch. Cap at 2 iterations. If still failing, set `needs_human: true` with `hitl_category: prd_ambiguity` and surface the specific blocking issues.
+The reviewer returns a structured verdict. On `verdict: revise`, apply the `suggested_revisions` list and re-dispatch. Cap at 2 iterations. If still failing, set `needs_human: true` with `hitl_category: prd_ambiguity` and surface the specific blocking issues. Under `run.unattended: true`, keep the best draft (the one with the fewest open reviewer items), list each open item in Section 6, record one decision line in the ticket, and continue.
 
 ---
 
@@ -200,12 +209,13 @@ After writing the PRD file and completing the review loop, end the response with
 
 ## Completion Checklist
 
-- [ ] Plan-mode gate completed (3 to 7 questions asked and answered)
+- [ ] Plan-mode gate completed (3 to 7 questions asked and answered; unattended: answered from the ticket or by recommended option, each pick recorded under "Decisions made without you")
 - [ ] Architecture conditional evaluated and documented in Section 4
 - [ ] All 8 sections (0 to 7) present in the output PRD
 - [ ] No Linear references in output
 - [ ] Consistency check passed (or gaps flagged with TBD tags)
-- [ ] `prd-reviewer` dispatched and returned `verdict: pass` (or HITL surfaced after 2 iterations)
+- [ ] `prd-reviewer` dispatched and returned `verdict: pass` (or HITL surfaced after 2 iterations; unattended: open items listed in Section 6 and the run continued)
+- [ ] No host, database, auth, email or payments vendor appears in the PRD unless the operator authorized it
 - [ ] PRD written to `docs/prd-[project-slug].md`
 - [ ] Generation summary included in response
 - [ ] Every checkbox in the output is a `- [ ]` task-list item (no bare `[ ]` lines)
@@ -225,4 +235,4 @@ The PRD produced by this skill feeds downstream skills as follows:
 | Section 6 (Open Questions & Assumptions) | Drives phased-plan elicitation + HITL category 1 triggers |
 | Section 7 (Out of Scope) | Guards every stage from scope creep, referenced throughout orchestration |
 
-Pass the full PRD file path to `/cook-pizzas` after human review and sign-off.
+Pass the full PRD file path to `/cook-pizzas` after human review and sign-off (under `run.unattended: true`, the conductor passes it on directly).

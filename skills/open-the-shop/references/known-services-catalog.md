@@ -7,7 +7,7 @@ This catalog maps environment variable prefix patterns to external service ident
 
 ## How to Add a New Service
 
-Copy the entry template at the bottom of this file and fill in every field. Entries are matched in order — put more specific patterns (e.g. `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`) before broad prefixes (e.g. `SUPABASE_*`).
+Copy the entry template at the bottom of this file and fill in every field. Entries are matched in order: put more specific patterns (e.g. `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`) before broad prefixes (e.g. `SUPABASE_*`).
 
 ---
 
@@ -29,7 +29,7 @@ provisioning_url: https://supabase.com/dashboard
 notes: >
   Create a new Supabase project. Keys are found under Project Settings → API.
   SUPABASE_SECRET_KEY uses the format sb_secret_xxx (newer Supabase projects).
-  SUPABASE_SERVICE_ROLE_KEY is the legacy equivalent — never expose in the browser.
+  SUPABASE_SERVICE_ROLE_KEY is the legacy equivalent: never expose in the browser.
 ci_secrets_needed: [SUPABASE_SERVICE_ROLE_KEY, SUPABASE_SECRET_KEY]
 ```
 
@@ -168,7 +168,7 @@ provisioning_url: https://vercel.com/account/tokens
 notes: >
   VERCEL_TOKEN is a personal or team access token (Account Settings → Tokens).
   VERCEL_ORG_ID and VERCEL_PROJECT_ID are found via `vercel link` or in project settings.
-  These values are typically only needed in CI — not in .env.local for local dev.
+  These values are typically only needed in CI, not in .env.local for local dev.
 ci_secrets_needed: [VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID]
 ```
 

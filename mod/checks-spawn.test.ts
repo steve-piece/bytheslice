@@ -117,9 +117,9 @@ test('the pure parts: roles, given models, markers and the judgment', () => {
   expect(givenModel('claude-sonnet-4-6')).toBe('claude-sonnet-4-6')
   expect(markerIn('see the Diff --git below', DEFAULT_POLICY.contextMarkers)).toBe('diff --git')
   expect(markerIn('clean', DEFAULT_POLICY.contextMarkers)).toBeNull()
-  const facts = { tool_use_id: 'toolu-1', prompt: 'p', subagentType: 'bytheslice:discovery', model: 'claude-haiku-4-5' }
-  expect(judgeSpawn(facts, DEFAULT_POLICY)).toEqual({ findings: [], track: { role: 'discovery', given: 'claude-haiku-4-5', parent: null, slice: null } })
-  expect(judgeSpawn({ ...facts, model: 'opus', description: 'P5 S5.4 prep: recon' }, DEFAULT_POLICY).findings[0]?.slice).toBe('5.4')
+  const facts = { tool_use_id: 'toolu-1', prompt: 'p', subagentType: 'bytheslice:discovery', model: 'claude-opus-5-5' }
+  expect(judgeSpawn(facts, DEFAULT_POLICY)).toEqual({ findings: [], track: { role: 'discovery', given: 'claude-opus-5-5', parent: null, slice: null } })
+  expect(judgeSpawn({ ...facts, model: 'haiku', description: 'P5 S5.4 prep: recon' }, DEFAULT_POLICY).findings[0]?.slice).toBe('5.4')
   expect(judgeSpawn({ ...facts, model: 'fable' }, DEFAULT_POLICY).findings.map(f => f.code)).toEqual(['model-policy'])
   expect(judgeSpawn({ ...facts, subagentType: 'general-purpose' }, DEFAULT_POLICY)).toEqual({ findings: [], track: null })
 })

@@ -2,7 +2,7 @@
 name: token-expander
 description: Fallback brief-first agent. Expands a free-form brand brief into a complete design-system token set, surfaces the proposed values to the user for approval before writing files. Used only when no Claude Design bundle is present.
 model: opus
-effort: high
+effort: medium
 tools: [Read, Write, Edit, Glob, Grep]
 ---
 
@@ -23,6 +23,16 @@ The orchestrating skill passes the following values at dispatch time:
 | `token_checklist_path` | Yes | Path to `references/token-checklist.md` — defines required categories |
 | `has_sidebar` | Yes | Boolean — whether the project includes an app shell with a sidebar (determines if sidebar tokens are required) |
 | `missing_categories` | No | List of specific category names if this agent is being dispatched to fill gaps from a previous round |
+| `mode` | No | `full` (default): generate the whole token system. `brand-layer`: a registry theme is already installed, so propose values only for its brand layer |
+| `brand_layer` | With `brand-layer` | The theme's documented brand-layer variables with their installed values, the CSS entry path, and the registry entry's `notes` |
+
+### `brand-layer` mode
+
+A registry theme item already defines every token and derives most of them from a few brand set points. In this mode you propose values **only** for the variables in `brand_layer`, in the theme's own color format, and nothing else: no new tokens, no derived values, no formulas. Phase 2's category list becomes a check, not a generation list: read the installed CSS entry, confirm the theme covers each required category, and list any category it does not cover in the proposal so the skill can route it through `missing_categories`. Contrast still matters: judge the brand colors against the theme's derived foregrounds and say where a choice would fail WCAG AA. The proposal table has one row per brand-layer variable (installed value, proposed light value, proposed dark value when the theme restates it for dark mode). Phase 5 writes the approved values into `docs/design-system-draft.md` the same way.
+
+### Unattended runs
+
+When the skill runs with `run.unattended: true`, it takes your proposal as approved without showing it to anyone. Write every proposal so it can stand as a decision on its own: the design-direction summary names the brief signals each brand choice came from, in one or two sentences the skill copies into "Decisions made without review".
 
 ---
 

@@ -30,11 +30,14 @@ You are the **rules-loader** for `/sell-slice`. Your job: read the project rules
    - `verification.viewports`, `verification.e2e.feature`, `verification.e2e.regressionCore`, `verification.e2e.visual`
    - `flow.autoApproveBuildPlan`, `flow.libraryGate`
    - `review.default`
-   - `delivery.mode`, `delivery.sliceBudgetHours`
+   - `delivery.mode`, `delivery.sliceBudgetHours`, `delivery.shipBranch`
+   - `quality.tier`
+   - `ui.registries`, `ui.registryFirst`
+   - `run.unattended`
    - `hitl.additionalCategories`
    - `rules.imports`
-   Every key above is resolved and returned even when the config file is absent: a key set nowhere comes back as its plugin default from [`bytheslice-config-schema.md`](../../setup-shop/references/bytheslice-config-schema.md). The orchestrator passes the `verification.*` values to `slice-tester` / `slice-verifier`, uses `flow.*` at the build-plan and library gates, uses `review.default` for unannotated pies, and uses `delivery.*` to pick the closeout path and the slice time budget.
-3. If the config file is malformed JSON, or a key holds a value outside its allowed set (for example `delivery.mode` other than `"pie-pr"` / `"merge-per-slice"`, or a negative `delivery.sliceBudgetHours`), surface as HITL `prd_ambiguity`.
+   Every key above is resolved and returned even when the config file is absent: a key set nowhere comes back as its plugin default from [`bytheslice-config-schema.md`](../../setup-shop/references/bytheslice-config-schema.md). The orchestrator passes the `verification.*` values to `slice-tester` / `slice-verifier`, uses `flow.*` at the build-plan and library gates, uses `review.default` for unannotated pies, uses `delivery.*` to pick the closeout path and the slice time budget, passes `ui.*` to block-composer and component-crafter, and under `run.unattended` resolves its own gates instead of asking.
+3. If the config file is malformed JSON, or a key holds a value outside its allowed set (for example `delivery.mode` other than `"pie-pr"` / `"merge-per-slice"` / `"ship-once"`, or a negative `delivery.sliceBudgetHours`), surface as HITL `prd_ambiguity`.
 
 ## Output Contract
 
@@ -69,8 +72,16 @@ resolved_config:
   review:
     default: boundary | continuous          # default boundary
   delivery:
-    mode: pie-pr | merge-per-slice          # default pie-pr (one PR per pie via /box-it-up)
+    mode: pie-pr | merge-per-slice | ship-once   # default pie-pr (one PR per pie via /box-it-up); ship-once: local gates, one PR for the app
     sliceBudgetHours: <number>              # default 3; 0 = off
+    shipBranch: <branch>                    # ship-once only; default ship/<repo dir name>
+  quality:
+    tier: lean | standard | auto            # default standard
+  ui:
+    registries: [<{name, catalog, item, theme?, notes?}>]   # default []: stock shadcn only
+    registryFirst: true | false             # default true when registries is non-empty
+  run:
+    unattended: true | false                # default false; /pizza-party sets true
   hitl:
     additionalCategories: [<entries>]
   rules:

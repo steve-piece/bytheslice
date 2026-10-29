@@ -1,7 +1,7 @@
 ---
 name: master-checklist-synthesizer
 description: Runs LAST after all slice files are written. Aggregates the writers' structured returns into the nested Pie/Slice master checklist at docs/plans/00_master_checklist.md, with the Prep gate (Pie 1 Foundations) on top. Mechanical aggregation, no creative decisions.
-model: sonnet
+model: opus
 effort: medium
 tools: [Read, Write, Glob, Grep]
 ---

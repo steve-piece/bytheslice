@@ -88,7 +88,7 @@ Pass all collected data to `bytheslice:retrospective-reviewer`, with `project_pa
 
 ### Step 3: Analyze and draft proposals
 
-Dispatch `bytheslice:retrospective-reviewer` ([definition](agents/retrospective-reviewer.md); opus, high effort, enforced by registration). The agent reads the collected data, identifies friction patterns, and returns structured proposals including unified diffs for each proposed change.
+Dispatch `bytheslice:retrospective-reviewer` ([definition](agents/retrospective-reviewer.md); opus, medium effort, enforced by registration). The agent reads the collected data, identifies friction patterns, and returns structured proposals including unified diffs for each proposed change.
 
 ### Step 4: Surface proposals to user
 
@@ -130,7 +130,7 @@ Return the PR URL to the user.
 
 The analysis step is delegated entirely to `bytheslice:retrospective-reviewer` ([agents/retrospective-reviewer.md](agents/retrospective-reviewer.md)).
 
-- Model: `opus`, effort: high; cross-stage pattern detection benefits from depth
+- Model: `opus`, effort: medium; cross-stage pattern detection benefits from depth
 - Tools: `Read`, `Glob`, `Grep`, `Bash` (read-only invocations only)
 - The agent never writes files to disk; it returns structured YAML
 

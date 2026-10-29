@@ -7,7 +7,7 @@ import { boxMarks, flipsOf, judgeFlips, judgePlanWrite, judgePush } from './chec
 import { parseChecklist } from './checklist.ts'
 import { CHECKLIST_FIXTURE } from './fixtures/checklist.fixture.ts'
 import { projectLedger } from './ledger-projection.ts'
-import { HEAD, LEDGER, activeAt52, bashResult, engineLoops, ledgerLine, ledgerText, rowsOf, stage, warnsOf } from './testing.tsx'
+import { HEAD, LEDGER, WARN_MODE, activeAt52, bashResult, engineLoops, ledgerLine, ledgerText, rowsOf, stage, warnsOf } from './testing.tsx'
 import type { LedgerRow } from './types'
 
 const CHECKLIST = 'docs/plans/00_master_checklist.md'
@@ -29,8 +29,39 @@ const tester = (slice: string, overall: string, t = 1) =>
 // A one-pie checklist whose open slice is a frontend slice.
 const UI = ['## Pie 7 - Screens [ ]', '### Slice 7.1 - Order screen [ ]', 'Status: Not Started', '**Type:** frontend', ''].join('\n')
 
-test('a flip without a verdict warns once and the edit still returns its result', async ($, on) => {
+test('under enforcement block a flip with no verifier pass is refused before it runs, and reported', async ($, on) => {
   const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  let ran = 0
+  on('tool.call', () => {
+    ran += 1
+    return { result: EDITED }
+  })
+  await start($)
+  const refused = await $.tool.call(tick51)
+  expect(ran).toBe(0)
+  expect(refused.deny).toContain('The Pass refused this (checkbox-without-verdict)')
+  expect(refused.deny).toContain('Slice 5.1 was marked [x] with no slice-verifier verdict in the ledger')
+  expect(refused.deny).toContain('BTS_ALLOW_BYPASS=1')
+  expect(warnsOf(world)).toEqual([['checkbox-without-verdict', '5.1']])
+  expect(rowsOf(world).find(row => row.ev === 'warn')?.data).toEqual(expect.objectContaining({ blocked: true }))
+  // Refused again inside a minute: still refused, reported once.
+  expect((await $.tool.call(tick51)).deny).toContain('checkbox-without-verdict')
+  expect(warnsOf(world)).toHaveLength(1)
+})
+
+test('the operator bypass (BTS_ALLOW_BYPASS=1) turns the refusal into a warning', async ($, on) => {
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE, env: { BTS_ALLOW_BYPASS: '1' } })
+  on('tool.call', () => ({ result: EDITED }))
+  await start($)
+  const ran = await $.tool.call(tick51)
+  expect(ran.deny).toBeUndefined()
+  expect(ran.result).toEqual(EDITED)
+  expect(ran.context?.[0]).toContain('checkbox-without-verdict')
+  expect(warnsOf(world)).toEqual([['checkbox-without-verdict', '5.1']])
+})
+
+test('under enforcement warn a flip without a verdict warns once and the edit still returns its result', async ($, on) => {
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE, files: { ...WARN_MODE } })
   on('tool.call', () => ({ result: EDITED }))
   await start($)
   const ran = await $.tool.call(tick51)
@@ -61,12 +92,13 @@ test('a flip with a slice-verifier pass at a matching HEAD is silent', async ($,
   expect(world.toasts).toEqual([])
 })
 
-test('a stale HEAD (a pass at an older sha) and a failed verdict each warn with their reason', async ($, on) => {
+test('a stale HEAD (a pass at an older sha) only warns; a failed verdict is refused, with its reason', async ($, on) => {
   const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
   world.files[LEDGER] = ledgerText([verifier('5.1', 'pass', OLD_HEAD), verifier('5.2', 'fail', HEAD)])
   on('tool.call', () => ({ result: EDITED }))
   await start($)
   const stale = await $.tool.call(tick51)
+  expect(stale.deny).toBeUndefined()
   expect(stale.context?.[0]).toContain(`with its slice-verifier pass at 0123456, not at HEAD ${HEAD.slice(0, 7)}`)
   const failed = await $.tool.call({
     tool: 'Edit',
@@ -74,7 +106,7 @@ test('a stale HEAD (a pass at an older sha) and a failed verdict each warn with 
     old_string: '### Slice 5.2 - Ledger and status tool [ ]',
     new_string: '### Slice 5.2 - Ledger and status tool [x]',
   })
-  expect(failed.context?.[0]).toContain('while its latest slice-verifier verdict is fail')
+  expect(failed.deny).toContain('while its latest slice-verifier verdict is fail')
   expect(warnsOf(world)).toEqual([
     ['checkbox-without-verdict', '5.1'],
     ['checkbox-without-verdict', '5.2'],
@@ -102,7 +134,7 @@ test('a UI slice with both passes at HEAD flips silently', async ($, on) => {
 })
 
 test('a whole-file Write that ticks a slice is judged too, and a failed edit reports nothing', async ($, on) => {
-  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE, files: { ...WARN_MODE } })
   let fail = true
   on('tool.call', () => (fail ? { isError: true as const, result: 'old_string not found', text: 'old_string not found' } : { result: EDITED }))
   await start($)

@@ -204,7 +204,7 @@ Walk this at the end of every run. Do not report complete until every box is `[x
 
 ## Sub-agent return contract
 
-When `/inspect-display` is invoked as a sub-skill (e.g. by `/run-the-day` as a periodic checkpoint; see the future roadmap in `references/integration-points.md`):
+When `/inspect-display` is invoked as a sub-skill (e.g. by `/pizza-party` as a per-pie checkpoint, a proposal in `references/integration-points.md`):
 
 ```yaml
 status: complete | failed | needs_human
@@ -251,4 +251,4 @@ hitl_context: null | "<what triggered this>"
 
 These do not overlap. `slice-tester` answers "did this slice meet spec." `inspect-display` answers "what's the state of the whole product right now."
 
-See `references/integration-points.md` for proposed integrations with `/run-the-day` (periodic checkpoint) and `/close-shop` (retrospective augmentation).
+See `references/integration-points.md` for proposed integrations with `/pizza-party` (per-pie checkpoint) and `/close-shop` (retrospective augmentation).

@@ -1,5 +1,5 @@
 // tests/box-it-up/merge-strategy.test.js
-// Covers pick-merge-strategy.js: an empty slice commit forces a merge commit, since GitHub's rebase-merge would drop it.
+// Covers pick-merge-strategy.js: an empty slice commit forces a merge commit, since GitHub's rebase-merge would drop it; slice-merge and ship PRs always take one.
 'use strict';
 
 const test = require('node:test');
@@ -86,6 +86,41 @@ test('the CLI fails quietly on a bad argument', () => {
     assert.equal(error.status, 1);
     assert.equal(String(error.stdout), '');
     assert.equal(String(error.stderr), 'Merge strategy could not be picked.\n');
+    return true;
+  });
+});
+
+test('a ship PR always takes a merge commit, even when rebase is allowed', () => {
+  assert.deepEqual(pickMergeStrategy({ empty: [], repo: ALL, mode: 'ship' }), { strategy: 'merge', reason: 'merge-commit-required' });
+  assert.deepEqual(pickMergeStrategy({ empty: [], repo: ALL, mode: 'slice-merge' }), { strategy: 'merge', reason: 'merge-commit-required' });
+});
+
+test('a ship PR on a repo without merge commits picks nothing', () => {
+  const result = pickMergeStrategy({ empty: ['abc'], repo: { rebaseMergeAllowed: true, squashMergeAllowed: true }, mode: 'ship' });
+  assert.deepEqual(result, { strategy: 'none', reason: 'merge-commits-disallowed' });
+});
+
+test('an unknown mode is refused', () => {
+  assert.throws(() => pickMergeStrategy({ empty: [], repo: ALL, mode: 'squash' }), TypeError);
+});
+
+test('the CLI picks a merge commit for a ship branch holding pie merge commits', (t) => {
+  const r = repo(t);
+  r.git('checkout', '-q', '-b', 'pie-9-a', 'base');
+  commitFile(r, 'd.txt', 'feat(pie-9): 9.1 Slice One');
+  r.git('checkout', '-q', 'pie-9-test');
+  r.git('merge', '-q', '--no-ff', '-m', 'merge(pie-9): Pie 9 into ship/app', 'pie-9-a');
+  const out = execFileSync('node', [SCRIPT, '--base', 'base', '--project', r.dir, '--mode', 'ship'], { input: JSON.stringify(ALL), encoding: 'utf8' });
+  const parsed = JSON.parse(out.trim());
+  assert.equal(parsed.strategy, 'merge');
+  assert.equal(parsed.reason, 'merge-commit-required');
+  assert.deepEqual(parsed.emptyCommits, []);
+});
+
+test('the CLI fails quietly on an unknown mode', () => {
+  assert.throws(() => execFileSync('node', [SCRIPT, '--mode', 'squash'], { input: '{}', stdio: ['pipe', 'pipe', 'pipe'] }), (error) => {
+    assert.equal(error.status, 1);
+    assert.equal(String(error.stdout), '');
     return true;
   });
 });
