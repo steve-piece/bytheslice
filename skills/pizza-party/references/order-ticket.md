@@ -37,7 +37,7 @@ Started: <ISO time> · Plugin: <version> · Model: <model id> · Brief: <brief i
 
 ## Progress
 
-- <phase> · <status: done | running | deferred> · <one-line result, e.g. "PRD at docs/prd-health-app.md">
+- <phase> · <status: done | running | deferred> · <one-line result, e.g. "PRD at docs/prd-<app>.md">
 ```
 
 Rules:

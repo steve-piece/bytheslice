@@ -240,21 +240,21 @@ The env var override documentation in `references/model-tier-guide.md` contains 
 Two frontmatter patterns coexist in the plugin. Agents written in Waves 2.1 and 2.2 use YAML-only frontmatter; agents written in Waves 2.3 and 3 use an HTML comment header (containing the file path) followed by YAML frontmatter. Both patterns are functionally valid — the YAML parser ignores the HTML comment — but they create visual inconsistency when reading across agent files. A future housekeeping wave should decide whether to normalize all agents to the Wave 2.3 style. The mass-edit risk outweighs the cosmetic benefit without a deliberate decision, so no auto-apply was performed in this refactor.
 
 **HA-4: Local path reference in README**
-`README.md` contains the line `Local clone: /Users/stevenlight/phased-dev-workflow` — an author-specific absolute path. This is appropriate for a personal workflow file but will look odd if the README is published publicly or shared with other users. Review and strip before any public release of the plugin documentation.
+`README.md` contains the line `Local clone: <local clone path>` — an author-specific absolute path. This is appropriate for a personal workflow file but will look odd if the README is published publicly or shared with other users. Review and strip before any public release of the plugin documentation.
 
 ---
 
 ## 10. Files of note
 
-- `/Users/stevenlight/phased-dev-workflow/README.md` — ByTheSlice branding, updated Mermaid workflow diagram, `sc-` prefix command table, Migration from v1 section
-- `/Users/stevenlight/phased-dev-workflow/references/model-tier-guide.md` — NEW; documents the plugin's three-tier model philosophy, full agent tier table, and all override paths
-- `/Users/stevenlight/phased-dev-workflow/skills/phased-dev-retrospective/` — NEW (experimental); cross-stage friction detection skill
-- `/Users/stevenlight/phased-dev-workflow/skills/sp-design-system-gate/` — NEW; design system validation/generation skill (Stage 1)
-- `/Users/stevenlight/phased-dev-workflow/skills/sp-environment-setup-gate/` — NEW; env setup and verification skill (Stage 3)
-- `/Users/stevenlight/phased-dev-workflow/skills/sp-frontend-design/` — NEW; six-agent frontend delivery pipeline
-- `/Users/stevenlight/phased-dev-workflow/docs/v2-qa-report.md` — full Wave 5.2 audit log: 57 files audited, 8 fixed, 4 items flagged for human attention
-- `/Users/stevenlight/phased-dev-workflow/.claude-plugin/plugin.json` — version bumped to 2.0.0, name updated to `bytheslice`
-- `/Users/stevenlight/phased-dev-workflow/.cursor-plugin/plugin.json` — aligned to match `.claude-plugin/plugin.json`
+- `README.md` — ByTheSlice branding, updated Mermaid workflow diagram, `sc-` prefix command table, Migration from v1 section
+- `references/model-tier-guide.md` — NEW; documents the plugin's three-tier model philosophy, full agent tier table, and all override paths
+- `skills/phased-dev-retrospective/` — NEW (experimental); cross-stage friction detection skill
+- `skills/sp-design-system-gate/` — NEW; design system validation/generation skill (Stage 1)
+- `skills/sp-environment-setup-gate/` — NEW; env setup and verification skill (Stage 3)
+- `skills/sp-frontend-design/` — NEW; six-agent frontend delivery pipeline
+- `docs/v2-qa-report.md` — full Wave 5.2 audit log: 57 files audited, 8 fixed, 4 items flagged for human attention
+- `.claude-plugin/plugin.json` — version bumped to 2.0.0, name updated to `bytheslice`
+- `.cursor-plugin/plugin.json` — aligned to match `.claude-plugin/plugin.json`
 
 ---
 

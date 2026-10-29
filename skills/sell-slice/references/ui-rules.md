@@ -57,7 +57,7 @@ AI agents tend to scatter explanations across cards, section headers and form fi
 ## 8. Consistent micro-copy
 
 - Sentence case everywhere (titles, buttons, labels, menu items).
-- Buttons are verbs that say what happens ("Save meal", "Log workout"), never "OK" or "Submit".
+- Buttons are verbs that say what happens ("Save draft", "Create project"), never "OK" or "Submit".
 - One icon set across the app, one stroke weight and size scale; icons accompany labels rather than replace them, except universally known ones in toolbars (with an accessible name and a tooltip).
 - The same thing has the same name everywhere (never "entry" in one place and "record" in another).
 

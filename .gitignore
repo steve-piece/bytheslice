@@ -21,3 +21,5 @@ docs/plans/
 
 # Plugin eval results (claude plugin eval)
 evals/results/
+# Benchmark briefs are personal: keep them in ~/.bytheslice/pizza-party/briefs/, never here.
+evals/pizza-party/briefs/

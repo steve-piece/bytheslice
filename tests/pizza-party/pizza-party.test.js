@@ -13,7 +13,7 @@ const SCRIPT = path.join(__dirname, '..', '..', 'scripts', 'pizza-party.js');
 const { ticketCount } = require(SCRIPT);
 
 const TICKET = [
-  '# Order: Health',
+  '# Order: Sample',
   '',
   '## Answers',
   '',
@@ -46,7 +46,7 @@ test('a recorded run lands in the run log and the table compares runs of one bri
   fs.writeFileSync(path.join(app, 'docs', 'pizza-party', 'order.md'), TICKET);
   const env = { ...process.env, BTS_HOME: home };
   const run = extra =>
-    execFileSync(process.execPath, [SCRIPT, 'record', app, '--brief', 'health-app', '--model', 'claude-sonnet-5-5', ...extra], { env, encoding: 'utf8' });
+    execFileSync(process.execPath, [SCRIPT, 'record', app, '--brief', 'sample-app', '--model', 'claude-sonnet-5-5', ...extra], { env, encoding: 'utf8' });
   const first = JSON.parse(run(['--outcome', 'shipped', '--url', 'http://localhost:3000', '--url-kind', 'localhost', '--acceptance', '9/10']));
   assert.equal(first.outcome, 'shipped');
   assert.equal(first.decisions, 2);
@@ -56,7 +56,7 @@ test('a recorded run lands in the run log and the table compares runs of one bri
   const lines = fs.readFileSync(path.join(home, 'pizza-party', 'runs.jsonl'), 'utf8').trim().split('\n');
   assert.equal(lines.length, 2);
   assert.equal(JSON.parse(lines[1]).outcome, 'partial');
-  const table = execFileSync(process.execPath, [SCRIPT, 'runs', '--brief', 'health-app'], { env, encoding: 'utf8' });
+  const table = execFileSync(process.execPath, [SCRIPT, 'runs', '--brief', 'sample-app'], { env, encoding: 'utf8' });
   assert.match(table, /\| Date \| Brief \|/);
   assert.equal(table.trim().split('\n').length, 4);
   assert.match(table, /http:\/\/localhost:3000/);

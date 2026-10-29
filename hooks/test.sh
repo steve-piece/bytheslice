@@ -1349,7 +1349,7 @@ assert_empty "an ordinary prompt gets no context"
 
 # No checklist yet: a whole-app ask is pointed at /pizza-party, nothing else is
 NOPLAN_P=$(mk_fixture)
-run_wg "$NOPLAN_P" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$NOPLAN_P"),\"prompt\":\"/goal build me this application end to end: a private diet and workout log\"}"
+run_wg "$NOPLAN_P" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$NOPLAN_P"),\"prompt\":\"/goal build me this application end to end: a private reading list tracker\"}"
 assert_contains "no checklist: a whole-app ask gets the /pizza-party route" "/pizza-party"
 run_wg "$NOPLAN_P" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$NOPLAN_P"),\"prompt\":\"add a new feature for alerts\"}"
 assert_empty "no checklist: a feature ask outside a ByTheSlice project gets nothing"
