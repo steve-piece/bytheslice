@@ -892,6 +892,15 @@ run_wg "$FIX" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$FI
 assert_empty "a /special-order prompt gets no extra context"
 run_wg "$FIX" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$FIX"),\"prompt\":\"why did CI fail?\"}"
 assert_empty "an ordinary prompt gets no context"
+for quiet in "/goal" "/goal fix the flaky CI on main" "What does the new feature do?" "Fix the new page, it 500s on load" "Add tests for the new endpoint" "Only use special order when we are doing a new feature." "Use an agent to research how other apps build onboarding flows"; do
+  run_wg "$FIX" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$FIX"),\"prompt\":$(json_str "$quiet")}"
+  assert_empty "no intake for a non-feature prompt: $quiet"
+done
+run_wg "$FIX" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$FIX"),\"prompt\":\"Can you build a new feature that shares a slate by link?\"}"
+assert_contains "a can-you feature request gets the intake context" "/special-order"
+assert_contains "the intake context says plain agents are fine for other work" "plain agents"
+run_wg "$FIX" "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":$(json_str "$FIX"),\"prompt\":\"<task-notification> report: Implement Slice 1.2 and add a new feature for alerts\"}"
+assert_empty "a relayed agent report or task notice gets no context"
 
 # No checklist yet: a whole-app ask is pointed at /pizza-party, nothing else is
 NOPLAN_P=$(mk_fixture)
@@ -958,6 +967,12 @@ LAST_OUT=$(node "$HERE/workflow-nudge.js" intake "$INTAKE_FIX")
 assert_contains "intake: an AGENTS.md-only project gets it there" "added to AGENTS.md"
 LAST_OUT=$(env -u BTS_HOOKS_DISABLED node "$HERE/workflow-nudge.js" doctor "$INTAKE_FIX")
 assert_contains "doctor: reads AGENTS.md too" "Feature intake: present in AGENTS.md"
+# create-next-app's layout: CLAUDE.md only imports AGENTS.md, so the block goes in AGENTS.md and the pointer stays one line.
+rm "$INTAKE_FIX/AGENTS.md"; printf '# Agents\n' > "$INTAKE_FIX/AGENTS.md"; printf '@AGENTS.md\n' > "$INTAKE_FIX/CLAUDE.md"
+LAST_OUT=$(node "$HERE/workflow-nudge.js" intake "$INTAKE_FIX")
+assert_contains "intake: a CLAUDE.md that imports AGENTS.md sends it to AGENTS.md" "added to AGENTS.md"
+LAST_OUT=$(cat "$INTAKE_FIX/CLAUDE.md")
+assert_not_contains "intake: the @AGENTS.md pointer is untouched" "feature-intake"
 rm -rf "$INTAKE_FIX"
 
 rm -rf "$FIX" "$WG_HOME"

@@ -330,7 +330,7 @@ For Flow B:
 >
 > **CI/CD baseline:** <"present" | "scaffold pending, run /bytheslice:final-quality-check next" | "skipped per user choice">
 >
-> **Feature intake:** <the doctor's Feature intake line> · **Enforcement:** <block | warn> · **Hooks:** <active | off | not wired>
+> **Feature intake:** <the doctor's Feature intake line> · **Hooks:** <active | off | not wired>
 >
 > **Next steps:**
 > 1. `cd <project-name>`
@@ -346,7 +346,7 @@ For Flow C:
 >
 > **CI/CD baseline:** <"present" | "scaffold pending, run /bytheslice:final-quality-check next" | "skipped per user choice">
 >
-> **Feature intake:** <the doctor's Feature intake line> · **Enforcement:** <block | warn> · **Hooks:** <active | off | not wired>
+> **Feature intake:** <the doctor's Feature intake line> · **Hooks:** <active | off | not wired>
 >
 > **Next steps:**
 > - **Have a PRD already?** Run `/bytheslice:cook-pizzas` to generate phased plans.
@@ -408,7 +408,7 @@ hitl_context: "Detected existing package.json at the working directory; user exp
 - [ ] Step 3 detected ci_cd_ready accurately based on the four markers
 - [ ] (Step 3 + ci_cd_ready false + user said no) `.bytheslice/.skip-ci-cd` sentinel file written
 - [ ] Step 4 ran in Flow B and Flow C: the Feature intake block is in the project rules file and the doctor reports the hooks active
-- [ ] Next-step pointer printed to the user, including the CI/CD baseline, Feature intake, Enforcement and Hooks lines
+- [ ] Next-step pointer printed to the user, including the CI/CD baseline, Feature intake and Hooks lines
 
 ---
 

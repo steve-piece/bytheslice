@@ -35,7 +35,7 @@ Every script that was in this directory at the start of slice 5.4, with the evid
 
 ## The workflow nudge
 
-`workflow-nudge.sh` runs `workflow-nudge.js` under Node on `UserPromptSubmit` (without Node it does nothing). It only adds context, and only in three cases: a `/goal` or new-feature ask in a project with a master checklist (the Feature intake rule), a "build Slice N.M" ask there (the `/sell-slice` route), and an ask for a whole app end to end in a folder with no checklist yet (the `/pizza-party` route). Every other prompt, and every tool call, passes untouched.
+`workflow-nudge.sh` runs `workflow-nudge.js` under Node on `UserPromptSubmit` (without Node it does nothing). It only adds context, and only in three cases: a prompt that opens by asking for a new feature in a project with a master checklist (the Feature intake rule; a `/goal` counts when its text asks for one, a bare `/goal` does not), a prompt that opens with "build Slice N.M" there (the `/sell-slice` route), and an ask for a whole app end to end in a folder with no checklist yet (the `/pizza-party` route). Every other prompt (a question, a fix, a mention of a feature, an agent report or task notice relayed into the session) and every tool call passes untouched.
 
 **Reports.** `node hooks/workflow-nudge.js doctor <root>` prints the Feature intake, Hooks and Checklist lines `/setup-shop` and `/open-kitchen` show; `node hooks/workflow-nudge.js intake <root>` writes the Feature intake block from [`skills/setup-shop/references/feature-intake.md`](../skills/setup-shop/references/feature-intake.md) into `CLAUDE.md` (or an `AGENTS.md`-only project's `AGENTS.md`).
 
@@ -103,7 +103,7 @@ All per-project hook state lives under `.claude/.bytheslice-state/` (gitignored)
 
 Two supported escape hatches, in order of preference:
 
-1. **Per-session env var** - `export BTS_HOOKS_DISABLED=1` before launching Claude Code. Every hook in this directory short-circuits on exit 0 without running its checks, the workflow guard included. Use this for one-off experimental flows where the warnings are getting in your way. To keep the warnings but drop the refusals, launch with `BTS_ALLOW_BYPASS=1` instead. Wired check: see the second non-comment line of every `*.sh` in this dir.
+1. **Per-session env var** - `export BTS_HOOKS_DISABLED=1` before launching Claude Code. Every hook in this directory short-circuits on exit 0 without running its checks, the workflow nudge included. Use this for one-off experimental flows where the warnings are getting in your way. Wired check: see the second non-comment line of every `*.sh` in this dir.
 2. **Global disable via settings** - set `"disableAllHooks": true` in `.claude/settings.local.json`. This is the Claude Code primitive and disables every hook from every plugin, not just ours.
 
 Prefer (1) - it only affects bytheslice hooks and reverts the moment your shell session ends.

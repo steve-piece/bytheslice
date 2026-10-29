@@ -289,7 +289,7 @@ flowchart TD
 - [ ] step
 ```
 
-A **Pie** is a coherent chapter of usually 3 to 8 slices (a small app gets few pies, of 1 or 2 slices when that is all it holds); a **Slice** is one vertical deliverable. `/sell-slice`'s prep gate **refuses to start feature work until every Pie-1 / Prep box is `[x]`**. For the full hierarchy, caps, and how legacy flat-v4 / v3 checklists are handled, see [**Architecture & conventions**](#architecture--conventions).
+A **Pie** is a coherent chapter of usually 3 to 8 slices (a small app gets few pies, of 1 or 2 slices when that is all it holds); a **Slice** is one vertical deliverable. `/sell-slice`'s prep gate **asks you to finish every Pie-1 / Prep box (`[x]`) before it starts feature work**. For the full hierarchy, caps, and how legacy flat-v4 / v3 checklists are handled, see [**Architecture & conventions**](#architecture--conventions).
 
 > [!NOTE]
 > **Hard caps per slice:** 6 tasks, ~10-15 files changed, completable in one fresh agent session. Override `stages.maxTasksPerStage` in `bytheslice.config.json` if you really need a bigger slice - but the cap exists for a reason.
@@ -326,7 +326,7 @@ Full schema and precedence rules: [`bytheslice-config-schema.md`](skills/setup-s
 
 ## Architecture & conventions
 
-The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once**, **context-separated** dispatch, **preview-first** library delivery, and **feature intake**: new work is documented with `/special-order` and built through `/sell-slice` or `/sell-pie`. Nothing refuses a shortcut: one prompt hook adds the rule as context, and the Pass checks warn. The full reference lives in **[docs/architecture.md](docs/architecture.md)**:
+The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once**, **context-separated** dispatch, **preview-first** library delivery, and **feature intake**: new features are documented with `/special-order` and built through `/sell-slice` or `/sell-pie`, while fixes, research and other one-off work use plain agents. Nothing refuses a shortcut: one prompt hook adds the rule as context, and the Pass checks warn. The full reference lives in **[docs/architecture.md](docs/architecture.md)**:
 
 - [**Pies & Slices**](docs/architecture.md#pies--slices-the-two-level-checklist) - the two-level checklist, caps, the Prep gate
 - [**Mode detection**](docs/architecture.md#mode-detection-standalone-vs-sequential) - standalone vs sequential, per-skill posture table

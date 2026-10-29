@@ -33,7 +33,7 @@ The under-the-hood reference for ByTheSlice. The [README](../README.md) covers t
 - A **Slice** (`### Slice N.M`) is one vertical deliverable, hard-capped at **6 tasks / ~10-15 files** - completable in one fresh agent session. Override `stages.maxTasksPerStage` in `bytheslice.config.json` if you truly need a bigger slice.
 - **Pie 1 is Foundations** (slices 1.1-1.4: design system, CI/CD, env, DB schema), tracked via the `## Prep` gate. Feature pies are Pie 2+.
 
-`/sell-slice`'s prep gate **refuses to start feature work until every Pie-1 / Prep box is `[x]`**. Each foundation skill flips its own checkbox when invoked in sequential mode. The DB-schema row is conditional - emitted only if the PRD has a backend.
+`/sell-slice`'s prep gate **asks you to finish every Pie-1 / Prep box (`[x]`) before it starts feature work**. Each foundation skill flips its own checkbox when invoked in sequential mode. The DB-schema row is conditional - emitted only if the PRD has a backend.
 
 ---
 
@@ -188,7 +188,7 @@ Existing operational state files stay, because they drive behavior rather than p
 
 Hooks run only where nothing else can do the job (6.1). Skill preconditions are checked inline by each skill and raised as a question to the operator. No hook refuses a tool call or blocks a prompt, and every script exits 0. Claude Code wires two:
 
-- [`workflow-nudge.sh`](../hooks/workflow-nudge.sh) (Node, [`workflow-nudge.js`](../hooks/workflow-nudge.js)) on `UserPromptSubmit`: in a project with a master checklist, a `/goal` or a new-feature ask gets the **Feature intake** rule as context (document with `/special-order`, build with `/sell-slice` or `/sell-pie`), and a "build Slice N.M" ask gets the `/sell-slice` route; with no checklist yet, an ask for a whole app end to end gets the `/pizza-party` route. `/setup-shop` writes the Feature intake block into the project rules file (`workflow-nudge.js intake`) and `/open-kitchen` re-checks it (`workflow-nudge.js doctor`).
+- [`workflow-nudge.sh`](../hooks/workflow-nudge.sh) (Node, [`workflow-nudge.js`](../hooks/workflow-nudge.js)) on `UserPromptSubmit`: in a project with a master checklist, a prompt that opens by asking for a new feature (a `/goal` whose text does included) gets the **Feature intake** rule as context (document with `/special-order`, build with `/sell-slice` or `/sell-pie`; fixes, research and one-off work need neither), and a "build Slice N.M" ask gets the `/sell-slice` route; with no checklist yet, an ask for a whole app end to end gets the `/pizza-party` route. `/setup-shop` writes the Feature intake block into the project rules file (`workflow-nudge.js intake`) and `/open-kitchen` re-checks it (`workflow-nudge.js doctor`).
 - [`shop-status.sh`](../hooks/shop-status.sh) injects the checklist summary at session start, and again after a resume or a compaction, so a compacted session re-orients.
 
 [`kitchen-log.sh`](../hooks/kitchen-log.sh) (kitchen activity) and [`lobby-signal.sh`](../hooks/lobby-signal.sh) ([the lobby](#the-lobby)) are not hooks on Claude Code: the Pass hands them each event's envelope (`mod/relay.ts`). Cursor, which has no mods, still runs them, and `shop-status.sh`, from `hooks-cursor.json`. A commit on `main` draws the Pass's `commit-on-main` warning; editing a stage plan mid-delivery draws `plan-write-during-bake`.

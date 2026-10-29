@@ -113,8 +113,14 @@ const gatesOf = (value: unknown): string[] =>
         .map(oneLine)
     : []
 
+// Agents drift to `FAIL` or `Pass`: the verdict word is read in any case.
+const verdictOf = (value: unknown): 'pass' | 'fail' | undefined => {
+  const word = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  return word === 'pass' || word === 'fail' ? word : undefined
+}
+
 function fromObject(value: Record<string, unknown>): ParsedVerdict {
-  const overall = value.overall === 'pass' || value.overall === 'fail' ? value.overall : 'unparsed'
+  const overall = verdictOf(value.overall) ?? 'unparsed'
   const slice = typeof value.slice === 'string' && /^\d+\.\d+$/.test(value.slice) ? value.slice : undefined
   return {
     overall,
@@ -158,8 +164,8 @@ export function parseVerdict(answer: unknown): ParsedVerdict {
         // Not this span.
       }
     }
-    const overall = /^\s*overall\s*:\s*["']?(pass|fail)\b/im.exec(text)?.[1]
-    if (overall === 'pass' || overall === 'fail') {
+    const overall = verdictOf(/^\s*overall\s*:\s*["']?(pass|fail)\b/im.exec(text)?.[1])
+    if (overall !== undefined) {
       const slice = /^\s*slice\s*:\s*["']?(\d+\.\d+)/im.exec(text)?.[1]
       return {
         overall,

@@ -13,6 +13,29 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [6.1.1] - 2026-10-29
+
+**Special orders are for new features only.** Plain agents are fine for everything else, the prompt nudge stops firing on prompts that only mention a feature, and three bugs from the first `/pizza-party` benchmark run are fixed.
+
+### Changed
+
+- **Feature intake covers new features and requirements only.** The block `/setup-shop` writes now says bug fixes of any size, refactors, research, review, debugging and one-off tasks need no special order and can use plain agents (general-purpose, Explore) or direct edits. A slice already in the checklist is still built through `/sell-slice` or `/sell-pie`. The "multi-file fixes" and "not through ad-hoc Agent fan-out" wording is gone.
+- **The prompt nudge fires on requests, not mentions.** The prompt must open by asking to add, build, create or implement a new feature, pie, pipeline or similar. Questions, fixes, tests, docs and talk about the framework stay quiet; a bare `/goal` no longer triggers it, and a `/goal` does only when its text asks for a feature. An agent report or task notice relayed into the session never triggers it (one quoting "Implement Slice 2.2" did). Measured on 42 sample prompts: 16 false positives before, 0 after.
+- **The Pass honors `modelTiers`.** A project's top-level `modelTiers` (camelCase agent names, the key conductors dispatch with) now sets the tier the spawn check expects, recorded once as a `policy-override` note; `pass.spawnPolicy.roles` still wins. Before, a conductor that followed the documented override drew a `model-policy` warning.
+- `/setup-shop` drops the stale **Enforcement** field from its report, and the prep gate is described as asking, not refusing.
+
+### Removed
+
+- The `build-slice-uses-baker` eval's no-other-agents grader: research and review agents are fine. The case still checks that `/sell-slice` or `/sell-pie` runs.
+
+### Fixed
+
+- **A tester verdict in capitals read as unparsed.** `overall: FAIL` (or `"PASS"` in JSON) now parses in any case, so the ledger keeps the fail and its fix targets. The tester contract also asks for the lowercase word alone.
+- **Feature intake ignored an `AGENTS.md` project.** When `CLAUDE.md` only imports `@AGENTS.md` (as create-next-app scaffolds), the block now goes in `AGENTS.md` and the one-line pointer is left alone.
+- `docs/pass-mod-spec.md` listed `fix-attempter` and `ci-fix-attempter` on opus; they are sonnet, as their frontmatter and the Pass defaults say.
+
+---
+
 ## [6.1.0] - 2026-10-29
 
 **Fewer hooks, no refusals.** The plugin keeps only the hooks that have to be hooks, and nothing it ships refuses a tool call any more: the rules and the prompt nudge inform the model, the Pass warns, and the model decides. The first `/pizza-party` benchmark run also surfaced two run bugs, fixed here.

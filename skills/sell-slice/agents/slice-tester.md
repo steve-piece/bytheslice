@@ -152,7 +152,7 @@ seed:
   non_prod_guard: passed | blocked | not_applicable
   cleanup_ran: true | false
   residue: 0
-overall: pass | fail                      # fail when any check, transition direction or a11y key is fail
+overall: pass | fail                      # lowercase word alone on the line; fail when any check, transition direction or a11y key is fail
 fix_targets:
   - "<agent + file + reason, e.g. implementer:app/blog/editor/page.tsx: Bold affordance does not toggle weight>"
 ```
