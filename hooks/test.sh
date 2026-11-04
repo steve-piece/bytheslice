@@ -1060,6 +1060,15 @@ if "$JSON_NODE" -e '
   process.exit(JSON.stringify(got.sort()) === JSON.stringify(["beforeSubmitPrompt", "sessionStart", "stop", "subagentStart", "subagentStop"]) ? 0 : 1);
 ' "$CURSOR_HOOKS" 2>/dev/null; then cursor_ok "hooks-cursor.json runs lobby-signal.sh on sessionStart, beforeSubmitPrompt, subagentStart, subagentStop and stop"; else cursor_no "hooks-cursor.json lobby-signal.sh events"; fi
 
+# The checklist hooks ride Cursor's postToolUse: the edit check on every tool
+# (the script's own text match keeps it cheap), the PR check on Shell only.
+if "$JSON_NODE" -e '
+  const list = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).hooks.postToolUse || [];
+  const base = "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/checklist-check.sh\" ";
+  const edit = list.find((e) => e.command === base + "edit");
+  const pr = list.find((e) => e.command === base + "pr");
+  process.exit(edit && !edit.matcher && pr && pr.matcher === "Shell" && edit.timeout === 10 && pr.timeout === 10 ? 0 : 1);
+' "$CURSOR_HOOKS" 2>/dev/null; then cursor_ok "hooks-cursor.json runs checklist-check.sh edit and pr (Shell) on postToolUse"; else cursor_no "hooks-cursor.json checklist-check.sh postToolUse"; fi
 FIX=$(mk_fixture)
 OUT=$(cd "$FIX" && env -u CLAUDE_PROJECT_DIR BTS_HOST=cursor bash "$SHOP_STATUS" </dev/null 2>/dev/null)
 if [ "$OUT" = "{}" ]; then cursor_ok "cursor shop-status: no checklist prints {}"; else cursor_no "cursor shop-status no checklist ($OUT)"; fi
@@ -1215,6 +1224,16 @@ printf 'z\n' > "$CLONE/src/other.ts"; git -C "$CLONE" commit -q -am "feat(pie-3)
 LAST_OUT=$(pr_payload "$GH pr create --fill" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
 assert_exit "pr hook pie commit exit 0" 0
 assert_contains "pr hook reads a pie commit subject" "names a pie or slice"
+cursor_pr() { printf '{"hook_event_name":"postToolUse","conversation_id":"c-pr","tool_name":"Shell","tool_input":{"command":%s},"cwd":%s,"workspace_roots":[%s]}' "$(json_str "$1")" "$(json_str "$CLONE")" "$(json_str "$CLONE")"; }
+LAST_OUT=$(cursor_pr "$GH as steve-piece pr create --fill" | BTS_HOST=cursor bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+assert_exit "cursor pr hook exit 0" 0
+assert_contains "cursor pr hook answers additional_context" '"additional_context":"[bytheslice checklist] This PR left'
+assert_contains "cursor pr hook asks for a follow-up commit" "so the open PR carries it"
+assert_not_contains "cursor pr hook never sets a permission" '"permission"'
+assert_not_contains "cursor pr hook never uses the Claude Code shape" "hookSpecificOutput"
+LAST_OUT=$(cursor_pr "$GH pr view 3" | BTS_HOST=cursor bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+assert_exit "cursor pr hook quiet exit 0" 0
+if [ "$LAST_OUT" = "{}" ]; then PASS=$((PASS+1)); printf '  ✓ %s\n' "cursor pr hook answers {} on other commands"; else FAIL=$((FAIL+1)); FAILED_NAMES+=("cursor pr hook {} ($LAST_OUT)"); printf '  ✗ cursor pr hook {} (%s)\n' "$LAST_OUT"; fi
 git -C "$CLONE" checkout -q feedback-round
 write_two_slices "$CLONE" "Completed"; git -C "$CLONE" commit -q -am "docs: close 2.2"
 LAST_OUT=$(pr_payload "$GH as steve-piece pr create --fill" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
@@ -1224,6 +1243,43 @@ LAST_OUT=$(printf '{"tool_input":{"command":"%s pr create"},"cwd":"/nonexistent"
 quiet_ok "pr hook outside a repo"
 LAST_OUT=$(printf '{"tool_input":{"command":"%s pr create"}}' "$GH" | BTS_HOOKS_DISABLED=1 bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
 quiet_ok "pr hook disabled"
+
+# 8. Cursor: the edit check rides postToolUse, every exit answers JSON, and sessionStart reads workspace_roots[0].
+cursor_json() { # name: passes when the last run exited 0 and printed exactly {}
+  if [ "$LAST_EXIT" = 0 ] && [ "$LAST_OUT" = "{}" ]; then PASS=$((PASS+1)); printf '  ✓ %s\n' "$1"
+  else FAIL=$((FAIL+1)); FAILED_NAMES+=("$1 (exit=$LAST_EXIT out=$LAST_OUT)"); printf '  ✗ %s (exit=%s)\n    output: %s\n' "$1" "$LAST_EXIT" "$LAST_OUT"; fi
+}
+FIX=$(mk_fixture)
+mkdir -p "$FIX/docs/plans"
+cp "$HERE/../tests/fixtures/checklist-format/baldwin-shaped.md" "$FIX/$REL"
+CEDIT="{\"hook_event_name\":\"postToolUse\",\"conversation_id\":\"c-$$-edit\",\"tool_name\":\"Write\",\"cwd\":$(json_str "$FIX"),\"workspace_roots\":[$(json_str "$FIX")],\"tool_input\":{\"path\":$(json_str "$REL")}}"
+LAST_OUT=$(printf '%s' "$CEDIT" | BTS_HOST=cursor bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+assert_exit "cursor edit hook exit 0" 0
+assert_contains "cursor edit hook answers additional_context" '"additional_context"'
+assert_contains "cursor edit hook reads a relative path against the workspace root" "line 24 duplicate-slice"
+assert_not_contains "cursor edit hook never sets a permission" '"permission"'
+LAST_OUT=$(printf '%s' "$CEDIT" | BTS_HOST=cursor bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+cursor_json "cursor edit hook dedupes by conversation and answers {}"
+LAST_OUT=$(printf '{"tool_name":"Read","tool_input":{"path":"src/a.ts"}}' | BTS_HOST=cursor bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+cursor_json "cursor edit hook answers {} on other tools"
+LAST_OUT=$(printf '%s' "$CEDIT" | BTS_HOST=cursor BTS_HOOKS_DISABLED=1 bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+cursor_json "cursor edit hook answers {} when disabled"
+LAST_OUT=$(printf 'not json 00_master_checklist.md' | BTS_HOST=cursor bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+cursor_json "cursor edit hook answers {} on malformed input"
+rm -rf "$FIX"
+FIX=$(mk_fixture)
+write_two_slices "$FIX" "Not Started"
+git -C "$FIX" add -A && git -C "$FIX" commit -q -m checklist
+WT="$FIX/.claude/worktrees/wt"
+git -C "$FIX" worktree add -q -b wt "$WT" 2>/dev/null
+write_two_slices "$WT" "Completed"
+LAST_OUT=$(printf '{"hook_event_name":"sessionStart","conversation_id":"c-s","workspace_roots":[%s]}' "$(json_str "$WT")" | (cd "$FIX" && CLAUDE_PROJECT_DIR=$FIX BTS_HOST=cursor bash "$SHOP_STATUS") 2>&1); LAST_EXIT=$?
+assert_exit "cursor sessionStart worktree exit 0" 0
+if printf '%s' "$LAST_OUT" | python3 -c 'import json,sys; c=json.load(sys.stdin)["additional_context"]; assert "slices: 2 total, 2 completed / 0 open" in c and "(this worktree)" in c' 2>/dev/null; then
+  PASS=$((PASS+1)); printf '  ✓ %s\n' "cursor sessionStart reads workspace_roots[0] (the session worktree)"
+else FAIL=$((FAIL+1)); FAILED_NAMES+=("cursor sessionStart worktree ($LAST_OUT)"); printf '  ✗ cursor sessionStart worktree\n    output: %s\n' "$LAST_OUT"; fi
+git -C "$FIX" worktree remove --force "$WT" 2>/dev/null
+rm -rf "$FIX"
 
 ####################################################################
 # Summary

@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { parseChecklist, shopStatus } = require('../../mcp/kitchen-state.js');
 const { RULES, validateChecklist, checklistCounts, formatReport } = require('../../mcp/checklist-format.js');
-const { PR_CREATE } = require('../../hooks/checklist-check.js');
+const { PR_CREATE, editedFile } = require('../../hooks/checklist-check.js');
 
 const root = path.resolve(__dirname, '../..');
 const fixture = name => fs.readFileSync(path.join(root, 'tests/fixtures/checklist-format', name), 'utf8');
@@ -199,4 +199,16 @@ test('the PR hook matches every gh pr create form and nothing else', () => {
   for (const cmd of [`${gh} pr view 3`, `${gh} pr list`, 'echo pr create', `${gh}x pr create`, `${gh} pr created`, `${gh} as x pr checks 3`]) {
     assert.ok(!PR_CREATE.test(cmd), cmd);
   }
+});
+
+test('the edit hook finds the checklist under every tool input key Claude Code and Cursor use', () => {
+  const rel = 'docs/plans/00_master_checklist.md';
+  for (const key of ['file_path', 'path', 'target_file', 'filePath']) {
+    assert.equal(editedFile({ tool_input: { [key]: `/repo/${rel}` } }), `/repo/${rel}`, key);
+  }
+  assert.equal(editedFile({ tool_input: { path: rel } }), rel);
+  assert.equal(editedFile({ file_path: `/repo/${rel}` }), `/repo/${rel}`, 'Cursor afterFileEdit shape');
+  assert.equal(editedFile({ tool_input: { path: '/repo/src/app.ts' } }), null);
+  assert.equal(editedFile({ tool_input: { path: `/repo/${rel}.bak` } }), null);
+  assert.equal(editedFile({}), null);
 });

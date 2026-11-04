@@ -22,7 +22,12 @@ SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF_DIR/lib/checklist.sh"
 
 if [ "${BTS_HOST:-}" = "cursor" ]; then
-  STATUS=$(BTS_HOST= bash "$SELF_DIR/shop-status.sh" </dev/null 2>/dev/null)
+  # Cursor names the folder as workspace_roots[0]; hand it on as the cwd the
+  # Claude Code path reads, so a Cursor session also prefers its own worktree.
+  CINPUT=""
+  [ -t 0 ] || CINPUT=$(cat 2>/dev/null)
+  ROOT=$(printf '%s' "$CINPUT" | tr -d '\n' | sed -n 's/.*"workspace_roots"[[:space:]]*:[[:space:]]*\[[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+  STATUS=$(printf '{"cwd":"%s"}' "$ROOT" | BTS_HOST= bash "$SELF_DIR/shop-status.sh" 2>/dev/null)
   if [ -n "$STATUS" ]; then printf '{"additional_context":"%s"}\n' "$(json_str "$STATUS")"; else printf '{}\n'; fi
   exit 0
 fi

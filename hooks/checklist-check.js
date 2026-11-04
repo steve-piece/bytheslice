@@ -1,5 +1,6 @@
 // hooks/checklist-check.js
 // Two warn-only checklist hooks, run by checklist-check.sh: `edit` (PostToolUse) runs the shared format check after an edit to the master checklist; `pr` (PreToolUse Bash) warns when `gh pr create` opens a slice-related PR that leaves the checklist unchanged. Both add context and exit 0; neither ever blocks.
+// With BTS_HOST=cursor both run on Cursor's postToolUse and answer {"additional_context": ...}, the one Cursor output the agent is documented to read on an allowed call; so on Cursor the PR warning arrives just after the PR opens and asks for a follow-up checklist commit.
 'use strict';
 
 const fs = require('node:fs');
@@ -23,15 +24,33 @@ function readInput() {
   try { return JSON.parse(fs.readFileSync(0, 'utf8') || '{}'); } catch { return {}; }
 }
 
+const CURSOR = process.env.BTS_HOST === 'cursor';
+let emitted = false;
+
 function emit(event, context) {
-  process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: context } })}\n`);
+  emitted = true;
+  const out = CURSOR ? { additional_context: context } : { hookSpecificOutput: { hookEventName: event, additionalContext: context } };
+  process.stdout.write(`${JSON.stringify(out)}\n`);
 }
 
-const dirOf = input => (typeof input.cwd === 'string' && fs.existsSync(input.cwd) ? input.cwd : process.cwd());
+// The folder the call ran in: the hook's cwd, else Cursor's first workspace root. Null when the input
+// names folders and none exists; this process's folder only when the input names none.
+function dirOf(input) {
+  const roots = Array.isArray(input.workspace_roots) ? input.workspace_roots : [];
+  const named = [input.cwd, ...roots].filter(dir => typeof dir === 'string' && dir);
+  if (!named.length) return process.cwd();
+  return named.find(dir => fs.existsSync(dir)) || null;
+}
+
+// The edited file: Claude Code sends file_path; Cursor tools name it file_path, path or target_file.
+function editedFile(input) {
+  const ti = input.tool_input && typeof input.tool_input === 'object' ? input.tool_input : {};
+  return [ti.file_path, ti.path, ti.target_file, ti.filePath, input.file_path].find(v => typeof v === 'string' && CHECKLIST_FILE.test(v)) || null;
+}
 
 // The same report again in one session is noise: remember the last one per session and checklist.
 function isRepeat(input, file, report) {
-  const key = crypto.createHash('sha1').update(`${input.session_id || ''}\0${file}`).digest('hex').slice(0, 16);
+  const key = crypto.createHash('sha1').update(`${input.session_id || input.conversation_id || ''}\0${file}`).digest('hex').slice(0, 16);
   const mark = path.join(os.tmpdir(), `bytheslice-format-${key}`);
   const digest = crypto.createHash('sha1').update(report).digest('hex');
   try { if (fs.readFileSync(mark, 'utf8') === digest) return true; } catch { /* First report this session. */ }
@@ -40,9 +59,11 @@ function isRepeat(input, file, report) {
 }
 
 function onEdit(input) {
-  const target = input.tool_input && (input.tool_input.file_path || input.tool_input.path);
-  if (typeof target !== 'string' || !CHECKLIST_FILE.test(target)) return;
-  const file = path.isAbsolute(target) ? target : path.resolve(dirOf(input), target);
+  const target = editedFile(input);
+  if (!target) return;
+  const dir = dirOf(input);
+  if (!path.isAbsolute(target) && !dir) return;
+  const file = path.isAbsolute(target) ? target : path.resolve(dir, target);
   let markdown;
   try { markdown = fs.readFileSync(file, 'utf8'); } catch { return; }
   const report = formatReport(validateChecklist(markdown), REL);
@@ -104,7 +125,9 @@ function sliceReason(changed, subjects, branch, plans) {
 function onPr(input) {
   const command = input.tool_input && input.tool_input.command;
   if (typeof command !== 'string' || !PR_CREATE.test(command)) return;
-  const git = gitIn(dirOf(input));
+  const dir = dirOf(input);
+  if (!dir) return;
+  const git = gitIn(dir);
   const top = git('rev-parse', '--show-toplevel');
   if (!top) return;
   const base = baseRef(command, git);
@@ -122,11 +145,16 @@ function onPr(input) {
   const subjects = (git('log', '--format=%s', `${fork}..HEAD`) || '').split('\n').filter(Boolean);
   const reason = sliceReason(changed, subjects, git('rev-parse', '--abbrev-ref', 'HEAD'), planTexts(home, git, base));
   if (!reason) return;
-  emit('PreToolUse', [
+  const fix = 'set the `**Status:**` line of each slice this PR delivers or changes (and its pie heading when the pie is now complete)';
+  emit('PreToolUse', (CURSOR ? [
+    `[bytheslice checklist] This PR left ${REL} unchanged, but it looks slice-related: ${reason}.`,
+    `Update the checklist now: ${fix}, commit that on this branch and push, so the open PR carries it.`,
+    'If this PR changes no slice, nothing more is needed. This is a warning only; nothing was blocked.',
+  ] : [
     `[bytheslice checklist] This PR leaves ${REL} unchanged, but it looks slice-related: ${reason}.`,
-    'Update the checklist first: set the `**Status:**` line of each slice this PR delivers or changes (and its pie heading when the pie is now complete), commit that on this branch, then open the PR.',
+    `Update the checklist first: ${fix}, commit that on this branch, then open the PR.`,
     'If this PR changes no slice, go ahead as planned. This is a warning only; nothing is blocked.',
-  ].join('\n'));
+  ]).join('\n'));
 }
 
 if (require.main === module) {
@@ -136,7 +164,8 @@ if (require.main === module) {
     if (mode === 'edit') onEdit(input);
     else if (mode === 'pr') onPr(input);
   } catch { /* A warning hook never fails its tool call. */ }
+  if (CURSOR && !emitted) process.stdout.write('{}\n');  // Cursor reads JSON on every exit.
   process.exit(0);
 }
 
-module.exports = { PR_CREATE, sliceReason, baseRef };
+module.exports = { PR_CREATE, sliceReason, baseRef, editedFile };

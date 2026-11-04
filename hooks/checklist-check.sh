@@ -8,18 +8,24 @@
 # Either one only adds context. It never refuses a call and always exits 0.
 # A cheap text match skips Node for every other call; without Node it does
 # nothing.
+#
+# With BTS_HOST=cursor both modes run on Cursor's postToolUse (hooks-cursor.json)
+# and every exit prints JSON: {"additional_context": ...} or {}.
 
 set -u
 
-[ "${BTS_HOOKS_DISABLED:-0}" = "1" ] && exit 0
+quiet() { [ "${BTS_HOST:-}" = "cursor" ] && printf '{}\n'; exit 0; }
+
+[ "${BTS_HOOKS_DISABLED:-0}" = "1" ] && quiet
 MODE="${1:-}"
 INPUT=$(cat 2>/dev/null)
 case "$MODE" in
-  edit) case "$INPUT" in *00_master_checklist.md*) ;; *) exit 0 ;; esac ;;
-  pr) case "$INPUT" in *"pr create"*|*"pr new"*) ;; *) exit 0 ;; esac ;;
-  *) exit 0 ;;
+  edit) case "$INPUT" in *00_master_checklist.md*) ;; *) quiet ;; esac ;;
+  pr) case "$INPUT" in *"pr create"*|*"pr new"*) ;; *) quiet ;; esac ;;
+  *) quiet ;;
 esac
-command -v node >/dev/null 2>&1 || exit 0
+command -v node >/dev/null 2>&1 || quiet
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
-printf '%s' "$INPUT" | node "$SELF_DIR/checklist-check.js" "$MODE" 2>/dev/null
-exit 0
+OUT=$(printf '%s' "$INPUT" | node "$SELF_DIR/checklist-check.js" "$MODE" 2>/dev/null)
+[ -n "$OUT" ] && { printf '%s\n' "$OUT"; exit 0; }
+quiet
