@@ -16,6 +16,34 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [6.2.0] - 2026-11-03
+
+**The checklist reads true, says when it cannot, and is updated before every PR.** A long-lived client checklist read 21 of 50 slices done in the session banner when 55 of 56 were. The banner read a primary checkout 181 commits behind, and the kitchen, the Pass and the banner each counted the same file differently. All three now share one parse, a format check names the lines none of them can read, and a PR that skips the checklist draws a warning. Nothing blocks. The decisions are recorded in [docs/architecture.md, "The checklist format"](docs/architecture.md#the-checklist-format-62).
+
+### Added
+
+- **Checklist format check** (`mcp/checklist-format.js`), shared by the hooks and the kitchen MCP (`checklistProblems` in its snapshot). Six rules, each reported with its line number: `table-only-pie`, `duplicate-slice`, `unreadable-status`, `status-disagreement`, `unknown-status` and `missing-status`. The text asks for a separate subagent session to repair the lines and tells work unrelated to slices to keep going.
+- **`hooks/checklist-check.sh`**, two warn-only hooks. `PostToolUse` on `Write|Edit|MultiEdit` runs the format check after an edit to the master checklist, once per distinct report per session. `PreToolUse` on `Bash` warns when `gh pr create` (also `gh pr new` and `gh as <user> pr create`) opens a slice-related branch whose diff leaves `docs/plans/00_master_checklist.md` unchanged. Both add context only and always exit 0.
+- **Checklist before every PR.** `/box-it-up` Phase 1 step 5 reconciles the checklist against the branch diff in every mode that opens a PR, universal (hand-rolled) included. `/sell-slice` and `/sell-pie` make the same rule explicit, including for feedback-round, review and CI-fix PRs, where the drift happened.
+- Tests: `tests/checklist-format/` (each parser case and each validator rule), a Baldwin-shaped fixture and a flat v4 fixture (`tests/fixtures/checklist-format/`), parity cases in `tests/pass/parity.test.js` and `mod/checklist.test.ts`, and 55 `hooks/test.sh` assertions proving the hooks exit 0 with context and never a permission decision.
+
+### Changed
+
+- **The banner reads the session's own checkout first.** `bts_checklist_locate` (`hooks/lib/checklist.sh`) reads the worktree the session runs in (the hook input `cwd`), then `git show origin/<default>:docs/plans/00_master_checklist.md`, then the primary checkout, and the banner names the source; a stale checkout reports how many commits behind its default branch it is.
+- **One count everywhere.** The banner counts through the kitchen parse when Node is present, so Prep counts as Pie 1 and its slices count, as in the kitchen and the Pass. A project's banner totals rise by its Prep pie and Prep slices. `shopStatus` in `mcp/kitchen-state.js` follows the same parse.
+- **Pies roll up from their slices** in the banner, as they already did in the kitchen and the Pass. The awk fallback (no Node) rolls up too.
+- The SessionStart hook timeout is 5 seconds (was 3) for the git lookups.
+
+### Fixed
+
+- **A heading's `<!-- Status: Completed -->` note read as open** in the kitchen and the Pass, which stripped comments before reading the status. Both now read it, as the banner did.
+- **A pie written only as a markdown table counted no slices.** Its rows now count, from the `Slice` column and the `Status` or `Implementation` column, when the pie has no slice headings. Tables outside a pie and beside slice headings are still ignored.
+- **A slice listed twice counted twice** (a Prep line and its own `### Slice` heading). It counts once, at the furthest status.
+- `Complete` and `Partial` are read as statuses, and a slice id with one letter (`9.2a`) is a slice in every parser.
+- Flat v4 checklists (`## Stage N`, body `**Status:** Completed` lines, the table-only stage file) read as before.
+
+---
+
 ## [6.1.2] - 2026-10-29
 
 **Every merge is a tagged release.** Tagging had stopped after 5.1.0, so 20 versions shipped with no tag or release. Those are backfilled, and the repo now enforces a version bump on every pull request and tags each one on merge.

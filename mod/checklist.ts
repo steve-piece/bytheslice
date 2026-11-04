@@ -21,10 +21,23 @@ const clean = (value: string, max = 240): string =>
   Array.from(value.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim()).slice(0, max).join('')
 
 function statusOf(line: string): Status {
-  if (/\[[xX]\]|~~|\bStatus:\s*(?:Completed|Done|Shipped)\b/i.test(line)) return 'done'
-  if (/\bStatus:\s*(?:In Progress|Active|Running)\b|\[-\]/i.test(line)) return 'active'
+  if (/\[[xX]\]|~~|\bStatus:\s*(?:Completed?|Done|Shipped)\b/i.test(line)) return 'done'
+  if (/\bStatus:\s*(?:In Progress|Active|Running|Partial)\b|\[-\]/i.test(line)) return 'active'
   return 'open'
 }
+
+// A heading's status may sit in an HTML comment (`### Slice 3.1 <!-- Status: Completed -->`): read it, never strip it.
+const notedStatus = (raw: string, line: string): Status =>
+  statusOf(`${line} ${(raw.match(/<!--\s*Status:.*?-->/gi) ?? []).join(' ')}`)
+const RANK: Record<Status, number> = { open: 0, active: 1, done: 2 }
+const cellsOf = (line: string): string[] =>
+  line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim())
+const plainCell = (cell: string): string =>
+  cell.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\*\*|`/g, '').trim()
+// A table cell's status: a box or strike, or a status word with or without a `Status:` prefix.
+const cellStatus = (cell: string): Status =>
+  statusOf(/\bStatus:/i.test(cell) ? cell : `Status: ${cell.replace(/^[^\w[~]+/, '')}`)
+type Row = { id: string; name: string; status: Status }
 
 function titleOf(value: string): string {
   return clean(
@@ -49,28 +62,33 @@ function parse(markdown: string): PassChecklist {
   let sawPie = false
   let sawStage = false
   let prepCounts: { done: number; total: number } | null = null
+  let table: { header: string[] } | null = null
+  const tables = new Map<PieDraft, Row[]>()
+  const real = new Set<PieDraft>()
 
   for (const raw of markdown.split(/\r?\n/)) {
     if (/^\s*(```|~~~)/.test(raw)) {
       fenced = !fenced
+      table = null
       continue
     }
     if (fenced) continue
     const annotated = reviewOf(/<!--\s*review:\s*(boundary|continuous)\s*-->/i.exec(raw)?.[1])
     const line = raw.replace(/<!--.*?-->/g, '').trimEnd()
+    if (!/^\s*\|/.test(line)) table = null
 
     if (/^##\s+Prep\b/i.test(line)) {
       prep = true
       slice = null
       prepCounts = prepCounts ?? { done: 0, total: 0 }
       const n = Number(/\bPie\s+(\d+)/i.exec(line)?.[1] ?? 1)
-      current = { n, name: 'Foundations', review: annotated ?? 'boundary', status: statusOf(line), slices: [] }
+      current = { n, name: 'Foundations', review: annotated ?? 'boundary', status: notedStatus(raw, line), slices: [] }
       pies.push(current)
       continue
     }
 
     const pieMatch = /^##\s+(?:\[[ xX-]\]\s*)?(?:~~)?Pie\s+(\d+)\b(.*)$/i.exec(line)
-    const standalone = /^##\s+(?:\[[ xX-]\]\s*)?(?:~~)?(?:Slice\s+(\d+\.\d+)|Stage\s+(\d+))\b(.*)$/i.exec(line)
+    const standalone = /^##\s+(?:\[[ xX-]\]\s*)?(?:~~)?(?:Slice\s+(\d+\.\d+[a-z]?)|Stage\s+(\d+))\b(.*)$/i.exec(line)
     if (pieMatch) {
       sawPie = true
       prep = false
@@ -79,10 +97,11 @@ function parse(markdown: string): PassChecklist {
         n: Number(pieMatch[1]),
         name: titleOf(pieMatch[2] ?? ''),
         review: annotated ?? 'boundary',
-        status: statusOf(line),
+        status: notedStatus(raw, line),
         slices: [],
       }
       pies.push(current)
+      real.add(current)
       continue
     }
     if (standalone) {
@@ -90,7 +109,7 @@ function parse(markdown: string): PassChecklist {
       const isStage = standalone[2] !== undefined
       if (isStage) sawStage = true
       const number = standalone[1] ?? standalone[2] ?? '0'
-      slice = { id: number, name: titleOf(standalone[3] ?? ''), status: statusOf(line) }
+      slice = { id: number, name: titleOf(standalone[3] ?? ''), status: notedStatus(raw, line) }
       current = {
         n: Number(number.split('.')[0]),
         name: slice.name,
@@ -121,20 +140,51 @@ function parse(markdown: string): PassChecklist {
     }
 
     const sliceMatch =
-      /^###\s+(?:\[[ xX-]\]\s*)?(?:~~)?Slice\s+(\d+\.\d+)\b(.*)$/i.exec(line) ??
-      (prep ? /^\s*(?:-\s*)?\[[ xX]\]\s+Slice\s+(\d+\.\d+)\b(.*)$/i.exec(line) : null)
+      /^###\s+(?:\[[ xX-]\]\s*)?(?:~~)?Slice\s+(\d+\.\d+[a-z]?)\b(.*)$/i.exec(line) ??
+      (prep ? /^\s*(?:-\s*)?\[[ xX]\]\s+Slice\s+(\d+\.\d+[a-z]?)\b(.*)$/i.exec(line) : null)
     if (sliceMatch) {
       const id = sliceMatch[1] ?? ''
-      slice = { id, name: titleOf(sliceMatch[2] ?? ''), status: statusOf(line) }
+      const status = notedStatus(raw, line)
       const n = Number(id.split('.')[0])
       if (!current || current.n !== n) {
-        current = { n, name: slice.name, review: 'boundary', status: slice.status, slices: [] }
+        current = { n, name: titleOf(sliceMatch[2] ?? ''), review: 'boundary', status, slices: [] }
         pies.push(current)
       }
+      // A slice listed twice (a Prep line and its own heading) is one slice: keep the furthest status.
+      const existing = current.slices.find(item => item.id === id)
+      if (existing) {
+        if (RANK[status] > RANK[existing.status]) existing.status = status
+        slice = existing
+        continue
+      }
+      slice = { id, name: titleOf(sliceMatch[2] ?? ''), status }
       current.slices.push(slice)
       continue
     }
     if (/^###\s/.test(line)) slice = null
+
+    // A pie that lists its slices only in a markdown table: the rows count once the pie has no slice headings.
+    if (current && real.has(current) && /^\s*\|/.test(line)) {
+      const cells = cellsOf(line)
+      if (!table) table = { header: cells.map(cell => plainCell(cell).toLowerCase()) }
+      else if (!cells.every(cell => /^:?-{2,}:?$/.test(cell))) {
+        const { header } = table
+        let idAt = header.indexOf('slice')
+        if (idAt < 0) idAt = cells.findIndex(cell => /^\d+\.\d+[a-z]?$/.test(plainCell(cell)))
+        const id = idAt >= 0 ? plainCell(cells[idAt] ?? '') : ''
+        if (/^\d+\.\d+[a-z]?$/.test(id) && Number(id.split('.')[0]) === current.n) {
+          const statusAt = header.findIndex(cell => /^(?:status|implementation|state|progress)$/.test(cell))
+          const titleAt = header.findIndex(cell => /deliverable|name|title/.test(cell))
+          const rows = tables.get(current) ?? []
+          tables.set(current, rows)
+          rows.push({
+            id,
+            name: titleOf(plainCell(cells[titleAt >= 0 ? titleAt : idAt + 1] ?? '')),
+            status: statusAt >= 0 ? cellStatus(plainCell(cells[statusAt] ?? '')) : statusOf(line),
+          })
+        }
+      }
+    }
 
     // A slice's `**Type:** frontend | **Plan:** ...` line names what kind of slice it is.
     const typed = slice ? /^\s*\*\*Type:?\*\*:?\s*([A-Za-z][\w-]*)/i.exec(line)?.[1] : undefined
@@ -145,6 +195,12 @@ function parse(markdown: string): PassChecklist {
       if (slice) slice.status = status
       else if (current) current.status = status
     }
+  }
+
+  for (const pie of pies) {
+    const rows = tables.get(pie)
+    if (pie.slices.length > 0 || !rows) continue
+    for (const row of rows) if (!pie.slices.some(item => item.id === row.id)) pie.slices.push({ ...row })
   }
 
   const done = pies.map((pie): PassPie => {
