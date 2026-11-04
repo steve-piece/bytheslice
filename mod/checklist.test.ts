@@ -77,3 +77,34 @@ test('an empty file gives an empty checklist', () => {
   expect(parseChecklist('')).toEqual({ pies: [], prep: null, layout: 'empty' })
   expect(parseChecklist('# Title only\n\nSome words.\n').layout).toBe('empty')
 })
+
+test('a heading comment status is read, a lettered id is a slice, and a duplicate counts once', () => {
+  const c = parseChecklist(
+    '## Prep <!-- Status: Completed -->\n- [x] Slice 1.4: DB\n### Slice 1.4: DB Schema\n**Status:** Completed\n' +
+      '## Pie 9: Quotes    <!-- review: continuous --> <!-- Status: Completed -->\n### Slice 9.2: A <!-- Status: Completed -->\n' +
+      '### Slice 9.2a: B <!-- Status: Completed 2026-08-31 -->\n## Pie 10: Security\n### Slice 10.1: A <!-- Status: Completed -->\n' +
+      '### Slice 10.2: B <!-- Status: Partial: owed -->\n**Status:** Partial\n',
+  )
+  expect(c.pies.map(pie => [pie.n, pie.done, pie.slices.map(slice => `${slice.id}${slice.done ? '+' : '-'}`).join(' ')])).toEqual([
+    [1, true, '1.4+'],
+    [9, true, '9.2+ 9.2a+'],
+    [10, false, '10.1+ 10.2-'],
+  ])
+  expect(c.pies[1]?.review).toBe('continuous')
+})
+
+test('a pie written only as a table counts its rows; a table beside headings or outside a pie does not', () => {
+  const table = parseChecklist(
+    '## Pie 4: Market\n| Slice | Stage | Deliverable / Plan | Implementation |\n|---|---|---|---|\n' +
+      '| 4.1 | 44 | [Records](stage_44.md) | Completed, verified 2026-10-21 |\n| 4.2 | 45 | [Editor](stage_45.md) | Not Started |\n',
+  )
+  expect(table.pies[0]?.slices).toEqual([
+    { id: '4.1', name: 'Records', done: true },
+    { id: '4.2', name: 'Editor', done: false },
+  ])
+  const beside = parseChecklist(
+    '## Pie 4: M\n| Slice | Name | Status |\n|---|---|---|\n| 4.1 | A | Completed |\n### Slice 4.1: A [ ]\n' +
+      '## MVP Summary\n| Pie | Slice | Name | Status |\n|---|---|---|---|\n| 5 | 5.1 | Ghost | [x] |\n',
+  )
+  expect(beside.pies.flatMap(pie => pie.slices.map(slice => [slice.id, slice.done]))).toEqual([['4.1', false]])
+})

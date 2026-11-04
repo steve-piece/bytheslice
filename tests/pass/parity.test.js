@@ -70,3 +70,30 @@ test('a flat v4 checklist gives the Pass no pies, by design, while the kitchen l
   assert.deepEqual(parsed.prep, { done: 1, total: 1 });
   assert.ok(fromKitchen(v4).length > 0);
 });
+
+// Older and hand-edited formats (6.2): heading-comment statuses, a duplicate Prep slice heading, a lettered slice id,
+// a table-only pie, Partial, and the summary tables below the pies. Both parsers must count them the same.
+test('both parsers give identical pies, slices and counts on the Baldwin-shaped fixture', async () => {
+  const [{ parseChecklist }] = await load();
+  const baldwin = fs.readFileSync(path.join(root, 'tests/fixtures/checklist-format/baldwin-shaped.md'), 'utf8');
+  const ours = fromPass(parseChecklist(baldwin));
+  assert.deepEqual(ours, fromKitchen(baldwin));
+  const all = ours.flatMap(pie => pie.slices);
+  assert.deepEqual({ pies: ours.length, piesDone: ours.filter(pie => pie.done).length, slices: all.length, slicesDone: all.filter(s => s.done).length },
+    { pies: 5, piesDone: 3, slices: 18, slicesDone: 16 });
+  const { pies, slices } = kitchen.shopStatus(baldwin);
+  assert.deepEqual({ pies: pies.total, piesDone: pies.done, slices: slices.total, slicesDone: slices.done },
+    { pies: 5, piesDone: 3, slices: 18, slicesDone: 16 }, 'the SessionStart counts agree too');
+});
+
+test('both parsers agree on comment statuses, lettered ids, duplicates and table pies', async () => {
+  const [{ parseChecklist }] = await load();
+  const cases = [
+    '## Pie 3: Q <!-- Status: Completed -->\n### Slice 3.1 <!-- Status: Completed -->\n### Slice 3.2: B <!-- Status: Partial: owed -->\n',
+    '## Pie 9: Q\n### Slice 9.2: A [x]\n### Slice 9.2a: B [x]\n### Slice 9.3: C\n**Status:** Complete\n',
+    '## Prep\n- [x] Slice 1.4: DB\n### Slice 1.4: DB\n**Status:** Completed\n## Pie 2: A\n### Slice 2.1: X [ ]\n### Slice 2.1: Y [x]\n',
+    '## Pie 4: M\n| Slice | Deliverable / Plan | Implementation |\n|---|---|---|\n| 4.1 | [A](a.md) | Completed |\n| 4.2 | [B](b.md) | In Progress |\n',
+    '## Pie 4: M\n| Slice | Name | Status |\n|---|---|---|\n| 4.1 | A | Completed |\n### Slice 4.1: A [ ]\n## MVP Summary\n| Pie | Slice | Name | Status |\n|---|---|---|---|\n| 5 | 5.1 | Ghost | [x] |\n',
+  ];
+  for (const markdown of cases) assert.deepEqual(fromPass(parseChecklist(markdown)), fromKitchen(markdown), markdown);
+});

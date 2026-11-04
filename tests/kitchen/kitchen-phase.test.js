@@ -73,22 +73,24 @@ test('only a confirmed merge of this session active pie closes immediately', () 
   assert.equal(foldActivity([...rows, { t: 1600, sid: 'morning', ev: 'PreToolUse', skill: 'sell-pie', pie: 5 }], 2000, { mergedPie: merge }).phase, 'open');
 });
 
-test('status board counts exactly match heading-based SessionStart hook, without activity overlays', async t => {
+test('status board counts exactly match the SessionStart hook, without activity overlays', async t => {
   const { root } = await fixture(t);
   const status = shopStatus(checklist);
-  assert.deepEqual(status, { prep: { done: 3, total: 3 }, pies: { done: 1, total: 2, open: 1 }, slices: { done: 2, total: 4, open: 2 } });
+  // Prep counts as Pie 1 and its slices count (6.2), as in the kitchen and the Pass.
+  assert.deepEqual(status, { prep: { done: 3, total: 3 }, pies: { done: 2, total: 4, open: 2 }, slices: { done: 5, total: 8, open: 3 } });
   const result = spawnSync('bash', [path.join(__dirname, '../../hooks/shop-status.sh')], {
     env: { ...process.env, CLAUDE_PROJECT_DIR: root, BTS_HOOKS_DISABLED: '0' }, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Prep: 3\/3 boxes checked/);
-  assert.match(result.stdout, /pies: 2 total, 1 completed \/ 1 open/);
-  assert.match(result.stdout, /slices: 4 total, 2 completed \/ 2 open/);
+  assert.match(result.stdout, /pies: 4 total, 2 completed \/ 2 open/);
+  assert.match(result.stdout, /slices: 8 total, 5 completed \/ 3 open/);
   const state = buildSnapshot({ root, checklist, rows: [session, start('implementer')], now: 2000 });
   assert.deepEqual(state.shopStatus, status);
-  const headingOnly = '## Prep\n- [ ] ready: n/a\n## Pie 2\nStatus: Completed\n### Slice 2.1\nStatus: Done\n';
-  assert.equal(shopStatus(headingOnly).pies.done, 0);
-  assert.equal(shopStatus(headingOnly).slices.done, 0);
-  assert.equal(shopStatus(headingOnly).prep.done, 0);
+  // A body Status line counts (6.2): the heading-only read is what left 34 done slices open in one project.
+  const bodyLines = '## Prep\n- [ ] ready: n/a\n## Pie 2\nStatus: Completed\n### Slice 2.1\nStatus: Done\n';
+  assert.equal(shopStatus(bodyLines).pies.done, 1);
+  assert.equal(shopStatus(bodyLines).slices.done, 1);
+  assert.equal(shopStatus(bodyLines).prep.done, 0);
 });
 
 test('confirmed merge writer keeps one allowlisted record and the reader remains local and read-only', async t => {

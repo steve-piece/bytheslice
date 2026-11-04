@@ -334,7 +334,7 @@ The kitchen runs on a handful of non-negotiable rules - per-slice **verify-once*
 - [**Delivery & git**](docs/architecture.md#delivery--git-selling-vs-boxing) - selling vs boxing, one pie per PR, worktrees
 - [**Design-system delivery**](docs/architecture.md#design-system-delivery) - preview-first library gate, visual review tooling
 - [**Orchestration principles**](docs/architecture.md#orchestration-principles) - subagent-driven, exit-criteria contract, HITL bubbling, model tiers
-- [**Hooks**](docs/architecture.md#hooks) - the two hooks the plugin keeps, and why (neither blocks anything)
+- [**Hooks**](docs/architecture.md#hooks) - the hooks the plugin keeps, and why (none blocks anything): the prompt nudge, the shop status, and the checklist format and PR checks
 - [**The Pass mod**](docs/architecture.md#the-pass-mod) - packaging, the ledger, the warn-only checks, spawn policy, watchdog, HITL inbox, team mode
 - [**Legacy & migration**](docs/architecture.md#legacy--migration) - flat v4 / v3 projects, `--repie`
 - [**Agent roster**](docs/agents.md) - ByTheSlice ships 52 registered subagents; every one in plain English
