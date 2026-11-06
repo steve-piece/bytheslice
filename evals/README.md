@@ -32,6 +32,8 @@ claude plugin eval . --runs 1 -j 4 --scaffold --allow-tools Write Edit Bash --mo
 
 **Last release pass (5.8.0, with the refusals still on).** Six of seven cases scored 1.0 with the plugin; `build-slice-uses-baker` scored 0.78 (one run built the slice directly) and, rerun three times after the build-a-slice prompt context landed, 1.0. The suite drove that fix and the shell plan-write rule. Deltas over the no-plugin baseline: refused plan write +0.83, checkbox +0.75, PR +0.25, build +0.22; the new-feature case scores 1.0 either way because the baseline reads the fixture's `CLAUDE.md` rule, and the two over-enforcement cases stay at 1.0 in both arms, as they should.
 
+**`failing-gate-gets-fixed` (6.3.0, one run, Sonnet 5.5 agent and judge).** 1.00 with the plugin, 0.25 without: the baseline left `--error` unchanged and did not report a fix, the plugin arm darkened the token and reported it fixed with no question. Delta +0.75, $0.25 for both arms.
+
 ## Limits
 
 - The Pass mod loads in eval runs (the agent can call `bts_status` and `bts_hitl`).
