@@ -16,6 +16,21 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [6.1.3] - 2026-11-05
+
+**CI now runs the code checks, not just the release checks.** The 28 mod test files, 165 node tests and the frontend statics fixtures only ran on someone's machine, and the mod's type check could not run at all.
+
+### Added
+
+- **Checks workflow** (`.github/workflows/checks.yml`) on every pull request and push to main: the mod type check, `claude plugin validate` for the plugin and marketplace, `claude plugin test .` under Claude Code 2.1.317, every `tests/**/*.test.js` suite and `tests/frontend-statics/run.sh`.
+- **Vendored engine types** (`types/engine/claude-code/index.d.ts`, written by Claude Code 2.1.317), so the type check needs no loaded session. Refresh it from a newer engine and bump the CLI pin in the workflow together.
+
+### Fixed
+
+- `tsconfig.json` extended `.claude-plugin/types/tsconfig.json`, which only exists after the engine loads the mod from a folder, so `tsc` failed on a fresh clone and in CI. It now stands alone and reads the vendored types.
+
+---
+
 ## [6.1.2] - 2026-10-29
 
 **Every merge is a tagged release.** Tagging had stopped after 5.1.0, so 20 versions shipped with no tag or release. Those are backfilled, and the repo now enforces a version bump on every pull request and tags each one on merge.
