@@ -1,0 +1,64 @@
+# The code checks behind every pull request and every push to main: the Pass mod's
+# type check against the vendored engine types (types/engine), the plugin's own
+# validate and mod tests under the Claude Code version those types came from, and
+# every node and shell test suite in tests/.
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Type check the mod
+        run: npx --yes --package typescript@5.9.3 tsc -p tsconfig.json
+
+  mod:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Claude Code 2.1.317
+        run: npm install -g @anthropic-ai/claude-code@2.1.317 && claude --version
+      - name: Validate the plugin and marketplace
+        run: claude plugin validate .claude-plugin/plugin.json && claude plugin validate .claude-plugin/marketplace.json
+      - name: Mod tests
+        run: claude plugin test .
+
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Node test suites
+        run: node --test $(find tests -name '*.test.js' -not -path '*/fixtures/*' -not -path '*/vendor/*' | sort)
+      - name: Frontend statics fixtures
+        run: bash tests/frontend-statics/run.sh
