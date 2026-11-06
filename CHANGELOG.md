@@ -16,6 +16,36 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [6.3.0] - 2026-11-06
+
+**Enabled gates are binding.** The quality gates a project runs are the operator's decision, made at setup. When one fails during a run, agents now fix the code until it passes, even when the cause is a shared design token or a file the slice only consumes, instead of handing it back as an open decision or a follow-up "for the operator's call". It came from a live run where a slice-tester measured an error color at 4.23:1 and a control border at 1.49:1, and the conductor reported both as "out of slice scope, app-wide design tokens, your call". The same run surfaced two Pass false positives, fixed here.
+
+### Added
+
+- **`gates` config block** (`skills/setup-shop/references/bytheslice-config-schema.md`). `gates.enforcement: "fix"` states the rule and is the default (the only value; there is no global off switch). `gates.advisory` lists gate classes the operator marked advisory: they still run and report, but never fail a slice or enter the fix loop. `gates.declared` adds project gates `slice-verifier` runs once at tier 3 (`declared.<name>`), and pre-push commands no other check covers run the same way. Unrelated to the top-level `enforcement` key retired in 6.1.0.
+- **The rule, in one place** (`skills/sell-slice/references/quality-gates.md`): the gate classes (lint, typecheck, build, tests, e2e, visual, design-system, accessibility including WCAG AA contrast, ci, declared), what counts as enabled, the routing rule, "the threshold makes the design call" for value failures such as contrast, and the only escalations left: a destructive fix, a missing secret, a new dependency (the approval batch), an exhausted fix cap.
+- **`/setup-shop` Q-gates**, asked in every flow: the operator is told once that enabled gates are binding, then picks any advisory classes and declared gates. `gates.enforcement: "fix"` is always written uncommented.
+- **Feature intake rule 4**, "Enabled quality gates are binding", in the block every project's rules file carries, so agents outside the bakers read it too.
+- **`tests/quality-gates/`**: a lockstep test that the schema, the example config, the rule doc, the setup-shop questions, the intake block (and the eval fixture's copy) and every conductor, tester, verifier, fixer and UI review agent state the same rule.
+- **`failing-gate-gets-fixed` eval**: a slice-tester contrast failure on a shared `--error` token must be fixed in `src/theme.css`, with no question to the operator and no out-of-scope or follow-up framing.
+
+### Changed
+
+- **`slice-verifier`** routes every enabled-gate failure to `fix_targets`. Statics findings are no longer warnings: `E1` to `E3` fail `design_system` and `E4`, `E5` fail the new `a11y_static` check. `warnings` now holds only advisory-class findings and a statics run with no token catalog. Fix targets name the root-cause file, inside the slice diff or not; the greps still scan only the diff.
+- **`slice-tester`** names a failing token and its file in `fix_targets` (a shared token is still the slice's target) and never calls a gate failure out of scope; an advisory class goes to a new `warnings` field.
+- **`fix-attempter`, `ui-fix-attempter`, `ci-fix-attempter`** fix a gate's root cause where it lives, set a failing value to the nearest one that clears the threshold, and never escalate for scope or with `creative_direction` for a failure a threshold decides. `ci-fix-attempter` fixes the cause of a flaky test instead of escalating it, and picks the nearest passing token before asking for a new one.
+- **`break-ui-runner` and `design-critic`** tag a finding that fails an enabled gate with `gate` (accessibility or design-system): it is at least `Ugly` or `P1`, always a fix target, and never `Fragile`, a decision or an open question.
+- **`/sell-slice`, `/sell-pie`, `/box-it-up`**: a failing enabled gate goes to the fix loop without asking and is never a HITL, `creative_direction`, a batched approval or a follow-up; Progress Reports, closeouts and PR bodies never present one as "your call". It reaches the operator only at cap exhaustion (named as still failing), or for a destructive fix or a missing secret. Pie-boundary design-critique gate findings are fixed without the "fix now or defer" question in every delivery mode. The 3-loop and 3-round caps and the cap-exhaustion HITL are unchanged.
+- **`rules-loader`** resolves `gates.*` and passes them on; an unknown advisory class is dropped, and `gates.enforcement` always resolves to `fix`.
+- Workflow A review fixes are labelled with the `review` step and count against no fix cap.
+
+### Fixed
+
+- **The Pass counted Workflow A review fixes against the Workflow B cap.** A slice fix spawn now counts only once the ledger holds a `slice-tester` or `slice-verifier` verdict for the slice, and never under a `build:`, `review:` or `prep:` label, so four reviewer-loop fixes no longer make Workflow B's first loop read "attempt 5 of cap 3". The activity-log count and the slice rollup follow the same rule and now count `ui-fix-attempter` too.
+- **`builder-context` flagged documented inputs.** A re-verification `slice-verifier` prompt carrying the fix's `files_changed` (as `/sell-slice` 5.4 requires), and reviewer prompts carrying the implementer's output, no longer warn; `builder transcript` still does. For the `slice-tester`, `files_changed` counts only as a key holding entries, so an instruction that merely names it is not builder context.
+
+---
+
 ## [6.1.2] - 2026-10-29
 
 **Every merge is a tagged release.** Tagging had stopped after 5.1.0, so 20 versions shipped with no tag or release. Those are backfilled, and the repo now enforces a version bump on every pull request and tags each one on merge.

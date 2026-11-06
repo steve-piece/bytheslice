@@ -238,7 +238,7 @@ function summarize(rows, opts = {}) {
       const { view: s, firstRow, rollup, fails, warn, raised, answered } = pie.slices.get(id);
       // A slice with no slice.started row (one started before the ledger) counts from its first row.
       if (s.startedAt === null) s.startedAt = firstRow;
-      // A rollup counted fix-attempter starts from the activity log; without one, each failed verdict is one loop.
+      // A rollup counted Workflow B fix-attempter starts from the activity log; without one, each failed verdict is one loop.
       s.fixLoops = rollup && finite(rollup.fixLoops) ? rollup.fixLoops : fails;
       if (rollup && finite(rollup.tokens)) s.tokens += rollup.tokens;
       s.durationMs = s.startedAt !== null && s.doneAt !== null ? Math.max(0, s.doneAt - s.startedAt) : null;

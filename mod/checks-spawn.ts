@@ -7,7 +7,7 @@ import type { AgentSpawnInput, EngineInterface, TurnCompleteInput } from 'claude
 import { labelOf } from './capture.ts'
 import { checksOn } from './checks.ts'
 import type { Finding } from './checks.ts'
-import { CONTEXT_ROLES, GATE_ROLES, PROMPT_MAX, TEAMMATE_ROLE, tierAllowed } from './policy.ts'
+import { CONTEXT_ROLES, EXPECTED_MARKERS, GATE_ROLES, PROMPT_MAX, TEAMMATE_ROLE, tierAllowed } from './policy.ts'
 import type { PassPolicy, PassSpawnTrack } from './types'
 
 const spawnsAtom = atom({ plugin: 'bytheslice', key: 'pass.spawns' } as const, {})
@@ -35,10 +35,28 @@ export function spawnKey(e: Pick<AgentSpawnInput, 'tool_use_id' | 'workflow'>): 
   return `${e.tool_use_id}#${e.workflow?.agentIndex ?? ''}`
 }
 
-/** The first configured marker the prompt holds (case-insensitive), or null. */
-export function markerIn(prompt: string, markers: readonly string[]): string | null {
+/**
+ * `files_changed` as a key holding entries (a pasted builder or fixer return):
+ * a list item on the next line, or a non-empty inline array. A bare mention in
+ * an instruction ("list the seeds you write in files_changed") is not one.
+ */
+const LISTED_FILES = /files_changed["'`]?\s*[:=]\s*(?:\[\s*[^\]\s<]|\r?\n[ \t]*-[ \t]+\S)/i
+
+/**
+ * The first configured marker the prompt holds (case-insensitive), or null.
+ * `files_changed` counts only as a listed key (see LISTED_FILES); every other
+ * marker counts anywhere. `expected` names markers the role's own inputs carry.
+ */
+export function markerIn(prompt: string, markers: readonly string[], expected: readonly string[] = []): string | null {
   const text = prompt.toLowerCase()
-  return markers.find(marker => marker !== '' && text.includes(marker.toLowerCase())) ?? null
+  const skip = new Set(expected.map(marker => marker.toLowerCase()))
+  return (
+    markers.find(marker => {
+      const lower = marker.toLowerCase()
+      if (lower === '' || skip.has(lower)) return false
+      return lower === 'files_changed' ? LISTED_FILES.test(prompt) : text.includes(lower)
+    }) ?? null
+  )
 }
 
 /** What a spawn's judgment gave: its findings, and whether its model is checked again at its first turn's end. */
@@ -120,7 +138,7 @@ export function judgeSpawn(e: SpawnFacts, policy: Pick<PassPolicy, 'roles' | 'co
   }
   if (CONTEXT_ROLES.has(role)) {
     const prompt = typeof e.prompt === 'string' ? e.prompt : ''
-    const marker = markerIn(prompt, policy.contextMarkers)
+    const marker = markerIn(prompt, policy.contextMarkers, EXPECTED_MARKERS[role] ?? [])
     const long = prompt.length > PROMPT_MAX
     if (marker !== null || long) {
       const why = marker !== null ? `it holds "${marker}"` : `it runs ${prompt.length} characters, past ${PROMPT_MAX}`

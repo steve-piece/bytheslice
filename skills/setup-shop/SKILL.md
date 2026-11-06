@@ -196,7 +196,7 @@ Generate a `bytheslice.config.json` at the project root (or `~/.bytheslice/defau
 > "You have system-wide defaults at `~/.bytheslice/defaults.json`. Want to use them as the starting point for this project?"
 > single_select: ["Yes, copy my system-wide defaults into this project", "No, answer the per-section questions below"]
 
-If yes: copy `~/.bytheslice/defaults.json` content into the project's `bytheslice.config.json` and skip Group 2. Print the resolved values for the user to review.
+If yes: copy `~/.bytheslice/defaults.json` content into the project's `bytheslice.config.json` and skip Group 2, except **Q-gates** below, which always runs. Print the resolved values for the user to review.
 
 If no: continue to Group 2.
 
@@ -254,9 +254,29 @@ If "Yes": text input. One URL per line.
 
 If "Yes": three text inputs (`variant`, `stack`, `roadmapFile`: note `null` is allowed for `roadmapFile` to skip creating it).
 
+**Q-gates** (always asked, in Group 1 and Group 2 alike; this is where the operator is told, once, that enabled gates are binding)
+
+Say this once, before the question: *"The quality gates this project runs (lint, typecheck, tests, build, e2e, design-system checks, accessibility including WCAG AA contrast, and anything your CI or pre-push runs) are binding. When one fails, agents fix the code until it passes, even when the cause is a shared design token or a file the slice only uses. They will not hand a failing gate back to you as a decision or a follow-up. They still stop for a destructive fix, a missing secret, or an exhausted fix cap."*
+
+> "Mark any gate class advisory?"
+> single_select: ["No, all binding (recommended)", "Yes, pick advisory classes"]
+
+If "Yes": one follow-up.
+
+> "Which classes are advisory?"
+> multi_select: ["visual", "design-system", "accessibility", "e2e", "lint", "typecheck", "build", "tests", "declared"]
+
+**Q-gates-declared**
+> "Add project-specific gates?"
+> single_select: ["No, skip (recommended)", "Yes, list commands (text input)"]
+
+If "Yes": text input, one command per line, optionally `<name>: <command>`; each becomes a `gates.declared` entry. Commands the project's pre-push hook or CI already run need no entry: they count as enabled anyway.
+
+Write `gates.enforcement: "fix"` whatever the answers, plus `gates.advisory` and `gates.declared` when they are non-empty. The rule itself is [`../sell-slice/references/quality-gates.md`](../sell-slice/references/quality-gates.md).
+
 ### Phase: Write the config file
 
-Generate the JSONC file. Use [`references/bytheslice.config.example.json`](references/bytheslice.config.example.json) as the structural template. Fill in only the sections the user customized; leave the rest commented out.
+Generate the JSONC file. Use [`references/bytheslice.config.example.json`](references/bytheslice.config.example.json) as the structural template. Fill in only the sections the user customized; leave the rest commented out. The `gates` block is the exception: `"enforcement": "fix"` is always written uncommented, so the rule is visible in the project's own config.
 
 - Flow A target: `~/.bytheslice/defaults.json` (create the directory if missing: `mkdir -p ~/.bytheslice`)
 - Flow B / C target: `<project-root>/bytheslice.config.json`
@@ -332,6 +352,8 @@ For Flow B:
 >
 > **Feature intake:** <the doctor's Feature intake line> · **Hooks:** <active | off | not wired>
 >
+> **Quality gates:** binding (`gates.enforcement: "fix"`)<; advisory: <classes>, if any>
+>
 > **Next steps:**
 > 1. `cd <project-name>`
 > 2. (Optional) Edit `bytheslice.config.json` to refine any defaults
@@ -348,6 +370,8 @@ For Flow C:
 >
 > **Feature intake:** <the doctor's Feature intake line> · **Hooks:** <active | off | not wired>
 >
+> **Quality gates:** binding (`gates.enforcement: "fix"`)<; advisory: <classes>, if any>
+>
 > **Next steps:**
 > - **Have a PRD already?** Run `/bytheslice:cook-pizzas` to generate phased plans.
 > - **No PRD yet?** Run `/bytheslice:create-menu` to write one against this existing app's surface area.
@@ -361,7 +385,7 @@ For Flow C:
 
 - **Flow.** `/pizza-party` picks it: Flow B from the parent folder for a new app (the scaffolder creates `<project-name>/`), Flow C inside an existing app.
 - **Step 1 questions** come from the ticket's **Answers**: Q-bootstrap-name is the app folder's name, Q-bootstrap-stack the **Stack** line (Next.js when it names none), Q-bootstrap-variant single-app unless the ticket says monorepo, Q-bootstrap-roadmap No.
-- **Step 2.** Skip Group 1 and Group 2. Write `bytheslice.config.json` from the run config file `/pizza-party` passed, merged over the recommended Group 2 defaults (the run config's keys win). An existing `bytheslice.config.json` is merged the same way, never asked about.
+- **Step 2.** Skip Group 1 and Group 2, Q-gates included. Write `bytheslice.config.json` from the run config file `/pizza-party` passed, merged over the recommended Group 2 defaults (the run config's keys win), always with `gates.enforcement: "fix"`. An existing `bytheslice.config.json` is merged the same way, never asked about.
 - **Step 3.** Skip Q-ci-cd-baseline: `/pizza-party` runs `/final-quality-check` itself in its Phase 5. Report `ci_cd_ready` only.
 - **Step 4** runs as usual (intake, then doctor).
 - Record each of these in the ticket's **Decisions made without you** and return without the next-step pointer's questions.
@@ -400,6 +424,7 @@ hitl_context: "Detected existing package.json at the working directory; user exp
 - [ ] Step 2 ran in every flow (always required)
 - [ ] Group 1 ran ONLY when `~/.bytheslice/defaults.json` exists (skipped on first run + during Flow A)
 - [ ] Group 2 ran when needed (no defaults, OR Group 1 = "No", OR Flow A)
+- [ ] Q-gates ran (Group 1 or Group 2): the operator heard once that enabled gates are binding, and the config carries `gates.enforcement: "fix"` uncommented, plus any `advisory` or `declared` entries they gave
 - [ ] Generated config file is valid JSONC (parses cleanly, no syntax errors)
 - [ ] Generated config file is at the correct path (Flow A: `~/.bytheslice/defaults.json`; Flow B/C: project root)
 - [ ] (Flow B only) `.gitignore` includes the personal-scratchpad and AI-tooling-workspace entries

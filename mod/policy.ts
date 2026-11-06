@@ -91,6 +91,19 @@ export const DEFAULT_MARKERS: readonly string[] = ['files_changed', 'diff --git'
 /** The roles whose prompt must carry the manifest, the Exit criteria and the design-system path only. */
 export const CONTEXT_ROLES: ReadonlySet<string> = new Set(['slice-tester', 'slice-verifier', 'spec-reviewer', 'quality-reviewer'])
 
+/**
+ * Markers a role's own documented inputs carry, so they are no builder context
+ * for it: slice-verifier gets the slice diff and, on a re-verification pass,
+ * the fix's `files_changed` (/sell-slice 5.4); spec-reviewer and
+ * quality-reviewer review the implementer's output and the diff by design.
+ * The slice-tester gets none of these, so every marker counts for it.
+ */
+export const EXPECTED_MARKERS: Readonly<Record<string, readonly string[]>> = {
+  'slice-verifier': ['files_changed', 'diff --git'],
+  'spec-reviewer': ['files_changed', 'diff --git', 'implementer returned'],
+  'quality-reviewer': ['files_changed', 'diff --git', 'implementer returned'],
+}
+
 const TESTER_MODES: readonly PassRequireTester[] = ['ui-slices', 'always', 'never']
 
 /**

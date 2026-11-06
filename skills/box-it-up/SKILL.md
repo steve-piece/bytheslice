@@ -105,6 +105,7 @@ The skill refuses to proceed past Phase 0 if any check fails. The point is to av
    - **Evidence section (the Pass ledger):** when `bts_pr_body` is available, write its output into the PR body under `## Evidence` after the `--fill` content; the section is generated, do not edit it by hand. Call it once with `{ "pie": N }` before `gh pr create`. A `--body` or `--body-file` overwrites what `--fill` would write, so build the body file yourself: the `--fill` content (`git log --reverse --format='%s%n%n%b' origin/main..HEAD`), then a blank line and `## Evidence`, then the tool's output verbatim; pass it with `--body-file` and keep `--title`. When the tool is absent, or answers its one-line `bts_pr_body:` message (no ledger, no `node`), open the PR with `--fill` alone and leave the section out. It warns and never blocks: a missing section is not a reason to stop.
    - Capture the returned URL as `PR_URL` and the number as `PR_NUMBER`.
 3. Output the PR URL to the user immediately so they can open it in a browser if they want to skim the pie.
+4. **No failing gate rides in the body as an open item.** Every enabled gate passed before the pie reached this phase ([`quality-gates.md`](../sell-slice/references/quality-gates.md)), so the body never lists one as a follow-up, "for your decision" or out of scope. Advisory-class findings (`gates.advisory`) may be listed, labeled advisory.
 
 ### Phase 3 - Watch CI *(pie-completion / universal - CI's single run for the pie)*
 
@@ -119,6 +120,8 @@ The skill caps total CI watch time at **30 minutes per attempt**. If `--watch` d
 
 Loop counter starts at 1. Cap at **3 attempts**.
 
+**Every red check is a binding gate.** Dispatch the fix without asking the operator first, and never offer "merge anyway", "fix in a follow-up" or "the cause is outside this pie" as an answer: `ci-fix-attempter` fixes the root cause where it lives, a shared design token or a file the pie only consumes included. A check that belongs to a class in `gates.advisory` is the one exception: report it, labeled advisory, and do not fix it. The operator hears about a red required check only at the cap-exhaustion HITL below, or when its fix is destructive or needs a secret.
+
 1. Capture the failed-check rollup: `gh pr checks "$PR_NUMBER" --json name,state,link,workflow`.
 2. For each failed check, retrieve logs:
    - `gh run view <run-id> --log-failed` for workflow runs, OR
@@ -132,7 +135,7 @@ Loop counter starts at 1. Cap at **3 attempts**.
    - `previous_signature`: the `signature` the previous round returned, or `null` on attempt 1
 4. The agent makes no git writes: it returns `files_changed` and a proposed commit subject and body. **This skill** stages exactly those paths (`git add -- <paths>`), commits with the proposed message, and pushes to `origin "$BRANCH"` (never forced; a rejected push is a `destructive_operation` HITL). Do not call `--watch` from inside the dispatch - the skill returns to Phase 3 (top) after its push lands and re-invokes `gh pr checks --watch` against the new head SHA.
    If the agent returns `bail_reason: repeated_signature`, it patched nothing because the identical failure survived the last round: stop the loop now, commit and push nothing, and surface the `creative_direction` HITL below. The bail counts as that round and never extends the 3.
-5. Increment the counter. If it would exceed 3, STOP. Surface as `creative_direction` HITL with the full failure history so the user can decide whether to debug manually, retry CI, or close the PR.
+5. Increment the counter. If it would exceed 3, STOP. Surface as `creative_direction` HITL with the full failure history, naming each check still failing, so the user can decide whether to grant more rounds, debug manually, retry CI, or close the PR. This cap-exhaustion HITL is the only place a failing gate is put to the user.
 
 The 3-attempt cap is a hard rule and is **not overridable by the run instruction**: "continue until CI is green", "never stop", "fully automated" or an autonomous-delivery instruction do not add rounds. Only the operator's explicit reply at this HITL can grant more. The CI counter is per PR and separate from the conductor's 3 local fix loops per slice; neither borrows from the other. One identical repeat already signals a structural problem (flaky test, missing secret, infra outage) that needs human judgment, so the loop stops at the first repeated signature (`normalize(first_error_line) + " | " + file + " | " + job_name`, a plain string compared by equality and never persisted) instead of counting to three.
 
@@ -257,6 +260,7 @@ HITL categories the skill produces:
 - **Clean up from the primary checkout, in order.** Sync `main` with `git -C "$PRIMARY" pull --ff-only`, then `worktree remove`, then `branch -d`, then the remote delete, then `worktree prune`. Never check out `main` inside a worktree, and never delete a branch a worktree still holds.
 - **Never edit a tracked file on `main`.** The Pie's checklist flip is committed on the pie branch before the PR opens.
 - **Never auto-resolve merge conflicts during cleanup pull.** `--ff-only` fails fast; the user resolves.
+- **Red checks are binding gates.** Fix them through Phase 3a without asking, root cause fixed where it lives; never merge red, never park a failing check as a follow-up or "out of scope". Only a class in `gates.advisory` is reported instead of fixed.
 - **Cap the CI fix loop at 3 attempts.** Beyond that → HITL `creative_direction`. No "one more try." No run instruction raises the cap; only the operator's explicit reply at the HITL does. Separate from the 3 local fix loops per slice. The `pie-local` check rounds are their own counter with the same cap of 3 and the same rule.
 - **Cap CI watch at 30 minutes per attempt.** Beyond that → HITL `external_credentials`.
 - **Reuse existing PRs.** If an open PR already tracks the branch, watch its CI; never create a duplicate.

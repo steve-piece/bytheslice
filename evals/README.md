@@ -12,8 +12,9 @@ Each case also runs once without the plugin (the default `with-without` ablation
 | `build-slice-uses-baker` | implement Slice 2.2 | `sell-slice` or `sell-pie` runs (6.1.1 dropped the no-other-agents grader: plain agents are fine for research and review) |
 | `one-file-fix-not-blocked` | fix the typo in `src/slates.js` | the typo is fixed in place, no planning skill runs |
 | `question-gets-no-intake-noise` | what does `listGames` return | a plain answer, no skill |
+| `failing-gate-gets-fixed` | a slice-tester contrast failure on a shared `--error` token | `src/theme.css`'s `--error` changes, no question to the operator, and the reply reports a fix rather than an out-of-scope note or a follow-up (6.3.0, binding gates) |
 
-The last two catch over-routing. Every case starts from [`fixtures/slate-shop`](fixtures/slate-shop/) through [`lib/scaffold.sh`](lib/scaffold.sh): a git repo on `main` with Pie 2 (Slice 2.1 done and verified, Slice 2.2 open), its stage files and the Feature intake block.
+`one-file-fix-not-blocked` and `question-gets-no-intake-noise` catch over-routing; `failing-gate-gets-fixed` catches the opposite slip, a configured gate handed back to the operator. Its scaffold adds a shared `src/theme.css` and a config with `gates.enforcement: "fix"`. Every case starts from [`fixtures/slate-shop`](fixtures/slate-shop/) through [`lib/scaffold.sh`](lib/scaffold.sh): a git repo on `main` with Pie 2 (Slice 2.1 done and verified, Slice 2.2 open), its stage files and the Feature intake block.
 
 ## Running
 

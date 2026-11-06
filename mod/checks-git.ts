@@ -8,7 +8,7 @@ import { gitIntent, labelOf } from './capture.ts'
 import { checksOn, noteModel } from './checks.ts'
 import type { Finding } from './checks.ts'
 import { raiseHitl } from './hitl.ts'
-import { CI_FIX_CAP, FIX_CAP, findSlice } from './ledger-projection.ts'
+import { CI_FIX_CAP, FIX_CAP, WORKFLOW_A_STEPS, findSlice, stepOf } from './ledger-projection.ts'
 import { activePie, activeSlice, branchPie } from './projection.ts'
 import type { PassChecklist, PassFixCounts, PassProjection } from './types'
 
@@ -45,15 +45,21 @@ export type FixView = {
  * Which attempt a fix spawn is: the slice (from its `P<pie> S<slice>` label,
  * else the active slice) or, for ci-fix-attempter, the pie (label, branch,
  * active pie), and the larger of what the activity log and this session
- * counted, plus one. Null for any other spawn. Pure.
+ * counted, plus one. A slice fix counts only in Workflow B: null when its
+ * label names a Workflow A step (`build`, `review`, `prep`), or when the
+ * ledger holds no slice-tester or slice-verifier verdict for the slice yet
+ * (a reviewer-loop fix before verify-once began). Null for any other spawn. Pure.
  */
 export function fixSpawnOf(e: Pick<AgentSpawnInput, 'subagentType' | 'description'>, view: FixView): FixSpawn | null {
   const kind = fixKind(e.subagentType)
   if (kind === null) return null
   if (kind === 'fix') {
+    if (WORKFLOW_A_STEPS.has(stepOf(e.description) ?? '')) return null
     const slice = labelOf(e.description)?.slice ?? activeSlice(view.checklist)?.id
     if (slice === undefined) return null
-    const logged = findSlice(view.ledger, slice)?.fixLoop ?? 0
+    const entry = findSlice(view.ledger, slice)
+    if (view.ledger !== null && (entry?.verdicts.length ?? 0) === 0) return null
+    const logged = entry?.fixLoop ?? 0
     return { kind, key: slice, attempt: Math.max(logged, view.counts.fix[slice] ?? 0) + 1 }
   }
   const labelled = /^P(\d+)\b/.exec(typeof e.description === 'string' ? e.description.trim() : '')?.[1]
