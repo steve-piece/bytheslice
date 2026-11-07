@@ -44,8 +44,13 @@
 #   - A custom property declared in the scanned file itself is allowed there.
 #   - Semantic utilities are checked in .tsx/.jsx only; built-in palette
 #     colors, numbers and Tailwind keywords (text-sm, border-2, shadow-md) pass.
-#     A Tailwind v3 config that binds raw colors (brand: { 500: '#...' }) can
-#     make its utilities read as unknown; treat such E1 lines as leads.
+#     A Tailwind v3 config that binds raw colors (brand: { 500: '#...' }) is
+#     read for its color keys (every colors: object, theme or extend), so
+#     bg-brand-500 and bg-brand (a DEFAULT key) resolve. Those keys count only
+#     for utilities, never for var(--x), since v3 makes no CSS variable of
+#     them. Colors the reader cannot see (an imported palette, a preset, a
+#     plugin) can still read as unknown; slice-verifier confirms a utility E1
+#     against the project's config before it fails the gate.
 #   - E3 durations and easings are each skipped, with a note, when the design
 #     system holds no concrete values for them.
 #   - A tag with a {...spread} is skipped for E4 and E5: the props may carry it.
@@ -121,6 +126,63 @@ trap 'rm -rf "$WORK"' EXIT
     [ -f "$tw" ] && grep -o -- '--[A-Za-z0-9_-]\{1,\}' "$tw" 2>/dev/null
   done
 } | grep -E '^--[A-Za-z0-9]' | sort -u > "$WORK/catalog"
+# Tailwind v3 color keys: every path under a colors: object in tailwind.config.*
+# (theme.colors or theme.extend.colors), dash-joined, with DEFAULT naming its
+# parent (brand: { DEFAULT, 500 } gives brand and brand-500). Read by the
+# semantic-utility check only. Comments are skipped outside strings; a value
+# that is not an object literal (an import, a spread, a call) is not guessed.
+for tw in "$ROOT"/tailwind.config.ts "$ROOT"/tailwind.config.js "$ROOT"/tailwind.config.mjs "$ROOT"/tailwind.config.cjs; do
+  [ -f "$tw" ] || continue
+  awk '
+    function leaf(k,   path, x) {
+      path = ""
+      for (x = 1; x <= sp; x++) if (stack[x] != "DEFAULT") path = path (path == "" ? "" : "-") stack[x]
+      if (k != "DEFAULT") path = path (path == "" ? "" : "-") k
+      if (path != "") print tolower(path)
+    }
+    # A value just ended (comma or closing brace) directly inside a colors object.
+    function close_value() { if (incolors && pending != "" && pdepth == 0) leaf(pending); pending = "" }
+    {
+      text = $0; n = length(text); i = 1
+      while (i <= n) {
+        c = substr(text, i, 1); c2 = substr(text, i, 2)
+        if (incomment) { if (c2 == "*/") { incomment = 0; i += 2 } else i++; continue }
+        if (c2 == "//") break
+        if (c2 == "/*") { incomment = 1; i += 2; continue }
+        if (c == "\"" || c == "\047" || c == "`") {
+          j = i + 1
+          while (j <= n && substr(text, j, 1) != c) { if (substr(text, j, 1) == "\\") j++; j++ }
+          word = substr(text, i + 1, j - i - 1); want = 0; i = j + 1; continue
+        }
+        if (c ~ /[A-Za-z0-9_$.-]/) {
+          j = i; while (j <= n && substr(text, j, 1) ~ /[A-Za-z0-9_$.-]/) j++
+          word = substr(text, i, j - i); want = 0; i = j; continue
+        }
+        if (c == ":") {
+          if (incolors && depth == cdepth + sp && pdepth == 0) pending = word
+          else if (!incolors && word == "colors" && pdepth == 0) want = 1
+          i++; continue
+        }
+        if (c == "{") {
+          depth++
+          if (want) { incolors = 1; cdepth = depth; sp = 0 }
+          else if (incolors && pending != "" && pdepth == 0) { sp++; stack[sp] = pending }
+          want = 0; pending = ""; i++; continue
+        }
+        if (c == "}") {
+          close_value()
+          if (incolors && sp > 0 && depth == cdepth + sp) sp--
+          else if (incolors && depth == cdepth) incolors = 0
+          depth--; i++; continue
+        }
+        if (c == ",") { close_value(); want = 0; i++; continue }
+        if (c == "(") { pdepth++; want = 0; i++; continue }
+        if (c == ")") { if (pdepth > 0) pdepth--; i++; continue }
+        if (c !~ /[ \t\r]/) want = 0
+        i++
+      }
+    }' "$tw"
+done | sort -u > "$WORK/twcolors"
 # The ^--[A-Za-z0-9] filter is load-bearing: a table separator row (| --- |)
 # would otherwise read as a token named ---, make an empty catalog look
 # populated and defeat the exit-2 guard below.
@@ -201,12 +263,13 @@ scan_file() {
     | sed -e 's/^htmlFor=//' -e 's/[{}"'"'"'`]//g' | sort -u > "$WORK/labelled"
 
   awk -v F="$rel" -v JSX="$jsx" \
-      -v ALLOWED="$WORK/allowed" -v LABELLED="$WORK/labelled" \
+      -v ALLOWED="$WORK/allowed" -v LABELLED="$WORK/labelled" -v TWCOLORS="$WORK/twcolors" \
       -v DURS="$WORK/durations" -v EASES="$WORK/easings" \
       -v HAVE_DUR="$HAVE_DUR" -v HAVE_EASE="$HAVE_EASE" '
     BEGIN {
       while ((getline t < ALLOWED) > 0) if (t != "") ok[t] = 1
       while ((getline t < LABELLED) > 0) if (t != "") lab[t] = 1
+      while ((getline t < TWCOLORS) > 0) if (t != "") twc[t] = 1
       while ((getline t < DURS) > 0) if (t != "") dur[t] = 1
       while ((getline t < EASES) > 0) if (t != "") ease[t] = 1
       palette = "^(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|mauve|olive|mist|taupe)-(50|100|200|300|400|500|600|700|800|900|950)$"
@@ -243,6 +306,7 @@ scan_file() {
       if ((prefix in kw) && n ~ kw[prefix]) return
       if (n !~ /^[a-z][a-z0-9-]*$/) return
       if (allowed_name("--" n) || allowed_name("--color-" n) || allowed_name("--" prefix "-" n)) return
+      if (n in twc) return
       hit("E1", ln, prefix "-" name " uses --" n ", which is not in the token catalog")
     }
 

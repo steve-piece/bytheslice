@@ -31,7 +31,7 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ### Changed
 
-- **`slice-verifier`** routes every enabled-gate failure to `fix_targets`. Statics findings are no longer warnings: `E1` to `E3` fail `design_system` and `E4`, `E5` fail the new `a11y_static` check. `warnings` now holds only advisory-class findings and a statics run with no token catalog. Fix targets name the root-cause file, inside the slice diff or not; the greps still scan only the diff.
+- **`slice-verifier`** routes every enabled-gate failure to `fix_targets`. Statics findings are no longer warnings: `E1` to `E3` fail `design_system` and `E4`, `E5` fail the new `a11y_static` check. A semantic-utility `E1` is confirmed against the project's Tailwind config, presets and `@theme` first and dropped when the color resolves there. `warnings` now holds only advisory-class findings and a statics run with no token catalog. Fix targets name the root-cause file, inside the slice diff or not; the greps still scan only the diff.
 - **`slice-tester`** names a failing token and its file in `fix_targets` (a shared token is still the slice's target) and never calls a gate failure out of scope; an advisory class goes to a new `warnings` field.
 - **`fix-attempter`, `ui-fix-attempter`, `ci-fix-attempter`** fix a gate's root cause where it lives, set a failing value to the nearest one that clears the threshold, and never escalate for scope or with `creative_direction` for a failure a threshold decides. `ci-fix-attempter` fixes the cause of a flaky test instead of escalating it, and picks the nearest passing token before asking for a new one.
 - **`break-ui-runner` and `design-critic`** tag a finding that fails an enabled gate with `gate` (accessibility or design-system): it is at least `Ugly` or `P1`, always a fix target, and never `Fragile`, a decision or an open question.
@@ -41,6 +41,7 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ### Fixed
 
+- **Tailwind v3 theme colors read as unknown tokens.** `verify-frontend-statics.sh` now reads the color keys of every `colors:` object literal in `tailwind.config.*` (theme or extend, nested, `DEFAULT` naming its parent), so `bg-brand-500` against `colors: { brand: { 500: '#123456' } }` passes. Those keys count for utilities only, never for `var(--x)`. A new statics fixture covers it.
 - **The Pass counted Workflow A review fixes against the Workflow B cap.** A slice fix spawn now counts only once the ledger holds a `slice-tester` or `slice-verifier` verdict for the slice, and never under a `build:`, `review:` or `prep:` label, so four reviewer-loop fixes no longer make Workflow B's first loop read "attempt 5 of cap 3". The activity-log count and the slice rollup follow the same rule and now count `ui-fix-attempter` too.
 - **`builder-context` flagged documented inputs.** A re-verification `slice-verifier` prompt carrying the fix's `files_changed` (as `/sell-slice` 5.4 requires), and reviewer prompts carrying the implementer's output, no longer warn; `builder transcript` still does. For the `slice-tester`, `files_changed` counts only as a key holding entries, so an instruction that merely names it is not builder context.
 

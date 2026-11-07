@@ -128,6 +128,15 @@ need_count '^E1 UNKNOWN_TOKEN ' 1
 need_line '^E1 UNKNOWN_TOKEN components/banner\.tsx:4 bg-brand uses --brand'
 report "semantic utility without a token reports E1"
 
+setup e1-tailwind-v3-colors
+run_script --base "$BASE_SHA"
+need_code 1
+need_count '^E1 UNKNOWN_TOKEN ' 2
+need_none '^E1 UNKNOWN_TOKEN components/card\.tsx:4 '
+need_line '^E1 UNKNOWN_TOKEN components/card\.tsx:7 bg-fake uses --fake'
+need_line '^E1 UNKNOWN_TOKEN components/card\.tsx:7 --brand-500 is not in the token catalog'
+report "Tailwind v3 color keys resolve utilities, never var()"
+
 setup motion-unchecked
 run_script --base "$BASE_SHA"
 need_code 0

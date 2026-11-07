@@ -114,6 +114,7 @@ test('no retired wording lets an enabled-gate failure become a warning or a ques
   const verifier = readText('skills/sell-slice/agents/slice-verifier.md');
   assert.doesNotMatch(verifier, /Every result is a warning, never a failure/);
   assert.doesNotMatch(verifier, /whose findings are non-forcing warnings/);
+  assert.match(verifier, /\*\*A utility `E1` is a lead until confirmed\.\*\*/, 'a semantic-utility E1 is confirmed against the config before it fails the gate');
   assert.doesNotMatch(readText('skills/sell-slice/SKILL.md'), /Its `warnings` array \(the statics findings\) never fails the slice/);
   assert.doesNotMatch(readText('skills/box-it-up/agents/ci-fix-attempter.md'), /If the design system doesn't define the needed token, surface as HITL `creative_direction`\./);
   for (const file of ['skills/sell-slice/agents/frontend/break-ui-runner.md', 'skills/sell-slice/agents/frontend/design-critic.md']) {
