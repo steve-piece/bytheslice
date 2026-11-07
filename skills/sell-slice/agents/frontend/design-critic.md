@@ -132,7 +132,7 @@ open_questions:                     # heuristic findings only; never a gate find
   - question: <short, cites a finding id>
     options: ["<option>", "<option>"]
     recommendation: <option>
-fix_targets:                        # P0 and P1, every non-advisory gate finding among them; the shape the fix loop reads
+fix_targets:                        # P0 and P1 findings (every gate finding is at least P1), except any marked advisory: true; the shape the fix loop reads
   - "design-critique:<path>: <finding id> <problem>"
 needs_human: false | true
 hitl_category: null | "destructive_operation" | "prd_ambiguity"
