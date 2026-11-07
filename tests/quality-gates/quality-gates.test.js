@@ -125,6 +125,10 @@ test('no retired wording lets an enabled-gate failure become a warning or a ques
   assert.match(pie, /Every P0 and P1 finding not marked `advisory: true` goes straight to `ui-fix-attempter`/, 'ship-once skips advisory findings');
   assert.doesNotMatch(pie, /Every P0 and P1 finding goes straight to/);
   assert.match(pie, /\*\*Every critique fix round re-measures\*\* \(gate rounds/, 'pie-boundary fixes are re-measured by design-critic');
+  const box = readText('skills/box-it-up/SKILL.md');
+  assert.match(box, /then \*\*classify each failed check\.\*\*/, 'box-it-up classifies failed checks');
+  assert.match(box, /a failed required check is always binding/, 'a required check is never advisory');
+  assert.match(box, /Only advisory failures left → CI counts as green/, 'advisory-only failures reach the merge step');
   assert.match(readText('skills/sell-slice/agents/frontend/design-critic.md'), /- \*\*Mode\*\* \*\(optional, default `full`\)\*: `full`, or `recheck`/, 'design-critic has a recheck mode');
   assert.doesNotMatch(readText('skills/box-it-up/agents/ci-fix-attempter.md'), /If the design system doesn't define the needed token, surface as HITL `creative_direction`\./);
   for (const file of ['skills/sell-slice/agents/frontend/break-ui-runner.md', 'skills/sell-slice/agents/frontend/design-critic.md']) {
