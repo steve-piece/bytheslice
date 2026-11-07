@@ -124,6 +124,8 @@ test('no retired wording lets an enabled-gate failure become a warning or a ques
   assert.match(pie, /\*\*Advisory findings are only listed\.\*\*/, 'the pie boundary lists advisory findings');
   assert.match(pie, /Every P0 and P1 finding not marked `advisory: true` goes straight to `ui-fix-attempter`/, 'ship-once skips advisory findings');
   assert.doesNotMatch(pie, /Every P0 and P1 finding goes straight to/);
+  assert.match(pie, /\*\*Every critique fix round re-measures\.\*\*/, 'pie-boundary fixes are re-measured by design-critic');
+  assert.match(readText('skills/sell-slice/agents/frontend/design-critic.md'), /- \*\*Mode\*\* \*\(optional, default `full`\)\*: `full`, or `recheck`/, 'design-critic has a recheck mode');
   assert.doesNotMatch(readText('skills/box-it-up/agents/ci-fix-attempter.md'), /If the design system doesn't define the needed token, surface as HITL `creative_direction`\./);
   for (const file of ['skills/sell-slice/agents/frontend/break-ui-runner.md', 'skills/sell-slice/agents/frontend/design-critic.md']) {
     assert.match(readText(file), /gate: null \| accessibility \| design-system/, `${file} findings carry a gate tag`);

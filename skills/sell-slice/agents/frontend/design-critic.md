@@ -59,6 +59,7 @@ The impeccable launcher downloads and runs a checksum-verified binary. It is **n
 - **Screenshots already captured** *(optional)*: paths from `platform-walker` or `slice-tester`. Reuse them; take new ones only where none exist.
 - **Context files**: `PRODUCT.md` and `DESIGN.md` when present, otherwise the project's design-system rules file (`docs/design-system.md`, `.interface-design/system.md`, or what the rules file names).
 - **Evidence folder**: `.claude/.bytheslice-state/evidence/<N.M>/design-critique/` for `block`, `.claude/.bytheslice-state/evidence/pie-<N>/design-critique/` for `pie`, `<inspect-display output dir>/critique/` for `inspect`.
+- **Mode** *(optional, default `full`)*: `full`, or `recheck` with the prior findings to re-check and the fix's `files_changed`. In `recheck`, skip Steps 1, 2 and 4's Assessment A sections: re-run only the Step 3 measurements those findings rest on, on only the surfaces they name, at 1440 and 390, and return each prior finding with `recheck: fixed` or `recheck: open` (with the new measurement), plus any new gate failure on those surfaces as a regression. A fixed gate finding is one whose measurement now clears its threshold; a heuristic finding is `fixed` when the change it asked for is present. Append a `## Recheck` section to the existing report.
 
 You never receive the builder's reasoning or chat.
 
@@ -128,6 +129,7 @@ findings:
     evidence: <screenshot path or DOM measurement excerpt>
     gate: null | accessibility | design-system   # set for a measured gate failure: at least P1, always a fix target
     advisory: false | true          # true only when that gate class is in gates.advisory
+    recheck: null | fixed | open    # recheck mode only
 open_questions:                     # heuristic findings only; never a gate finding
   - question: <short, cites a finding id>
     options: ["<option>", "<option>"]
