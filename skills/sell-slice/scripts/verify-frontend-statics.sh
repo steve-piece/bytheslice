@@ -259,8 +259,9 @@ scan_file() {
   } | sort -u > "$WORK/allowed"
 
   # Ids that some htmlFor in this file points at, normalized.
-  grep -o 'htmlFor=[^[:space:]>]*' "$abs" 2>/dev/null \
-    | sed -e 's/^htmlFor=//' -e 's/[{}"'"'"'`]//g' | sort -u > "$WORK/labelled"
+  # JSX allows whitespace around = (htmlFor = "email"), so the match does too.
+  grep -o 'htmlFor[[:space:]]*=[[:space:]]*[^[:space:]>]*' "$abs" 2>/dev/null \
+    | sed -e 's/^htmlFor[[:space:]]*=[[:space:]]*//' -e 's/[{}"'"'"'`]//g' | sort -u > "$WORK/labelled"
 
   awk -v F="$rel" -v JSX="$jsx" \
       -v ALLOWED="$WORK/allowed" -v LABELLED="$WORK/labelled" -v TWCOLORS="$WORK/twcolors" \
@@ -358,8 +359,8 @@ scan_file() {
         if (ty ~ /^(hidden|submit|button|reset|image)$/) { tag = ""; return }
       }
       id = ""
-      if (match(tag, /[[:space:]]id=[^[:space:]>]*/)) {
-        id = substr(tag, RSTART, RLENGTH); sub(/^[[:space:]]id=/, "", id); gsub(/[{}"'"'"'`]/, "", id); sub(/\/$/, "", id)
+      if (match(tag, /[[:space:]]id[[:space:]]*=[[:space:]]*[^[:space:]>]*/)) {
+        id = substr(tag, RSTART, RLENGTH); sub(/^[[:space:]]id[[:space:]]*=[[:space:]]*/, "", id); gsub(/[{}"'"'"'`]/, "", id); sub(/\/$/, "", id)
       }
       if (id != "" && (id in lab)) { tag = ""; return }
       hit("E5", start, "<" kind "> has no <label htmlFor>, wrapping <label>, aria-label or aria-labelledby")

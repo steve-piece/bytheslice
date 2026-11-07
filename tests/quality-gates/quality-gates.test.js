@@ -115,6 +115,8 @@ test('no retired wording lets an enabled-gate failure become a warning or a ques
   assert.doesNotMatch(verifier, /Every result is a warning, never a failure/);
   assert.doesNotMatch(verifier, /whose findings are non-forcing warnings/);
   assert.match(verifier, /\*\*A utility `E1` is a lead until confirmed\.\*\*/, 'a semantic-utility E1 is confirmed against the config before it fails the gate');
+  assert.match(verifier, /\*\*Every other finding is confirmed against the source too\.\*\*/, 'every statics finding is confirmed before it fails the gate');
+  assert.doesNotMatch(verifier, /need no confirmation/);
   assert.match(verifier, /\*\*plus every file that held a `design_system` or `a11y_static` finding in the prior verdict\*\*/, 'a definition fix re-scans the consumers it resolved');
   assert.doesNotMatch(readText('skills/sell-slice/SKILL.md'), /Its `warnings` array \(the statics findings\) never fails the slice/);
   assert.match(readText('skills/sell-slice/SKILL.md'), /and not marked `advisory: true` is not a concern for the operator/, 'the library gate skips advisory findings');

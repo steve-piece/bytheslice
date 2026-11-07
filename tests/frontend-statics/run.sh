@@ -136,6 +136,13 @@ need_count '^E1 UNKNOWN_TOKEN ' 1
 need_line '^E1 UNKNOWN_TOKEN components/banner\.tsx:4 bg-brand uses --brand'
 report "semantic utility without a token reports E1"
 
+setup e5-spaced-attributes
+run_script --base "$BASE_SHA"
+need_code 1
+need_count '^E5 INPUT_NO_LABEL ' 1
+need_line '^E5 INPUT_NO_LABEL components/signup\.tsx:8 '
+report "whitespace around = in htmlFor and id still binds the label"
+
 setup e1-tailwind-v3-colors
 run_script --base "$BASE_SHA"
 need_code 1
