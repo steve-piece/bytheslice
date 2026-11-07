@@ -116,6 +116,7 @@ test('no retired wording lets an enabled-gate failure become a warning or a ques
   assert.doesNotMatch(verifier, /whose findings are non-forcing warnings/);
   assert.match(verifier, /\*\*A utility `E1` is a lead until confirmed\.\*\*/, 'a semantic-utility E1 is confirmed against the config before it fails the gate');
   assert.doesNotMatch(readText('skills/sell-slice/SKILL.md'), /Its `warnings` array \(the statics findings\) never fails the slice/);
+  assert.match(readText('skills/sell-slice/SKILL.md'), /and not marked `advisory: true` is not a concern for the operator/, 'the library gate skips advisory findings');
   assert.doesNotMatch(readText('skills/box-it-up/agents/ci-fix-attempter.md'), /If the design system doesn't define the needed token, surface as HITL `creative_direction`\./);
   for (const file of ['skills/sell-slice/agents/frontend/break-ui-runner.md', 'skills/sell-slice/agents/frontend/design-critic.md']) {
     assert.match(readText(file), /gate: null \| accessibility \| design-system/, `${file} findings carry a gate tag`);

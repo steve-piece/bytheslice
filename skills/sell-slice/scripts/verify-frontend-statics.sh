@@ -329,6 +329,22 @@ scan_file() {
       hit("E3", ln, lit " is not in the Easing Curves")
     }
 
+    # Where the opening tag held in s ends: the first > outside quotes and
+    # outside {} expressions, so an arrow (=>) or a > in a string never ends
+    # it. 0 while the tag is still open.
+    function tag_end(s,   k, ch, d, q) {
+      d = 0; q = ""
+      for (k = 1; k <= length(s); k++) {
+        ch = substr(s, k, 1)
+        if (q != "") { if (ch == "\\") k++; else if (ch == q) q = ""; continue }
+        if (ch == "\"" || ch == "\047" || ch == "`") { q = ch; continue }
+        if (ch == "{") d++
+        else if (ch == "}") { if (d > 0) d-- }
+        else if (ch == ">" && d == 0) return k
+      }
+      return 0
+    }
+
     function flush_tag(   id, ty) {
       if (tag == "") return
       if (tag ~ /\{[[:space:]]*\.\.\./) { tag = ""; return }
@@ -411,7 +427,7 @@ scan_file() {
       # E4 / E5: img alt and form-control labels (multi-line tags supported).
       if (tag != "") {
         tag = tag " " line
-        if (index(line, ">") > 0) flush_tag()
+        tend = tag_end(tag); if (tend > 0) { tag = substr(tag, 1, tend); flush_tag() }
       } else if (match(line, /<(img|input|select|textarea)([[:space:]>\/]|$)/)) {
         pre = substr(line, 1, RSTART - 1)
         frag = substr(line, RSTART)
@@ -420,7 +436,7 @@ scan_file() {
         b = pre; closes = gsub(/<\/[Ll]abel>/, "", b)
         in_label = (depth + opens - closes > 0)
         start = NR; tag = frag
-        if (index(frag, ">") > 0) flush_tag()
+        tend = tag_end(tag); if (tend > 0) { tag = substr(tag, 1, tend); flush_tag() }
       }
       a = line; depth += gsub(/<[Ll]abel([[:space:]>]|$)/, "", a)
       b = line; depth -= gsub(/<\/[Ll]abel>/, "", b)
