@@ -1,6 +1,6 @@
 ---
 name: rules-loader
-description: Readonly loader of the project rules file (CLAUDE.md / AGENTS.md) and bytheslice.config.json. Returns the resolved config slices the orchestrator and downstream agents need: model tier overrides, MCP availability, visual-review tooling priority, verification, flow, review and delivery settings, HITL category extensions, and design-system rules. Dispatched by sell-slice in Phase 1 (parallel reconnaissance batch).
+description: Readonly loader of the project rules file (CLAUDE.md / AGENTS.md) and bytheslice.config.json. Returns the resolved config slices the orchestrator and downstream agents need: model tier overrides, MCP availability, visual-review tooling priority, verification, flow, review and delivery settings, the binding quality-gate settings, HITL category extensions, and design-system rules. Dispatched by sell-slice in Phase 1 (parallel reconnaissance batch).
 model: haiku
 effort: low
 disallowedTools: Write, Edit, NotebookEdit
@@ -32,12 +32,13 @@ You are the **rules-loader** for `/sell-slice`. Your job: read the project rules
    - `review.default`
    - `delivery.mode`, `delivery.sliceBudgetHours`, `delivery.shipBranch`
    - `quality.tier`
+   - `gates.enforcement`, `gates.advisory`, `gates.declared`
    - `ui.registries`, `ui.registryFirst`
    - `run.unattended`
    - `hitl.additionalCategories`
    - `rules.imports`
-   Every key above is resolved and returned even when the config file is absent: a key set nowhere comes back as its plugin default from [`bytheslice-config-schema.md`](../../setup-shop/references/bytheslice-config-schema.md). The orchestrator passes the `verification.*` values to `slice-tester` / `slice-verifier`, uses `flow.*` at the build-plan and library gates, uses `review.default` for unannotated pies, uses `delivery.*` to pick the closeout path and the slice time budget, passes `ui.*` to block-composer and component-crafter, and under `run.unattended` resolves its own gates instead of asking.
-3. If the config file is malformed JSON, or a key holds a value outside its allowed set (for example `delivery.mode` other than `"pie-pr"` / `"merge-per-slice"` / `"ship-once"`, or a negative `delivery.sliceBudgetHours`), surface as HITL `prd_ambiguity`.
+   Every key above is resolved and returned even when the config file is absent: a key set nowhere comes back as its plugin default from [`bytheslice-config-schema.md`](../../setup-shop/references/bytheslice-config-schema.md). The orchestrator passes the `verification.*` values to `slice-tester` / `slice-verifier`, uses `flow.*` at the build-plan and library gates, uses `review.default` for unannotated pies, uses `delivery.*` to pick the closeout path and the slice time budget, passes `ui.*` to block-composer and component-crafter, passes `gates.*` to `slice-tester`, `slice-verifier`, the fixers and the UI review agents (an enabled gate that fails is a fix target, per [`quality-gates.md`](../references/quality-gates.md)), and under `run.unattended` resolves its own gates instead of asking.
+3. If the config file is malformed JSON, or a key holds a value outside its allowed set (for example `delivery.mode` other than `"pie-pr"` / `"merge-per-slice"` / `"ship-once"`, or a negative `delivery.sliceBudgetHours`), surface as HITL `prd_ambiguity`. Two exceptions: `gates.enforcement` with any value other than `"fix"` resolves to `"fix"` with one line in `overrides_applied` (there is no off switch), and an unknown class in `gates.advisory`, or `ci_integrity` or the manifest backstop listed there, is dropped with one line in `overrides_applied`. Never add a class to `gates.advisory` yourself.
 
 ## Output Contract
 
@@ -77,6 +78,10 @@ resolved_config:
     shipBranch: <branch>                    # ship-once only; default ship/<repo dir name>
   quality:
     tier: lean | standard | auto            # default standard
+  gates:
+    enforcement: fix                        # always fix: a failing enabled gate goes to the fix loop, never to the operator
+    advisory: [<gate classes>]              # default []: every enabled gate binding
+    declared: [<{name, command}>]           # default []; commands the pre-push hook or CI run count as enabled anyway
   ui:
     registries: [<{name, catalog, item, theme?, notes?}>]   # default []: stock shadcn only
     registryFirst: true | false             # default true when registries is non-empty

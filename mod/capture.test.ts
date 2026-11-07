@@ -8,10 +8,13 @@ import { CHECKLIST_FIXTURE } from './fixtures/checklist.fixture.ts'
 import {
   ACTIVITY,
   HEAD,
+  LEDGER,
   activityLine,
   bashResult,
   endTurn,
   engineLoops,
+  ledgerLine,
+  ledgerText,
   rowsOf,
   spawn,
   stage,
@@ -206,6 +209,8 @@ test('gh pr merge records a pr merge with its number', async ($, on) => {
 test('a slice that flips to done records slice.done with its verifier verdict and a rollup from activity', async ($, on) => {
   const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
   engineLoops(on, ['agent-v'])
+  // A failing tester verdict before the fix: Workflow B had begun, so the fix-attempter start is one fix loop.
+  world.files[LEDGER] = ledgerText([ledgerLine(5, 'verdict', '5.1', { gate: 'slice-tester', overall: 'fail', fix_targets: ['implementer | a.ts | x'], head: HEAD })])
   world.files[ACTIVITY] = [
     activityLine({ t: 10, sid: 's', ev: 'SubagentStart', agent: 'bytheslice:implementer', aid: 'i1', pie: 5, slice: '5.1' }),
     activityLine({ t: 11, sid: 's', ev: 'SubagentStart', agent: 'bytheslice:fix-attempter', aid: 'f1', pie: 5, slice: '5.1' }),
@@ -221,9 +226,9 @@ test('a slice that flips to done records slice.done with its verifier verdict an
   await endTurn($, '{"overall": "pass", "fix_targets": []}', 'agent-v')
   await $.tool.call({ tool: 'Edit', file_path: 'docs/plans/00_master_checklist.md', old_string: '[ ]', new_string: '[x]' })
   const rows = rowsOf(world)
-  expect(rows.map(row => row.ev)).toEqual(['verdict', 'slice.done', 'slice.rollup'])
-  expect(rows[1]).toMatchObject({ pie: 5, slice: '5.1', data: { verdict: { overall: 'pass', head: HEAD } } })
-  expect(rows[2]?.data).toEqual({
+  expect(rows.map(row => row.ev)).toEqual(['verdict', 'verdict', 'slice.done', 'slice.rollup'])
+  expect(rows[2]).toMatchObject({ pie: 5, slice: '5.1', data: { verdict: { overall: 'pass', head: HEAD } } })
+  expect(rows[3]?.data).toEqual({
     agents: {
       implementer: { count: 1, tok: 500, ms: 9000 },
       'fix-attempter': { count: 1, tok: 0, ms: 0 },
@@ -235,7 +240,7 @@ test('a slice that flips to done records slice.done with its verifier verdict an
   expect(world.toasts).toEqual(['Slice 5.1 done · verifier pass'])
   // The same flip seen again records nothing new.
   await $.tool.call({ tool: 'Edit', file_path: 'docs/plans/00_master_checklist.md', old_string: '[ ]', new_string: '[x]' })
-  expect(rowsOf(world)).toHaveLength(3)
+  expect(rowsOf(world)).toHaveLength(4)
 })
 
 test('a project with no master checklist gets no ledger from turns or commits', async ($, on) => {

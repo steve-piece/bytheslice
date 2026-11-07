@@ -13,7 +13,7 @@ import type {
 import { stripJsonc } from './jsonc.ts'
 import { appendRow, readRows } from './ledger.ts'
 import type { LedgerInput } from './ledger.ts'
-import { gateOf, readActivity, rollup } from './ledger-projection.ts'
+import { gateOf, readActivity, rollup, verifyStartOf } from './ledger-projection.ts'
 import { refreshLedger } from './live.ts'
 import { activePie, activeSlice } from './projection.ts'
 import { toastRow } from './toasts.ts'
@@ -557,7 +557,7 @@ export async function recordDoneFlips(
       },
     })
     if (done) out.push(done)
-    const totals = rollup(activity, slice)
+    const totals = rollup(activity, slice, verifyStartOf(rows, slice))
     const rolled = await record($, { ev: 'slice.rollup', pie, slice, data: totals })
     if (rolled) out.push(rolled)
   }

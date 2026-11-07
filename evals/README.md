@@ -12,8 +12,9 @@ Each case also runs once without the plugin (the default `with-without` ablation
 | `build-slice-uses-baker` | implement Slice 2.2 | `sell-slice` or `sell-pie` runs (6.1.1 dropped the no-other-agents grader: plain agents are fine for research and review) |
 | `one-file-fix-not-blocked` | fix the typo in `src/slates.js` | the typo is fixed in place, no planning skill runs |
 | `question-gets-no-intake-noise` | what does `listGames` return | a plain answer, no skill |
+| `failing-gate-gets-fixed` | a slice-tester contrast failure on a shared `--error` token | `src/theme.css`'s `--error` changes, no question to the operator, and the reply reports a fix rather than an out-of-scope note or a follow-up (6.3.0, binding gates) |
 
-The last two catch over-routing. Every case starts from [`fixtures/slate-shop`](fixtures/slate-shop/) through [`lib/scaffold.sh`](lib/scaffold.sh): a git repo on `main` with Pie 2 (Slice 2.1 done and verified, Slice 2.2 open), its stage files and the Feature intake block.
+`one-file-fix-not-blocked` and `question-gets-no-intake-noise` catch over-routing; `failing-gate-gets-fixed` catches the opposite slip, a configured gate handed back to the operator. Its scaffold adds a shared `src/theme.css` and a config with `gates.enforcement: "fix"`. Every case starts from [`fixtures/slate-shop`](fixtures/slate-shop/) through [`lib/scaffold.sh`](lib/scaffold.sh): a git repo on `main` with Pie 2 (Slice 2.1 done and verified, Slice 2.2 open), its stage files and the Feature intake block.
 
 ## Running
 
@@ -30,6 +31,8 @@ claude plugin eval . --runs 1 -j 4 --scaffold --allow-tools Write Edit Bash --mo
 **Cost (measured 2026-10-29, Sonnet agent and judge).** A one-run pass of the seven 5.8 cases (four since 6.1), both arms, costs about $2; the three-run release pass $4 to $5 and about three minutes at `-j 4`. `build-slice-uses-baker` is about a third of it, since it starts the real `/sell-slice`. Cap a one-run pass at `--max-cost-usd 5` and the release pass at `10`.
 
 **Last release pass (5.8.0, with the refusals still on).** Six of seven cases scored 1.0 with the plugin; `build-slice-uses-baker` scored 0.78 (one run built the slice directly) and, rerun three times after the build-a-slice prompt context landed, 1.0. The suite drove that fix and the shell plan-write rule. Deltas over the no-plugin baseline: refused plan write +0.83, checkbox +0.75, PR +0.25, build +0.22; the new-feature case scores 1.0 either way because the baseline reads the fixture's `CLAUDE.md` rule, and the two over-enforcement cases stay at 1.0 in both arms, as they should.
+
+**`failing-gate-gets-fixed` (6.3.0, one run, Sonnet 5.5 agent and judge).** 1.00 with the plugin, 0.25 without: the baseline left `--error` unchanged and did not report a fix, the plugin arm darkened the token and reported it fixed with no question. Delta +0.75, $0.25 for both arms.
 
 ## Limits
 

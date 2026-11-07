@@ -121,7 +121,7 @@ Each check is a `tool.call` (or `agent.spawn`) hook whose `.catch` passes the ca
 |---|---|---|
 | **Checkbox integrity** | `Edit`/`Write` on `00_master_checklist.md` that flips a slice to `[x]` | Warn (`checkbox-without-verdict`) unless the ledger has a `slice-verifier` pass for that slice at the current HEAD SHA; warn (`checkbox-without-tester`) when a `frontend` or `full-stack` slice has no `slice-tester` pass. The design wanted both passes at HEAD for every slice. |
 | **Push integrity** | `Bash` `git push` to a pie branch | Warn (`push-slice-done-unverified`) when HEAD is a commit of a slice already `[x]` without a verifier pass there; a mid-slice push is silent. The design judged every push. (5.4 kept `pre-commit-guard.sh` as a warning for hosts without the mod.) |
-| **Fix-loop cap** | `agent.spawn` for `fix-attempter` (and `ci-fix-attempter`, per pie) | Warn (`fix-loop-cap`) on attempt 4 or later on the same slice and open one HITL inbox item; the spawn runs. |
+| **Fix-loop cap** | `agent.spawn` for `fix-attempter` and `ui-fix-attempter` (and `ci-fix-attempter`, per pie) | Warn (`fix-loop-cap`) on attempt 4 or later on the same slice and open one HITL inbox item; the spawn runs. Only Workflow B loops count (6.3.0): a slice fix spawn counts once the ledger holds a `slice-tester` or `slice-verifier` verdict for the slice, and never when its label names a Workflow A step (`P<pie> S<slice> build:`, `review:` or `prep:`), so reviewer-loop fixes in Workflow A never draw the warning. |
 | **Main-branch guard** | `Bash` commit or push while on `main` | Warn (`commit-on-main`); the command runs. `pre-commit-guard.sh` warns on the same commit, each warning naming its source. |
 | **Plan write guard** | `Edit`/`Write` under `docs/plans/stage_*` during a bake | Warn (`plan-write-during-bake`): the same rule the stage plan Bash hook held, moved onto typed input (5.4 retired that hook). |
 
@@ -137,8 +137,8 @@ An `agent.spawn` hook judges each spawn against a role table and warns; it never
 |---|---|---|
 | `implementer` | opus | none |
 | `fix-attempter`, `ci-fix-attempter` | sonnet | none |
-| `slice-tester` | sonnet | Prompt must be the manifest plus Exit criteria plus the design-system path only; warn (`builder-context`) if it carries builder transcript markers |
-| `slice-verifier`, `spec-reviewer`, `quality-reviewer` | sonnet | Same separation rule as `slice-tester` |
+| `slice-tester` | sonnet | Prompt must be the manifest plus Exit criteria plus the design-system path only; warn (`builder-context`) if it carries builder transcript markers. `files_changed` counts as a marker only as a key holding entries (a pasted return), never as a word in an instruction |
+| `slice-verifier`, `spec-reviewer`, `quality-reviewer` | sonnet | Same separation rule as `slice-tester`, minus the markers their own documented inputs carry (6.3.0): `slice-verifier` gets the slice diff and, on a re-verification pass, the fix's `files_changed`; the reviewers get the implementer's output and the diff. `builder transcript` still warns for all three |
 | discovery, recon, `rules-loader`, scanners | sonnet or haiku | none |
 | any spawn without an explicit `model` | the role's default from this table | none |
 
@@ -188,7 +188,7 @@ This builds on the teams harness direction. The lead is the shift manager and ea
 
 `/close-shop`'s `retrospective-reviewer` reads `ledger.jsonl` directly: gate failure rate per slice type, fix-loop depth, stalls, model-policy warnings, HITL wait time, and cost per slice. Proposals become data-driven.
 
-> **Note (5.7, as built).** The reviewer runs `node <plugin>/scripts/ledger-summary.js --root <project> --format json` (its "Ledger metrics" section) and cites fix-loop depth, warning counts by code, stalls, HITL wait and cost per slice, saying "not in the ledger" when a metric is absent rather than reading the absence as zero. Fix loops come from the slice's `slice.rollup` (fix-attempter starts in the activity log), else one per failed verdict.
+> **Note (5.7, as built).** The reviewer runs `node <plugin>/scripts/ledger-summary.js --root <project> --format json` (its "Ledger metrics" section) and cites fix-loop depth, warning counts by code, stalls, HITL wait and cost per slice, saying "not in the ledger" when a metric is absent rather than reading the absence as zero. Fix loops come from the slice's `slice.rollup` (Workflow B `fix-attempter` and `ui-fix-attempter` starts in the activity log, counted from the first verify verdict), else one per failed verdict.
 
 ### 4.12 Prior art
 
