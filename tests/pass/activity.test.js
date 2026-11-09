@@ -57,6 +57,10 @@ test('the projection reads the rows hooks/kitchen-log.sh writes: status, fix loo
       tool_input: { description: 'P5 S5.2 build: ledger', subagent_type: 'bytheslice:implementer' },
       tool_response: { agentId: 'impl-1', totalTokens: 4200, totalDurationMs: 61000, status: 'completed' },
     });
+    // A Workflow A review fix: its start row inherits the review label, so it is no fix loop.
+    emit(dir, dispatch('P5 S5.2 review: fix header caps', 'bytheslice:fix-attempter'));
+    emit(dir, { hook_event_name: 'SubagentStart', agent_type: 'bytheslice:fix-attempter', agent_id: 'review-1' });
+    emit(dir, { hook_event_name: 'SubagentStop', agent_type: 'bytheslice:fix-attempter', agent_id: 'review-1' });
     emit(dir, dispatch('P5 S5.2 fix: typecheck', 'bytheslice:fix-attempter'));
     emit(dir, { hook_event_name: 'SubagentStart', agent_type: 'bytheslice:fix-attempter', agent_id: 'fix-1' });
 
@@ -65,7 +69,10 @@ test('the projection reads the rows hooks/kitchen-log.sh writes: status, fix loo
     // The fix: unlabeled subagent rows follow their labeled dispatch, not the pie-4 branch.
     assert.ok(activity.filter(row => row.ev.startsWith('Subagent')).every(row => row.pie === 5 && row.slice === '5.2'));
 
-    const projection = projectLedger([], activity, parseChecklist(CHECKLIST), Date.now());
+    // Workflow B began with a failing verifier verdict (t: 1, before every logged row).
+    const failed = { v: 1, t: 1, sid: 'live-1', ev: 'verdict', pie: 5, slice: '5.2', data: { gate: 'slice-verifier', overall: 'fail', fix_targets: ['implementer | a.ts | typecheck: x'], head: null } };
+    assert.equal(findSlice(projectLedger([], activity, parseChecklist(CHECKLIST), Date.now()), '5.2').fixLoop, 0);
+    const projection = projectLedger([failed], activity, parseChecklist(CHECKLIST), Date.now());
     const view = findSlice(projection, '5.2');
     assert.equal(view.status, 'fixing');
     assert.equal(view.fixLoop, 1);
@@ -74,8 +81,9 @@ test('the projection reads the rows hooks/kitchen-log.sh writes: status, fix loo
     assert.deepEqual(projection.active, { pie: 5, slice: '5.2' });
     assert.deepEqual(rollup(activity, '5.2').agents, {
       implementer: { count: 1, tok: 4200, ms: 61000 },
-      'fix-attempter': { count: 1, tok: 0, ms: 0 },
+      'fix-attempter': { count: 2, tok: 0, ms: 0 },
     });
+    assert.equal(rollup(activity, '5.2', 1).fixLoops, 1);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

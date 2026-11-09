@@ -63,6 +63,22 @@ test('a tester prompt with files_changed warns builder-context, and the agent st
   expect(JSON.stringify(world.files)).not.toContain('mod/a.ts')
 })
 
+test('a re-verify slice-verifier prompt with the fix files_changed, and reviewers with the builder output, are no builder context', async ($, on) => {
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  engineLoops(on, ['v2', 's1', 'q1', 't2', 'v3'])
+  await start($)
+  const reverify = 'Prior verdict: {...}\nfiles_changed:\n  - path: app/globals.css\n    rationale: darken --error\ndiff --git a/app/globals.css b/app/globals.css'
+  await spawn($, 'bytheslice:slice-verifier', 'P5 S5.3 verify: re-verify loop 1', { prompt: reverify })
+  await spawn($, 'bytheslice:spec-reviewer', 'P5 S5.3 review: spec', { prompt: 'implementer returned:\nfiles_changed:\n  - path: mod/a.ts' })
+  await spawn($, 'bytheslice:quality-reviewer', 'P5 S5.3 review: quality', { prompt: 'files_changed: ["mod/a.ts"]' })
+  // A tester told to list the seeds it writes in files_changed is an instruction, not a pasted return.
+  await spawn($, 'bytheslice:slice-tester', 'P5 S5.3 test: probes', { prompt: 'Manifest. Return the seed paths you persist in files_changed: [<paths>].' })
+  expect(warnsOf(world)).toEqual([])
+  // The verifier still warns on the builder's chat.
+  await spawn($, 'bytheslice:slice-verifier', 'P5 S5.3 verify: gates', { prompt: 'Here is the builder transcript: ...' })
+  expect(warnsOf(world)).toEqual([['builder-context', '5.3']])
+})
+
 test('a reviewer prompt past 20,000 characters warns builder-context; an implementer prompt never does', async ($, on) => {
   const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
   engineLoops(on, ['q1', 'i1'])
@@ -117,6 +133,10 @@ test('the pure parts: roles, given models, markers and the judgment', () => {
   expect(givenModel('claude-sonnet-4-6')).toBe('claude-sonnet-4-6')
   expect(markerIn('see the Diff --git below', DEFAULT_POLICY.contextMarkers)).toBe('diff --git')
   expect(markerIn('clean', DEFAULT_POLICY.contextMarkers)).toBeNull()
+  expect(markerIn('list them in files_changed', DEFAULT_POLICY.contextMarkers)).toBeNull()
+  expect(markerIn('"files_changed": ["a.ts"]', DEFAULT_POLICY.contextMarkers)).toBe('files_changed')
+  expect(markerIn('files_changed: []', DEFAULT_POLICY.contextMarkers)).toBeNull()
+  expect(markerIn('files_changed:\n  - a.ts', DEFAULT_POLICY.contextMarkers, ['files_changed'])).toBeNull()
   const facts = { tool_use_id: 'toolu-1', prompt: 'p', subagentType: 'bytheslice:discovery', model: 'claude-opus-5-5' }
   expect(judgeSpawn(facts, DEFAULT_POLICY)).toEqual({ findings: [], track: { role: 'discovery', given: 'claude-opus-5-5', parent: null, slice: null } })
   expect(judgeSpawn({ ...facts, model: 'haiku', description: 'P5 S5.4 prep: recon' }, DEFAULT_POLICY).findings[0]?.slice).toBe('5.4')

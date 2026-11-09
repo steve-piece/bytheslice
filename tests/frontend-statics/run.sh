@@ -96,6 +96,14 @@ need_count '^E4 IMG_NO_ALT ' 1
 need_line '^E4 IMG_NO_ALT components/gallery\.tsx:6 '
 report "img without alt reports E4, alt=\"\" does not"
 
+setup e4-e5-multiline-arrow
+run_script --base "$BASE_SHA"
+need_code 1
+need_count '^E4 IMG_NO_ALT ' 1
+need_line '^E4 IMG_NO_ALT components/portrait\.tsx:16 '
+need_none '^E5 '
+report "an arrow or a quoted > inside a multi-line tag does not end it"
+
 # 6. unlabelled input is E5, aria-label is not
 setup e5-input-no-label
 run_script --base "$BASE_SHA"
@@ -127,6 +135,22 @@ need_code 1
 need_count '^E1 UNKNOWN_TOKEN ' 1
 need_line '^E1 UNKNOWN_TOKEN components/banner\.tsx:4 bg-brand uses --brand'
 report "semantic utility without a token reports E1"
+
+setup e5-spaced-attributes
+run_script --base "$BASE_SHA"
+need_code 1
+need_count '^E5 INPUT_NO_LABEL ' 1
+need_line '^E5 INPUT_NO_LABEL components/signup\.tsx:8 '
+report "whitespace around = in htmlFor and id still binds the label"
+
+setup e1-tailwind-v3-colors
+run_script --base "$BASE_SHA"
+need_code 1
+need_count '^E1 UNKNOWN_TOKEN ' 2
+need_none '^E1 UNKNOWN_TOKEN components/card\.tsx:4 '
+need_line '^E1 UNKNOWN_TOKEN components/card\.tsx:7 bg-fake uses --fake'
+need_line '^E1 UNKNOWN_TOKEN components/card\.tsx:7 --brand-500 is not in the token catalog'
+report "Tailwind v3 color keys resolve utilities, never var()"
 
 setup motion-unchecked
 run_script --base "$BASE_SHA"

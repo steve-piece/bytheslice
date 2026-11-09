@@ -312,6 +312,7 @@ Drop a `bytheslice.config.json` at your project root to override defaults:
   "delivery":     { "mode": "pie-pr", "sliceBudgetHours": 3 },  // "merge-per-slice" = one PR per slice, merged on green CI; "ship-once" (/pizza-party) = all gates local, one PR at the end; budget 0 = off
   "mcps":         { "shadcn": true, "magic": false, "figma": false, "chromeDevTools": true },
   "visualReview": { "tools": ["claude-in-chrome", "chrome-devtools-mcp", "playwright"], "vizzly": false },
+  "gates":        { "enforcement": "fix", "advisory": [] },   // enabled gates are binding: a failing one is fixed, never handed back as a decision
   "hitl":         { "additionalCategories": [] },
   "rules":        { "imports": [] },
   "run":          { "unattended": false }   // /pizza-party sets true: every prompt takes its recommended answer, recorded in the order ticket
@@ -373,7 +374,7 @@ A slice has to be a real *user-facing* delta - UI + route + data + tests for one
 <details>
 <summary><b>Can I skip the verification gates?</b></summary>
 
-Technically yes (the orchestrator will accept a HITL override with `destructive_operation` category), but every story we've seen of "I'll just skip the gates this once" ends with a slice that breaks main. The whole point is that the kitchen doesn't ship slices it didn't taste.
+Only by turning them off where they are configured, or by listing a class in `gates.advisory` in `bytheslice.config.json` (it still runs and reports, but never fails a slice). Every gate you leave on is binding: when it fails, the agents fix the code until it passes, including a shared design token or a file the slice only uses, instead of handing it back to you as a decision or a follow-up. They still stop for a destructive fix, a missing secret or an exhausted fix cap. The whole point is that the kitchen doesn't ship slices it didn't taste.
 
 </details>
 

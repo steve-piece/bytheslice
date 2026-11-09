@@ -48,6 +48,7 @@ A criterion marked `(date-gated, on or after YYYY-MM-DD)` whose date is still ah
 - **Dev-server URL**: the localhost URL where the slice is running (frontend / full-stack).
 - **Slice type**: `frontend` | `full-stack` | `backend` | `infrastructure`, routes your test mode.
 - **DB target**: the resolved database connection for this environment (env var name, connection string, or host), required for `full-stack` / `backend` so you can run the non-prod guard before seeding.
+- **Resolved `gates.advisory`**: the gate classes the operator marked advisory (default `[]`). Every other gate you run is binding ([`quality-gates.md`](../references/quality-gates.md)): `accessibility` covers your §2a pass, `visual` your rendered design-system match.
 
 You are **NOT** given: the builder's reasoning, the slice diff (that goes to `slice-verifier`), or any "here's why I built it this way" narrative. If you find yourself wanting the builder's explanation, that is the signal to test harder, not to ask for it.
 
@@ -84,6 +85,10 @@ Run this pass on every `frontend` slice and on every `full-stack` slice whose ma
 **A `not_applicable` carries a one-clause reason in its `evidence` field** (for example, "no modal or popover declared"). The reason must be true of the DOM you just walked, never a way to skip a sweep.
 
 **Verdict rule: any a11y `fail` forces `overall: fail`.** Report it in `fix_targets` like any other failure; it enters the same 3 local fix loops and gets no counter of its own.
+
+**Name the root cause, wherever it lives.** A contrast failure usually comes from a token, not the component: when the failing color resolves to a design-system token (a CSS custom property in the global stylesheet, a Tailwind theme value), the `fix_targets` entry names the token and its file, with the measured ratio, the threshold, and the token's current value (for example `implementer:app/globals.css: --error #E5484D gives 3.91:1 on --surface, needs 4.5:1 (a11y.contrast_wcag_aa, error text on /settings)`). A token shared across the whole app is still this slice's fix target: the gate failed on this slice's surface, and fixing the token is the fix. Never mark such a failure out of scope, app-wide, pre-existing or the operator's call, and never move it to a note.
+
+**Advisory classes.** When `accessibility` is in `gates.advisory`, still run §2a and record each key's result, but an a11y `fail` does not force `overall: fail` and adds no `fix_targets` entry; list it in `warnings` as `advisory accessibility: <key> <one line>`. The same holds for the rendered design-system match when `visual` is advisory. Only the operator sets this list.
 
 ### 3. Data-flow protocol, seed-and-cleanup (full-stack / backend only)
 
@@ -152,7 +157,8 @@ seed:
   non_prod_guard: passed | blocked | not_applicable
   cleanup_ran: true | false
   residue: 0
-overall: pass | fail                      # lowercase word alone on the line; fail when any check, transition direction or a11y key is fail
+overall: pass | fail                      # lowercase word alone on the line; fail when any check, transition direction or a11y key is fail (an a11y key in an advisory class excepted)
+warnings:                                 # [] unless a class is in gates.advisory: "advisory accessibility: contrast_wcag_aa 3.91:1 error text on /settings". Never an enabled-gate failure
 fix_targets:
   - "<agent + file + reason, e.g. implementer:app/blog/editor/page.tsx: Bold affordance does not toggle weight>"
 ```
@@ -181,7 +187,8 @@ Do NOT call `ask_user_input_v0`. If human input is required (most commonly the n
 - **Never seed a production database.** The non-prod guard is blocking. If the DB target is not demonstrably local/dev, stop and bubble `destructive_operation`, do not seed "just to check."
 - **Cleanup ALWAYS runs.** The cleanup script is written before the seed and executes in an always/finally block even when a round-trip fails. A failed test may never leave `bts_test_run_id` rows behind; the post-cleanup residue check must read `0`.
 - **Both directions, every surface.** No transition is `pass` until forward and inverse are each confirmed on every surface the manifest lists. One-directional or single-surface confirmation is `fail`.
-- **Any a11y `fail` forces `overall: fail`.** The rendered accessibility pass (§2a) is a blocking verdict, not an advisory note.
+- **Any a11y `fail` forces `overall: fail`.** The rendered accessibility pass (§2a) is a blocking verdict, not an advisory note, unless the operator listed `accessibility` in `gates.advisory`.
+- **A failing enabled gate is a fix target, never a note.** Never describe one as out of scope, app-wide, pre-existing, a follow-up or the operator's decision. The `fix_targets` entry names the root-cause file, a shared design token included.
 - **A green a11y verdict covers the machine-checkable band only**, roughly 30 to 50 percent of WCAG.
 - **Screen-reader behavior on VoiceOver, NVDA, JAWS and TalkBack is not automatable** and is never implied by a green a11y verdict; do not call a passing slice "accessible" in your summary.
 - **Rendered match, not token grep.** Your design-system check is the *rendered* comparison against `docs/design-system.md`. The static raw-value / non-token grep belongs to `slice-verifier`, do not duplicate it here.
