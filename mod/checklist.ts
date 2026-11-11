@@ -57,6 +57,8 @@ function parse(markdown: string): PassChecklist {
   const pies: PieDraft[] = []
   let current: PieDraft | null = null
   let slice: SliceDraft | null = null
+  // The furthest status a repeated slice already had from its earlier entries: a later entry never lowers it.
+  let floor: Status | null = null
   let prep = false
   let fenced = false
   let sawPie = false
@@ -109,6 +111,7 @@ function parse(markdown: string): PassChecklist {
       const isStage = standalone[2] !== undefined
       if (isStage) sawStage = true
       const number = standalone[1] ?? standalone[2] ?? '0'
+      floor = null
       slice = { id: number, name: titleOf(standalone[3] ?? ''), status: notedStatus(raw, line) }
       current = {
         n: Number(number.split('.')[0]),
@@ -153,10 +156,12 @@ function parse(markdown: string): PassChecklist {
       // A slice listed twice (a Prep line and its own heading) is one slice: keep the furthest status.
       const existing = current.slices.find(item => item.id === id)
       if (existing) {
+        floor = existing.status
         if (RANK[status] > RANK[existing.status]) existing.status = status
         slice = existing
         continue
       }
+      floor = null
       slice = { id, name: titleOf(sliceMatch[2] ?? ''), status }
       current.slices.push(slice)
       continue
@@ -192,7 +197,7 @@ function parse(markdown: string): PassChecklist {
 
     if (/^\s*(?:\*\*)?Status(?:\*\*)?:/i.test(line)) {
       const status = statusOf(line.replace(/\*\*/g, ''))
-      if (slice) slice.status = status
+      if (slice) slice.status = floor && RANK[floor] > RANK[status] ? floor : status
       else if (current) current.status = status
     }
   }

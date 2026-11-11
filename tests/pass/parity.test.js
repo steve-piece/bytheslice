@@ -92,6 +92,7 @@ test('both parsers agree on comment statuses, lettered ids, duplicates and table
     '## Pie 3: Q <!-- Status: Completed -->\n### Slice 3.1 <!-- Status: Completed -->\n### Slice 3.2: B <!-- Status: Partial: owed -->\n',
     '## Pie 9: Q\n### Slice 9.2: A [x]\n### Slice 9.2a: B [x]\n### Slice 9.3: C\n**Status:** Complete\n',
     '## Prep\n- [x] Slice 1.4: DB\n### Slice 1.4: DB\n**Status:** Completed\n## Pie 2: A\n### Slice 2.1: X [ ]\n### Slice 2.1: Y [x]\n',
+    '## Pie 3: D\n### Slice 3.1: A\n**Status:** Completed\n### Slice 3.1: A again\n**Status:** Not Started\n### Slice 3.2: B [x]\n**Status:** In Progress\n',
     '## Pie 4: M\n| Slice | Deliverable / Plan | Implementation |\n|---|---|---|\n| 4.1 | [A](a.md) | Completed |\n| 4.2 | [B](b.md) | In Progress |\n',
     '## Pie 4: M\n| Slice | Name | Status |\n|---|---|---|\n| 4.1 | A | Completed |\n### Slice 4.1: A [ ]\n## MVP Summary\n| Pie | Slice | Name | Status |\n|---|---|---|---|\n| 5 | 5.1 | Ghost | [x] |\n',
   ];

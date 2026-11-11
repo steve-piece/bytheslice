@@ -86,6 +86,16 @@ function baseRef(command, git) {
   return candidates.find(ref => ref && git('rev-parse', '-q', '--verify', `${ref}^{commit}`)) || null;
 }
 
+// The PR's head: --head/-H when given (an `owner:branch` form drops the owner; the local branch, else its
+// origin ref), else this checkout's HEAD. `name` is the branch name the slice words are read from.
+function headRef(command, git) {
+  const named = /(?:^|\s)(?:--head|-H)(?:=|\s+)['"]?([\w./:-]+)/.exec(command)?.[1];
+  if (!named) return { ref: 'HEAD', name: git('rev-parse', '--abbrev-ref', 'HEAD') };
+  const branch = named.includes(':') ? named.slice(named.indexOf(':') + 1) : named;
+  const ref = [`refs/heads/${branch}`, `refs/remotes/origin/${branch}`].find(candidate => git('rev-parse', '-q', '--verify', `${candidate}^{commit}`));
+  return ref ? { ref, name: branch } : null;
+}
+
 // Where the checklist and the slice plans live: this checkout, else the primary checkout (a gitignored
 // docs/plans/ exists only there), else the project dir. Null when the project has no checklist at all.
 function plansHome(top, git, base) {
@@ -133,17 +143,19 @@ function onPr(input) {
   const base = baseRef(command, git);
   const home = plansHome(top, git, base);
   if (!home || !base) return;
-  const fork = git('merge-base', base, 'HEAD');
+  const head = headRef(command, git);
+  if (!head) return;
+  const fork = git('merge-base', base, head.ref);
   if (!fork) return;
-  const changed = (git('diff', '--name-only', `${fork}..HEAD`) || '').split('\n').filter(Boolean);
+  const changed = (git('diff', '--name-only', `${fork}..${head.ref}`) || '').split('\n').filter(Boolean);
   if (!changed.length || changed.includes(REL)) return;
   if (!home.tracked && home.dir) {
     // A gitignored checklist never shows in the diff: an edit since the branch's first commit counts as an update.
-    const first = Number((git('log', '--format=%ct', `${fork}..HEAD`) || '').split('\n').filter(Boolean).pop() || 0);
+    const first = Number((git('log', '--format=%ct', `${fork}..${head.ref}`) || '').split('\n').filter(Boolean).pop() || 0);
     try { if (first && fs.statSync(path.join(home.dir, REL)).mtimeMs / 1000 >= first) return; } catch { return; }
   }
-  const subjects = (git('log', '--format=%s', `${fork}..HEAD`) || '').split('\n').filter(Boolean);
-  const reason = sliceReason(changed, subjects, git('rev-parse', '--abbrev-ref', 'HEAD'), planTexts(home, git, base));
+  const subjects = (git('log', '--format=%s', `${fork}..${head.ref}`) || '').split('\n').filter(Boolean);
+  const reason = sliceReason(changed, subjects, head.name, planTexts(home, git, base));
   if (!reason) return;
   const fix = 'set the `**Status:**` line of each slice this PR delivers or changes (and its pie heading when the pie is now complete)';
   emit('PreToolUse', (CURSOR ? [
@@ -168,4 +180,4 @@ if (require.main === module) {
   process.exit(0);
 }
 
-module.exports = { PR_CREATE, sliceReason, baseRef, editedFile };
+module.exports = { PR_CREATE, sliceReason, baseRef, headRef, editedFile };

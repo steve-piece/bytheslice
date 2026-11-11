@@ -1234,6 +1234,14 @@ assert_not_contains "cursor pr hook never uses the Claude Code shape" "hookSpeci
 LAST_OUT=$(cursor_pr "$GH pr view 3" | BTS_HOST=cursor bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
 assert_exit "cursor pr hook quiet exit 0" 0
 if [ "$LAST_OUT" = "{}" ]; then PASS=$((PASS+1)); printf '  ✓ %s\n' "cursor pr hook answers {} on other commands"; else FAIL=$((FAIL+1)); FAILED_NAMES+=("cursor pr hook {} ($LAST_OUT)"); printf '  ✗ cursor pr hook {} (%s)\n' "$LAST_OUT"; fi
+git -C "$CLONE" checkout -q main
+LAST_OUT=$(pr_payload "$GH pr create --head feedback-round --fill" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+assert_exit "pr hook --head from main exit 0" 0
+assert_contains "pr hook reads the --head branch, not the checkout HEAD" "src/feature.ts"
+LAST_OUT=$(pr_payload "$GH as steve-piece pr create -H=steve-piece:pie-3-polish --fill" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+assert_contains "pr hook reads an owner:branch -H and its branch name" "names a pie or slice"
+LAST_OUT=$(pr_payload "$GH pr create --head no-such-branch --fill" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+quiet_ok "pr hook quiet when the --head branch is unknown here"
 git -C "$CLONE" checkout -q feedback-round
 write_two_slices "$CLONE" "Completed"; git -C "$CLONE" commit -q -am "docs: close 2.2"
 LAST_OUT=$(pr_payload "$GH as steve-piece pr create --fill" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?

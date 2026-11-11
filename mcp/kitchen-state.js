@@ -102,6 +102,8 @@ function rowFacts(target, line) {
 function parseChecklist(markdown, meta = null) {
   const pies = [];
   let current = null, slice = null, prep = false, fenced = false, table = null;
+  // The furthest status a repeated slice already had from its earlier entries: a later entry never lowers it.
+  let floor = null;
   const prepChecks = [];
   let prepStatus = 'open';
   const prepPieceExemptions = {};
@@ -147,6 +149,7 @@ function parseChecklist(markdown, meta = null) {
       const number = standalone[1] || standalone[2];
       const legacy = Boolean(standalone[2]);
       const pie = Number(number.split('.')[0]);
+      floor = null;
       slice = { id: `${legacy ? 'stage' : 'slice'}-${number}`, number, title: titleOf(standalone[3]), status: notedStatus(raw, line) };
       current = { id: `standalone-${slice.id}`, pie, title: slice.title, status: slice.status, single: true, slices: [slice] };
       pies.push(current); track(current, at, raw, line, legacy ? 'stage' : 'standalone');
@@ -179,11 +182,13 @@ function parseChecklist(markdown, meta = null) {
       // A slice listed twice (a Prep line and its own heading) is one slice: keep the furthest status.
       const existing = current.slices.find(item => item.number === number);
       if (existing) {
+        floor = existing.status;
         if (RANK[status] > RANK[existing.status]) existing.status = status;
         if (explicit) sliceInfo.get(existing).explicit = true;
         slice = existing;
         continue;
       }
+      floor = null;
       slice = { id: `slice-${number}`, number, title: titleOf(sliceMatch[2]), status };
       current.slices.push(slice);
       sliceInfo.set(slice, { line: at, kind: /^###/.test(line) ? 'heading' : 'bullet', explicit });
@@ -214,7 +219,7 @@ function parseChecklist(markdown, meta = null) {
     if (!prep && (slice || current)) rowFacts(slice || current, line);
     if (STATUS_LINE.test(line)) {
       const status = statusOf(line.replace(/\*\*/g, ''));
-      if (slice) { slice.status = status; sliceInfo.get(slice).explicit = true; }
+      if (slice) { slice.status = floor && RANK[floor] > RANK[status] ? floor : status; sliceInfo.get(slice).explicit = true; }
       else if (current) { current.status = status; pieInfo.get(current).explicit = true; }
       if (prep) prepStatus = status;
     }

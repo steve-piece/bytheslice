@@ -212,3 +212,12 @@ test('the edit hook finds the checklist under every tool input key Claude Code a
   assert.equal(editedFile({ tool_input: { path: `/repo/${rel}.bak` } }), null);
   assert.equal(editedFile({}), null);
 });
+
+test('a repeated slice keeps its furthest status even when a later entry has an open body line', () => {
+  const md = '## Pie 3: Dupes\n\n### Slice 3.1: First\n**Status:** Completed\n\n### Slice 3.1: Again\n**Status:** Not Started\n';
+  assert.equal(slices(md)['3.1'], 'done');
+  assert.equal(parseChecklist(md).pies[0].status, 'done');
+  assert.deepEqual(checklistCounts(md).slices, { done: 1, total: 1 });
+  const once = '## Pie 3: Once\n\n### Slice 3.1: First [x]\n**Status:** Not Started\n';
+  assert.equal(slices(once)['3.1'], 'open', 'within one entry the body line still wins');
+});
