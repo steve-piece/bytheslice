@@ -2,7 +2,7 @@
   "version": 1,
   "hooks": {
     "sessionStart": [
-      { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/shop-status.sh\"", "timeout": 3 },
+      { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/shop-status.sh\"", "timeout": 5 },
       { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/lobby-signal.sh\"", "timeout": 5 }
     ],
     "beforeSubmitPrompt": [
@@ -13,6 +13,10 @@
     ],
     "subagentStop": [
       { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/lobby-signal.sh\"", "timeout": 5 }
+    ],
+    "postToolUse": [
+      { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/checklist-check.sh\" edit", "timeout": 10 },
+      { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/checklist-check.sh\" pr", "timeout": 10, "matcher": "Shell" }
     ],
     "stop": [
       { "command": "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/lobby-signal.sh\"", "timeout": 5 }

@@ -27,13 +27,94 @@ json_str() {
   printf '%s' "$s" | tr -d '\000-\010\013\014\016-\037'
 }
 
-# Path to the master checklist if it exists at the conventional location.
-# Empty string if missing.
+BTS_CHECKLIST_REL="docs/plans/00_master_checklist.md"
+
+# The default branch's remote-tracking ref (`origin/main`), or empty. Arg: dir.
+bts_default_ref() {
+  local ref
+  ref=$(git -C "$1" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null)
+  if [ -z "$ref" ]; then
+    for ref in origin/main origin/master; do
+      git -C "$1" rev-parse -q --verify "refs/remotes/$ref" >/dev/null 2>&1 && { printf '%s' "$ref"; return; }
+    done
+    return
+  fi
+  printf '%s' "$ref"
+}
+
+# ", N commits behind <ref>, whose copy differs" when the checkout at $1 is
+# behind the default ref $2 and its checklist differs from the ref's; else "".
+bts_checklist_staleness() {
+  local n
+  [ -n "$2" ] || return 0
+  n=$(git -C "$1" rev-list --count "HEAD..$2" 2>/dev/null) || return 0
+  [ "${n:-0}" -gt 0 ] || return 0
+  git -C "$1" cat-file -e "$2:$BTS_CHECKLIST_REL" 2>/dev/null || return 0
+  git -C "$1" show "$2:$BTS_CHECKLIST_REL" 2>/dev/null | cmp -s - "$1/$BTS_CHECKLIST_REL" && return 0
+  if [ "$n" = 1 ]; then
+    printf ', 1 commit behind %s, whose copy differs' "$2"
+  else
+    printf ', %s commits behind %s, whose copy differs' "$n" "$2"
+  fi
+}
+
+# Find the master checklist for a session. Arg: the session's working
+# directory (the hook input's `cwd`); without one, bts_root.
+# Prints two lines, the file to read and where it came from, or nothing:
+#   1. this checkout / this worktree: the copy in the folder the session runs in
+#   2. <origin/default> (this checkout has no copy): read with `git show`
+#      into a per-repo temp file
+#   3. primary checkout <path>: the parent of the git common dir, the only
+#      copy of a gitignored checklist, then $CLAUDE_PROJECT_DIR
+# The worktree comes first because $CLAUDE_PROJECT_DIR names the primary
+# checkout in a worktree session, and that checkout can be far behind (on
+# 2026-11-03 one was 181 commits behind and read 21 of 50 slices done when 55
+# of 56 were). A stale source says how far behind it is.
+bts_checklist_locate() {
+  local base="${1:-}" rel=$BTS_CHECKLIST_REL top gitdir common def primary out
+  { [ -n "$base" ] && [ -d "$base" ]; } || base=$(bts_root)
+  top=$(git -C "$base" rev-parse --show-toplevel 2>/dev/null)
+  if [ -z "$top" ]; then
+    [ -f "$base/$rel" ] && printf '%s\n%s\n' "$base/$rel" "this folder"
+    return 0
+  fi
+  def=$(bts_default_ref "$top")
+  if [ -f "$top/$rel" ]; then
+    gitdir=$(git -C "$top" rev-parse --absolute-git-dir 2>/dev/null)
+    common=$(git -C "$top" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+    if [ -z "$common" ] || [ "$gitdir" = "$common" ]; then
+      printf '%s\nthis checkout%s\n' "$top/$rel" "$(bts_checklist_staleness "$top" "$def")"
+    else
+      printf '%s\nthis worktree%s\n' "$top/$rel" "$(bts_checklist_staleness "$top" "$def")"
+    fi
+    return 0
+  fi
+  if [ -n "$def" ] && git -C "$top" cat-file -e "$def:$rel" 2>/dev/null; then
+    out="${TMPDIR:-/tmp}"
+    out="${out%/}/bytheslice-checklist-$(id -u)-$(printf '%s' "$top" | cksum | cut -d' ' -f1).md"
+    if git -C "$top" show "$def:$rel" > "$out" 2>/dev/null; then
+      printf '%s\n%s (this checkout has no copy)\n' "$out" "$def"
+      return 0
+    fi
+  fi
+  common=$(git -C "$top" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+  for primary in "${common%/.git}" "${CLAUDE_PROJECT_DIR:-}"; do
+    [ -n "$primary" ] && [ "$primary" != "$top" ] && [ -f "$primary/$rel" ] || continue
+    printf '%s\nprimary checkout %s%s\n' "$primary/$rel" "$primary" "$(bts_checklist_staleness "$primary" "$(bts_default_ref "$primary")")"
+    return 0
+  done
+  return 0
+}
+
+# Path to the master checklist (see bts_checklist_locate); empty if none.
+# $BTS_CHECKLIST, when set, wins: shop-status.sh locates once and every helper
+# below reads the same file. Optional arg: the session's working directory.
 bts_checklist_path() {
-  local root path
-  root=$(bts_root)
-  path="$root/docs/plans/00_master_checklist.md"
-  [ -f "$path" ] && printf '%s' "$path"
+  if [ -n "${BTS_CHECKLIST:-}" ]; then
+    [ -f "$BTS_CHECKLIST" ] && printf '%s' "$BTS_CHECKLIST"
+    return
+  fi
+  bts_checklist_locate "${1:-}" | sed -n 1p
 }
 
 # Count Prep checkboxes. Prints "<done> <total>" (e.g. "2 5").
@@ -82,42 +163,57 @@ bts_checklist_layout() {
 # A "unit" is one `## Stage N` heading (flat v4) OR one `## Pie N` heading
 # (nested v5). Prints "<done> <total>"; empty if neither heading style exists.
 #
-# Done-ness is heading-driven so it works regardless of whether a project
-# tracks status inline (checkbox on the heading line) or in a separate table:
-#   - a heading counts as done if its line carries a checked box `[x]`,
-#     a `~~strikethrough~~`, or a trailing `Status: Completed` / `Status: Done`.
+# A heading counts as done if its line carries a checked box `[x]`, a
+# `~~strikethrough~~`, or `Status: Completed` / `Complete` / `Done` / `Shipped`
+# (in a `<!-- Status: ... -->` note too). A pie also counts as done when it has
+# slices and every one of them is done: the pie rolls up from its slices.
+# This is the no-Node fallback; with Node, shop-status.sh counts through
+# mcp/checklist-format.js, the parser the kitchen and the Pass share.
 bts_unit_counts() {
-  local checklist layout pat
+  local checklist layout
   checklist=$(bts_checklist_path)
   [ -z "$checklist" ] && return
   layout=$(bts_checklist_layout)
   case "$layout" in
-    pie)   pat='^## +Pie[[:space:]]+[0-9]' ;;
-    stage) pat='^## +Stage[[:space:]]+[0-9]' ;;
-    *)     return ;;
+    pie|stage) ;;
+    *) return ;;
   esac
-  awk -v pat="$pat" '
-    BEGIN { done = 0; total = 0 }
-    $0 ~ pat {
+  awk -v layout="$layout" '
+    function is_done(s) { return (s ~ /\[[xX]\]/ || s ~ /~~/ || s ~ /[Ss]tatus:[[:space:]]*(Completed?|Done|Shipped)/) }
+    function close_pie() {
+      if (!open_pie) return
       total++
-      if ($0 ~ /\[[xX]\]/ || $0 ~ /~~/ || $0 ~ /[Ss]tatus:[[:space:]]*(Completed|Done)/) done++
+      if (pie_done || (slices > 0 && slices == slices_done)) done++
+      open_pie = 0
     }
-    END { if (total) printf "%d %d\n", done, total }
+    BEGIN { done = 0; total = 0; open_pie = 0 }
+    layout == "stage" && /^## +Stage[[:space:]]+[0-9]/ { total++; if (is_done($0)) done++; next }
+    layout == "pie" && /^## / {
+      close_pie()
+      if ($0 ~ /^## +Pie[[:space:]]+[0-9]/) { open_pie = 1; pie_done = is_done($0); slices = 0; slices_done = 0 }
+      next
+    }
+    layout == "pie" && open_pie && /^### +Slice[[:space:]]+[0-9]+\.[0-9]/ { slices++; if (pie_done || is_done($0)) slices_done++ }
+    END { close_pie(); if (total) printf "%d %d\n", done, total }
   ' "$checklist"
 }
 
 # Count v5 slices (`### Slice N.M`) and their checked state, mirroring
-# bts_unit_counts' heading-driven done detection. Prints "<done> <total>";
-# empty when the checklist has no `### Slice` headings (i.e. a flat v4 file).
+# bts_unit_counts' heading-driven done detection; a slice under a pie whose
+# heading is done counts as done, as the kitchen parser reads it. Prints
+# "<done> <total>"; empty when the checklist has no `### Slice` headings
+# (i.e. a flat v4 file).
 bts_slice_counts() {
   local checklist
   checklist=$(bts_checklist_path)
   [ -z "$checklist" ] && return
   awk '
-    BEGIN { done = 0; total = 0 }
+    function is_done(s) { return (s ~ /\[[xX]\]/ || s ~ /~~/ || s ~ /[Ss]tatus:[[:space:]]*(Completed?|Done|Shipped)/) }
+    BEGIN { done = 0; total = 0; pie_done = 0 }
+    /^## / { pie_done = ($0 ~ /^## +Pie[[:space:]]+[0-9]/ && is_done($0)) }
     /^### +Slice[[:space:]]+[0-9]+\.[0-9]/ {
       total++
-      if ($0 ~ /\[[xX]\]/ || $0 ~ /~~/ || $0 ~ /[Ss]tatus:[[:space:]]*(Completed|Done)/) done++
+      if (pie_done || is_done($0)) done++
     }
     END { if (total) printf "%d %d\n", done, total }
   ' "$checklist"
