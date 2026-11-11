@@ -16,6 +16,18 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [6.6.1] - 2026-11-11
+
+**A plan commit is not a merge.** On its first live run the project board read two planned pies as fully merged, because a plan commit whose squash subject merely named them (`chore(plans): add Pie 28 chaptered clip selection (#254)`) was taken for that pie's boundary merge. The same reading in the collision fold hid any real whole-pie branch of those pies from `bts_status`, `bts_claim` and the start guard.
+
+### Fixed
+
+- **Only the boundary shape merges a pie.** A squash subject settles a pie only when it starts with the pie (`Pie 23: Video GIF Posting (#251)`, the boundary PR's title) and records no planning change: never a `chore`, `docs`, `plan` or `spec` commit that is not scoped to a pie, never a planning phrase (`add ... plans`, `update the roadmap`), never a name that is only a plan noun. A feature whose name merely contains such a word (`Pie 7: Subscription plans (#42)`) still merges its pie. A slice squash counts in the conductor shape (`feat(pie-7): 7.1 ... (#40)`) or the slice PR shape (`Slice 7.1: ... (#40)`). The collision fold and the board use the same rule; status drift reads only conductor subjects, which plan commits never match.
+- **A pie-boundary squash settles every slice of its pie** up to when it landed (the default branch is now read with commit times), including a slice with commits on a stray duplicate branch; work after the merge still shows.
+- **An old `/sell-pie` start holds no pie on its own.** A `pie.started` row (an older plugin wrote one for the first open pie) holds the pie only with a branch of that pie on record; a pie claim still holds it.
+
+---
+
 ## [6.6.0] - 2026-11-11
 
 **The project board.** One live view of every pie and slice, shared by every chat, worktree and branch of a project, so an agent in any session can see what the others are doing before it starts. It is derived on each read from the same sources as the 6.5.0 collision guard (the shared ledger and its claims, every local and remote branch and worktree, open PRs through `gh`), so nothing has to be kept up to date by hand.
