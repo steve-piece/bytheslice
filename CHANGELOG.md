@@ -16,9 +16,9 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
-## [6.2.0] - 2026-11-03
+## [6.4.0] - 2026-11-11
 
-**The checklist reads true, says when it cannot, and is updated before every PR.** A long-lived client checklist read 21 of 50 slices done in the session banner when 55 of 56 were. The banner read a primary checkout 181 commits behind, and the kitchen, the Pass and the banner each counted the same file differently. All three now share one parse, a format check names the lines none of them can read, and a PR that skips the checklist draws a warning. Nothing blocks. The decisions are recorded in [docs/architecture.md, "The checklist format"](docs/architecture.md#the-checklist-format-62).
+**The checklist reads true, says when it cannot, and is updated before every PR.** A long-lived client checklist read 21 of 50 slices done in the session banner when 55 of 56 were. The banner read a primary checkout 181 commits behind, and the kitchen, the Pass and the banner each counted the same file differently. All three now share one parse, a format check names the lines none of them can read, and a PR that skips the checklist draws a warning. Nothing blocks. The decisions are recorded in [docs/architecture.md, "The checklist format"](docs/architecture.md#the-checklist-format-64).
 
 ### Added
 
@@ -44,6 +44,58 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 - **A slice listed twice counted twice** (a Prep line and its own `### Slice` heading). It counts once, at the furthest status.
 - `Complete` and `Partial` are read as statuses, and a slice id with one letter (`9.2a`) is a slice in every parser.
 - Flat v4 checklists (`## Stage N`, body `**Status:** Completed` lines, the table-only stage file) read as before.
+
+---
+
+## [6.3.0] - 2026-11-06
+
+**Enabled gates are binding.** The quality gates a project runs are the operator's decision, made at setup. When one fails during a run, agents now fix the code until it passes, even when the cause is a shared design token or a file the slice only consumes, instead of handing it back as an open decision or a follow-up "for the operator's call". It came from a live run where a slice-tester measured an error color at 4.23:1 and a control border at 1.49:1, and the conductor reported both as "out of slice scope, app-wide design tokens, your call". The same run surfaced two Pass false positives, fixed here.
+
+### Added
+
+- **`gates` config block** (`skills/setup-shop/references/bytheslice-config-schema.md`). `gates.enforcement: "fix"` states the rule and is the default (the only value; there is no global off switch). `gates.advisory` lists gate classes the operator marked advisory: they still run and report, but never fail a slice or enter the fix loop. `gates.declared` adds project gates `slice-verifier` runs once at tier 3 (`declared.<name>`), and pre-push commands no other check covers run the same way. Unrelated to the top-level `enforcement` key retired in 6.1.0.
+- **The rule, in one place** (`skills/sell-slice/references/quality-gates.md`): the gate classes (lint, typecheck, build, tests, e2e, visual, design-system, accessibility including WCAG AA contrast, ci, declared), what counts as enabled, the routing rule, "the threshold makes the design call" for value failures such as contrast, and the only escalations left: a destructive fix, a missing secret, a new dependency (the approval batch), an exhausted fix cap.
+- **`/setup-shop` Q-gates**, asked in every flow: the operator is told once that enabled gates are binding, then picks any advisory classes and declared gates. `gates.enforcement: "fix"` is always written uncommented.
+- **Feature intake rule 4**, "Enabled quality gates are binding", in the block every project's rules file carries, so agents outside the bakers read it too.
+- **`tests/quality-gates/`**: a lockstep test that the schema, the example config, the rule doc, the setup-shop questions, the intake block (and the eval fixture's copy) and every conductor, tester, verifier, fixer and UI review agent state the same rule.
+- **`failing-gate-gets-fixed` eval**: a slice-tester contrast failure on a shared `--error` token must be fixed in `src/theme.css`, with no question to the operator and no out-of-scope or follow-up framing.
+
+### Changed
+
+- **`slice-verifier`** routes every enabled-gate failure to `fix_targets`. Statics findings are no longer warnings: `E1` to `E3` fail `design_system` and `E4`, `E5` fail the new `a11y_static` check. Every statics finding is confirmed against the source before it fails the gate (a semantic-utility `E1` also against the Tailwind config, presets and `@theme`); a finding the source contradicts is a scanner miss and is dropped, a confirmed one still fails. `warnings` now holds only advisory-class findings and a statics run with no token catalog. Fix targets name the root-cause file, inside the slice diff or not; the greps still scan only the diff.
+- **`slice-tester`** names a failing token and its file in `fix_targets` (a shared token is still the slice's target) and never calls a gate failure out of scope; an advisory class goes to a new `warnings` field.
+- **`fix-attempter`, `ui-fix-attempter`, `ci-fix-attempter`** fix a gate's root cause where it lives, set a failing value to the nearest one that clears the threshold, and never escalate for scope or with `creative_direction` for a failure a threshold decides. `ci-fix-attempter` fixes the cause of a flaky test instead of escalating it, and picks the nearest passing token before asking for a new one.
+- **`break-ui-runner` and `design-critic`** tag a finding that fails an enabled gate with `gate` (accessibility or design-system): it is at least `Ugly` or `P1`, always a fix target, and never `Fragile`, a decision or an open question.
+- **`/sell-slice`, `/sell-pie`, `/box-it-up`**: a failing enabled gate goes to the fix loop without asking and is never a HITL, `creative_direction`, a batched approval or a follow-up; Progress Reports, closeouts and PR bodies never present one as "your call". It reaches the operator only at cap exhaustion (named as still failing), or for a destructive fix or a missing secret. Pie-boundary design-critique gate findings are fixed without the "fix now or defer" question in every delivery mode. The 3-loop and 3-round caps and the cap-exhaustion HITL are unchanged.
+- **`rules-loader`** resolves `gates.*` and passes them on; an unknown advisory class is dropped, and `gates.enforcement` always resolves to `fix`.
+- Workflow A review fixes are labelled with the `review` step and count against no fix cap.
+
+### Fixed
+
+- **Tailwind v3 theme colors read as unknown tokens.** `verify-frontend-statics.sh` now reads the color keys of every `colors:` object literal in `tailwind.config.*` (theme or extend, nested, `DEFAULT` naming its parent), so `bg-brand-500` against `colors: { brand: { 500: '#123456' } }` passes. Those keys count for utilities only, never for `var(--x)`. A new statics fixture covers it.
+- **A multi-line tag ended at an arrow.** The statics tag reader took the `>` of an `=>` prop (or one inside a quoted value) as the end of an `<img>` or `<input>` opening tag, so an `alt` or `aria-label` after it read as missing (`E4`, `E5`). It now ends the tag at the first `>` outside quotes and `{}` expressions. A new statics fixture covers it.
+- **A fixed token could stay failing on re-verify.** When a fix defined a missing token in a shared stylesheet (or changed `tailwind.config.*`, the motion scales or `docs/design-system.md`), `slice-verifier` re-scanned only the touched files and carried the consumer's finding forward, so a correct root-cause fix stayed red and could trip the repeated-signature bail. A definition fix now re-scans every file that held a `design_system` or `a11y_static` finding in the prior verdict as well.
+- **A label with spaces around `=` read as missing.** `htmlFor = "email"` and `id = "email"` (valid JSX) did not bind, so the input reported `E5`. The scanner now accepts whitespace around `=` in both. A new statics fixture covers it.
+- **An advisory CI check could block the merge forever.** `/box-it-up` Phase 3 treated any red check as not done, so a check the operator marked advisory, correctly left unfixed, kept the PR in the fix loop. Phase 3 now classifies each failed check: a non-required check in a `gates.advisory` class is advisory (listed, never fixed, outside the cap), and when only those are red CI counts as green for the merge step. A failed required check is always binding. The slice-merge and ship closeouts, and the ship-once pie-local check (where a job branch protection requires stays binding), use the same rule.
+- **A pie-boundary gate fix was never re-measured.** Critique fix rounds were verified by `slice-verifier` alone, which runs no rendered check, so a contrast or target-size fix that still failed could reach closeout. `design-critic` gains `mode: "recheck"` (re-runs only the measurements behind the given findings, on their surfaces, and returns each `fixed` or `open`); every critique fix round at the pie boundary, and every gate revision at the Library Preview Gate, now ends with one, and a finding is resolved only when it comes back `fixed`.
+- **Advisory findings could still be fixed.** A `design-critic` finding marked `advisory: true` is now only listed, as an advisory warning, at the Library Preview Gate (no `component-crafter` revision) and at the pie boundary in every delivery mode (the ship-once branch had still sent every P0 and P1 finding to `ui-fix-attempter`, using critique rounds on a class the operator relaxed). The `design-critic` `fix_targets` contract and the `/sell-slice` and `/pizza-party` wording say the same.
+- **The Pass counted Workflow A review fixes against the Workflow B cap.** A slice fix spawn now counts only once the ledger holds a `slice-tester` or `slice-verifier` verdict for the slice, and never under a `build:`, `review:` or `prep:` label, so four reviewer-loop fixes no longer make Workflow B's first loop read "attempt 5 of cap 3". The activity-log count and the slice rollup follow the same rule and now count `ui-fix-attempter` too.
+- **`builder-context` flagged documented inputs.** A re-verification `slice-verifier` prompt carrying the fix's `files_changed` (as `/sell-slice` 5.4 requires), and reviewer prompts carrying the implementer's output, no longer warn; `builder transcript` still does. For the `slice-tester`, `files_changed` counts only as a key holding entries, so an instruction that merely names it is not builder context.
+
+---
+
+## [6.1.3] - 2026-11-05
+
+**CI now runs the code checks, not just the release checks.** The 28 mod test files, 165 node tests and the frontend statics fixtures only ran on someone's machine, and the mod's type check could not run at all.
+
+### Added
+
+- **Checks workflow** (`.github/workflows/checks.yml`) on every pull request and push to main: the mod type check, `claude plugin validate` for the plugin and marketplace, `claude plugin test .` under Claude Code 2.1.317, every `tests/**/*.test.js` suite and `tests/frontend-statics/run.sh`.
+- **Vendored engine types** (`types/engine/claude-code/index.d.ts`, written by Claude Code 2.1.317), so the type check needs no loaded session. Refresh it from a newer engine and bump the CLI pin in the workflow together.
+
+### Fixed
+
+- `tsconfig.json` extended `.claude-plugin/types/tsconfig.json`, which only exists after the engine loads the mod from a folder, so `tsc` failed on a fresh clone and in CI. It now stands alone and reads the vendored types.
 
 ---
 

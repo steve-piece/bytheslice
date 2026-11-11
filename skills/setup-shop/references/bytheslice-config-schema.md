@@ -102,6 +102,14 @@ When two sources disagree, the higher-precedence source wins. The orchestrator l
     "tier": "standard"                // "standard" | "lean" | "auto"
   },
 
+  // Enabled quality gates are binding: a failing one goes to the fix loop, never to the operator.
+  // Read by every conductor, tester, verifier, fixer and UI review agent.
+  "gates": {
+    "enforcement": "fix",             // the only value; written so the rule is visible in the project's own config
+    "advisory": [],                   // gate classes the operator marked advisory: reported, never fixed or failed on, e.g. ["visual"]
+    "declared": []                    // extra project gates slice-verifier runs, binding: "pnpm check:links" or { "name", "command" }
+  },
+
   // Shadcn-style UI registries searched before the stock shadcn registry. Empty = stock only.
   "ui": {
     "registries": [],                 // the operator's own: "@namespace" strings or { name, item, catalog?, theme?, notes? }
@@ -226,6 +234,16 @@ How a finished slice reaches `main`, and how long a slice may run before the con
   - `"standard"` - the full line: CI, `@feature`, `@regression-core` and `@visual` E2E, coverage, design-system compliance, schema drift when a database exists.
   - `"lean"` - lint, typecheck, unit tests, build and one `@smoke` Playwright spec (`test:e2e:smoke`); design-system compliance only when a design system exists. Pre-push and slice-verifier run the same set.
   - `"auto"` - lean when the checklist has at most 3 feature pies and nothing touches payments, else standard. `/pizza-party` sets it.
+
+### `gates`
+
+The gates a project runs are the operator's decision, made at setup. When an enabled gate fails during a run, agents fix the code until it passes; they never report the failure as an open decision, a follow-up or "the operator's call". The full rule, the gate classes and the escalation exceptions live in [`quality-gates.md`](../../sell-slice/references/quality-gates.md).
+
+- **`enforcement`** *(string, default `"fix"`)* - `"fix"` is the only value: a failing enabled gate goes to the fix loop (3 local loops per slice, 3 CI rounds per PR, unchanged), including when its root cause is a shared design token or a file the slice only consumes. `/setup-shop` writes it explicitly so the rule sits in the project's own config, where every agent reads it. Any other value is read as `"fix"`, with one line in the resolved-config log. There is no global off switch: relax one gate class with `advisory`, or turn the gate off where it is configured (for example `verification.e2e.visual: "off"`). This key is unrelated to the top-level `enforcement` key removed in 6.1.0, which is still ignored.
+- **`advisory`** *(string[], default `[]`)* - gate classes the operator marked advisory: `lint`, `typecheck`, `build`, `tests`, `e2e`, `visual`, `design-system`, `accessibility`, `ci`, `declared`. They still run, and their findings are listed as warnings, but they never fail a slice and never enter the fix loop. `ci_integrity` and the manifest backstop cannot be advisory. Only the operator sets this; an agent never adds a class to it.
+- **`declared`** *(array, default `[]`)* - extra project gates. An entry is a command string (`"pnpm check:links"`) or `{ "name": "links", "command": "pnpm check:links" }`. `slice-verifier` runs each once at tier 3 (check key `declared.<name>`, the name defaulting to the command) and routes a failure to the fix loop like any built-in gate. Every command the project's `.husky/pre-push` hook or CI workflows already run counts as enabled whether or not it is listed here.
+
+The escalations that stay: a fix that is destructive (`destructive_operation`), one that needs a secret only the operator holds (`external_credentials`), one that needs a new dependency (the slice's approval batch), and an exhausted fix cap (the cap-exhaustion HITL).
 
 ### `ui`
 

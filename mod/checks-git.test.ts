@@ -7,13 +7,18 @@ import { branchPie, fixKind, fixSpawnOf, judgeCommitOnMain, judgeFixCap } from '
 import { parseChecklist } from './checklist.ts'
 import { CHECKLIST_FIXTURE } from './fixtures/checklist.fixture.ts'
 import { projectLedger } from './ledger-projection.ts'
-import { ACTIVITY, activityLine, bashResult, engineLoops, rowsOf, spawn, stage, status, warnsOf } from './testing.tsx'
+import { ACTIVITY, HEAD, LEDGER, activityLine, bashResult, endTurn, engineLoops, ledgerLine, ledgerText, rowsOf, spawn, stage, status, warnsOf } from './testing.tsx'
 
-const fixStart = (aid: string, slice = '5.1') =>
-  activityLine({ t: 10, sid: 's', ev: 'SubagentStart', agent: 'bytheslice:fix-attempter', aid, pie: 5, slice })
+const fixStart = (aid: string, slice = '5.1', t = 10, label?: string) =>
+  activityLine({ t, sid: 's', ev: 'SubagentStart', agent: 'bytheslice:fix-attempter', aid, pie: 5, slice, ...(label ? { label } : {}) })
+
+/** A failing slice-verifier verdict at time `t`: Workflow B has begun for the slice, so its fix loops count. */
+const failing = (slice = '5.1', t = 1) =>
+  ledgerLine(t, 'verdict', slice, { gate: 'slice-verifier', overall: 'fail', fix_targets: ['implementer | a.ts | typecheck: x'], head: HEAD })
 
 test('the fourth fix-attempter spawn on a slice warns and still returns a model; the third does not', async ($, on) => {
   const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  world.files[LEDGER] = ledgerText([failing()])
   engineLoops(on, ['f1', 'f2', 'f3', 'f4'])
   await start($)
   for (const n of [1, 2, 3]) {
@@ -29,6 +34,7 @@ test('the fourth fix-attempter spawn on a slice warns and still returns a model;
 
 test('a fourth fix spawn adds exactly one HITL inbox item, asked in chat; a fifth adds none', async ($, on) => {
   const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  world.files[LEDGER] = ledgerText([failing()])
   const session = mock.session(on)
   engineLoops(on, ['f1', 'f2', 'f3', 'f4', 'f5'])
   await start($)
@@ -67,11 +73,37 @@ test('a fourth fix spawn adds exactly one HITL inbox item, asked in chat; a fift
 
 test('the activity log counts fix attempts made before this session', async ($, on) => {
   const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  world.files[LEDGER] = ledgerText([failing('5.1'), failing('5.2')])
   world.files[ACTIVITY] = [fixStart('a'), fixStart('b'), fixStart('c'), fixStart('d', '5.2')].join('')
   engineLoops(on, ['f4', 'x1'])
   await start($)
   await spawn($, 'bytheslice:fix-attempter', 'P5 S5.1 fix: again')
   await spawn($, 'bytheslice:fix-attempter', 'P5 S5.2 fix: first here')
+  expect(warnsOf(world)).toEqual([['fix-loop-cap', '5.1']])
+})
+
+test('Workflow A review fixes count against no cap: before any verify verdict, and under a build or review label', async ($, on) => {
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
+  // Four reviewer-loop fixes in an earlier session, before verify-once began (one labelled review, one build).
+  world.files[ACTIVITY] = [
+    fixStart('a', '5.1', 1),
+    fixStart('b', '5.1', 2, 'P5 S5.1 review: fix header caps'),
+    fixStart('c', '5.1', 3),
+    fixStart('d', '5.1', 4, 'P5 S5.1 build: fix font loader'),
+  ].join('')
+  engineLoops(on, ['r1', 'r2', 'v1', 'f1', 'f2', 'f3', 'r3', 'f4'])
+  await start($)
+  // Two more in this session, still in Workflow A: no verdict yet, so neither counts.
+  await spawn($, 'bytheslice:fix-attempter', 'P5 S5.1 review: fix submit ordering')
+  await spawn($, 'bytheslice:fix-attempter', 'P5 S5.1 fix: no verdict yet')
+  expect(warnsOf(world)).toEqual([])
+  // Workflow B starts with a failing verifier verdict; loops 1 to 3 are silent, a review fix still is, loop 4 warns.
+  await spawn($, 'bytheslice:slice-verifier', 'P5 S5.1 verify: gates', { model: 'sonnet', prompt: 'Manifest and Exit criteria.' })
+  await endTurn($, '{"overall": "fail", "fix_targets": ["implementer | a.ts | typecheck: x"]}', 'v1')
+  for (const n of [1, 2, 3]) await spawn($, 'bytheslice:ui-fix-attempter', `P5 S5.1 fix: loop ${n}`)
+  await spawn($, 'bytheslice:fix-attempter', 'P5 S5.1 review: one more review fix')
+  expect(warnsOf(world)).toEqual([])
+  await spawn($, 'bytheslice:fix-attempter', 'P5 S5.1 fix: loop 4')
   expect(warnsOf(world)).toEqual([['fix-loop-cap', '5.1']])
 })
 
@@ -130,9 +162,15 @@ test('the pure parts: fix kinds, branch pies, attempts and the main-branch judgm
   expect(branchPie('feature/pie/12')).toBe(12)
   expect(branchPie('main')).toBeNull()
   const checklist = parseChecklist(CHECKLIST_FIXTURE)
-  const ledger = projectLedger([], [], checklist)
+  const verdictRow = JSON.parse(failing('5.1'))
+  const ledger = projectLedger([verdictRow], [], checklist)
   const view = { checklist, ledger, branch: 'main', counts: { fix: { '5.1': 2 }, ci: {} } }
   expect(fixSpawnOf({ subagentType: 'bytheslice:fix-attempter', description: 'unlabelled' }, view)).toEqual({ kind: 'fix', key: '5.1', attempt: 3 })
+  expect(fixSpawnOf({ subagentType: 'bytheslice:ui-fix-attempter', description: 'P5 S5.1 fix: loop 3' }, view)).toEqual({ kind: 'fix', key: '5.1', attempt: 3 })
+  expect(fixSpawnOf({ subagentType: 'bytheslice:fix-attempter', description: 'P5 S5.1 review: fix' }, view)).toBeNull()
+  expect(fixSpawnOf({ subagentType: 'bytheslice:fix-attempter', description: 'P5 S5.2 fix: no verdict' }, view)).toBeNull()
+  expect(fixSpawnOf({ subagentType: 'bytheslice:fix-attempter', description: 'unlabelled' }, { ...view, ledger: projectLedger([], [], checklist) })).toBeNull()
+  expect(fixSpawnOf({ subagentType: 'bytheslice:fix-attempter', description: 'unlabelled' }, { ...view, ledger: null })).toEqual({ kind: 'fix', key: '5.1', attempt: 3 })
   expect(fixSpawnOf({ subagentType: 'bytheslice:ci-fix-attempter', description: 'P6 ci round' }, view)).toEqual({ kind: 'ci', key: '6', attempt: 1 })
   expect(judgeFixCap({ kind: 'fix', key: '5.1', attempt: 3 })).toBeNull()
   expect(judgeFixCap({ kind: 'fix', key: '5.1', attempt: 5 })?.key).toBe('fix|5.1|5')

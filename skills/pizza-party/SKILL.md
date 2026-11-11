@@ -71,7 +71,7 @@ Then write the ticket: the brief verbatim, the **Answers**, and an **Acceptance*
 }
 ```
 
-   `libraryGate: "off"` is safe here because ship-once runs the design critique at every pie boundary and fixes its P0 and P1 findings itself. The operator's own `ui.registries` in `~/.bytheslice/defaults.json` still apply first.
+   `libraryGate: "off"` is safe here because ship-once runs the design critique at every pie boundary and fixes its P0 and P1 findings itself (findings in a class the operator marked advisory are only listed). The operator's own `ui.registries` in `~/.bytheslice/defaults.json` still apply first.
 2. Run `/setup-shop --unattended --ticket <ticket path> --config <config path>`: Flow B from the parent folder for a new app (the scaffolder creates the app folder), Flow C inside an existing one. It scaffolds, commits on `main`, merges the run config into `bytheslice.config.json` and writes the Feature intake block, all without asking.
 3. Move the ticket to `<app>/docs/pizza-party/order.md` (and delete the `pending/<name>/` folder). From here on every phase runs inside the app folder.
 4. Create the private GitHub repository and push `main`: `gh repo create <name> --private --source . --remote origin --push` (use the wrapper form the operator's environment requires for `gh`, if any). Then cut the ship branch, `ship/<name>` (`delivery.shipBranch`), from `origin/main`. Plans stay where [git-worktree-standard.md, "Where the plans live"](../cook-pizzas/references/git-worktree-standard.md) puts them: with the default gitignored `docs/plans/`, every checklist flip happens in this primary checkout's `$PLANS`, never in a pie worktree.

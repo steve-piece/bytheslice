@@ -77,6 +77,9 @@ const SEEDS: Seed[] = [
   {
     code: 'fix-loop-cap',
     before: world => {
+      world.files[LEDGER] = ledgerText([
+        ledgerLine(5, 'verdict', '5.1', { gate: 'slice-verifier', overall: 'fail', fix_targets: ['implementer | a.ts | x'], head: HEAD }),
+      ])
       world.files[ACTIVITY] = ['a', 'b', 'c']
         .map(aid => activityLine({ t: 10, sid: 's', ev: 'SubagentStart', agent: 'bytheslice:fix-attempter', aid, pie: 5, slice: '5.1' }))
         .join('')

@@ -34,6 +34,18 @@ export const STALE_MS = 6 * 60 * 60 * 1000
 export const GATES: readonly PassGate[] = ['slice-tester', 'slice-verifier']
 const FIXERS = new Set(['fix-attempter', 'debug-instrumenter'])
 
+/** The fixers a Workflow B fix loop dispatches: one start is one loop. */
+const LOOP_FIXERS: ReadonlySet<string> = new Set(['fix-attempter', 'ui-fix-attempter'])
+
+/** Dispatch steps of Workflow A (prep, build, per-item review): a fixer started under one counts against no fix cap. */
+export const WORKFLOW_A_STEPS: ReadonlySet<string> = new Set(['prep', 'build', 'review'])
+
+/** The step a `P<pie> S<slice> <step>:` dispatch label names, lowercased (`build`, `review`, `fix`), or null. */
+export function stepOf(text: unknown): string | null {
+  if (typeof text !== 'string') return null
+  return /^P\d+ S\d+\.\d+ ([A-Za-z]+)\s*:/.exec(text.trim())?.[1]?.toLowerCase() ?? null
+}
+
 /** An agent type without its plugin prefix (`bytheslice:slice-tester` reads `slice-tester`). */
 export function roleOf(type: string | undefined): string {
   if (typeof type !== 'string' || type === '') return 'agent'
@@ -131,12 +143,40 @@ export function liveAgents(activity: readonly ActivityRow[], now: number): PassL
   return live.sort((a, b) => a.startedAt - b.startedAt)
 }
 
-/** Fix-attempter starts in the activity log for one slice (one per agent id). */
-export function fixLoops(activity: readonly ActivityRow[], slice: string): number {
+/**
+ * When Workflow B began for a slice: the time of its first slice-tester or
+ * slice-verifier verdict, or null before any. Fix loops count from here on.
+ */
+export function verifyStartOf(rows: readonly LedgerRow[], slice: string): number | null {
+  let first: number | null = null
+  for (const row of rows) {
+    if (row.ev !== 'verdict' || row.slice !== slice || verdictOf(row) === null) continue
+    first = first === null ? row.t : Math.min(first, row.t)
+  }
+  return first
+}
+
+/**
+ * Workflow B fix loops for one slice: fix-attempter and ui-fix-attempter
+ * starts in the activity log (one per agent id). A start whose dispatch label
+ * names a Workflow A step (`build`, `review`, `prep`) never counts; a start
+ * row carries no label of its own, so it takes the latest labelled row of the
+ * same session and agent type before it (its Agent dispatch), as the kitchen
+ * log attributes it. With `since`, only starts at or after it count, and
+ * `null` (no Workflow B verdict yet) counts none; without it, every other
+ * start counts.
+ */
+export function fixLoops(activity: readonly ActivityRow[], slice: string, since?: number | null): number {
+  if (since === null) return 0
   const aids = new Set<string>()
+  const dispatched = new Map<string, string>()
   let unnamed = 0
   for (const row of dedupeActivity(activity)) {
-    if (row.ev !== 'SubagentStart' || row.slice !== slice || roleOf(row.agent) !== 'fix-attempter') continue
+    const key = `${row.sid ?? ''}|${row.agent ?? ''}`
+    if (typeof row.label === 'string' && row.label !== '') dispatched.set(key, row.label)
+    if (row.ev !== 'SubagentStart' || row.slice !== slice || !LOOP_FIXERS.has(roleOf(row.agent))) continue
+    if (since !== undefined && row.t < since) continue
+    if (WORKFLOW_A_STEPS.has(stepOf(row.label ?? dispatched.get(key)) ?? '')) continue
     if (typeof row.aid === 'string' && row.aid !== '') aids.add(row.aid)
     else unnamed += 1
   }
@@ -220,8 +260,8 @@ export function hitlOf(rows: readonly LedgerRow[]): PassHitl {
 /** What a slice.rollup row keeps: per-role agent counts, tokens and time, and fix loops. */
 export type SliceRollup = { agents: Record<string, PassRoleTotals>; fixLoops: number; tokens: number; ms: number }
 
-/** Totals one slice's activity rows, so the ledger keeps them after the log rotates. */
-export function rollup(activity: readonly ActivityRow[], slice: string): SliceRollup {
+/** Totals one slice's activity rows, so the ledger keeps them after the log rotates; `since` is as `fixLoops` reads it. */
+export function rollup(activity: readonly ActivityRow[], slice: string, since?: number | null): SliceRollup {
   const agents: Record<string, PassRoleTotals> = {}
   const counted = new Set<string>()
   const totals = (role: string): PassRoleTotals => (agents[role] ??= { count: 0, tok: 0, ms: 0 })
@@ -243,7 +283,7 @@ export function rollup(activity: readonly ActivityRow[], slice: string): SliceRo
       ms += row.ms ?? 0
     }
   }
-  return { agents, fixLoops: fixLoops(activity, slice), tokens, ms }
+  return { agents, fixLoops: fixLoops(activity, slice, since), tokens, ms }
 }
 
 function verdictOf(row: LedgerRow): PassVerdict | null {
@@ -353,7 +393,7 @@ function sliceView(
     seen(row.t)
   }
   const rolled = rollupOf(own)
-  const counted = fixLoops(acts, id)
+  const counted = fixLoops(acts, id, verifyStartOf(own, id))
   const summed = rollup(acts, id).tokens
   const begun: number | null = startedAt
   const ended: number | null = doneAt

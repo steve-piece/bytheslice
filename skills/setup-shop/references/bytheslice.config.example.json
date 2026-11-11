@@ -52,6 +52,13 @@
     // "tier": "standard"
   },
 
+  // Enabled quality gates are binding: a failing gate is fixed, never handed to you as a decision or a follow-up.
+  "gates": {
+    "enforcement": "fix"                     // the only value; relax one gate class with "advisory" instead
+    // "advisory": [],                       // e.g. ["visual"]: still run and reported, never fixed or failed on
+    // "declared": []                        // extra gates slice-verifier runs: "pnpm check:links" or { "name": "links", "command": "pnpm check:links" }
+  },
+
   // Your own shadcn-style registries, searched before stock shadcn. See the schema doc for the entry shape.
   "ui": {
     // "registries": [],

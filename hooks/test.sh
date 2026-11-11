@@ -203,7 +203,7 @@ EOF
 CLAUDE_PROJECT_DIR=$FIX run_hook "$SHOP_STATUS" '{}'
 assert_exit "shop-status nested exit 0" 0
 assert_contains "shop-status nested dashless Prep counts" "Prep: 2/3 boxes checked"
-# With Node the counts come from the shared parse (6.2): Prep is Pie 1 and its
+# With Node the counts come from the shared parse (6.4): Prep is Pie 1 and its
 # three slices count, as in the kitchen and the Pass.
 assert_contains "shop-status nested pie counts" "pies: 3 total, 1 completed / 2 open"
 assert_contains "shop-status nested slice counts" "slices: 7 total, 5 completed / 2 open"
@@ -1079,7 +1079,7 @@ if printf '%s' "$OUT" | python3 -c 'import json,sys; assert "bytheslice shop sta
 rm -rf "$FIX"
 
 ####################################################################
-# Checklist source, shared counts and the warn-only checklist hooks (6.2)
+# Checklist source, shared counts and the warn-only checklist hooks (6.4)
 ####################################################################
 
 echo

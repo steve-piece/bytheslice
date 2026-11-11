@@ -5,7 +5,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { parseChecklist } from './checklist.ts'
 import { CHECKLIST_FIXTURE } from './fixtures/checklist.fixture.ts'
-import { dedupeActivity, findSlice, liveAgents, parseActivity, projectLedger, rollup, STALE_MS, statusOf } from './ledger-projection.ts'
+import { dedupeActivity, findSlice, liveAgents, parseActivity, projectLedger, rollup, STALE_MS, statusOf, stepOf, verifyStartOf } from './ledger-projection.ts'
 import { ACTIVITY, ROTATED, activityLine, stage, status } from './testing.tsx'
 import type { ActivityRow, LedgerRow } from './types'
 
@@ -75,6 +75,30 @@ test('the fix loop counts fix-attempter starts in the activity log only', () => 
   const view = findSlice(projectLedger(rows, acts, C, 10), '5.2')
   expect(view?.fixLoop).toBe(2)
   expect(findSlice(projectLedger(rows, [], C, 10), '5.2')?.fixLoop).toBe(0)
+})
+
+test('the fix loop counts only Workflow B: from the first verdict on, never under a Workflow A label, ui-fix-attempter included', () => {
+  const labelled = (t: number, role: string, aid: string, label: string): ActivityRow => ({ ...start(t, role, aid), label })
+  const acts: ActivityRow[] = [
+    start(1, 'fix-attempter', 'a1'),
+    labelled(2, 'fix-attempter', 'a2', 'P5 S5.2 review: fix header caps'),
+    labelled(6, 'fix-attempter', 'b1', 'P5 S5.2 fix: loop 1'),
+    labelled(7, 'ui-fix-attempter', 'b2', 'P5 S5.2 fix: loop 2'),
+    labelled(8, 'fix-attempter', 'a3', 'P5 S5.2 build: fix font loader'),
+    // An unlabelled start takes its dispatch's label, as the kitchen log writes them: this one is a review fix.
+    { t: 9, sid: 's', ev: 'PreToolUse', agent: 'bytheslice:fix-attempter', label: 'P5 S5.2 review: fix caps', pie: 5, slice: '5.2' },
+    start(9, 'fix-attempter', 'a4'),
+  ]
+  // No verify verdict yet: Workflow B has not begun, so nothing counts.
+  expect(findSlice(projectLedger([row(1, 'slice.started', '5.2')], acts, C, 10), '5.2')?.fixLoop).toBe(0)
+  const rows = [verdict(5, 'slice-verifier', 'fail')]
+  expect(findSlice(projectLedger(rows, acts, C, 10), '5.2')?.fixLoop).toBe(2)
+  expect(verifyStartOf(rows, '5.2')).toBe(5)
+  expect(verifyStartOf(rows, '5.3')).toBeNull()
+  expect(rollup(acts, '5.2', 5).fixLoops).toBe(2)
+  expect(rollup(acts, '5.2', null).fixLoops).toBe(0)
+  expect(stepOf('P5 S5.2 Review: x')).toBe('review')
+  expect(stepOf('review: x')).toBeNull()
 })
 
 test('a rollup totals agents by role, tokens, time and fix loops, and survives rotation', () => {
