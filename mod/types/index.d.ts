@@ -310,6 +310,37 @@ export type PassReplay = {
 }
 
 /** One other session's roadmap entry in `$.store` (`strip:<projectKey>:<sid>`): where it is, and when it said so. */
+/** Where a slice stands across every chat, worktree and branch of the project. `built` reads "built, unmerged". */
+export type PassBoardState = 'queued' | 'claimed' | 'building' | 'built' | 'in review' | 'merged'
+
+/** Who holds a slice or a pie: the session (when the ledger names one), its branch and worktree, and how it stands. */
+export type PassBoardHolder = { sid: string | null; branch: string | null; worktree: string | null; liveness: 'live' | 'stale' | 'idle' | 'ended' | null }
+
+/** One slice on the project board. `holders` counts the sessions and branches on it; more than one is a collision. */
+export type PassBoardSlice = {
+  id: string
+  name: string
+  state: PassBoardState
+  holders: number
+  /** Every session holding it (a branch with no session counts in `holders` only). */
+  sids: string[]
+  holder: PassBoardHolder | null
+  pr: { number: number; url: string } | null
+  lastT: number | null
+  goal: string | null
+  /** Uncommitted files and unpushed commits in the holder's worktree, when counted. */
+  dirty: number | null
+  ahead: number | null
+}
+
+/** The project board: derived on read from the ledger, git and gh, never stored in a file. */
+export type PassBoard = {
+  at: number
+  pies: { n: number; name: string; done: boolean; slices: PassBoardSlice[]; pieHolders: PassBoardHolder[] }[]
+  /** False when gh was unavailable, so no slice can read in review. */
+  prsChecked: boolean
+}
+
 export type PassStripEntry = { pie: number | null; slice: string | null; status: string; branch: string | null; t: number }
 
 /** The live agents poll: when it last ran and what it saw. */
@@ -364,6 +395,8 @@ declare module 'claude-code' {
       'pass.replay': PassReplay | null
       /** Other live sessions of the same project, read from `$.store`, newest first. */
       'pass.strip': { sid: string; entry: PassStripEntry }[]
+      /** The project board as the pulse last read it (every 30 seconds), with this session's id; null before the first read. */
+      'pass.board': (PassBoard & { self: string }) | null
     }
   }
 }

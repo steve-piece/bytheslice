@@ -31,6 +31,10 @@ After the operator answers:
 
 A session that resumes from a plain message, without a new `/sell-pie` or `/sell-slice`, is checked before its first file write or commit (then at most every 30 minutes). The facts come back with that tool's result: stop and raise the same HITL before writing more. A session that holds the slice and already has work on it is the one building, and is not stopped by its own check.
 
+## Seeing the whole project
+
+`bts_board` lists every open pie and slice across every chat, worktree and branch: its state (`queued`, `claimed`, `building`, `built, unmerged`, `in review`, `merged`), who holds it, uncommitted and unpushed work, the open PR, last activity and the claim goal. It is derived on each read, so nobody maintains it. The Pass pane shows the active pie's slices held elsewhere under **Board**.
+
 ## Letting go
 
 A slice the Pass sees flip to `[x]` releases its claim as `done` automatically (its work stays visible to others until it reaches the default branch). Release by hand with `bts_claim { pie, slice, release: "deferred" }` when a slice is deferred, and `"abandoned"` when a run stops for good.

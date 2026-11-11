@@ -16,6 +16,18 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [6.6.0] - 2026-11-11
+
+**The project board.** One live view of every pie and slice, shared by every chat, worktree and branch of a project, so an agent in any session can see what the others are doing before it starts. It is derived on each read from the same sources as the 6.5.0 collision guard (the shared ledger and its claims, every local and remote branch and worktree, open PRs through `gh`), so nothing has to be kept up to date by hand.
+
+### Added
+
+- **`bts_board`** (`mcp__bytheslice__bts_board`): every open pie (or one pie, or `scope: all`) with a line per slice: its state (`queued`, `claimed`, `building`, `built, unmerged`, `in review`, `merged`), who holds it (this session, another session and how it stands, the branch, the worktree), uncommitted files and unpushed commits in that worktree, the open PR, last activity and the claim goal. Two holders on one slice are counted, so a collision shows on the board too.
+- **Board section in the Pass pane:** the active pie's slices another session or branch holds, plus one line per other pie with activity, read on the pulse at most every 30 seconds.
+- Worktrees on a pie branch now count commits ahead of their upstream, so local unpushed work shows beside uncommitted files.
+
+---
+
 ## [6.5.0] - 2026-11-11
 
 **Sessions see each other.** Two chats baked the same pie in one project without knowing it: one built all six slices of a pie on a pie branch and opened its PR, while the other, idle for days on a slice branch cut from `main`, started the same first slice and applied duplicate migrations to a shared database. Nothing caught it because every check compared one session against `main`: the checklist each worktree reads still said "Not Started", a slice on an unmerged branch or in an open PR looked open, and a start was free text in the run log that no other session read. The Pass now reads the other sessions, branches and PRs of the project, records a real claim per start, and the bakers stop on a blocking HITL before they cut a branch on work that already exists.

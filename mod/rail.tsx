@@ -1,5 +1,5 @@
 // mod/rail.tsx
-// The Pass pane: pie header, slice rail with live status and last verdict, live agents with stall flags, gates, touched files (red after a builder edit past the verifier's pass) and check warnings, the HITL inbox, the team roster in team mode, the other live sessions of the project (read-only), drawn from atoms only, plus the pass command's toggle and checks text.
+// The Pass pane: pie header, the project board (slices other sessions and branches hold), slice rail with live status and last verdict, live agents with stall flags, gates, touched files (red after a builder edit past the verifier's pass) and check warnings, the HITL inbox, the team roster in team mode, the other live sessions of the project (read-only), drawn from atoms only, plus the pass command's toggle and checks text.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
@@ -8,10 +8,11 @@ import { markAnswered } from './hitl.ts'
 import { FIX_CAP, findSlice } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, counts } from './projection.ts'
 import { bakersWord } from './team.ts'
+import { boardRows } from './board.ts'
 import { STRIP_SHOWN, stripLine } from './strip.ts'
 import type { StripOther } from './strip.ts'
 import { TOUCHED_SHOWN } from './touched.ts'
-import type { PassBaker, PassChecklist, PassFinding, PassHitlItem, PassLive, PassProjection, PassSliceView, PassTeam, PassTouched } from './types'
+import type { PassBaker, PassBoard, PassChecklist, PassFinding, PassHitlItem, PassLive, PassProjection, PassSliceView, PassTeam, PassTouched } from './types'
 import { stalledIds } from './watchdog-actions.ts'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
@@ -23,6 +24,7 @@ const seenAtom = atom({ plugin: 'bytheslice', key: 'pass.seen' } as const, {})
 const stallsAtom = atom({ plugin: 'bytheslice', key: 'pass.stalls' } as const, { agents: {}, counts: {} })
 const teamAtom = atom({ plugin: 'bytheslice', key: 'pass.team' } as const, { at: 0, bakers: [] })
 const stripAtom = atom({ plugin: 'bytheslice', key: 'pass.strip' } as const, [])
+const boardAtom = atom({ plugin: 'bytheslice', key: 'pass.board' } as const, null)
 const touchedAtom = atom({ plugin: 'bytheslice', key: 'pass.touched' } as const, { slice: null, files: [], at: 0 })
 
 export const PANE_ID = 'pass'
@@ -51,6 +53,8 @@ export type PaneView = {
   touched?: PassTouched
   /** Other live sessions of the same project, newest first; read-only. */
   strip?: StripOther[]
+  /** The project board as the pulse last read it; the section shows only while something elsewhere holds a slice. */
+  board?: (PassBoard & { self: string }) | null
   /** The time ages are counted to; the projection's own time when left out. */
   now?: number
 }
@@ -275,6 +279,7 @@ export function paneLines(view: PaneView, columns: number): PaneLine[] {
     fit({ text: mode, dim: true }, width),
     fit({ text: `${done} of ${total} slices done` }, width),
     ...stripRows(view.strip, now, width),
+    ...boardRows(view.board ?? null, c).map(text => fit({ text, dim: !text.startsWith('Board') }, width)),
     ...sliceRows(c, ledger, width),
     ...agentRows(view.live, view.stalled ?? new Set(), width),
     ...gateRows(findSlice(ledger, activeSlice(c)?.id), width),
@@ -290,7 +295,7 @@ export function paneLines(view: PaneView, columns: number): PaneLine[] {
  * disk. An inbox item's button records the answer from its press, not here.
  */
 export async function drawPane($: EngineInterface, e: RenderInput<'Pane'>): Promise<RenderElement> {
-  const [checklist, loadedAt, branch, ledger, live, seen, stalls, team, touched, strip] = await Promise.all([
+  const [checklist, loadedAt, branch, ledger, live, seen, stalls, team, touched, strip, board] = await Promise.all([
     read($, checklistAtom),
     read($, loadedAtAtom),
     read($, branchAtom),
@@ -301,6 +306,7 @@ export async function drawPane($: EngineInterface, e: RenderInput<'Pane'>): Prom
     read($, teamAtom),
     read($, touchedAtom),
     read($, stripAtom),
+    read($, boardAtom),
   ])
   let now = ledger?.at ?? 0
   try {
@@ -309,7 +315,7 @@ export async function drawPane($: EngineInterface, e: RenderInput<'Pane'>): Prom
     // Ages count to the projection's time.
   }
   const stalled = stalledIds(stalls, seen)
-  const lines = paneLines({ checklist, loadedAt, branch, ledger, live, stalled, now, team, touched, strip }, e.props.bodyColumns)
+  const lines = paneLines({ checklist, loadedAt, branch, ledger, live, stalled, now, team, touched, strip, board }, e.props.bodyColumns)
   const { Box, Text, Button } = $.ui.resolve(e)
   return (
     <Box flexDirection="column">
