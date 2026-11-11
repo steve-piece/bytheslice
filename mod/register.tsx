@@ -1,5 +1,5 @@
 // mod/register.tsx
-// The Pass hooks module, wiring only: version gate, ledger capture (file edits as path and role only), checks that warn (never refuse), the session collision guard (claims and other work on a pie), the stall watchdog, the HITL inbox, team mode (roster, teammate turns, idle and done), the cross-session strip, the kitchen and Lobby logging relay, the bts tools, the pass command (replay and history included), pane, replay pane, band and hint.
+// The Pass hooks module, wiring only: version gate, ledger capture (file edits as path and role only), checks that warn (never refuse), the session collision guard (claims and other work on a pie), the project board, the stall watchdog, the HITL inbox, team mode (roster, teammate turns, idle and done), the cross-session strip, the kitchen and Lobby logging relay, the bts tools, the pass command (replay and history included), pane, replay pane, band and hint.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
@@ -10,6 +10,7 @@ import { primeChecks, reportToModel, trackGit, trackSkill, warnResult } from './
 import { checkFileWrite, checkPush } from './checks-checklist.ts'
 import { checkCommitOnMain, checkFixSpawn, countFix, raiseFixCap } from './checks-git.ts'
 import { checkDrift, checkSpawn, trackSpawn } from './checks-spawn.ts'
+import { pulseBoard, resetBoard, serveBoard } from './board.ts'
 import { clearPendingStart, guardStart, guardWork, isCommit, notePendingStart, pendingArg, resetClaims, serveClaimTool } from './claims-guard.ts'
 import { closeEndedStalls, closeOnReply, isOperatorReply, serveHitl } from './hitl.ts'
 import { startSession } from './ledger.ts'
@@ -73,6 +74,7 @@ export const register: Register = on => {
       resetTouched()
       resetStrip()
       resetClaims()
+      resetBoard()
       // Awaited here, so the model has both tools listed by its first turn.
       await registerTools($).catch(() => undefined)
       await $.command
@@ -87,12 +89,15 @@ export const register: Register = on => {
       if (hasChecklist) await refreshTouched($).catch(() => null)
       // This session's place in the roadmap strip, and the other sessions of the project.
       if (hasChecklist) await pulseStrip($, true).catch(() => [])
+      // The project board: every chat, worktree and branch, read from the ledger, git and gh.
+      if (hasChecklist) await pulseBoard($, true).catch(() => null)
       await watchChecklist($, () => reload($))
       await pollAgents($)
       // Every five seconds; the roster reads the ledger only when a teammate moved,
       // the touched files run git only when an edit, verdict or commit came since,
       // and the strip entry is written at most once per 10 seconds.
-      await startPulse($, () => Promise.all([refreshTeam($), refreshTouchedIfDirty($), pulseStrip($)]))
+      // and the board reads git at most every 30 seconds (gh cached a minute).
+      await startPulse($, () => Promise.all([refreshTeam($), refreshTouchedIfDirty($), pulseStrip($), pulseBoard($)]))
       // Every 30 seconds: flags stalled agents; it warns and never stops one.
       await startWatchdog($)
       // Unasked, the engine places the pane only on a wide terminal; it waits undrawn below that.
@@ -168,6 +173,11 @@ export const register: Register = on => {
   // Records a claim or a release and lists the other work on it; it never refuses the start.
   on('tool.call', { tool: ['mcp__bytheslice__bts_claim', /^mcp__\w*bytheslice\w*__bts_claim$/] }, async ($, e) => ({ result: await serveClaimTool($, inputOf(e)) })).catch(() => ({
     result: 'not recorded: the Pass could not record that claim; check git branch -a and open PRs by hand before cutting a branch. Nothing was halted.',
+  }))
+
+  // Read-only: the project board across every chat, worktree and branch.
+  on('tool.call', { tool: ['mcp__bytheslice__bts_board', /^mcp__\w*bytheslice\w*__bts_board$/] }, async ($, e) => ({ result: await serveBoard($, inputOf(e)) })).catch(() => ({
+    result: 'Project board unavailable right now; bts_status and bts_claim still list other work on the active pie. Nothing was halted.',
   }))
 
   // Records and notifies, then returns at once: the skill's own HITL flow (ask in chat and stop) is what waits.

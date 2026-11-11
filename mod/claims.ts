@@ -27,7 +27,7 @@ export const PR_CACHE_MS = 60000
 export const SNAPSHOT_MS = 10000
 /** Commits read past the default branch, across every branch. */
 export const OFF_BASE_DEPTH = 2000
-/** Worktrees on a pie branch whose uncommitted files are counted. */
+/** Worktrees on a pie branch whose uncommitted files and unpushed commits are counted. */
 export const DIRTY_WORKTREES = 8
 
 /** A commit on some branch that is neither on the default branch nor reachable from HEAD. */
@@ -35,7 +35,7 @@ export type RefCommit = { sha: string; branch: string; t: number; subject: strin
 /** A branch tip, local or remote, by its short name. */
 export type RefHead = { branch: string; sha: string; t: number }
 /** A worktree of the repository: its path, its branch, and its uncommitted files when counted. */
-export type WorktreeEntry = { path: string; branch: string | null; dirty: number | null }
+export type WorktreeEntry = { path: string; branch: string | null; dirty: number | null; ahead?: number | null }
 /** An open pull request as `gh pr list` names it. */
 export type OpenPr = { number: number; title: string; head: string; url: string; t: number }
 /** A merged pull request's head branch and when it merged: work on that branch up to then is merged, squashed or not. */
@@ -81,6 +81,8 @@ export type Party = {
   branch: string | null
   worktree: string | null
   dirty: number | null
+  /** Commits in its worktree not pushed to the branch upstream, when counted. */
+  ahead: number | null
   pie: number
   slices: string[]
   /** Slices its ledger shows done. */
@@ -319,7 +321,7 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     const key = branch ?? `session:${sid ?? 'unknown'}`
     let party = parties.get(key)
     if (!party) {
-      party = { key, sid: null, sids: [], branch, worktree: null, dirty: null, pie, slices: [], done: [], pieLevel: false, commits: 0, claimed: false, goal: null, lastT: null, liveness: null, pr: null, pieBranch: isPieBranch(branch) }
+      party = { key, sid: null, sids: [], branch, worktree: null, dirty: null, ahead: null, pie, slices: [], done: [], pieLevel: false, commits: 0, claimed: false, goal: null, lastT: null, liveness: null, pr: null, pieBranch: isPieBranch(branch) }
       parties.set(key, party)
     }
     if (sid !== null && !party.sids.includes(sid)) party.sids.push(sid)
@@ -429,6 +431,7 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     if (tree) {
       party.worktree = tree.path
       party.dirty = tree.dirty
+      party.ahead = tree.ahead ?? null
     }
     for (const sid of party.sids) {
       const liveness = livenessOf(sid, lastBySid.get(sid) ?? party.lastT, world)
@@ -703,11 +706,18 @@ async function readGit($: EngineInterface, cwd: string, base: NonNullable<Elsewh
     git($, ['worktree', 'list', '--porcelain']),
   ])
   const worktrees = list === null ? [] : parseWorktrees(list)
-  const counted = worktrees.filter(tree => tree.path !== cwd && branchPie(tree.branch) !== null).slice(0, DIRTY_WORKTREES)
-  const statuses = await Promise.all(counted.map(tree => git($, ['-C', tree.path, 'status', '--porcelain'])))
+  // This session's own worktree is counted too: the board shows its local work beside everyone else's.
+  const counted = worktrees.filter(tree => branchPie(tree.branch) !== null).slice(0, DIRTY_WORKTREES)
+  const [statuses, aheads] = await Promise.all([
+    Promise.all(counted.map(tree => git($, ['-C', tree.path, 'status', '--porcelain']))),
+    // Null with no upstream: a branch never pushed has nothing to be ahead of.
+    Promise.all(counted.map(tree => git($, ['-C', tree.path, 'rev-list', '--count', '@{u}..HEAD']))),
+  ])
   counted.forEach((tree, i) => {
     const status = statuses[i]
     tree.dirty = status === null || status === undefined ? null : status.split('\n').filter(line => line.trim() !== '').length
+    const ahead = aheads[i]?.trim()
+    tree.ahead = ahead !== undefined && /^\d+$/.test(ahead) ? Number(ahead) : null
   })
   return { commits: log === null ? [] : parseRefCommits(log), heads: refs === null ? [] : parseHeads(refs), worktrees }
 }

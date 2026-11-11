@@ -10,6 +10,7 @@ import { ledgerPath } from './ledger.ts'
 import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, boxReady, counts, refresh } from './projection.ts'
 import { runningFor } from './rail.tsx'
+import { registerBoard } from './board.ts'
 import { checkScope, collisionLines, collisionsFor, handoffLine, holdsWork, readElsewhere, registerClaim, runTarget } from './claims.ts'
 import type { Collisions } from './claims.ts'
 import { driftLine, readBase, readDrift } from './drift.ts'
@@ -65,7 +66,7 @@ const PR_BODY_DESCRIPTION = [
   '## Evidence after the --fill content; it is generated, so never edit it by hand. Read-only: it changes nothing.',
 ].join(' ')
 
-/** Registers bts_status, bts_note, bts_pr_body, bts_hitl, bts_wake and bts_claim with their schemas in the prompt's tool list; resolves the listed names. */
+/** Registers bts_status, bts_note, bts_pr_body, bts_hitl, bts_wake, bts_claim and bts_board with their schemas in the prompt's tool list; resolves the listed names. */
 export async function registerTools($: EngineInterface): Promise<string[]> {
   const listed: string[] = []
   const status = await $.tool.register({
@@ -114,6 +115,7 @@ export async function registerTools($: EngineInterface): Promise<string[]> {
   listed.push(await registerHitl($))
   listed.push(await registerWake($))
   listed.push(await registerClaim($))
+  listed.push(await registerBoard($))
   await update($, toolsAtom, () => listed).catch(() => undefined)
   return listed
 }

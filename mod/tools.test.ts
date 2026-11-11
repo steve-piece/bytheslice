@@ -15,11 +15,11 @@ const DONE_51 = CHECKLIST_FIXTURE.replace(
 
 const ledger = (...lines: string[]) => `${lines.join('\n')}\n`
 
-test('the six tools register at session start with their schemas in the prompt', async ($, on) => {
+test('the seven tools register at session start with their schemas in the prompt', async ($, on) => {
   const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE })
   await start($)
-  expect(world.tools).toEqual(['bts_status', 'bts_note', 'bts_pr_body', 'bts_hitl', 'bts_wake', 'bts_claim'])
-  expect(world.deferred).toEqual({ bts_status: false, bts_note: false, bts_pr_body: false, bts_hitl: false, bts_wake: false, bts_claim: false })
+  expect(world.tools).toEqual(['bts_status', 'bts_note', 'bts_pr_body', 'bts_hitl', 'bts_wake', 'bts_claim', 'bts_board'])
+  expect(world.deferred).toEqual({ bts_status: false, bts_note: false, bts_pr_body: false, bts_hitl: false, bts_wake: false, bts_claim: false, bts_board: false })
 })
 
 const prBody = async ($: Parameters<typeof status>[0], input: Record<string, unknown> = {}) =>
