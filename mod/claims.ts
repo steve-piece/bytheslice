@@ -98,6 +98,8 @@ export type Party = {
   pr: { number: number; url: string } | null
   /** Its branch is one pie branch (not `pie-N-sN.M-...`). */
   pieBranch: boolean
+  /** The slices it has commits for (a branch commit naming them, or a commit row in its ledger), slice by slice. */
+  committed: string[]
 }
 
 /** What the fold found for one pie: other work that conflicts, work this session continues, and a delivery-mode mismatch. */
@@ -321,7 +323,7 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     const key = branch ?? `session:${sid ?? 'unknown'}`
     let party = parties.get(key)
     if (!party) {
-      party = { key, sid: null, sids: [], branch, worktree: null, dirty: null, ahead: null, pie, slices: [], done: [], pieLevel: false, commits: 0, claimed: false, goal: null, lastT: null, liveness: null, pr: null, pieBranch: isPieBranch(branch) }
+      party = { key, sid: null, sids: [], branch, worktree: null, dirty: null, ahead: null, pie, slices: [], done: [], pieLevel: false, commits: 0, claimed: false, goal: null, lastT: null, liveness: null, pr: null, pieBranch: isPieBranch(branch), committed: [] }
       parties.set(key, party)
     }
     if (sid !== null && !party.sids.includes(sid)) party.sids.push(sid)
@@ -359,6 +361,7 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     const party = partyFor(work.branch, work.sid)
     party.slices = sortSlices([...party.slices, ...live])
     party.done = sortSlices([...party.done, ...[...work.done].filter(id => live.includes(id))])
+    party.committed = sortSlices([...party.committed, ...live.filter(id => (work.slices.get(id)?.shas.length ?? 0) > 0)])
     party.pieLevel ||= pieOpen
     party.claimed ||= work.claimed
     party.worktree ??= work.worktree
@@ -380,6 +383,7 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     const party = partyFor(branch, null)
     party.slices = sortSlices([...party.slices, ...ids])
     party.commits += 1
+    party.committed = sortSlices([...party.committed, ...ids])
     party.pieLevel ||= wholePie
     touch(party, commit.t)
   }

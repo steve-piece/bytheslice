@@ -170,3 +170,47 @@ test('a slice with one task merged and the rest on a branch reads as that work, 
   expect([slice.state, slice.holder?.branch]).toEqual(['built', 'pie-7-s7.2-rest'])
   expect(boardOf(CHECKLIST, world({ base })).pies.find(p => p.n === 7)!.slices.find(s => s.id === '7.2')!.state).toBe('merged')
 })
+
+test('this session commits count as build evidence for their slice, read from the ledger', () => {
+  const rows = [
+    row('me', NOW - HOUR, 'claim', '7.4', { branch: 'pie-7-s7.4-fourth' }),
+    row('me', NOW - 30 * 60000, 'commit', '7.4', { sha: 'own0001', branch: 'pie-7-s7.4-fourth' }),
+  ]
+  const seven = boardOf(CHECKLIST, world({ rows })).pies.find(p => p.n === 7)!
+  expect(seven.slices.find(s => s.id === '7.4')!.state).toBe('built')
+})
+
+test('on one shared pie branch each slice is judged by its own evidence', () => {
+  const commits = [{ sha: 'sh1', branch: 'pie-7-work', t: NOW - HOUR, subject: 'feat(pie-7): 7.1 task 1' }]
+  const rows = [row('other', NOW - 60000, 'claim', '7.2', { branch: 'pie-7-work' })]
+  const seven = boardOf(CHECKLIST, world({ commits, rows })).pies.find(p => p.n === 7)!
+  expect(seven.slices.filter(s => s.id === '7.1' || s.id === '7.2').map(s => [s.id, s.state])).toEqual([
+    ['7.1', 'built'],
+    ['7.2', 'building'],
+  ])
+})
+
+test('two live chats on one branch are two holders, and the pane shows the slice even when one is this session', () => {
+  const rows = [
+    row('me', NOW - 60000, 'claim', '7.2', { branch: 'pie-7-work' }),
+    row('other', NOW - 30000, 'claim', '7.2', { branch: 'pie-7-work' }),
+  ]
+  const board = { ...boardOf(CHECKLIST, world({ rows })), self: 'me' }
+  const slice = board.pies.find(p => p.n === 7)!.slices.find(s => s.id === '7.2')!
+  expect([slice.holders, slice.sids.sort()]).toEqual([2, ['me', 'other']])
+  expect(boardRows(board, CHECKLIST).some(line => line.startsWith('  7.2 building'))).toBe(true)
+})
+
+test('a whole-pie claim marks another pie active, and stays on the pie line after its session starts a slice', () => {
+  const two: PassChecklist = {
+    ...CHECKLIST,
+    pies: [...CHECKLIST.pies, { n: 8, name: 'Eight', review: 'boundary', done: false, slices: [{ id: '8.1', name: 'First', done: false }] }],
+  }
+  const eight = [{ ...row('other', NOW - 60000, 'claim', null, { branch: 'pie-8-eight' }), pie: 8 }]
+  const board = { ...boardOf(two, world({ rows: eight })), self: 'me' }
+  expect(boardRows(board, two)).toEqual(['Board · 0 held elsewhere · 1 other pie active', '  Pie 8 Eight · 1 queued · pie claimed by session other'])
+  const pieThenSlice = [row('other', NOW - 2 * 60000, 'claim', null, { branch: 'pie-7-whole' }), row('other', NOW - 60000, 'claim', '7.1', { branch: 'pie-7-whole' })]
+  const seven = boardOf(CHECKLIST, world({ rows: pieThenSlice })).pies.find(p => p.n === 7)!
+  expect(seven.pieHolders.map(h => [h.sid, h.branch])).toEqual([['other', 'pie-7-whole']])
+  expect(seven.slices.find(s => s.id === '7.1')!.state).toBe('building')
+})

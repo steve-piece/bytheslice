@@ -322,6 +322,8 @@ export type PassBoardSlice = {
   name: string
   state: PassBoardState
   holders: number
+  /** Every session holding it (a branch with no session counts in `holders` only). */
+  sids: string[]
   holder: PassBoardHolder | null
   pr: { number: number; url: string } | null
   lastT: number | null

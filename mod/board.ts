@@ -40,7 +40,8 @@ export const STATE_WORDS: Record<PassBoardState, string> = {
 /** The state one holder gives a slice. Pure. */
 export function stateOf(party: Party, slice: string): PassBoardState {
   if (party.pr !== null) return 'in review'
-  if (party.done.includes(slice) || party.commits > 0) return 'built'
+  // Evidence for this slice only: on a shared pie branch, another slice's commits say nothing about this one.
+  if (party.done.includes(slice) || party.committed.includes(slice)) return 'built'
   if (party.liveness === 'live' || (party.dirty !== null && party.dirty > 0)) return 'building'
   return 'claimed'
 }
@@ -71,7 +72,7 @@ export function boardOf(c: PassChecklist | null, world: Elsewhere, scope: 'open'
         .filter(p => p.slices.includes(s.id))
         .sort((a, b) => RANK[stateOf(b, s.id)] - RANK[stateOf(a, s.id)] || (b.lastT ?? 0) - (a.lastT ?? 0))
       // Merged once nothing unmerged holds it: one task on the default branch leaves the rest of the slice in play.
-      if (holding.length === 0 && merged(s.id)) return { id: s.id, name: s.name, state: 'merged', holders: 0, holder: null, pr: null, lastT: null, goal: null, dirty: null, ahead: null }
+      if (holding.length === 0 && merged(s.id)) return { id: s.id, name: s.name, state: 'merged', holders: 0, sids: [], holder: null, pr: null, lastT: null, goal: null, dirty: null, ahead: null }
       const best = holding[0] ?? null
       const own: PassBoardState = s.done ? 'built' : 'queued'
       const theirs = best === null ? own : stateOf(best, s.id)
@@ -80,7 +81,9 @@ export function boardOf(c: PassChecklist | null, world: Elsewhere, scope: 'open'
         id: s.id,
         name: s.name,
         state,
-        holders: new Set(holding.map(p => p.sid ?? p.branch)).size,
+        // Every session a party holds counts, so two chats on one branch read as two holders.
+        holders: new Set(holding.flatMap(p => (p.sids.length > 0 ? p.sids : [`branch:${p.branch ?? p.key}`]))).size,
+        sids: [...new Set(holding.flatMap(p => p.sids))],
         holder: best === null ? null : { sid: best.sid, branch: best.branch, worktree: best.worktree, liveness: best.liveness },
         pr: best?.pr ?? null,
         lastT: best?.lastT ?? null,
@@ -90,7 +93,8 @@ export function boardOf(c: PassChecklist | null, world: Elsewhere, scope: 'open'
       }
     })
     const whole = parties
-      .filter(p => p.pieLevel && p.slices.length === 0)
+      // A whole-pie claim stays on the pie line after its session starts a slice too.
+      .filter(p => p.pieLevel)
       .map(p => ({ sid: p.sid, branch: p.branch, worktree: p.worktree, liveness: p.liveness }))
     pies.push({ n: pie.n, name: pie.name, done: pie.done, slices, pieHolders: whole })
   }
@@ -242,8 +246,13 @@ export function boardRows(board: (PassBoard & { self?: string }) | null, c: Pass
   if (board === null) return []
   const pie = activePie(c)
   const own = pie ? board.pies.find(p => p.n === pie.n) : undefined
-  const held = own?.slices.filter(s => s.state !== 'queued' && s.state !== 'merged' && s.holder !== null && s.holder.sid !== (board.self ?? '')) ?? []
-  const others = board.pies.filter(p => p.n !== pie?.n && p.slices.some(s => s.holder !== null && s.state !== 'merged'))
+  const self = board.self ?? ''
+  // Held elsewhere: another session holds it (even beside this one), or a branch no session is known on.
+  const elsewhere = (s: PassBoardSlice): boolean => s.sids.some(sid => sid !== self) || (s.holder !== null && s.holder.sid === null)
+  const held = own?.slices.filter(s => s.state !== 'queued' && s.state !== 'merged' && elsewhere(s)) ?? []
+  const others = board.pies.filter(
+    p => p.n !== pie?.n && (p.pieHolders.some(h => h.sid !== self) || p.slices.some(s => s.holder !== null && s.state !== 'merged')),
+  )
   if (held.length === 0 && others.length === 0) return []
   const rows = [`Board · ${held.length} held elsewhere${others.length > 0 ? ` · ${others.length} other pie${others.length === 1 ? '' : 's'} active` : ''}`]
   for (const slice of held.slice(0, BOARD_SHOWN)) rows.push(`  ${boardLine(slice, board.self ?? '', board.at)}`)
