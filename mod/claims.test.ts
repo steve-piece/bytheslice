@@ -117,7 +117,7 @@ test('a release as deferred or abandoned drops the work; a release as done keeps
 
 test('work already on the default branch, or a slice the checklist marks done, does not conflict', () => {
   const rows = [row('other', NOW - HOUR, 'commit', '7.1', { sha: 'mmmmmmm000', branch: 'pie-7-x' }), row('other', NOW - HOUR, 'slice.started', '7.3')]
-  const base = { base: 'origin/main', shas: ['mmmmmmm000'], subjects: ['feat(pie-7): 7.1 merged'] }
+  const base = { base: 'origin/main', shas: ['mmmmmmm000'], subjects: ['feat(pie-7): 7.1 merged (#9)'] }
   expect(collisionsFor(world({ rows, base }), 7, ['7.1', '7.2']).conflicts).toEqual([])
 })
 
@@ -370,4 +370,18 @@ test('a release as abandoned lets go of that session branch commits, worktree an
   expect(collisionsFor(world({ rows, commits, worktrees, prs, heads, strip: { other: NOW } }), 7, ['7.1']).conflicts).toEqual([])
   const later = [...commits, { sha: 'r2', branch: 'pie-7-s7.1-gone', t: NOW - 60000, subject: 'feat(pie-7): 7.1 task 2' }]
   expect(collisionsFor(world({ rows, commits: later, heads }), 7, ['7.1']).conflicts.map(p => p.commits)).toEqual([1])
+})
+
+test('one task of a slice on the default branch never hides its other, unmerged commits', () => {
+  const base = { base: 'origin/main', shas: ['t1aaaaa'], subjects: ['feat(pie-7): 7.1 task 1 first'] }
+  const commits = [{ sha: 't2bbbbb', branch: 'pie-7-s7.1-theirs', t: NOW - HOUR, subject: 'feat(pie-7): 7.1 task 2 second' }]
+  expect(collisionsFor(world({ base, commits }), 7, ['7.1']).conflicts.map(p => [p.branch, p.commits])).toEqual([['pie-7-s7.1-theirs', 1]])
+  // The ledger side too: task 1 merged, task 2 not.
+  const rows = [
+    row('other', NOW - 2 * HOUR, 'commit', '7.1', { sha: 't1aaaaa', branch: 'pie-7-s7.1-theirs' }),
+    row('other', NOW - HOUR, 'commit', '7.1', { sha: 't2bbbbb', branch: 'pie-7-s7.1-theirs' }),
+  ]
+  expect(collisionsFor(world({ base, rows }), 7, ['7.1']).conflicts.map(p => p.slices)).toEqual([['7.1']])
+  // Every recorded commit merged: settled.
+  expect(collisionsFor(world({ base, rows: rows.slice(0, 1) }), 7, ['7.1']).conflicts).toEqual([])
 })

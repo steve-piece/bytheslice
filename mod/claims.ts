@@ -228,7 +228,10 @@ type SidWork = {
 export function collisionsFor(world: Elsewhere, pie: number, open: readonly string[] | null): Collisions {
   const filter = open === null ? null : new Set(open)
   if (filter !== null && filter.size === 0) return { pie, conflicts: [], handoffs: [], delivery: null }
-  const named = world.base ? slicesNamed(world.base.subjects) : new Set<string>()
+  // A merged commit is already left out by sha. Only a squash merge (`... (#n)`) proves a whole slice merged:
+  // one task of a slice on the default branch says nothing about the slice's other commits.
+  const squashes = (world.base?.subjects ?? []).filter(subject => SQUASH_SUBJECT.test(subject))
+  const named = new Set([...slicesNamed(squashes), ...squashes.flatMap(subject => slicesInTitle(subject))])
   // A squash merge naming the pie (`Pie 23: ... (#251)`) merged its whole-pie branch.
   const squashedPie = (world.base?.subjects ?? []).some(subject => SQUASH_SUBJECT.test(subject) && piesInTitle(subject).includes(pie))
   const onBase = (sha: string): boolean => world.base?.shas.some(merged => headsMatch(merged, sha)) ?? false
@@ -327,7 +330,8 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     for (const [id, slice] of work.slices) {
       if (slice.lastWork === Number.NEGATIVE_INFINITY) continue
       if (slice.lastDrop >= slice.lastWork || work.pieDrop >= slice.lastWork) continue
-      if (named.has(id) || slice.shas.some(onBase) || mergedBefore(work.branch, slice.lastWork)) continue
+      // Settled only when every commit it recorded reached the default branch, not when one did.
+      if (named.has(id) || (slice.shas.length > 0 && slice.shas.every(onBase)) || mergedBefore(work.branch, slice.lastWork)) continue
       if (!wanted(id)) continue
       if (takenOver(work.sid, work.branch, id, slice.lastWork)) continue
       live.push(id)
