@@ -402,3 +402,12 @@ test('a fresh claim or edit after a session merged commits is live work again', 
   const again = [...merged, row('other', NOW - 10 * 60000, 'claim', '7.1', { branch: 'main' }), row('other', NOW - 60000, 'edit', '7.1')]
   expect(collisionsFor(world({ base, rows: again, strip: { other: NOW } }), 7, ['7.1']).conflicts.map(p => [p.sid, p.liveness])).toEqual([['other', 'live']])
 })
+
+test('a squash merge naming the pie settles the ledger work on its whole-pie branch too', () => {
+  const rows = [row('other', NOW - 5 * HOUR, 'commit', '7.2', { sha: 'orig001', branch: 'pie-7-seven' })]
+  const squash = { base: 'origin/main', shas: ['sq1'], subjects: ['Pie 7: seven (#42)'] }
+  expect(collisionsFor(world({ rows, base: squash }), 7, ['7.2']).conflicts).toEqual([])
+  // Work on a slice branch is not covered by a pie squash subject.
+  const slice = [row('other', NOW - 5 * HOUR, 'commit', '7.2', { sha: 'orig002', branch: 'pie-7-s7.2-own' })]
+  expect(collisionsFor(world({ rows: slice, base: squash }), 7, ['7.2']).conflicts).toHaveLength(1)
+})

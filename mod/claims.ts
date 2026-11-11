@@ -338,7 +338,9 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
       // Settled only when every commit it recorded reached the default branch, not when one did, and nothing
       // (a fresh claim, an edit) came after its last commit: merged commits cover only the work before them.
       const allMerged = slice.shas.length > 0 && slice.shas.every(onBase) && slice.lastFresh <= slice.lastCommit
-      if (named.has(id) || allMerged || mergedBefore(work.branch, slice.lastWork)) continue
+      // A squash merge naming the pie (`Pie 7: ... (#42)`) merged its whole-pie branch, ledger rows included.
+      const squashedHere = squashedPie && isPieBranch(work.branch)
+      if (named.has(id) || allMerged || squashedHere || mergedBefore(work.branch, slice.lastWork)) continue
       if (!wanted(id)) continue
       if (takenOver(work.sid, work.branch, id, slice.lastWork)) continue
       live.push(id)
