@@ -10,7 +10,9 @@ import { ledgerPath } from './ledger.ts'
 import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, boxReady, counts, refresh } from './projection.ts'
 import { runningFor } from './rail.tsx'
-import { driftLine, readDrift } from './drift.ts'
+import { collisionLines, collisionsFor, handoffLine, openSlices, readElsewhere, registerClaim } from './claims.ts'
+import type { Collisions } from './claims.ts'
+import { driftLine, readBase, readDrift } from './drift.ts'
 import type { StatusDrift } from './drift.ts'
 import { mismatchLine } from './reconcile.ts'
 import { bakersWord } from './team.ts'
@@ -45,7 +47,7 @@ const STATUS_DESCRIPTION = [
   'The Pass status for this ByTheSlice project: the active pie and slice, each slice of the pie with its status',
   '(queued, building, testing, verifying, fixing, done) and last verdicts, live agents, the fix loop as n/3,',
   'open HITL questions, the agent team roster (team: n bakers) in team mode, checklist and ledger mismatches,',
-  'and the next expected action.',
+  'other sessions, branches and open PRs already on the active pie (Other work), and the next expected action.',
   'Call it at every phase boundary instead of re-reading docs/plans/00_master_checklist.md.',
   'It reports facts from the ledger and the kitchen activity log; it never halts or refuses anything.',
 ].join(' ')
@@ -63,7 +65,7 @@ const PR_BODY_DESCRIPTION = [
   '## Evidence after the --fill content; it is generated, so never edit it by hand. Read-only: it changes nothing.',
 ].join(' ')
 
-/** Registers bts_status, bts_note, bts_pr_body, bts_hitl and bts_wake with their schemas in the prompt's tool list; resolves the listed names. */
+/** Registers bts_status, bts_note, bts_pr_body, bts_hitl, bts_wake and bts_claim with their schemas in the prompt's tool list; resolves the listed names. */
 export async function registerTools($: EngineInterface): Promise<string[]> {
   const listed: string[] = []
   const status = await $.tool.register({
@@ -111,6 +113,7 @@ export async function registerTools($: EngineInterface): Promise<string[]> {
   listed.push(prBody.tool)
   listed.push(await registerHitl($))
   listed.push(await registerWake($))
+  listed.push(await registerClaim($))
   await update($, toolsAtom, () => listed).catch(() => undefined)
   return listed
 }
@@ -201,6 +204,7 @@ export function statusReport(
     now: number
     team?: PassTeam
     drift?: readonly StatusDrift[]
+    collisions?: Collisions | null
   },
   scope: 'active' | 'all' = 'active',
 ): string {
@@ -278,7 +282,22 @@ export function statusReport(
     for (const d of drift.slice(0, 4)) lines.push(`  - ${driftLine(d)}`)
     if (drift.length > 4) lines.push(`  and ${drift.length - 4} more`)
   }
-  lines.push(`Next: ${nextAction(c, p, branch)}`)
+  const found = view.collisions ?? null
+  const other = found ? collisionLines(found, now) : []
+  if (found && other.length > 0) {
+    lines.push(`Other work on Pie ${found.pie}: ${other.length} (other sessions, branches and open PRs; nothing here refuses a step)`)
+    for (const line of other.slice(0, 4)) lines.push(`  - ${line}`)
+    if (other.length > 4) lines.push(`  and ${other.length - 4} more (bts_claim lists them all)`)
+  }
+  if (found && found.handoffs.length > 0) for (const party of found.handoffs.slice(0, 2)) lines.push(`Handoff: ${handoffLine(party, now)}`)
+  // Other work on the pie comes first: the projection folds every session's rows, so its own status may be theirs.
+  lines.push(
+    `Next: ${
+      found && other.length > 0
+        ? `other work is on Pie ${found.pie}: raise a destructive_operation HITL with these facts before cutting a branch or writing code`
+        : nextAction(c, p, branch)
+    }`,
+  )
   lines.push('These are facts from the ledger; nothing here halts or refuses a step.')
   if (lines.length > STATUS_LINES) {
     const tail = lines.slice(-6)
@@ -312,8 +331,15 @@ export async function serveStatus($: EngineInterface, input: Record<string, unkn
     nowOf($),
   ])
   const scope = input.scope === 'all' ? 'all' : 'active'
-  const drift = await readDrift($, checklist, projection, branch).catch(() => [])
-  return statusReport({ checklist, projection, live, branch, now, team, drift }, scope)
+  const base = await readBase($).catch(() => null)
+  const drift = await readDrift($, checklist, projection, branch, base).catch(() => [])
+  const pie = activePie(checklist)
+  let collisions: Collisions | null = null
+  if (pie) {
+    const world = await readElsewhere($, { branch, base }).catch(() => null)
+    if (world) collisions = collisionsFor(world, pie.n, openSlices(checklist, pie.n))
+  }
+  return statusReport({ checklist, projection, live, branch, now, team, drift, collisions }, scope)
 }
 
 /** Serves bts_note: appends one note row (text cut to 2,000 characters) and answers `ok`. */

@@ -10,8 +10,9 @@ import type {
   TurnCompleteInput,
 } from 'claude-code'
 
+import { holdsClaim, writeClaim, writeRelease } from './claims.ts'
 import { stripJsonc } from './jsonc.ts'
-import { appendRow, readRows } from './ledger.ts'
+import { appendRow, readRows, sessionId } from './ledger.ts'
 import type { LedgerInput } from './ledger.ts'
 import { gateOf, readActivity, rollup, verifyStartOf } from './ledger-projection.ts'
 import { refreshLedger } from './live.ts'
@@ -513,6 +514,17 @@ export async function captureSkill($: EngineInterface, name: unknown, baker: Ski
     const written = await record($, { ev: 'slice.started', pie: pie.n, slice: slice.id, data: { skill, ...who, ...at } })
     if (written) out.push(written)
   }
+  // The start is a claim every other session reads: this session, its branch and worktree, the pie and the slice.
+  const sid = await sessionId($)
+  const branch = (await git($, ['rev-parse', '--abbrev-ref', 'HEAD']))?.trim() ?? null
+  const worktree = await $.session.cwd().catch(() => '.')
+  // /sell-pie claims the pie and its first open slice; /sell-slice claims the slice only.
+  const ids: (string | null)[] = [...(skill === 'sell-pie' ? [null] : []), ...(slice ? [slice.id] : [])]
+  for (const id of ids) {
+    if (holdsClaim(rows, sid, pie.n, id)) continue
+    const claimed = await writeClaim($, { pie: pie.n, ...(id === null ? {} : { slice: id }), skill, branch, worktree, auto: true })
+    if (claimed) out.push(claimed)
+  }
   return out
 }
 
@@ -560,6 +572,13 @@ export async function recordDoneFlips(
     const totals = rollup(activity, slice, verifyStartOf(rows, slice))
     const rolled = await record($, { ev: 'slice.rollup', pie, slice, data: totals })
     if (rolled) out.push(rolled)
+    // A slice this session claimed and finished is released as done; its work stays visible until it merges.
+    const sid = await sessionId($)
+    if (holdsClaim(rows, sid, pie, slice)) {
+      const branch = (await git($, ['rev-parse', '--abbrev-ref', 'HEAD']))?.trim() ?? null
+      const released = await writeRelease($, { pie, slice, reason: 'done', branch, worktree: await $.session.cwd().catch(() => '.') })
+      if (released) out.push(released)
+    }
   }
   return out
 }

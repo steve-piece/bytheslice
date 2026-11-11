@@ -16,6 +16,25 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [6.4.0] - 2026-11-10
+
+**Sessions see each other.** Two chats baked the same pie in one project without knowing it: one built all six slices of a pie on a pie branch and opened its PR, while the other, idle for days on a slice branch cut from `main`, started the same first slice and applied duplicate migrations to a shared database. Nothing caught it because every check compared one session against `main`: the checklist each worktree reads still said "Not Started", a slice on an unmerged branch or in an open PR looked open, and a start was free text in the run log that no other session read. The Pass now reads the other sessions, branches and PRs of the project, records a real claim per start, and the bakers stop on a blocking HITL before they cut a branch on work that already exists.
+
+### Added
+
+- **Claims in the ledger.** New `claim` and `release` rows: session, branch, worktree, pie, slice, the skill, and a one-line goal. A `/sell-pie` start claims the pie and its first open slice and a `/sell-slice` start the slice, without the model doing anything; a slice that flips to `[x]` releases as `done`.
+- **`bts_claim`** (`mcp__bytheslice__bts_claim`): claim a pie or slice with a goal and get back every other piece of work already on it, release it as `done`, `deferred` or `abandoned`, or record an operator-approved takeover with `over: true` so other sessions stop seeing the old work as live.
+- **Other work in `bts_status`.** One line per conflict in plain words, for example `Slices 23.1, ..., 23.6 are also being built by another session (...) on branch pie-23-video-gif-posting (12 commits not on the default branch, ..., last activity 1 h ago, PR 251 open)`, from four read-only sources: other sessions' ledger rows and claims, commits on any local or remote branch past the default branch that name the pie's slices (plus a pie branch checked out in another worktree, with its uncommitted files), open PRs through `gh` (left out quietly without it), and a `delivery.mode: "merge-per-slice"` run on one pie branch. A quiet session is reported stale after 6 hours and an ended one as ended; neither is dropped or honored silently. Work already on the default branch, released, or taken over does not count, and an earlier session's work on this run's own branch reads as a handoff. While there is other work, `Next:` says to raise a HITL.
+- **`session-collision` warning** at a baker start on a pie with other work: a warn row, a toast, the band, and a note telling the model to raise a blocking `destructive_operation` HITL before it cuts a branch.
+- **The rule, in one place:** `skills/sell-slice/references/session-collisions.md`, with the by-hand check for a session without the Pass.
+
+### Changed
+
+- **`/sell-pie` and `/sell-slice` preflight** run the collision check after `git fetch --prune origin` and before any branch or worktree is cut, per pie (`/sell-pie` Phase 0 step 3a) and per slice (each slice spine, Phase 1-M step 1, `/sell-slice` Phase 0 step 4a). Other work is a blocking HITL, never a new branch.
+- `mod/drift.ts` exports its git helpers and reads the default branch once per `bts_status` for both status drift and other work.
+
+---
+
 ## [6.3.0] - 2026-11-06
 
 **Enabled gates are binding.** The quality gates a project runs are the operator's decision, made at setup. When one fails during a run, agents now fix the code until it passes, even when the cause is a shared design token or a file the slice only consumes, instead of handing it back as an open decision or a follow-up "for the operator's call". It came from a live run where a slice-tester measured an error color at 4.23:1 and a control border at 1.49:1, and the conductor reported both as "out of slice scope, app-wide design tokens, your call". The same run surfaced two Pass false positives, fixed here.
