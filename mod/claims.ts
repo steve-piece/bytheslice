@@ -250,6 +250,9 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     if (row.ev === 'claim' && Array.isArray(row.data?.over)) {
       takeovers.push({ t: row.t, slice: row.slice ?? null, over: new Set(row.data.over.filter((x): x is string => typeof x === 'string')) })
     }
+    // A release as deferred or abandoned lets go of that session's work on every source, as a takeover would:
+    // its ledger rows, its branches' commits from before the release, their worktrees and PRs.
+    if (row.ev === 'release' && row.data?.reason !== 'done') takeovers.push({ t: row.t, slice: row.slice ?? null, over: new Set([row.sid]) })
     const branch = rowBranch(row)
     if (branch !== null) sidBranches.set(row.sid, (sidBranches.get(row.sid) ?? new Set()).add(branch))
     if (row.sid === world.self.sid || (!WORK_EVENTS.has(row.ev) && row.ev !== 'release')) continue
@@ -275,7 +278,8 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
       if (dropping) work.pieDrop = Math.max(work.pieDrop, row.t)
       else if (row.ev !== 'release') {
         work.pieWork = Math.max(work.pieWork, row.t)
-        if (row.ev === 'claim' || row.ev === 'pie.started') work.pieClaim = true
+        // A /sell-slice start writes pie.started too; only a pie claim or a /sell-pie start holds the whole pie.
+        if (row.ev === 'claim' || (row.ev === 'pie.started' && row.data?.skill !== 'sell-slice')) work.pieClaim = true
       }
       continue
     }

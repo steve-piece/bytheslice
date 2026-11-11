@@ -346,3 +346,28 @@ test('a /sell-slice run is checked for its slice only; a /sell-pie run, or one w
   expect(checkScope(CHECKLIST, [row('me', 1, 'claim', null), row('me', 1, 'claim', '23.1')].map(r => ({ ...r, pie: 23 })), 'me', target)).toEqual(['23.1', '23.2'])
   expect(checkScope(CHECKLIST, [], 'me', target)).toEqual(['23.1', '23.2'])
 })
+
+test('a /sell-slice start elsewhere holds its slice, never the whole pie', () => {
+  const rows = [
+    row('other', NOW - 60000, 'pie.started', null, { skill: 'sell-slice' }),
+    row('other', NOW - 60000, 'slice.started', '7.2', { skill: 'sell-slice' }),
+  ]
+  expect(collisionsFor(world({ rows, strip: { other: NOW } }), 7, ['7.1']).conflicts).toEqual([])
+  expect(collisionsFor(world({ rows, strip: { other: NOW } }), 7, ['7.2']).conflicts.map(p => p.slices)).toEqual([['7.2']])
+  const pie = [row('other', NOW - 60000, 'pie.started', null, { skill: 'sell-pie' })]
+  expect(collisionsFor(world({ rows: pie, strip: { other: NOW } }), 7, ['7.1']).conflicts.map(p => p.pieLevel)).toEqual([true])
+})
+
+test('a release as abandoned lets go of that session branch commits, worktree and PR too; later work shows again', () => {
+  const rows = [
+    row('other', NOW - 3 * HOUR, 'commit', '7.1', { sha: 'r1', branch: 'pie-7-s7.1-gone' }),
+    row('other', NOW - 2 * HOUR, 'release', '7.1', { reason: 'abandoned' }),
+  ]
+  const commits = [{ sha: 'r1', branch: 'pie-7-s7.1-gone', t: NOW - 3 * HOUR, subject: 'feat(pie-7): 7.1 task 1' }]
+  const worktrees = [{ path: '/wt/gone', branch: 'pie-7-s7.1-gone', dirty: 1 }]
+  const prs = [{ number: 60, title: 'Slice 7.1: gone', head: 'pie-7-s7.1-gone', url: 'u60', t: NOW }]
+  const heads = [{ branch: 'pie-7-s7.1-gone', sha: 'r1', t: NOW - 3 * HOUR }]
+  expect(collisionsFor(world({ rows, commits, worktrees, prs, heads, strip: { other: NOW } }), 7, ['7.1']).conflicts).toEqual([])
+  const later = [...commits, { sha: 'r2', branch: 'pie-7-s7.1-gone', t: NOW - 60000, subject: 'feat(pie-7): 7.1 task 2' }]
+  expect(collisionsFor(world({ rows, commits: later, heads }), 7, ['7.1']).conflicts.map(p => p.commits)).toEqual([1])
+})
