@@ -50,10 +50,26 @@ function parseActivity(data) {
 }
 
 function statusOf(line) {
-  if (/\[[xX]\]|~~|\bStatus:\s*(?:Completed|Done|Shipped)\b/i.test(line)) return 'done';
-  if (/\bStatus:\s*(?:In Progress|Active|Running)\b|\[-\]/i.test(line)) return 'active';
+  if (/\[[xX]\]|~~|\bStatus:\s*(?:Completed?|Done|Shipped)\b/i.test(line)) return 'done';
+  if (/\bStatus:\s*(?:In Progress|Active|Running|Partial)\b|\[-\]/i.test(line)) return 'active';
   return 'open';
 }
+
+// Checklist grammar shared with mcp/checklist-format.js. A slice id may carry one letter (`9.2a`).
+const SLICE_HEADING = /^###\s+(?:\[[ xX-]\]\s*)?(?:~~)?Slice\s+(\d+\.\d+[a-z]?)\b(.*)$/i;
+const PREP_SLICE = /^\s*(?:-\s*)?\[[ xX]\]\s+Slice\s+(\d+\.\d+[a-z]?)\b(.*)$/i;
+const PIE_HEADING = /^##\s+(?:\[[ xX-]\]\s*)?(?:~~)?Pie\s+(\d+)\b(.*)$/i;
+const STANDALONE_HEADING = /^##\s+(?:\[[ xX-]\]\s*)?(?:~~)?(?:Slice\s+(\d+\.\d+[a-z]?)|Stage\s+(\d+))\b(.*)$/i;
+const STATUS_LINE = /^\s*(?:\*\*)?Status(?:\*\*)?:/i;
+// A heading's status may sit in an HTML comment (`### Slice 3.1 <!-- Status: Completed -->`): read it, never strip it.
+const STATUS_NOTE = /<!--\s*Status:.*?-->/gi;
+const notedStatus = (raw, line) => statusOf(`${line} ${(raw.match(STATUS_NOTE) || []).join(' ')}`);
+const explicitOn = (raw, line) => /\[[ xX-]\]|~~|\bStatus:/i.test(line) || /<!--\s*Status:/i.test(raw);
+const RANK = { open: 0, active: 1, done: 2 };
+const cellsOf = line => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim());
+const plainCell = cell => cell.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\*\*|`/g, '').trim();
+// A table cell's status: a box or strike, or a status word with or without a `Status:` prefix.
+const cellStatus = cell => statusOf(/\bStatus:/i.test(cell) ? cell : `Status: ${cell.replace(/^[^\w[~]+/, '')}`);
 
 function titleOf(value) {
   return text(value.replace(/<!--.*?-->/g, '').replace(/\[[ xX-]\]/g, '')
@@ -78,14 +94,27 @@ function rowFacts(target, line) {
   if (!target.summary && line.trim() && !/^\s*(?:\*\*|<!--|[-*|#>[]|\d+\.|Status\b|---)/i.test(line)) target.summary = text(line.replace(/\*\*|`/g, ''), 240);
 }
 
-function parseChecklist(markdown) {
+/**
+ * Parses the master checklist into pies and slices. Pass an empty object as `meta` to also collect what
+ * mcp/checklist-format.js validates: each pie's heading line and declared status, each slice's line and
+ * own status, every slice occurrence (duplicates included), the scoped lines, and which pies came from a table.
+ */
+function parseChecklist(markdown, meta = null) {
   const pies = [];
-  let current = null, slice = null, prep = false, fenced = false;
+  let current = null, slice = null, prep = false, fenced = false, table = null;
+  // The furthest status a repeated slice already had from its earlier entries: a later entry never lowers it.
+  let floor = null;
   const prepChecks = [];
   let prepStatus = 'open';
   const prepPieceExemptions = {};
-  for (const raw of (markdown || '').split(/\r?\n/)) {
-    if (/^\s*(```|~~~)/.test(raw)) { fenced = !fenced; continue; }
+  const tables = new Map(), pieInfo = new Map(), sliceInfo = new Map();
+  if (meta) Object.assign(meta, { pies: [], occurrences: [], scoped: [] });
+  const track = (pie, at, raw, line, kind) => pieInfo.set(pie, { line: at, kind, explicit: explicitOn(raw, line),
+    heading: line.replace(/^##\s+/, '').trim() });
+  const lines = (markdown || '').split(/\r?\n/);
+  for (let index = 0; index < lines.length; index++) {
+    const raw = lines[index], at = index + 1;
+    if (/^\s*(```|~~~)/.test(raw)) { fenced = !fenced; table = null; continue; }
     if (fenced) continue;
     const exemption = /<!--\s*kitchen-piece-exemption:\s*([a-z, ]+)\s*\|\s*(.+?)\s*-->/.exec(raw);
     if (exemption) {
@@ -95,32 +124,41 @@ function parseChecklist(markdown) {
       }
     }
     const line = raw.replace(/<!--.*?-->/g, '').trimEnd();
+    if (!/^\s*\|/.test(line)) table = null;
     if (/^##\s+Prep\b/i.test(line)) {
       prep = true; slice = null;
-      prepStatus = statusOf(line);
+      prepStatus = notedStatus(raw, line);
       const number = Number(/\bPie\s+(\d+)/i.exec(line)?.[1] || 1);
-      current = { id: `pie-${number}`, pie: number, title: 'Foundations', status: statusOf(line), single: false, slices: [] };
-      pies.push(current);
+      current = { id: `pie-${number}`, pie: number, title: 'Foundations', status: prepStatus, single: false, slices: [] };
+      pies.push(current); track(current, at, raw, line, 'prep');
+      if (meta) meta.scoped.push({ line: at, raw });
       continue;
     }
-    const pieMatch = /^##\s+(?:\[[ xX-]\]\s*)?(?:~~)?Pie\s+(\d+)\b(.*)$/i.exec(line);
-    const standalone = /^##\s+(?:\[[ xX-]\]\s*)?(?:~~)?(?:Slice\s+(\d+\.\d+)|Stage\s+(\d+))\b(.*)$/i.exec(line);
+    const pieMatch = PIE_HEADING.exec(line);
+    const standalone = STANDALONE_HEADING.exec(line);
     if (pieMatch) {
       prep = false; slice = null;
       current = { id: `pie-${pieMatch[1]}`, pie: Number(pieMatch[1]), title: titleOf(pieMatch[2]),
-        status: statusOf(line), single: /\bsingle(?:[ -]slice)?\b/i.test(line), slices: [] };
-      pies.push(current); continue;
+        status: notedStatus(raw, line), single: /\bsingle(?:[ -]slice)?\b/i.test(line), slices: [] };
+      pies.push(current); track(current, at, raw, line, 'pie');
+      if (meta) meta.scoped.push({ line: at, raw });
+      continue;
     }
     if (standalone) {
       prep = false;
       const number = standalone[1] || standalone[2];
       const legacy = Boolean(standalone[2]);
       const pie = Number(number.split('.')[0]);
-      slice = { id: `${legacy ? 'stage' : 'slice'}-${number}`, number, title: titleOf(standalone[3]), status: statusOf(line) };
+      floor = null;
+      slice = { id: `${legacy ? 'stage' : 'slice'}-${number}`, number, title: titleOf(standalone[3]), status: notedStatus(raw, line) };
       current = { id: `standalone-${slice.id}`, pie, title: slice.title, status: slice.status, single: true, slices: [slice] };
-      pies.push(current); continue;
+      pies.push(current); track(current, at, raw, line, legacy ? 'stage' : 'standalone');
+      sliceInfo.set(slice, { line: at, kind: 'heading', explicit: explicitOn(raw, line) });
+      if (meta) { meta.occurrences.push({ number, line: at, kind: legacy ? 'stage' : 'heading' }); meta.scoped.push({ line: at, raw }); }
+      continue;
     }
     if (/^##\s/.test(line)) { current = null; slice = null; prep = false; continue; }
+    if (meta && current) meta.scoped.push({ line: at, raw });
     if (prep && /\bn\/a\b|not applicable/i.test(line) && (/\[[xX]\]/.test(line) || prepStatus === 'done')) {
       // Match the named Prep item, never an unrelated exception in its explanation.
       const label = line.split(':')[0];
@@ -130,55 +168,104 @@ function parseChecklist(markdown) {
     if (prep && /^\s*(?:-\s*)?\[[ xX]\]/.test(line)) {
       prepChecks.push(/\[[xX]\]|\bn\/?a\b|not applicable/i.test(line));
     }
-    const sliceMatch = /^###\s+(?:\[[ xX-]\]\s*)?(?:~~)?Slice\s+(\d+\.\d+)\b(.*)$/i.exec(line)
-      || (prep ? /^\s*(?:-\s*)?\[[ xX]\]\s+Slice\s+(\d+\.\d+)\b(.*)$/i.exec(line) : null);
+    const sliceMatch = SLICE_HEADING.exec(line) || (prep ? PREP_SLICE.exec(line) : null);
     if (sliceMatch) {
       const number = sliceMatch[1];
-      slice = { id: `slice-${number}`, number, title: titleOf(sliceMatch[2]), status: statusOf(line) };
+      const status = notedStatus(raw, line);
+      const explicit = explicitOn(raw, line);
+      if (meta) meta.occurrences.push({ number, line: at, kind: /^###/.test(line) ? 'heading' : 'bullet' });
       if (!current || current.pie !== Number(number.split('.')[0])) {
         current = { id: `standalone-slice-${number}`, pie: Number(number.split('.')[0]),
-          title: slice.title, status: slice.status, single: true, slices: [] };
-        pies.push(current);
+          title: titleOf(sliceMatch[2]), status, single: true, slices: [] };
+        pies.push(current); track(current, at, raw, line, 'standalone');
       }
-      current.slices.push(slice); continue;
+      // A slice listed twice (a Prep line and its own heading) is one slice: keep the furthest status.
+      const existing = current.slices.find(item => item.number === number);
+      if (existing) {
+        floor = existing.status;
+        if (RANK[status] > RANK[existing.status]) existing.status = status;
+        if (explicit) sliceInfo.get(existing).explicit = true;
+        slice = existing;
+        continue;
+      }
+      floor = null;
+      slice = { id: `slice-${number}`, number, title: titleOf(sliceMatch[2]), status };
+      current.slices.push(slice);
+      sliceInfo.set(slice, { line: at, kind: /^###/.test(line) ? 'heading' : 'bullet', explicit });
+      continue;
     }
     if (/^###\s/.test(line)) slice = null;
+    // A pie that lists its slices only in a markdown table: the rows count once the pie has no slice headings.
+    if (current && pieInfo.get(current)?.kind === 'pie' && /^\s*\|/.test(line)) {
+      const cells = cellsOf(line);
+      if (!table) table = { header: cells.map(cell => plainCell(cell).toLowerCase()) };
+      else if (!cells.every(cell => /^:?-{2,}:?$/.test(cell))) {
+        const { header } = table;
+        let idAt = header.indexOf('slice');
+        if (idAt < 0) idAt = cells.findIndex(cell => /^\d+\.\d+[a-z]?$/.test(plainCell(cell)));
+        const number = idAt >= 0 ? plainCell(cells[idAt] || '') : '';
+        if (/^\d+\.\d+[a-z]?$/.test(number) && Number(number.split('.')[0]) === current.pie) {
+          const statusAt = header.findIndex(cell => /^(?:status|implementation|state|progress)$/.test(cell));
+          const titleAt = header.findIndex(cell => /deliverable|name|title/.test(cell));
+          const statusCell = statusAt >= 0 ? plainCell(cells[statusAt] || '') : null;
+          const rows = tables.get(current) || [];
+          tables.set(current, rows);
+          rows.push({ number, line: at, statusCell, title: titleOf(plainCell(cells[titleAt >= 0 ? titleAt : idAt + 1] || '')),
+            status: statusCell !== null ? cellStatus(statusCell) : statusOf(line),
+            explicit: statusCell !== null ? statusCell !== '' : /\[[ xX-]\]|~~|\bStatus:/i.test(line) });
+        }
+      }
+    }
     if (!prep && (slice || current)) rowFacts(slice || current, line);
-    if (/^\s*(?:\*\*)?Status(?:\*\*)?:/i.test(line)) {
+    if (STATUS_LINE.test(line)) {
       const status = statusOf(line.replace(/\*\*/g, ''));
-      if (slice) slice.status = status;
-      else if (current) current.status = status;
+      if (slice) { slice.status = floor && RANK[floor] > RANK[status] ? floor : status; sliceInfo.get(slice).explicit = true; }
+      else if (current) { current.status = status; pieInfo.get(current).explicit = true; }
       if (prep) prepStatus = status;
     }
   }
   for (const pie of pies) {
+    const rows = tables.get(pie);
+    const tableOnly = pie.slices.length === 0 && Boolean(rows && rows.length);
+    if (tableOnly) {
+      for (const row of rows) {
+        if (meta) meta.occurrences.push({ number: row.number, line: row.line, kind: 'table' });
+        if (pie.slices.some(item => item.number === row.number)) continue;
+        const item = { id: `slice-${row.number}`, number: row.number, title: row.title, status: row.status };
+        pie.slices.push(item);
+        sliceInfo.set(item, { line: row.line, kind: 'table', explicit: row.explicit, statusCell: row.statusCell });
+      }
+    }
+    const declared = pie.status, own = pie.slices.map(item => item.status);
     if (pie.slices.length === 1) pie.single = true;
     if (pie.status === 'done') { for (const item of pie.slices) item.status = 'done'; }
     else if (pie.slices.length && pie.slices.every(item => item.status === 'done')) pie.status = 'done';
     else if (pie.slices.some(item => item.status === 'active')) pie.status = 'active';
+    if (meta) {
+      meta.pies.push({ ...pieInfo.get(pie), pie: pie.pie, title: pie.title, declared, status: pie.status, tableOnly,
+        tableLine: tableOnly ? rows[0].line : null,
+        slices: pie.slices.map((item, i) => ({ ...sliceInfo.get(item), number: item.number, own: own[i], status: item.status })) });
+    }
   }
   return { pies, prepComplete: prepStatus === 'done' || (prepChecks.length > 0 && prepChecks.every(Boolean)), prepPieceExemptions };
 }
 
-// Mirror the SessionStart hook's heading-based counts before activity overlays statuses.
+// The counts the SessionStart hook prints (hooks/shop-status.sh reads them through mcp/checklist-format.js):
+// the checklist parse before any activity overlay, so a body `**Status:** Completed` line and a heading's
+// `<!-- Status: ... -->` note count, and a pie rolls up from its slices. Prep counts boxes, as the hook does.
 function shopStatus(markdown) {
-  const lines = (markdown || '').split(/\r?\n/);
-  const pieLayout = lines.some(line => /^## +Pie\s+[0-9]/.test(line));
-  const done = line => /\[[xX]\]|~~|[Ss]tatus:\s*(Completed|Done)/.test(line);
-  const count = pattern => {
-    const matches = lines.filter(line => pattern.test(line));
-    const completed = matches.filter(done).length;
-    return { done: completed, total: matches.length, open: matches.length - completed };
+  const { pies } = parseChecklist(markdown);
+  const count = items => {
+    const done = items.filter(item => item.status === 'done').length;
+    return { done, total: items.length, open: items.length - done };
   };
   let inPrep = false, prepDone = 0, prepTotal = 0;
-  for (const line of lines) {
+  for (const line of (markdown || '').split(/\r?\n/)) {
     if (/^## +Prep(?:\s|$)/.test(line)) { inPrep = true; continue; }
     if (/^## /.test(line)) inPrep = false;
     if (inPrep && /^\s*(?:-\s*)?\[[ xX]\]/.test(line)) { prepTotal++; if (/\[[xX]\]/.test(line)) prepDone++; }
   }
-  return { prep: { done: prepDone, total: prepTotal },
-    pies: count(pieLayout ? /^## +Pie\s+[0-9]/ : /^## +Stage\s+[0-9]/),
-    slices: count(/^### +Slice\s+[0-9]+\.[0-9]/) };
+  return { prep: { done: prepDone, total: prepTotal }, pies: count(pies), slices: count(pies.flatMap(pie => pie.slices)) };
 }
 
 function mergeEvidence(value) {
@@ -323,7 +410,13 @@ function buildSnapshot({ root, checklist = '', markers = {}, rows = [], cursor =
   }));
   const built = parsed.prepComplete || Object.values(pieces).every(piece => piece.present);
   return { project: { root, name: path.basename(root), setup: built ? 'built' : Object.values(pieces).some(piece => piece.present) ? 'partial' : 'none', pieces },
-    pies: parsed.pies, shopStatus: shopStatus(checklist), ...activity, cursor, port, progress: progressOf(ledger, checklist) };
+    pies: parsed.pies, shopStatus: shopStatus(checklist), checklistProblems: checklistProblems(checklist),
+    ...activity, cursor, port, progress: progressOf(ledger, checklist) };
+}
+
+// The format check the hooks print (mcp/checklist-format.js, required late: it requires this file). [] without it.
+function checklistProblems(markdown) {
+  try { return require('./checklist-format.js').validateChecklist(markdown); } catch { return []; }
 }
 
 async function readFileOrEmpty(file) {

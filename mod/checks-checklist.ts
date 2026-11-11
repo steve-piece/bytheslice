@@ -57,7 +57,7 @@ const typeOf = (c: PassChecklist | null, id: string): string | undefined => {
 }
 
 // A slice heading or a Prep line, and the box it carries.
-const SLICE_LINE = /^\s*(?:#{2,3}\s+(?:\[[ xX-]\]\s*)?(?:~~)?Slice\s+(\d+\.\d+)\b|(?:-\s*)?\[[ xX]\]\s+Slice\s+(\d+\.\d+)\b)/i
+const SLICE_LINE = /^\s*(?:#{2,3}\s+(?:\[[ xX-]\]\s*)?(?:~~)?Slice\s+(\d+\.\d+[a-z]?)\b|(?:-\s*)?\[[ xX]\]\s+Slice\s+(\d+\.\d+[a-z]?)\b)/i
 
 /** Each slice heading or Prep line in a piece of checklist text: its id and whether its box reads `[x]`. */
 export function boxMarks(text: string): Map<string, boolean> {

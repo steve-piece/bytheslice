@@ -203,8 +203,11 @@ EOF
 CLAUDE_PROJECT_DIR=$FIX run_hook "$SHOP_STATUS" '{}'
 assert_exit "shop-status nested exit 0" 0
 assert_contains "shop-status nested dashless Prep counts" "Prep: 2/3 boxes checked"
-assert_contains "shop-status nested pie counts" "pies: 2 total, 1 completed / 1 open"
-assert_contains "shop-status nested slice counts" "slices: 4 total, 3 completed / 1 open"
+# With Node the counts come from the shared parse (6.4): Prep is Pie 1 and its
+# three slices count, as in the kitchen and the Pass.
+assert_contains "shop-status nested pie counts" "pies: 3 total, 1 completed / 2 open"
+assert_contains "shop-status nested slice counts" "slices: 7 total, 5 completed / 2 open"
+assert_contains "shop-status names the checklist source" "checklist: docs/plans/00_master_checklist.md (this checkout)"
 assert_contains "shop-status nested next open pie" "next open pie: Pie 3 - Publish Flow"
 assert_not_contains "shop-status nested no awk noise" "syntax error"
 # After compaction (or a resume) the same summary is injected: the hook has no
@@ -1057,6 +1060,15 @@ if "$JSON_NODE" -e '
   process.exit(JSON.stringify(got.sort()) === JSON.stringify(["beforeSubmitPrompt", "sessionStart", "stop", "subagentStart", "subagentStop"]) ? 0 : 1);
 ' "$CURSOR_HOOKS" 2>/dev/null; then cursor_ok "hooks-cursor.json runs lobby-signal.sh on sessionStart, beforeSubmitPrompt, subagentStart, subagentStop and stop"; else cursor_no "hooks-cursor.json lobby-signal.sh events"; fi
 
+# The checklist hooks ride Cursor's postToolUse: the edit check on every tool
+# (the script's own text match keeps it cheap), the PR check on Shell only.
+if "$JSON_NODE" -e '
+  const list = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).hooks.postToolUse || [];
+  const base = "BTS_HOST=cursor bash \"${CURSOR_PLUGIN_ROOT}/hooks/checklist-check.sh\" ";
+  const edit = list.find((e) => e.command === base + "edit");
+  const pr = list.find((e) => e.command === base + "pr");
+  process.exit(edit && !edit.matcher && pr && pr.matcher === "Shell" && edit.timeout === 10 && pr.timeout === 10 ? 0 : 1);
+' "$CURSOR_HOOKS" 2>/dev/null; then cursor_ok "hooks-cursor.json runs checklist-check.sh edit and pr (Shell) on postToolUse"; else cursor_no "hooks-cursor.json checklist-check.sh postToolUse"; fi
 FIX=$(mk_fixture)
 OUT=$(cd "$FIX" && env -u CLAUDE_PROJECT_DIR BTS_HOST=cursor bash "$SHOP_STATUS" </dev/null 2>/dev/null)
 if [ "$OUT" = "{}" ]; then cursor_ok "cursor shop-status: no checklist prints {}"; else cursor_no "cursor shop-status no checklist ($OUT)"; fi
@@ -1064,6 +1076,217 @@ mkdir -p "$FIX/docs/plans"; printf '## Pie 1: A\n### Slice 1.1: B\n- [ ] x\n' > 
 OUT=$(cd "$FIX" && env -u CLAUDE_PROJECT_DIR BTS_HOST=cursor bash "$SHOP_STATUS" </dev/null 2>/dev/null)
 if printf '%s' "$OUT" | python3 -c 'import json,sys; assert "bytheslice shop status" in json.load(sys.stdin)["additional_context"]' 2>/dev/null; then
   cursor_ok "cursor shop-status: additional_context carries the header"; else cursor_no "cursor shop-status header ($OUT)"; fi
+rm -rf "$FIX"
+
+####################################################################
+# Checklist source, shared counts and the warn-only checklist hooks (6.4)
+####################################################################
+
+echo
+echo "== checklist source, format check and PR checklist hooks =="
+CHECK_HOOK="$HERE/checklist-check.sh"
+REL=docs/plans/00_master_checklist.md
+# The `gh` word is split so a host guard on literal gh commands does not read these test strings as calls.
+GH=g; GH="${GH}h"
+
+# A pie with a done slice 2.1 and slice 2.2 at the given status.
+write_two_slices() { # dir, second-slice status
+  mkdir -p "$1/docs/plans"
+  printf '## Pie 2: Two\n\n### Slice 2.1: A\n**Status:** Completed\n\n### Slice 2.2: B\n**Status:** %s\n' "$2" > "$1/$REL"
+}
+quiet_ok() { # name: passes when the last run exited 0 and printed nothing
+  if [ "$LAST_EXIT" = 0 ] && [ -z "$LAST_OUT" ]; then PASS=$((PASS+1)); printf '  ✓ %s\n' "$1"
+  else FAIL=$((FAIL+1)); FAILED_NAMES+=("$1 (exit=$LAST_EXIT out=$LAST_OUT)"); printf '  ✗ %s (exit=%s)\n    output: %s\n' "$1" "$LAST_EXIT" "$LAST_OUT"; fi
+}
+
+# 1. A worktree session reads its own worktree, not the stale primary checkout.
+FIX=$(mk_fixture)
+write_two_slices "$FIX" "Not Started"
+git -C "$FIX" add -A && git -C "$FIX" commit -q -m checklist
+WT="$FIX/.claude/worktrees/wt"
+git -C "$FIX" worktree add -q -b wt "$WT" 2>/dev/null
+write_two_slices "$WT" "Completed"
+git -C "$WT" commit -q -am "close 2.2"
+CLAUDE_PROJECT_DIR=$FIX run_hook "$SHOP_STATUS" "{\"hook_event_name\":\"SessionStart\",\"cwd\":$(json_str "$WT")}"
+assert_exit "shop-status worktree exit 0" 0
+assert_contains "shop-status reads the session worktree" "slices: 2 total, 2 completed / 0 open"
+assert_contains "shop-status names the worktree as the source" "(this worktree)"
+CLAUDE_PROJECT_DIR=$FIX run_hook "$SHOP_STATUS" '{}'
+assert_contains "shop-status without a cwd reads the project dir" "slices: 2 total, 1 completed / 1 open"
+git -C "$FIX" worktree remove --force "$WT" 2>/dev/null
+rm -rf "$FIX"
+
+# 2. No copy in this checkout: read origin's default branch, and say so.
+ORIGIN=$(mk_fixture)
+write_two_slices "$ORIGIN" "Completed"
+git -C "$ORIGIN" add -A && git -C "$ORIGIN" commit -q -m checklist
+CLONE=$(mktemp -d)/clone
+git clone -q "$ORIGIN" "$CLONE"
+git -C "$CLONE" config user.email test@example.com; git -C "$CLONE" config user.name test
+git -C "$CLONE" checkout -q -b feat
+git -C "$CLONE" rm -q "$REL" && git -C "$CLONE" commit -q -m "drop checklist here"
+LAST_OUT=$(cd "$CLONE" && printf '{"cwd":%s}' "$(json_str "$CLONE")" | env -u CLAUDE_PROJECT_DIR bash "$SHOP_STATUS" 2>&1); LAST_EXIT=$?
+assert_exit "shop-status origin fallback exit 0" 0
+assert_contains "shop-status falls back to origin's default branch" "(origin/main (this checkout has no copy))"
+assert_contains "shop-status counts origin's copy" "slices: 2 total, 2 completed / 0 open"
+
+# 3. A checkout behind origin whose checklist differs says how far behind it is.
+git -C "$CLONE" checkout -q main
+write_two_slices "$ORIGIN" "In Progress"
+git -C "$ORIGIN" commit -q -am "reopen 2.2"
+git -C "$CLONE" fetch -q origin
+LAST_OUT=$(cd "$CLONE" && printf '{"cwd":%s}' "$(json_str "$CLONE")" | env -u CLAUDE_PROJECT_DIR bash "$SHOP_STATUS" 2>&1); LAST_EXIT=$?
+assert_contains "shop-status flags a stale checkout" "(this checkout, 1 commit behind origin/main, whose copy differs)"
+rm -rf "$ORIGIN" "$(dirname "$CLONE")"
+
+# 4. Without Node the awk fallback still counts, and a pie rolls up from its slices.
+FIX=$(mk_fixture)
+mkdir -p "$FIX/docs/plans"
+printf '## Pie 2: Rolled up\n### Slice 2.1: A [x]\n### Slice 2.2: B <!-- Status: Completed -->\n## Pie 3: Open\n### Slice 3.1: C [ ]\n' > "$FIX/$REL"
+NONODE=$(mktemp -d)
+for tool in bash git awk sed head cat cksum cut id cmp dirname tr mkdir; do
+  p=$(command -v "$tool") && ln -s "$p" "$NONODE/$tool"
+done
+LAST_OUT=$(CLAUDE_PROJECT_DIR=$FIX PATH="$NONODE" "$NONODE/bash" "$SHOP_STATUS" </dev/null 2>&1); LAST_EXIT=$?
+assert_exit "shop-status without node exit 0" 0
+assert_contains "awk fallback rolls a pie up from its slices" "pies: 2 total, 1 completed / 1 open"
+assert_contains "awk fallback reads a heading-comment status" "slices: 3 total, 2 completed / 1 open"
+assert_not_contains "awk fallback prints no format check" "checklist format"
+rm -rf "$NONODE" "$FIX"
+
+# 5. The SessionStart banner carries the format check with line numbers.
+FIX=$(mk_fixture)
+mkdir -p "$FIX/docs/plans"
+cp "$HERE/../tests/fixtures/checklist-format/baldwin-shaped.md" "$FIX/$REL"
+CLAUDE_PROJECT_DIR=$FIX run_hook "$SHOP_STATUS" '{}'
+assert_exit "shop-status Baldwin-shaped exit 0" 0
+assert_contains "Baldwin-shaped pies count once each" "pies: 5 total, 3 completed / 2 open"
+assert_contains "Baldwin-shaped slices count once each" "slices: 18 total, 16 completed / 2 open"
+assert_contains "banner names the duplicate slice with its line" "line 24 duplicate-slice: Slice 1.4"
+assert_contains "banner names the table-only pie" "table-only-pie: Pie 4"
+assert_contains "banner routes the repair to a separate subagent" "start a separate subagent session"
+
+# 6. The edit hook: context on a checklist edit, silent otherwise, never a block.
+SID="t-$$-edit"
+EDIT_PAYLOAD="{\"session_id\":\"$SID\",\"hook_event_name\":\"PostToolUse\",\"tool_name\":\"Edit\",\"cwd\":$(json_str "$FIX"),\"tool_input\":{\"file_path\":$(json_str "$FIX/$REL")}}"
+LAST_OUT=$(printf '%s' "$EDIT_PAYLOAD" | bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+assert_exit "edit hook exit 0" 0
+assert_contains "edit hook adds context" '"additionalContext"'
+assert_contains "edit hook names the PostToolUse event" '"hookEventName":"PostToolUse"'
+assert_contains "edit hook lists the problem line" "line 24 duplicate-slice"
+assert_contains "edit hook says unrelated work keeps going" "keep going"
+assert_not_contains "edit hook never decides" '"decision"'
+assert_not_contains "edit hook never denies" "permissionDecision"
+LAST_OUT=$(printf '%s' "$EDIT_PAYLOAD" | bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+quiet_ok "edit hook stays quiet on the same report in one session"
+LAST_OUT=$(printf '{"session_id":"%s-2","tool_name":"Write","tool_input":{"file_path":"%s/src/app.ts"}}' "$SID" "$FIX" | bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+quiet_ok "edit hook ignores other files"
+write_two_slices "$FIX" "Completed"
+LAST_OUT=$(printf '%s' "${EDIT_PAYLOAD/$SID/$SID-clean}" | bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+quiet_ok "edit hook is silent on a clean checklist"
+LAST_OUT=$(printf 'not json 00_master_checklist.md' | bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+quiet_ok "edit hook on malformed input"
+rm -rf "$FIX"
+
+# 7. The PR hook: a slice-related branch that leaves the checklist unchanged draws a warning, never a block.
+ORIGIN=$(mk_fixture)
+write_two_slices "$ORIGIN" "Not Started"
+printf '# Slice 2.2\nFiles: `src/feature.ts`\n' > "$ORIGIN/docs/plans/stage_6_feature.md"
+mkdir -p "$ORIGIN/src"; printf 'export const a = 1\n' > "$ORIGIN/src/feature.ts"; printf 'x\n' > "$ORIGIN/src/other.ts"
+git -C "$ORIGIN" add -A && git -C "$ORIGIN" commit -q -m base
+CLONE=$(mktemp -d)/clone
+git clone -q "$ORIGIN" "$CLONE"
+git -C "$CLONE" config user.email test@example.com; git -C "$CLONE" config user.name test
+git -C "$CLONE" checkout -q -b feedback-round
+printf 'export const a = 2\n' > "$CLONE/src/feature.ts"
+git -C "$CLONE" commit -q -am "fix: client feedback on the feature"
+pr_payload() { printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","cwd":%s,"tool_input":{"command":%s}}' "$(json_str "$CLONE")" "$(json_str "$1")"; }
+for CMD in "$GH as steve-piece pr create --fill" "$GH pr create --base main --title x" "cd . && $GH -R o/r pr create" "$GH pr new"; do
+  LAST_OUT=$(pr_payload "$CMD" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+  assert_exit "pr hook exit 0 ($CMD)" 0
+  assert_contains "pr hook warns ($CMD)" "leaves docs/plans/00_master_checklist.md unchanged"
+done
+assert_contains "pr hook names the plan-listed file" "src/feature.ts"
+assert_contains "pr hook adds PreToolUse context" '"hookEventName":"PreToolUse"'
+assert_contains "pr hook says nothing is blocked" "nothing is blocked"
+assert_not_contains "pr hook never denies" "permissionDecision"
+assert_not_contains "pr hook never decides" '"decision"'
+for CMD in 'git status' "$GH pr view 12" "$GH pr list" "echo pr create"; do
+  LAST_OUT=$(pr_payload "$CMD" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+  quiet_ok "pr hook quiet on: $CMD"
+done
+git -C "$CLONE" checkout -q -b chore main
+printf 'y\n' > "$CLONE/src/other.ts"; git -C "$CLONE" commit -q -am "chore: tidy"
+LAST_OUT=$(pr_payload "$GH pr create --fill" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+quiet_ok "pr hook quiet on a branch no slice names"
+git -C "$CLONE" checkout -q -b pie-3-polish main
+printf 'z\n' > "$CLONE/src/other.ts"; git -C "$CLONE" commit -q -am "feat(pie-3): 3.1 task 2 polish"
+LAST_OUT=$(pr_payload "$GH pr create --fill" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+assert_exit "pr hook pie commit exit 0" 0
+assert_contains "pr hook reads a pie commit subject" "names a pie or slice"
+cursor_pr() { printf '{"hook_event_name":"postToolUse","conversation_id":"c-pr","tool_name":"Shell","tool_input":{"command":%s},"cwd":%s,"workspace_roots":[%s]}' "$(json_str "$1")" "$(json_str "$CLONE")" "$(json_str "$CLONE")"; }
+LAST_OUT=$(cursor_pr "$GH as steve-piece pr create --fill" | BTS_HOST=cursor bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+assert_exit "cursor pr hook exit 0" 0
+assert_contains "cursor pr hook answers additional_context" '"additional_context":"[bytheslice checklist] This PR left'
+assert_contains "cursor pr hook asks for a follow-up commit" "so the open PR carries it"
+assert_not_contains "cursor pr hook never sets a permission" '"permission"'
+assert_not_contains "cursor pr hook never uses the Claude Code shape" "hookSpecificOutput"
+LAST_OUT=$(cursor_pr "$GH pr view 3" | BTS_HOST=cursor bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+assert_exit "cursor pr hook quiet exit 0" 0
+if [ "$LAST_OUT" = "{}" ]; then PASS=$((PASS+1)); printf '  ✓ %s\n' "cursor pr hook answers {} on other commands"; else FAIL=$((FAIL+1)); FAILED_NAMES+=("cursor pr hook {} ($LAST_OUT)"); printf '  ✗ cursor pr hook {} (%s)\n' "$LAST_OUT"; fi
+git -C "$CLONE" checkout -q main
+LAST_OUT=$(pr_payload "$GH pr create --head feedback-round --fill" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+assert_exit "pr hook --head from main exit 0" 0
+assert_contains "pr hook reads the --head branch, not the checkout HEAD" "src/feature.ts"
+LAST_OUT=$(pr_payload "$GH as steve-piece pr create -H=steve-piece:pie-3-polish --fill" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+assert_contains "pr hook reads an owner:branch -H and its branch name" "names a pie or slice"
+LAST_OUT=$(pr_payload "$GH pr create --head no-such-branch --fill" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+quiet_ok "pr hook quiet when the --head branch is unknown here"
+git -C "$CLONE" checkout -q feedback-round
+write_two_slices "$CLONE" "Completed"; git -C "$CLONE" commit -q -am "docs: close 2.2"
+LAST_OUT=$(pr_payload "$GH as steve-piece pr create --fill" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+quiet_ok "pr hook quiet once the checklist is updated"
+rm -rf "$ORIGIN" "$(dirname "$CLONE")"
+LAST_OUT=$(printf '{"tool_input":{"command":"%s pr create"},"cwd":"/nonexistent"}' "$GH" | bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+quiet_ok "pr hook outside a repo"
+LAST_OUT=$(printf '{"tool_input":{"command":"%s pr create"}}' "$GH" | BTS_HOOKS_DISABLED=1 bash "$CHECK_HOOK" pr 2>&1); LAST_EXIT=$?
+quiet_ok "pr hook disabled"
+
+# 8. Cursor: the edit check rides postToolUse, every exit answers JSON, and sessionStart reads workspace_roots[0].
+cursor_json() { # name: passes when the last run exited 0 and printed exactly {}
+  if [ "$LAST_EXIT" = 0 ] && [ "$LAST_OUT" = "{}" ]; then PASS=$((PASS+1)); printf '  ✓ %s\n' "$1"
+  else FAIL=$((FAIL+1)); FAILED_NAMES+=("$1 (exit=$LAST_EXIT out=$LAST_OUT)"); printf '  ✗ %s (exit=%s)\n    output: %s\n' "$1" "$LAST_EXIT" "$LAST_OUT"; fi
+}
+FIX=$(mk_fixture)
+mkdir -p "$FIX/docs/plans"
+cp "$HERE/../tests/fixtures/checklist-format/baldwin-shaped.md" "$FIX/$REL"
+CEDIT="{\"hook_event_name\":\"postToolUse\",\"conversation_id\":\"c-$$-edit\",\"tool_name\":\"Write\",\"cwd\":$(json_str "$FIX"),\"workspace_roots\":[$(json_str "$FIX")],\"tool_input\":{\"path\":$(json_str "$REL")}}"
+LAST_OUT=$(printf '%s' "$CEDIT" | BTS_HOST=cursor bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+assert_exit "cursor edit hook exit 0" 0
+assert_contains "cursor edit hook answers additional_context" '"additional_context"'
+assert_contains "cursor edit hook reads a relative path against the workspace root" "line 24 duplicate-slice"
+assert_not_contains "cursor edit hook never sets a permission" '"permission"'
+LAST_OUT=$(printf '%s' "$CEDIT" | BTS_HOST=cursor bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+cursor_json "cursor edit hook dedupes by conversation and answers {}"
+LAST_OUT=$(printf '{"tool_name":"Read","tool_input":{"path":"src/a.ts"}}' | BTS_HOST=cursor bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+cursor_json "cursor edit hook answers {} on other tools"
+LAST_OUT=$(printf '%s' "$CEDIT" | BTS_HOST=cursor BTS_HOOKS_DISABLED=1 bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+cursor_json "cursor edit hook answers {} when disabled"
+LAST_OUT=$(printf 'not json 00_master_checklist.md' | BTS_HOST=cursor bash "$CHECK_HOOK" edit 2>&1); LAST_EXIT=$?
+cursor_json "cursor edit hook answers {} on malformed input"
+rm -rf "$FIX"
+FIX=$(mk_fixture)
+write_two_slices "$FIX" "Not Started"
+git -C "$FIX" add -A && git -C "$FIX" commit -q -m checklist
+WT="$FIX/.claude/worktrees/wt"
+git -C "$FIX" worktree add -q -b wt "$WT" 2>/dev/null
+write_two_slices "$WT" "Completed"
+LAST_OUT=$(printf '{"hook_event_name":"sessionStart","conversation_id":"c-s","workspace_roots":[%s]}' "$(json_str "$WT")" | (cd "$FIX" && CLAUDE_PROJECT_DIR=$FIX BTS_HOST=cursor bash "$SHOP_STATUS") 2>&1); LAST_EXIT=$?
+assert_exit "cursor sessionStart worktree exit 0" 0
+if printf '%s' "$LAST_OUT" | python3 -c 'import json,sys; c=json.load(sys.stdin)["additional_context"]; assert "slices: 2 total, 2 completed / 0 open" in c and "(this worktree)" in c' 2>/dev/null; then
+  PASS=$((PASS+1)); printf '  ✓ %s\n' "cursor sessionStart reads workspace_roots[0] (the session worktree)"
+else FAIL=$((FAIL+1)); FAILED_NAMES+=("cursor sessionStart worktree ($LAST_OUT)"); printf '  ✗ cursor sessionStart worktree\n    output: %s\n' "$LAST_OUT"; fi
+git -C "$FIX" worktree remove --force "$WT" 2>/dev/null
 rm -rf "$FIX"
 
 ####################################################################
