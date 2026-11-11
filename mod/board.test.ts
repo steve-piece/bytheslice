@@ -214,3 +214,12 @@ test('a whole-pie claim marks another pie active, and stays on the pie line afte
   expect(seven.pieHolders.map(h => [h.sid, h.branch])).toEqual([['other', 'pie-7-whole']])
   expect(seven.slices.find(s => s.id === '7.1')!.state).toBe('building')
 })
+
+test('squash-merged slices read merged: a squash subject naming the pie, or a merged PR of their commits branch', () => {
+  const done: PassChecklist = { ...CHECKLIST, pies: [{ ...CHECKLIST.pies[1]!, done: true, slices: CHECKLIST.pies[1]!.slices.map(s => ({ ...s, done: true })) }] }
+  const rows = [row('other', NOW - 5 * HOUR, 'commit', '7.2', { sha: 'orig001', branch: 'pie-7-seven' })]
+  const squash = { base: 'origin/main', shas: ['sq1'], subjects: ['Pie 7: seven (#42)'] }
+  expect(boardOf(done, world({ rows, base: squash })).pies).toEqual([])
+  const viaPr = boardOf(done, world({ rows, base: { base: 'origin/main', shas: [], subjects: [] }, merged: [{ head: 'pie-7-seven', t: NOW - HOUR }] }), 'all')
+  expect(viaPr.pies[0]!.slices.find(s => s.id === '7.2')!.state).toBe('merged')
+})

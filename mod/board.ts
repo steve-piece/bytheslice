@@ -4,7 +4,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
-import { ageWords, collisionsFor, readElsewhere } from './claims.ts'
+import { ageWords, collisionsFor, piesInTitle, readElsewhere, shortBranch, slicesInTitle } from './claims.ts'
 import type { Elsewhere, Liveness, Party } from './claims.ts'
 import { headsMatch } from './checks.ts'
 import { slicesNamed } from './drift.ts'
@@ -59,7 +59,18 @@ export function boardOf(c: PassChecklist | null, world: Elsewhere, scope: 'open'
   const all: Elsewhere = { ...world, self: { sid: '', branch: null, worktree: '' } }
   const named = world.base ? slicesNamed(world.base.subjects) : new Set<string>()
   const onBase = (sha: unknown): boolean => typeof sha === 'string' && (world.base?.shas.some(merged => headsMatch(merged, sha)) ?? false)
-  const merged = (id: string): boolean => named.has(id) || world.rows.some(row => row.ev === 'commit' && row.slice === id && onBase(row.data?.sha))
+  // Squash merges leave no original sha on the base: their subject (`Pie 7: first (#42)`) or a merged PR of the
+  // branch a slice's commits were on says it merged instead.
+  const squashes = (world.base?.subjects ?? []).filter(subject => /\(#\d+\)\s*$/.test(subject))
+  const squashedSlices = new Set([...slicesNamed(squashes), ...squashes.flatMap(subject => slicesInTitle(subject))])
+  const squashedPies = new Set(squashes.flatMap(subject => piesInTitle(subject)))
+  const mergedHead = (branch: unknown, t: number): boolean =>
+    typeof branch === 'string' && (world.merged ?? []).some(m => shortBranch(m.head) === shortBranch(branch) && m.t >= t)
+  const merged = (id: string): boolean =>
+    named.has(id) ||
+    squashedSlices.has(id) ||
+    squashedPies.has(Number(id.split('.')[0])) ||
+    world.rows.some(row => row.ev === 'commit' && row.slice === id && (onBase(row.data?.sha) || mergedHead(row.data?.branch, row.t)))
   const pies: PassBoard['pies'] = []
   for (const pie of c?.pies ?? []) {
     if (pie.slices.length === 0) continue
