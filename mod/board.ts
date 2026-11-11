@@ -4,7 +4,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
-import { ageWords, collisionsFor, piesInTitle, readElsewhere, shortBranch, slicesInTitle } from './claims.ts'
+import { ageWords, collisionsFor, livenessOf, piesInTitle, readElsewhere, shortBranch, slicesInTitle } from './claims.ts'
 import type { Elsewhere, Liveness, Party } from './claims.ts'
 import { headsMatch } from './checks.ts'
 import { slicesNamed } from './drift.ts'
@@ -74,7 +74,6 @@ export function boardOf(c: PassChecklist | null, world: Elsewhere, scope: 'open'
   const pies: PassBoard['pies'] = []
   for (const pie of c?.pies ?? []) {
     if (pie.slices.length === 0) continue
-    if (scope === 'open' && pie.done && pie.slices.every(s => merged(s.id))) continue
     const found = collisionsFor(all, pie.n, pie.slices.map(s => s.id))
     const parties = [...found.conflicts, ...found.handoffs]
     const slices: PassBoardSlice[] = pie.slices.map(s => {
@@ -85,6 +84,10 @@ export function boardOf(c: PassChecklist | null, world: Elsewhere, scope: 'open'
       // Merged once nothing unmerged holds it: one task on the default branch leaves the rest of the slice in play.
       if (holding.length === 0 && merged(s.id)) return { id: s.id, name: s.name, state: 'merged', holders: 0, sids: [], holder: null, pr: null, lastT: null, goal: null, dirty: null, ahead: null }
       const best = holding[0] ?? null
+      // The sessions on this slice, not every session on its branch: a shared pie branch carries several slices.
+      const sliceSids = (p: Party): string[] => [...new Set([...(p.sliceSids[s.id] ?? []), ...(p.sliceSids['*'] ?? [])])]
+      const sids = [...new Set(holding.flatMap(sliceSids))]
+      const who = best === null ? null : (sliceSids(best).includes(best.sid ?? '') ? best.sid : sliceSids(best)[0] ?? null)
       const own: PassBoardState = s.done ? 'built' : 'queued'
       const theirs = best === null ? own : stateOf(best, s.id)
       const state = RANK[theirs] >= RANK[own] ? theirs : own
@@ -92,10 +95,18 @@ export function boardOf(c: PassChecklist | null, world: Elsewhere, scope: 'open'
         id: s.id,
         name: s.name,
         state,
-        // Every session a party holds counts, so two chats on one branch read as two holders.
-        holders: new Set(holding.flatMap(p => (p.sids.length > 0 ? p.sids : [`branch:${p.branch ?? p.key}`]))).size,
-        sids: [...new Set(holding.flatMap(p => p.sids))],
-        holder: best === null ? null : { sid: best.sid, branch: best.branch, worktree: best.worktree, liveness: best.liveness },
+        // Every session on this slice counts, so two chats on it read as two holders; a branch with none counts once.
+        holders: new Set(holding.flatMap(p => (sliceSids(p).length > 0 ? sliceSids(p) : [`branch:${p.branch ?? p.key}`]))).size,
+        sids,
+        holder:
+          best === null
+            ? null
+            : {
+                sid: who,
+                branch: best.branch,
+                worktree: best.worktree,
+                liveness: who === null ? null : who === best.sid ? best.liveness : livenessOf(who, best.lastT, world),
+              },
         pr: best?.pr ?? null,
         lastT: best?.lastT ?? null,
         goal: best?.goal ?? null,
@@ -107,6 +118,8 @@ export function boardOf(c: PassChecklist | null, world: Elsewhere, scope: 'open'
       // A whole-pie claim stays on the pie line after its session starts a slice too.
       .filter(p => p.pieLevel)
       .map(p => ({ sid: p.sid, branch: p.branch, worktree: p.worktree, liveness: p.liveness }))
+    // Open means a slice still not merged, judged from the resolved states: a checked-off pie may still hold work.
+    if (scope === 'open' && pie.done && slices.every(s => s.state === 'merged')) continue
     pies.push({ n: pie.n, name: pie.name, done: pie.done, slices, pieHolders: whole })
   }
   return { at: world.now, pies, prsChecked: world.prs !== null }

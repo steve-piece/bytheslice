@@ -223,3 +223,23 @@ test('squash-merged slices read merged: a squash subject naming the pie, or a me
   const viaPr = boardOf(done, world({ rows, base: { base: 'origin/main', shas: [], subjects: [] }, merged: [{ head: 'pie-7-seven', t: NOW - HOUR }] }), 'all')
   expect(viaPr.pies[0]!.slices.find(s => s.id === '7.2')!.state).toBe('merged')
 })
+
+test('two sessions on different slices of one shared pie branch each hold only their own slice', () => {
+  const rows = [row('me', NOW - 60000, 'claim', '7.1', { branch: 'pie-7-work' }), row('other', NOW - 30000, 'claim', '7.2', { branch: 'pie-7-work' })]
+  const board = { ...boardOf(CHECKLIST, world({ rows, strip: { me: NOW, other: NOW } })), self: 'me' }
+  const seven = board.pies.find(p => p.n === 7)!
+  expect(seven.slices.filter(s => s.id === '7.1' || s.id === '7.2').map(s => [s.id, s.holders, s.sids, s.holder?.sid])).toEqual([
+    ['7.1', 1, ['me'], 'me'],
+    ['7.2', 1, ['other'], 'other'],
+  ])
+  expect(boardRows(board, CHECKLIST).filter(line => line.startsWith('  7.')).map(line => line.slice(0, 5))).toEqual(['  7.2'])
+})
+
+test('a checked-off pie with unmerged work left stays on the open board', () => {
+  const done: PassChecklist = { ...CHECKLIST, pies: [{ ...CHECKLIST.pies[1]!, done: true, slices: CHECKLIST.pies[1]!.slices.map(s => ({ ...s, done: true })) }] }
+  const base = { base: 'origin/main', shas: ['m1', 'm2'], subjects: ['feat(pie-7): 7.1 task 1', 'feat(pie-7): 7.2 task 1'] }
+  const commits = [{ sha: 'r2', branch: 'pie-7-s7.2-rest', t: NOW - HOUR, subject: 'feat(pie-7): 7.2 task 2' }]
+  const open = boardOf(done, world({ base, commits }))
+  expect(open.pies.map(p => p.n)).toEqual([7])
+  expect(open.pies[0]!.slices.find(s => s.id === '7.2')!.state).toBe('built')
+})

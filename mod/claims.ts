@@ -100,6 +100,8 @@ export type Party = {
   pieBranch: boolean
   /** The slices it has commits for (a branch commit naming them, or a commit row in its ledger), slice by slice. */
   committed: string[]
+  /** Which sessions hold which of its slices (`*` for the whole pie), so a shared pie branch keeps them apart. */
+  sliceSids: Record<string, string[]>
 }
 
 /** What the fold found for one pie: other work that conflicts, work this session continues, and a delivery-mode mismatch. */
@@ -323,7 +325,7 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     const key = branch ?? `session:${sid ?? 'unknown'}`
     let party = parties.get(key)
     if (!party) {
-      party = { key, sid: null, sids: [], branch, worktree: null, dirty: null, ahead: null, pie, slices: [], done: [], pieLevel: false, commits: 0, claimed: false, goal: null, lastT: null, liveness: null, pr: null, pieBranch: isPieBranch(branch), committed: [] }
+      party = { key, sid: null, sids: [], branch, worktree: null, dirty: null, ahead: null, pie, slices: [], done: [], pieLevel: false, commits: 0, claimed: false, goal: null, lastT: null, liveness: null, pr: null, pieBranch: isPieBranch(branch), committed: [], sliceSids: {} }
       parties.set(key, party)
     }
     if (sid !== null && !party.sids.includes(sid)) party.sids.push(sid)
@@ -362,6 +364,7 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     party.slices = sortSlices([...party.slices, ...live])
     party.done = sortSlices([...party.done, ...[...work.done].filter(id => live.includes(id))])
     party.committed = sortSlices([...party.committed, ...live.filter(id => (work.slices.get(id)?.shas.length ?? 0) > 0)])
+    for (const id of [...live, ...(pieOpen ? ['*'] : [])]) party.sliceSids[id] = [...new Set([...(party.sliceSids[id] ?? []), work.sid])]
     party.pieLevel ||= pieOpen
     party.claimed ||= work.claimed
     party.worktree ??= work.worktree
