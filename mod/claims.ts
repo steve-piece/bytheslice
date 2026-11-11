@@ -379,8 +379,10 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     if (own.has(branch) || branchPie(branch) !== pie) continue
     const tip = world.heads.find(head => head.branch === branch)?.t ?? null
     const bySlice = branchSlice(branch)
-    if (mergedBefore(branch, tip ?? 0)) continue
-    if (bySlice !== null ? !wanted(bySlice) || named.has(bySlice) || branchTaken(branch, bySlice, tip ?? 0) : squashedPie || wholeTaken(branch, tip ?? 0)) continue
+    // Uncommitted edits are new work: a merge of the branch's committed tip says nothing about them.
+    const dirty = (tree.dirty ?? 0) > 0
+    if (!dirty && mergedBefore(branch, tip ?? 0)) continue
+    if (bySlice !== null ? !wanted(bySlice) || (!dirty && named.has(bySlice)) || branchTaken(branch, bySlice, tip ?? 0) : (!dirty && squashedPie) || wholeTaken(branch, tip ?? 0)) continue
     const party = partyFor(branch, null)
     if (bySlice !== null) party.slices = sortSlices([...party.slices, bySlice])
     else party.pieLevel ||= party.slices.length === 0

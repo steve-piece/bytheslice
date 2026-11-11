@@ -385,3 +385,12 @@ test('one task of a slice on the default branch never hides its other, unmerged 
   // Every recorded commit merged: settled.
   expect(collisionsFor(world({ base, rows: rows.slice(0, 1) }), 7, ['7.1']).conflicts).toEqual([])
 })
+
+test('a worktree with uncommitted edits still counts after its branch earlier PR merged', () => {
+  const worktrees = [{ path: '/wt/again', branch: 'pie-7-s7.1-again', dirty: 2 }]
+  const heads = [{ branch: 'pie-7-s7.1-again', sha: 'h1', t: NOW - 3 * HOUR }]
+  const merged = [{ head: 'pie-7-s7.1-again', t: NOW - 2 * HOUR }]
+  expect(collisionsFor(world({ worktrees, heads, merged }), 7, ['7.1']).conflicts.map(p => [p.branch, p.dirty])).toEqual([['pie-7-s7.1-again', 2]])
+  // Clean, the merge settles it.
+  expect(collisionsFor(world({ worktrees: [{ ...worktrees[0]!, dirty: 0 }], heads, merged }), 7, ['7.1']).conflicts).toEqual([])
+})
