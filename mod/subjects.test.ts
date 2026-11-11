@@ -69,7 +69,12 @@ test('a plan commit that names a pie merges nothing; only the boundary shape doe
   expect([boundaryPie(PIE_28_PLAN), boundaryPie(PIE_24_25_PLAN), boundaryPie(PIE_23_MERGE)]).toEqual([null, null, 23])
   expect(boundaryPie('Pie 23: Video GIF Posting')).toBeNull()
   expect(boundaryPie('docs: Pie 9 roadmap (#12)')).toBeNull()
-  expect(boundaryPie('Pie 9: plan the onboarding (#12)')).toBeNull()
+  expect(boundaryPie('Pie 9: add plans for onboarding (#12)')).toBeNull()
+  expect(boundaryPie('Pie 9: plan (#12)')).toBeNull()
+  // A feature named with a plan word is still a boundary merge: box-it-up titles the PR from the pie's own name.
+  expect(boundaryPie('Pie 7: Subscription plans (#42)')).toBe(7)
+  expect(boundaryPie('Pie 9: Docs export (#40)')).toBe(9)
+  expect(squashSlices('Slice 7.4: Checklist editor (#43)')).toEqual(['7.4'])
   expect([isPlanOnly(PIE_28_PLAN), isPlanOnly('chore(pie-28): 28.1 task 2 bump deps'), isPlanOnly('Pie 23: Video GIF Posting (#251)')]).toEqual([true, false, false])
   expect(squashSlices('feat(pie-7): 7.1 first (#40)')).toEqual(['7.1'])
   expect(squashSlices('Slice 7.2: second (#41)')).toEqual(['7.2'])

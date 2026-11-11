@@ -23,12 +23,21 @@ const SUBJECT_SLICE = /\(pie-\d+\):\s*(\d+\.\d+)\b/g
 const SQUASH_SUFFIX = /\(#\d+\)\s*$/
 /** A conventional-commit type that plans or documents rather than builds (`chore(plans): ...`), unless scoped to a pie. */
 const PLAN_TYPE = /^\s*(chore|docs?|plans?|specs?)(\((?!pie-\d)[^)]*\))?!?:/i
-/** Words a plan, roadmap, checklist, spec or docs change uses; the same words that mark a planning PR title. */
-const PLAN_WORDS = /\b(plans?|planning|roadmap|checklist|specs?|docs?|special order)\b/i
+/** A planning change in words: a verb that changes plans, then a plan noun (`add Pie 26 plans`, `update the roadmap`). */
+const PLAN_PHRASE = /\b(add|adds|added|update|updates|updated|write|writes|wrote|draft|drafts|drafted|revise|revises|revised|re-?plan)\b[^()]*\b(plans?|roadmap|checklist|specs?|special order)\b/i
+/** A title whose name is nothing but a plan noun (`Pie 9: plan (#12)`, `Slice 7.1: spec`). */
+const PLAN_NAME = /:\s*(the\s+)?(plans?|planning|roadmap|checklist|specs?|docs?)\s*(\(#\d+\))?\s*$/i
 
-/** Whether a subject or title only plans or documents, so it is never evidence that a pie was built or merged. Pure. */
+/**
+ * Whether a subject or title records a planning change, so it is never
+ * evidence that a pie was built or merged: a plan or docs commit type not
+ * scoped to a pie (`chore(plans): ...`), a planning phrase (`add ... plans`),
+ * or a name that is only a plan noun. A feature whose name merely contains
+ * such a word (`Pie 7: Subscription plans`, `Slice 7.1: Docs viewer`) is not
+ * one. Pure.
+ */
 export function isPlanOnly(text: string): boolean {
-  return PLAN_TYPE.test(text) || PLAN_WORDS.test(text)
+  return PLAN_TYPE.test(text) || PLAN_PHRASE.test(text) || PLAN_NAME.test(text)
 }
 
 /**
