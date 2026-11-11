@@ -13,15 +13,22 @@ import {
   handoffLine,
   holdsClaim,
   isPieBranch,
+  holdsWork,
+  openSlices,
   overOf,
   parseHeads,
+  parsePrList,
+  parseRunArg,
+  piesInTitle,
+  runTarget,
+  slicesInTitle,
   parsePrs,
   parseRefCommits,
   parseWorktrees,
   shortBranch,
 } from './claims.ts'
 import type { Elsewhere } from './claims.ts'
-import type { LedgerRow } from './types'
+import type { LedgerRow, PassChecklist } from './types'
 
 const NOW = 1760000000000
 const HOUR = 60 * 60 * 1000
@@ -100,6 +107,9 @@ test('a release as deferred or abandoned drops the work; a release as done keeps
   const work = [row('other', NOW - HOUR, 'commit', '7.1', { sha: 'aaaaaaa1', branch: 'pie-7-s7.1-a' })]
   const dropped = collisionsFor(world({ rows: [...work, row('other', NOW - 1000, 'release', '7.1', { reason: 'abandoned' })] }), 7, OPEN)
   expect(dropped.conflicts).toEqual([])
+  // The turn that released it still writes its usage row: bookkeeping, not new work.
+  const usage = row('other', NOW - 500, 'usage', '7.1', { tok: 10 })
+  expect(collisionsFor(world({ rows: [...work, row('other', NOW - 1000, 'release', '7.1', { reason: 'abandoned' }), usage] }), 7, OPEN).conflicts).toEqual([])
   const kept = collisionsFor(world({ rows: [...work, row('other', NOW - 1000, 'release', '7.1', { reason: 'done' })] }), 7, OPEN)
   expect(kept.conflicts.map(p => p.slices)).toEqual([['7.1']])
 })
@@ -152,7 +162,7 @@ test('an open PR for the pie or one of its slices conflicts; one for another pie
 
 test('another session on this session own branch is a handoff once it is no longer live, a conflict while it is', () => {
   const rows = [row('earlier', NOW - 10 * HOUR, 'commit', '7.1', { sha: 'ccccccc1', branch: 'pie-7-s7.1-first' })]
-  const ended = collisionsFor(world({ rows }), 7, OPEN)
+  const ended = collisionsFor(world({ rows, ended: { earlier: NOW - 9 * HOUR } }), 7, OPEN)
   expect(ended.conflicts).toEqual([])
   expect(ended.handoffs.map(p => handoffLine(p, NOW))).toEqual(['Slice 7.1: continuing on branch pie-7-s7.1-first from session earlier (ended)'])
   const live = collisionsFor(world({ rows: [{ ...rows[0]!, t: NOW - 60000 }], strip: { earlier: NOW } }), 7, OPEN)
@@ -161,15 +171,19 @@ test('another session on this session own branch is a handoff once it is no long
 
 test('an ended session with no branch, commit or PR on record is history to continue; a live one still conflicts', () => {
   const rows = [row('before-clear', NOW - 2 * HOUR, 'slice.started', '7.1'), row('before-clear', NOW - HOUR, 'verdict', '7.1', { gate: 'slice-verifier' })]
-  const ended = collisionsFor(world({ rows }), 7, OPEN)
+  const ended = collisionsFor(world({ rows, ended: { 'before-clear': NOW - 30 * 60000 } }), 7, OPEN)
   expect(ended.conflicts).toEqual([])
   expect(ended.handoffs.map(p => handoffLine(p, NOW))).toEqual(['Slice 7.1: continuing from session before-clear (ended)'])
+  // Without an end mark it may only be idle (its chat still open): it conflicts, worded as idle.
+  const idle = collisionsFor(world({ rows }), 7, OPEN)
+  expect(idle.conflicts.map(p => p.liveness)).toEqual(['idle'])
+  expect(conflictLine(idle.conflicts[0]!, NOW)).toContain('(idle: no running session seen, its chat may still be open, last activity 1 h ago)')
   expect(collisionsFor(world({ rows, strip: { 'before-clear': NOW } }), 7, OPEN).conflicts.map(p => p.liveness)).toEqual(['live'])
 })
 
 test('an ended session whose only claim was the pie leaves nothing behind', () => {
   const rows = [row('gone', NOW - 30 * HOUR, 'pie.started', null)]
-  expect(collisionsFor(world({ rows }), 7, OPEN).conflicts).toEqual([])
+  expect(collisionsFor(world({ rows, ended: { gone: NOW - 29 * HOUR } }), 7, OPEN).conflicts).toEqual([])
 })
 
 test('merge-per-slice flags a run on one pie branch, its own or another', () => {
@@ -228,4 +242,91 @@ test('a slice claim ignores another slice branch, its commits, its worktree and 
   // Checking the whole pie still sees it, as slice 7.2 work.
   const all = collisionsFor(world({ commits, worktrees, prs }), 7, OPEN)
   expect(all.conflicts.map(p => [p.branch, p.slices, p.pieLevel, p.pr?.number ?? null])).toEqual([['pie-7-s7.2-second', ['7.2'], false, 42]])
+})
+
+const CHECKLIST: PassChecklist = {
+  layout: 'pie',
+  prep: null,
+  pies: [
+    { n: 8, name: 'Earlier', review: 'boundary', done: false, slices: [{ id: '8.6', name: 'Left open', done: false }] },
+    { n: 23, name: 'Video', review: 'boundary', done: false, slices: [{ id: '23.1', name: 'Kinds', done: false }, { id: '23.2', name: 'Upload', done: false }] },
+  ],
+}
+
+test('the run target is the pie the run is on, not the first pie with an open slice', () => {
+  const at = (facts: Partial<Parameters<typeof runTarget>[1]>) => runTarget(CHECKLIST, { branch: null, rows: [], sid: 'me', ...facts })
+  expect(at({})).toEqual({ pie: 8, slice: '8.6' })
+  expect(at({ branch: 'pie-23-video' })).toEqual({ pie: 23, slice: '23.1' })
+  expect(at({ branch: 'pie-23-s23.2-upload' })).toEqual({ pie: 23, slice: '23.2' })
+  expect(at({ branch: 'main', arg: '23' })).toEqual({ pie: 23, slice: '23.1' })
+  expect(at({ branch: 'main', arg: 'Slice 23.2' })).toEqual({ pie: 23, slice: '23.2' })
+  // A merge-per-slice conductor sits on main between slices: its own claim says where it is.
+  const rows = [row('me', 1, 'claim', '23.2'), row('me', 2, 'claim', '23.2', { contested: true })]
+  expect(at({ branch: 'main', rows })).toEqual({ pie: 23, slice: '23.2' })
+  expect(at({ branch: 'main', rows: [row('me', 1, 'claim', '23.2', { contested: true })] })).toEqual({ pie: 8, slice: '8.6' })
+  expect(at({ branch: 'pie-99-gone' })).toEqual({ pie: 8, slice: '8.6' })
+  expect([parseRunArg('pie 23'), parseRunArg('7'), parseRunArg('bake it'), parseRunArg(undefined)]).toEqual([{ pie: 23, slice: null }, { pie: 7, slice: null }, null, null])
+})
+
+test('a contested claim is intent only: it makes no conflict for the holder and no claim for its writer', () => {
+  const rows = [
+    row('me', NOW - 2 * HOUR, 'claim', '7.1', { branch: 'pie-7-s7.1-first' }),
+    row('me', NOW - HOUR, 'commit', '7.1', { sha: 'abcdef12', branch: 'pie-7-s7.1-first' }),
+    row('newcomer', NOW - 60000, 'claim', '7.1', { branch: 'pie-7-s7.1-again', contested: true }),
+    row('newcomer', NOW - 30000, 'warn', '7.1', { code: 'session-collision' }),
+  ]
+  expect(collisionsFor(world({ rows, strip: { newcomer: NOW } }), 7, OPEN).conflicts).toEqual([])
+  expect(holdsClaim(rows, 'newcomer', 7, '7.1')).toBe(false)
+  expect(holdsWork(rows, 'me', 7, '7.1')).toBe(true)
+  expect(holdsWork(rows, 'newcomer', 7, '7.1')).toBe(false)
+})
+
+test('squash-merged work counts as merged: a merged PR of its branch, a base subject naming the slice or the pie', () => {
+  const commits = [{ sha: 'a1', branch: 'pie-7-s7.1-theirs', t: NOW - 3 * HOUR, subject: 'feat(pie-7): 7.1 first' }]
+  const rows = [row('other', NOW - 3 * HOUR, 'commit', '7.1', { sha: 'a1', branch: 'pie-7-s7.1-theirs' })]
+  expect(collisionsFor(world({ commits, rows, merged: [{ head: 'pie-7-s7.1-theirs', t: NOW - HOUR }] }), 7, OPEN).conflicts).toEqual([])
+  // Work after the merge is new work again.
+  expect(collisionsFor(world({ commits, merged: [{ head: 'pie-7-s7.1-theirs', t: NOW - 4 * HOUR }] }), 7, OPEN).conflicts).toHaveLength(1)
+  const base = { base: 'origin/main', shas: ['m1'], subjects: ['feat(pie-7): 7.1 first (#40)'] }
+  expect(collisionsFor(world({ commits, base }), 7, OPEN).conflicts).toEqual([])
+  const whole = [{ sha: 'w1', branch: 'pie-7-everything', t: NOW - HOUR, subject: 'wip' }]
+  const squash = { base: 'origin/main', shas: ['m1'], subjects: ['Pie 7: everything (#41)'] }
+  expect(collisionsFor(world({ commits: whole, base: squash }), 7, OPEN).conflicts).toEqual([])
+  expect(collisionsFor(world({ commits: whole }), 7, OPEN).conflicts).toHaveLength(1)
+  expect(parsePrList('[{"number":1,"headRefName":"a","state":"MERGED","mergedAt":"2026-01-01T00:00:00Z"},{"number":2,"headRefName":"b","state":"CLOSED"},{"number":3,"headRefName":"c","state":"OPEN","title":"t","url":"u"}]')).toEqual({
+    open: [{ number: 3, title: 't', head: 'c', url: 'u', t: 0 }],
+    merged: [{ head: 'a', t: Date.parse('2026-01-01T00:00:00Z') }],
+  })
+})
+
+test('a party keeps every session on its branch and shows the liveliest', () => {
+  const rows = [
+    row('first', NOW - 2 * HOUR, 'commit', '7.1', { sha: 'b1', branch: 'pie-7-s7.4-fourth' }),
+    row('second', NOW - 60000, 'edit', '7.1', { branch: 'pie-7-s7.4-fourth' }),
+  ]
+  // This session's own branch: the ended first session alone would be a handoff, but a live second one conflicts.
+  const found = collisionsFor(world({ rows, self: { sid: 'me', branch: 'pie-7-s7.4-fourth', worktree: '/repo' }, strip: { second: NOW }, ended: { first: NOW - HOUR } }), 7, OPEN)
+  expect(found.handoffs).toEqual([])
+  expect(found.conflicts.map(p => [p.sid, p.sids, p.liveness])).toEqual([['second', ['first', 'second'], 'live']])
+  expect(conflictLine(found.conflicts[0]!, NOW)).toContain('2 sessions on it')
+})
+
+test('an empty open list means nothing is open; null means the checklist could not tell', () => {
+  const rows = [row('other', NOW - HOUR, 'claim', '7.1', { branch: 'pie-7-s7.1-first' }), row('other', NOW - HOUR, 'claim', null, { branch: 'pie-7-s7.1-first' })]
+  expect(collisionsFor(world({ rows, strip: { other: NOW } }), 7, []).conflicts).toEqual([])
+  expect(collisionsFor(world({ rows, strip: { other: NOW } }), 7, null).conflicts.map(p => p.slices)).toEqual([['7.1']])
+  expect(openSlices(CHECKLIST, 23)).toEqual(['23.1', '23.2'])
+  expect(openSlices(CHECKLIST, 99)).toBeNull()
+  expect(openSlices(null, 23)).toBeNull()
+})
+
+test('PR titles name every pie and slice they mention, and a planning PR is not a build', () => {
+  expect(piesInTitle('add Pie 26 plans and Pie 27 plans')).toEqual([26, 27])
+  expect(piesInTitle('Pies 23 and 24: media')).toEqual([23, 24])
+  expect(piesInTitle('Pies 3 to 5')).toEqual([3, 4, 5])
+  expect(slicesInTitle('Slices 7.1 and 7.2')).toEqual(['7.1', '7.2'])
+  const plan = [{ number: 50, title: 'docs: add Pie 7 and Pie 8 plans', head: 'docs/roadmap', url: 'u50', t: NOW }]
+  expect(collisionsFor(world({ prs: plan }), 7, OPEN).conflicts).toEqual([])
+  const build = [{ number: 51, title: 'Pies 6 and 7: shared upload', head: 'feature/upload', url: 'u51', t: NOW }]
+  expect(collisionsFor(world({ prs: build }), 7, OPEN).conflicts.map(p => p.pr?.number)).toEqual([51])
 })

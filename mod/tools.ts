@@ -10,7 +10,7 @@ import { ledgerPath } from './ledger.ts'
 import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, boxReady, counts, refresh } from './projection.ts'
 import { runningFor } from './rail.tsx'
-import { collisionLines, collisionsFor, handoffLine, openSlices, readElsewhere, registerClaim } from './claims.ts'
+import { collisionLines, collisionsFor, handoffLine, holdsWork, openSlices, readElsewhere, registerClaim, runTarget } from './claims.ts'
 import type { Collisions } from './claims.ts'
 import { driftLine, readBase, readDrift } from './drift.ts'
 import type { StatusDrift } from './drift.ts'
@@ -205,6 +205,8 @@ export function statusReport(
     team?: PassTeam
     drift?: readonly StatusDrift[]
     collisions?: Collisions | null
+    /** This session holds the slice and has work on it: other work is listed, but `Next:` stays its own. */
+    holdsWork?: boolean
   },
   scope: 'active' | 'all' = 'active',
 ): string {
@@ -293,7 +295,7 @@ export function statusReport(
   // Other work on the pie comes first: the projection folds every session's rows, so its own status may be theirs.
   lines.push(
     `Next: ${
-      found && other.length > 0
+      found && other.length > 0 && view.holdsWork !== true
         ? `other work is on Pie ${found.pie}: raise a destructive_operation HITL with these facts before cutting a branch or writing code`
         : nextAction(c, p, branch)
     }`,
@@ -333,13 +335,16 @@ export async function serveStatus($: EngineInterface, input: Record<string, unkn
   const scope = input.scope === 'all' ? 'all' : 'active'
   const base = await readBase($).catch(() => null)
   const drift = await readDrift($, checklist, projection, branch, base).catch(() => [])
-  const pie = activePie(checklist)
   let collisions: Collisions | null = null
-  if (pie) {
-    const world = await readElsewhere($, { branch, base }).catch(() => null)
-    if (world) collisions = collisionsFor(world, pie.n, openSlices(checklist, pie.n))
+  let holding = false
+  const world = checklist?.layout === 'pie' ? await readElsewhere($, { branch, base }).catch(() => null) : null
+  // The pie this run is on (its branch, its claims), not merely the first one with an open slice.
+  const target = world ? runTarget(checklist, { branch: world.self.branch, rows: world.rows, sid: world.self.sid }) : null
+  if (world && target) {
+    collisions = collisionsFor(world, target.pie, openSlices(checklist, target.pie))
+    holding = holdsWork(world.rows, world.self.sid, target.pie, target.slice)
   }
-  return statusReport({ checklist, projection, live, branch, now, team, drift, collisions }, scope)
+  return statusReport({ checklist, projection, live, branch, now, team, drift, collisions, holdsWork: holding }, scope)
 }
 
 /** Serves bts_note: appends one note row (text cut to 2,000 characters) and answers `ok`. */

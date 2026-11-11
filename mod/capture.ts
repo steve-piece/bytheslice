@@ -10,7 +10,7 @@ import type {
   TurnCompleteInput,
 } from 'claude-code'
 
-import { holdsClaim, writeClaim, writeRelease } from './claims.ts'
+import { holdsClaim, runTarget, writeRelease } from './claims.ts'
 import { stripJsonc } from './jsonc.ts'
 import { appendRow, readRows, sessionId } from './ledger.ts'
 import type { LedgerInput } from './ledger.ts'
@@ -490,14 +490,22 @@ export type SkillBaker = { teammateId: string; pie: number | null }
  * carrying `data.teammateId`; a slice already started by that teammate is not
  * recorded again.
  */
-export async function captureSkill($: EngineInterface, name: unknown, baker: SkillBaker | null = null): Promise<LedgerRow[]> {
+export async function captureSkill($: EngineInterface, name: unknown, baker: SkillBaker | null = null, arg?: unknown): Promise<LedgerRow[]> {
   if (typeof name !== 'string' || !BAKERS.test(name.trim()) || (await isLimited($))) return []
   const c = await checklistOf($)
-  const own = baker?.pie == null ? null : c?.pies.find(entry => entry.n === baker.pie && entry.slices.some(s => !s.done)) ?? null
-  const pie = own ?? activePie(c)
-  const slice = own ? own.slices.find(s => !s.done) ?? null : activeSlice(c)
-  if (!pie) return []
   const rows = await readRows($)
+  const own = baker?.pie == null ? null : c?.pies.find(entry => entry.n === baker.pie && entry.slices.some(s => !s.done)) ?? null
+  // The pie the run is on (its argument, its branch, this session's claims), not merely the first open one.
+  const target = own
+    ? null
+    : runTarget(c, { arg, branch: (await git($, ['rev-parse', '--abbrev-ref', 'HEAD']))?.trim() ?? null, rows, sid: await sessionId($) })
+  const pie = own ?? (target ? c?.pies.find(entry => entry.n === target.pie) ?? null : activePie(c))
+  const slice = own
+    ? own.slices.find(s => !s.done) ?? null
+    : target
+      ? pie?.slices.find(s => s.id === target.slice) ?? null
+      : activeSlice(c)
+  if (!pie) return []
   const skill = name.trim().slice(name.trim().lastIndexOf(':') + 1)
   const who = baker ? { teammateId: baker.teammateId } : {}
   const out: LedgerRow[] = []
@@ -513,17 +521,6 @@ export async function captureSkill($: EngineInterface, name: unknown, baker: Ski
     const at = head && /^[0-9a-f]{7,64}$/.test(head) ? { head } : {}
     const written = await record($, { ev: 'slice.started', pie: pie.n, slice: slice.id, data: { skill, ...who, ...at } })
     if (written) out.push(written)
-  }
-  // The start is a claim every other session reads: this session, its branch and worktree, the pie and the slice.
-  const sid = await sessionId($)
-  const branch = (await git($, ['rev-parse', '--abbrev-ref', 'HEAD']))?.trim() ?? null
-  const worktree = await $.session.cwd().catch(() => '.')
-  // /sell-pie claims the pie and its first open slice; /sell-slice claims the slice only.
-  const ids: (string | null)[] = [...(skill === 'sell-pie' ? [null] : []), ...(slice ? [slice.id] : [])]
-  for (const id of ids) {
-    if (holdsClaim(rows, sid, pie.n, id)) continue
-    const claimed = await writeClaim($, { pie: pie.n, ...(id === null ? {} : { slice: id }), skill, branch, worktree, auto: true })
-    if (claimed) out.push(claimed)
   }
   return out
 }

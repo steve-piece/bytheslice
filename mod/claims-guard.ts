@@ -1,24 +1,42 @@
 // mod/claims-guard.ts
-// The collision guard's hooks: at a /sell-pie or /sell-slice start it reads the other work on the pie and, when there is any, warns (a warn row, a toast, the band) and tells the model to raise a blocking HITL before it cuts a branch; bts_claim's tool call. It never refuses a start.
+// The collision guard's hooks: at a /sell-pie or /sell-slice start it resolves the pie the run is on, reads the other work on it, writes this session's claim (a contested one while other work is there) and warns (a warn row, a toast, the band, a note telling the model to raise a blocking HITL before it cuts a branch); the same check runs again at the first file write or commit of a stretch of work, so a session resumed from a plain message is checked too; bts_claim's tool call. It never refuses anything.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
-import { GATE_STEP, collisionLines, collisionsFor, openSlices, readElsewhere, resetClaims as resetPrs, serveClaim } from './claims.ts'
+import {
+  GATE_STEP,
+  collisionLines,
+  collisionsFor,
+  holdsClaim,
+  holdsWork,
+  openSlices,
+  readElsewhere,
+  resetClaims as resetSources,
+  runTarget,
+  serveClaim,
+  writeClaim,
+} from './claims.ts'
 import { checksOn, reportToModel } from './checks.ts'
 import type { Finding } from './checks.ts'
-import { activePie, refresh } from './projection.ts'
+import { isLimited, refresh } from './projection.ts'
+import type { PassChecklist } from './types'
 
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
+const branchAtom = atom({ plugin: 'bytheslice', key: 'pass.branch' } as const, null)
 
-/** The warning code a start on other work reports under. */
+/** The warning code a start or a write on other work reports under. */
 export const COLLISION_CODE = 'session-collision'
-/** The three sources of one start (skill prompt, Skill tool, typed command) read the other work once. */
+/** The three sources of one start (skill prompt, Skill tool, typed command) read the other work once per pie and loop. */
 export const GUARD_WINDOW_MS = 30000
+/** A write or commit checks again once this long has passed since this session's last successful check. */
+export const WORK_CHECK_MS = 30 * 60 * 1000
 
 const BAKERS = /(^|:)(sell-pie|sell-slice)$/
+const COMMIT = /\bgit\b(?:\s+-C\s+\S+)?[^;&|]*\bcommit\b/
 
-let guarded: { pie: number; t: number } | null = null
+const guarded = new Map<string, number>()
+let lastCheck = Number.NEGATIVE_INFINITY
 
 async function nowOf($: EngineInterface): Promise<number> {
   try {
@@ -28,53 +46,117 @@ async function nowOf($: EngineInterface): Promise<number> {
   }
 }
 
-/** The finding a start on other work reports: the facts, one per line, and the step to take. Pure. */
-export function collisionFinding(pie: number, lines: readonly string[], slice?: string): Finding {
+/** The bare baker skill a name or typed command names (`sell-pie`, `sell-slice`), or null. Pure. */
+export function bakerSkill(name: unknown): 'sell-pie' | 'sell-slice' | null {
+  if (typeof name !== 'string') return null
+  const m = BAKERS.exec(name.trim().replace(/^\//, ''))
+  return m ? (m[2] as 'sell-pie' | 'sell-slice') : null
+}
+
+/** The finding other work reports: the facts, one per line, and the step to take. Pure. */
+export function collisionFinding(pie: number, lines: readonly string[], slice?: string | null, agentId: string | null = null): Finding {
   return {
     code: COLLISION_CODE,
-    key: `${pie}:${lines.join('|')}`,
-    ...(slice === undefined ? {} : { slice }),
+    // Keyed by loop too, so a teammate starting on the same pie within the minute still gets its own note.
+    key: `${pie}:${agentId ?? 'main'}:${lines.join('|')}`,
+    ...(slice === undefined || slice === null ? {} : { slice }),
     text: `other work is already on Pie ${pie}: ${lines.map(line => `(${line})`).join(' ')}. ${GATE_STEP}`,
   }
 }
 
+async function checklistOf($: EngineInterface): Promise<PassChecklist | null> {
+  return read($, checklistAtom).catch(() => null)
+}
+
 /**
- * At a baker skill's start: reads the other work on its pie (a teammate's
- * own pie when given) and reports it as a `session-collision` warning the
- * model reads as a hidden note. Resolves the lines, or null when there were
- * none, checks are off, or another source of the same start already ran.
+ * At a baker skill's start: resolves the pie and slice the run is on (its
+ * argument, its branch, this session's claims, else the active pie; a
+ * teammate's own pie when given), reads the other work, writes this session's
+ * claims for the pie (`/sell-pie`) and the slice, contested when other work is
+ * there, and reports that work as a `session-collision` warning the model reads
+ * as a hidden note. Resolves the lines, or null when there were none, the
+ * engine is limited, or another source of the same start already read them.
  */
 export async function guardStart(
   $: EngineInterface,
   name: unknown,
   agentId: string | null,
-  teammatePie: number | null = null,
+  opts: { teammatePie?: number | null; arg?: unknown } = {},
 ): Promise<string[] | null> {
-  if (typeof name !== 'string' || !BAKERS.test(name.trim().replace(/^\//, ''))) return null
-  if ((await checksOn($)) === null) return null
-  const c = await read($, checklistAtom).catch(() => null)
-  const pie = teammatePie === null ? activePie(c) : c?.pies.find(x => x.n === teammatePie) ?? null
-  if (!pie) return null
+  const skill = bakerSkill(name)
+  if (skill === null || (await isLimited($))) return null
+  const c = await checklistOf($)
+  if (c === null || c.layout !== 'pie') return null
   const now = await nowOf($)
-  if (guarded && guarded.pie === pie.n && now - guarded.t < GUARD_WINDOW_MS) return null
-  guarded = { pie: pie.n, t: now }
-  const open = openSlices(c, pie.n)
   const world = await readElsewhere($)
-  const lines = collisionLines(collisionsFor(world, pie.n, open), world.now)
+  const target =
+    opts.teammatePie != null
+      ? { pie: opts.teammatePie, slice: c.pies.find(x => x.n === opts.teammatePie)?.slices.find(s => !s.done)?.id ?? null }
+      : runTarget(c, { arg: opts.arg, branch: world.self.branch, rows: world.rows, sid: world.self.sid })
+  if (target === null) return null
+  const key = `${target.pie}|${agentId ?? 'main'}`
+  const last = guarded.get(key)
+  if (last !== undefined && now - last < GUARD_WINDOW_MS) return null
+  const found = collisionsFor(world, target.pie, openSlices(c, target.pie))
+  const lines = collisionLines(found, world.now)
+  // The start is a claim every other session reads, unless other work is there: then it is intent only.
+  const ids: (string | null)[] = [...(skill === 'sell-pie' ? [null] : []), ...(target.slice !== null ? [target.slice] : [])]
+  for (const id of ids) {
+    if (holdsClaim(world.rows, world.self.sid, target.pie, id)) continue
+    await writeClaim($, {
+      pie: target.pie,
+      ...(id === null ? {} : { slice: id }),
+      skill,
+      branch: world.self.branch,
+      worktree: world.self.worktree,
+      auto: true,
+      contested: lines.length > 0,
+    })
+  }
+  guarded.set(key, now)
+  lastCheck = now
   if (lines.length === 0) return null
-  await reportToModel($, [collisionFinding(pie.n, lines, open[0])], agentId)
+  if ((await checksOn($)) !== null) await reportToModel($, [collisionFinding(target.pie, lines, target.slice, agentId)], agentId)
   return lines
+}
+
+/** True for a Bash command that commits. Pure. */
+export const isCommit = (command: unknown): boolean => typeof command === 'string' && COMMIT.test(command)
+
+/**
+ * Before a file write or a commit: once per half hour of work, reads the other
+ * work on the pie this session is on and returns it as a finding the tool
+ * result carries. Skipped while this session holds the slice and has work on
+ * it (it is the one already building). Resolves no findings outside a
+ * ByTheSlice project, with checks off, or when nothing else is there.
+ */
+export async function guardWork($: EngineInterface): Promise<Finding[]> {
+  if ((await checksOn($)) === null) return []
+  const now = await nowOf($)
+  if (now - lastCheck < WORK_CHECK_MS) return []
+  const c = await checklistOf($)
+  if (c === null || c.layout !== 'pie') return []
+  const branch = await read($, branchAtom).catch(() => null)
+  const world = await readElsewhere($, branch === null ? {} : { branch })
+  lastCheck = now
+  const target = runTarget(c, { branch: world.self.branch, rows: world.rows, sid: world.self.sid })
+  if (target === null || holdsWork(world.rows, world.self.sid, target.pie, target.slice)) return []
+  const lines = collisionLines(collisionsFor(world, target.pie, openSlices(c, target.pie)), world.now)
+  return lines.length === 0 ? [] : [collisionFinding(target.pie, lines, target.slice)]
 }
 
 /** Serves bts_claim from the checklist atom (read once more when it is empty). */
 export async function serveClaimTool($: EngineInterface, input: Record<string, unknown>): Promise<string> {
-  if ((await read($, checklistAtom).catch(() => null)) === null) await refresh($).catch(() => null)
-  const c = await read($, checklistAtom).catch(() => null)
-  return serveClaim($, input, c, activePie(c)?.n ?? null)
+  if ((await checklistOf($)) === null) await refresh($).catch(() => null)
+  const c = await checklistOf($)
+  const answer = await serveClaim($, input, c)
+  lastCheck = await nowOf($)
+  return answer
 }
 
-/** Forgets the last guarded start and the cached PR list (a new session, or a test). */
+/** Forgets the guard marks, the cached PR list and the git snapshot (a new session, or a test). */
 export function resetClaims(): void {
-  resetPrs()
-  guarded = null
+  resetSources()
+  guarded.clear()
+  lastCheck = Number.NEGATIVE_INFINITY
 }

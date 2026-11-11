@@ -10,7 +10,7 @@ import { primeChecks, reportToModel, trackGit, trackSkill, warnResult } from './
 import { checkFileWrite, checkPush } from './checks-checklist.ts'
 import { checkCommitOnMain, checkFixSpawn, countFix, raiseFixCap } from './checks-git.ts'
 import { checkDrift, checkSpawn, trackSpawn } from './checks-spawn.ts'
-import { guardStart, resetClaims, serveClaimTool } from './claims-guard.ts'
+import { guardStart, guardWork, isCommit, resetClaims, serveClaimTool } from './claims-guard.ts'
 import { closeEndedStalls, closeOnReply, isOperatorReply, serveHitl } from './hitl.ts'
 import { startSession } from './ledger.ts'
 import { pollAgents, refreshLedger, startPulse } from './live.ts'
@@ -115,7 +115,11 @@ export const register: Register = on => {
   // Checks judge before the call from atoms only and add any warning to what the
   // model reads after the result. Nothing is refused.
   on('tool.call', { tool: ['Edit', 'Write'] }, async ($, e, next) => {
-    const findings = await checkFileWrite($, e).catch(() => [])
+    const findings = [
+      ...(await checkFileWrite($, e).catch(() => [])),
+      // Other work on the pie, checked at the first write of a stretch of work (a resumed session included).
+      ...(isChecklistPath(e.file_path) ? [] : await guardWork($).catch(() => [])),
+    ]
     const ran = await next(e)
     if (isChecklistPath(e.file_path)) {
       if (!(await isLimited($))) await reload($).catch(() => false)
@@ -131,6 +135,7 @@ export const register: Register = on => {
     const findings = [
       ...(await checkCommitOnMain($, e.command).catch(() => [])),
       ...(await checkPush($, e.command).catch(() => [])),
+      ...(isCommit(e.command) ? await guardWork($).catch(() => []) : []),
     ]
     const ran = await next(e)
     const rows = await captureBash($, e.command, ran).catch(() => [])
@@ -228,8 +233,9 @@ export const register: Register = on => {
     if (ran.deny === undefined && ran.isError !== true) {
       await trackSkill($, e.skill).catch(() => null)
       const baker = await teammateOf($, e.agentId).catch(() => null)
-      await captureSkill($, e.skill, baker ? { teammateId: baker.teammateId, pie: baker.pie } : null).catch(() => [])
-      await guardStart($, e.skill, e.agentId ?? null, baker?.pie ?? null).catch(() => null)
+      const arg = (e as { args?: unknown }).args
+      await captureSkill($, e.skill, baker ? { teammateId: baker.teammateId, pie: baker.pie } : null, arg).catch(() => [])
+      await guardStart($, e.skill, e.agentId ?? null, { teammatePie: baker?.pie ?? null, arg }).catch(() => null)
       if (baker) await refreshTeam($, { force: true }).catch(() => null)
     }
     return ran
@@ -263,8 +269,8 @@ export const register: Register = on => {
     await relay($, 'UserPromptExpansion', inputOf(e)).catch(() => 0)
     const expanded = await next(e)
     await trackSkill($, e.command_name).catch(() => null)
-    await captureSkill($, e.command_name).catch(() => [])
-    await guardStart($, e.command_name, null).catch(() => null)
+    await captureSkill($, e.command_name, null, e.command_args).catch(() => [])
+    await guardStart($, e.command_name, null, { arg: e.command_args }).catch(() => null)
     return expanded
   }).catch(($, e, next) => next(e))
 

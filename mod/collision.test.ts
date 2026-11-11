@@ -14,8 +14,12 @@ const A_BRANCH = 'pie-23-video-gif-posting'
 const B_BRANCH = 'pie-23-s23.1-media-kinds'
 const SLICES = ['23.1', '23.2', '23.3', '23.4', '23.5', '23.6']
 
-/** Pie 23 open in B's checklist, as every worktree cut from main reads it. */
+/** Pie 23 open in B's checklist, as every worktree cut from main reads it, behind an earlier pie that still has an open row. */
 const PIE_23 = [
+  '## Pie 8 - Earlier [ ]    <!-- review: boundary -->',
+  '### Slice 8.6 - Left open [ ]',
+  'Status: Not Started',
+  '',
   '## Pie 22 - Scheduling [x]    <!-- review: boundary -->',
   '### Slice 22.1 - Calendar [x]',
   '',
@@ -98,10 +102,13 @@ test('a /sell-pie start on that pie writes its claim and tells the model to rais
   await start($)
   await $.skill.prompt({ skill: 'bytheslice:sell-pie', text: 'bake', frontmatter: {}, source: 'plugin' })
   const mine = rowsOf(world).filter(r => r.sid === SESSION)
-  expect(mine.filter(r => r.ev === 'claim').map(r => [r.slice ?? null, (r.data as Record<string, unknown>).branch])).toEqual([
-    [null, B_BRANCH],
-    ['23.1', B_BRANCH],
+  // Pie 23 from the branch, not Pie 8 (the first pie with an open row); contested, since A's work is there.
+  const claims = mine.filter(r => r.ev === 'claim')
+  expect(claims.map(r => [r.pie, r.slice ?? null, (r.data as Record<string, unknown>).branch, (r.data as Record<string, unknown>).contested])).toEqual([
+    [23, null, B_BRANCH, true],
+    [23, '23.1', B_BRANCH, true],
   ])
+  expect(mine.filter(r => r.ev === 'pie.started' || r.ev === 'slice.started').every(r => r.pie === 23)).toBe(true)
   const warn = mine.find(r => r.ev === 'warn')
   expect((warn?.data as Record<string, unknown>).code).toBe('session-collision')
   expect(String((warn?.data as Record<string, unknown>).text)).toContain('PR 251 open')
@@ -113,7 +120,7 @@ test('bts_claim records the goal and lists the conflicts; over: true records the
   const { world, start } = incident(on)
   await start($)
   const claim = String((await $.tool.call({ tool: CLAIM_LISTED, pie: 23, slice: '23.1', goal: 'media kinds for video and GIF' })).result)
-  expect(claim.startsWith(`claimed Slice 23.1 on branch ${B_BRANCH}, but other work is on it:`)).toBe(true)
+  expect(claim.startsWith('not claimed: other work is on Slice 23.1 (recorded as a contested claim, which nobody counts as a claim):')).toBe(true)
   expect(claim).toContain('Before cutting a branch or writing code, raise a destructive_operation HITL')
   const over = String((await $.tool.call({ tool: CLAIM_LISTED, pie: 23, slice: '23.1', over: true })).result)
   expect(over).toContain(`over chat-a, ${A_BRANCH} with the operator's approval`)
@@ -125,11 +132,15 @@ test('bts_claim records the goal and lists the conflicts; over: true records the
   const released = String((await $.tool.call({ tool: CLAIM_LISTED, slice: '23.1', release: 'abandoned' })).result)
   expect(released).toBe('released Slice 23.1 (abandoned)')
   const mine = rowsOf(world).filter(r => r.sid === SESSION)
-  expect(mine.map(r => [r.ev, r.slice, (r.data as Record<string, unknown>).goal ?? null, (r.data as Record<string, unknown>).over ?? null, (r.data as Record<string, unknown>).reason ?? null])).toEqual([
-    ['claim', '23.1', 'media kinds for video and GIF', null, null],
-    ['claim', '23.1', null, ['chat-a', A_BRANCH], null],
-    ['release', '23.1', null, null, 'abandoned'],
+  const d = (r: Record<string, unknown>) => r.data as Record<string, unknown>
+  expect(mine.map(r => [r.ev, r.slice, d(r).goal ?? null, d(r).over ?? null, d(r).reason ?? null, d(r).contested ?? false])).toEqual([
+    ['claim', '23.1', 'media kinds for video and GIF', null, null, true],
+    ['claim', '23.1', null, ['chat-a', A_BRANCH], null, false],
+    ['release', '23.1', null, null, 'abandoned', false],
   ])
+  const bad = String((await $.tool.call({ tool: CLAIM_LISTED, slice: 'Slice 23.1', release: 'abandoned' })).result)
+  expect(bad.startsWith('bts_claim: "Slice 23.1" is not a slice id')).toBe(true)
+  expect(rowsOf(world).filter(r => r.sid === SESSION)).toHaveLength(3)
 })
 
 test('without gh the branch and ledger facts still show, and the claim says PRs were not checked', async ($, on) => {
@@ -146,8 +157,44 @@ test('without gh the branch and ledger facts still show, and the claim says PRs 
 })
 
 test('a session that ended still shows its unmerged work, worded as ended rather than live', async ($, on) => {
-  const { start } = incident(on, { aLive: false })
+  const { world, start } = incident(on, { aLive: false })
+  world.store['strip-ended:/repo:chat-a'] = START_MS - HOUR
   await start($)
   const text = await status($)
   expect(text).toContain('were worked on by a session that has ended (chat-a)')
+})
+
+test('a merge-per-slice conductor on main starting /sell-pie 23 claims Pie 23, never the first open pie', async ($, on) => {
+  const { world, start } = incident(on)
+  world.branch = 'main'
+  engineLoops(on)
+  on('tool.call', () => ({ result: {} }))
+  await start($)
+  await $.tool.call({ tool: 'Skill', skill: 'bytheslice:sell-pie', args: '23' })
+  const claims = rowsOf(world).filter(r => r.sid === SESSION && r.ev === 'claim')
+  expect(claims.map(r => [r.pie, r.slice ?? null])).toEqual([
+    [23, null],
+    [23, '23.1'],
+  ])
+})
+
+test('a session resumed from a plain message is checked at its first edit, and the warning rides on the edit result', async ($, on) => {
+  const { world, start } = incident(on)
+  on('tool.call', () => ({ result: 'edited' }))
+  await start($)
+  const ran = await $.tool.call({ tool: 'Edit', file_path: '/repo/src/media.ts', old_string: 'a', new_string: 'b' })
+  expect((ran.context ?? []).some(text => text.includes('The Pass warning (session-collision): other work is already on Pie 23'))).toBe(true)
+  expect(rowsOf(world).some(r => r.ev === 'warn' && (r.data as Record<string, unknown>).code === 'session-collision')).toBe(true)
+  // Within the half hour the next edit reads nothing again.
+  const before = world.runs.length
+  await $.tool.call({ tool: 'Edit', file_path: '/repo/src/media.ts', old_string: 'b', new_string: 'c' })
+  expect(world.runs.slice(before).some(argv => argv.includes('--source'))).toBe(false)
+})
+
+test('back-to-back reads reuse one git snapshot for ten seconds', async ($, on) => {
+  const { world, start } = incident(on)
+  await start($)
+  await status($)
+  await status($)
+  expect(world.runs.filter(argv => argv[0] === 'git' && argv.includes('--source'))).toHaveLength(1)
 })
