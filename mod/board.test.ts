@@ -162,3 +162,11 @@ test('bts_board reads the ledger, git and gh on call and answers the board', asy
   expect(text).toContain('  7.1 building · session chat-a · pie-7-s7.1-first · 1 h ago · goal: first part')
   expect(text).toContain('  7.2 queued')
 })
+
+test('a slice with one task merged and the rest on a branch reads as that work, not merged', () => {
+  const base = { base: 'origin/main', shas: ['t1aaaaa'], subjects: ['feat(pie-7): 7.2 task 1 first'] }
+  const commits = [{ sha: 't2bbbbb', branch: 'pie-7-s7.2-rest', t: NOW - HOUR, subject: 'feat(pie-7): 7.2 task 2 rest' }]
+  const slice = boardOf(CHECKLIST, world({ base, commits })).pies.find(p => p.n === 7)!.slices.find(s => s.id === '7.2')!
+  expect([slice.state, slice.holder?.branch]).toEqual(['built', 'pie-7-s7.2-rest'])
+  expect(boardOf(CHECKLIST, world({ base })).pies.find(p => p.n === 7)!.slices.find(s => s.id === '7.2')!.state).toBe('merged')
+})

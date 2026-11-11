@@ -47,8 +47,8 @@ export function stateOf(party: Party, slice: string): PassBoardState {
 
 /**
  * Every pie's slices with their state, holder, PR, last activity and goal.
- * `merged` when a ledger commit of the slice or a subject naming it is on the
- * default branch; otherwise the furthest any session, branch or PR took it
+ * `merged` when nothing unmerged holds it and a ledger commit of the slice or a
+ * subject naming it is on the default branch; otherwise the furthest any session, branch or PR took it
  * (`in review`, `built, unmerged`, `building`, `claimed`); `queued` when
  * nothing holds it. A slice the checklist marks done with nothing else known
  * reads `built, unmerged` until it reaches the default branch. Pure.
@@ -66,11 +66,12 @@ export function boardOf(c: PassChecklist | null, world: Elsewhere, scope: 'open'
     const found = collisionsFor(all, pie.n, pie.slices.map(s => s.id))
     const parties = [...found.conflicts, ...found.handoffs]
     const slices: PassBoardSlice[] = pie.slices.map(s => {
-      if (merged(s.id)) return { id: s.id, name: s.name, state: 'merged', holders: 0, holder: null, pr: null, lastT: null, goal: null, dirty: null, ahead: null }
       // A slice's holders are the parties naming it; a claim on the pie as a whole shows on the pie line instead.
       const holding = parties
         .filter(p => p.slices.includes(s.id))
         .sort((a, b) => RANK[stateOf(b, s.id)] - RANK[stateOf(a, s.id)] || (b.lastT ?? 0) - (a.lastT ?? 0))
+      // Merged once nothing unmerged holds it: one task on the default branch leaves the rest of the slice in play.
+      if (holding.length === 0 && merged(s.id)) return { id: s.id, name: s.name, state: 'merged', holders: 0, holder: null, pr: null, lastT: null, goal: null, dirty: null, ahead: null }
       const best = holding[0] ?? null
       const own: PassBoardState = s.done ? 'built' : 'queued'
       const theirs = best === null ? own : stateOf(best, s.id)
