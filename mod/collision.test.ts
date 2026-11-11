@@ -116,13 +116,18 @@ test('bts_claim records the goal and lists the conflicts; over: true records the
   expect(claim.startsWith(`claimed Slice 23.1 on branch ${B_BRANCH}, but other work is on it:`)).toBe(true)
   expect(claim).toContain('Before cutting a branch or writing code, raise a destructive_operation HITL')
   const over = String((await $.tool.call({ tool: CLAIM_LISTED, pie: 23, slice: '23.1', over: true })).result)
-  expect(over).toContain("over chat-a with the operator's approval")
+  expect(over).toContain(`over chat-a, ${A_BRANCH} with the operator's approval`)
+  // The takeover of 23.1 covers A's ledger rows and branch commits for it; A's other five slices and its pie PR still show.
+  const after = await status($)
+  expect(after).toContain('Slices 23.2, 23.3, 23.4, 23.5, 23.6 are also being built by another session (chat-a)')
+  expect(after).toContain('PR 251 open')
+  expect(after.includes('Slices 23.1,')).toBe(false)
   const released = String((await $.tool.call({ tool: CLAIM_LISTED, slice: '23.1', release: 'abandoned' })).result)
   expect(released).toBe('released Slice 23.1 (abandoned)')
   const mine = rowsOf(world).filter(r => r.sid === SESSION)
   expect(mine.map(r => [r.ev, r.slice, (r.data as Record<string, unknown>).goal ?? null, (r.data as Record<string, unknown>).over ?? null, (r.data as Record<string, unknown>).reason ?? null])).toEqual([
     ['claim', '23.1', 'media kinds for video and GIF', null, null],
-    ['claim', '23.1', null, ['chat-a'], null],
+    ['claim', '23.1', null, ['chat-a', A_BRANCH], null],
     ['release', '23.1', null, null, 'abandoned'],
   ])
 })

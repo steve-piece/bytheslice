@@ -8,6 +8,7 @@ import {
   ageWords,
   collisionLines,
   collisionsFor,
+  branchSlice,
   conflictLine,
   handoffLine,
   holdsClaim,
@@ -116,7 +117,7 @@ test('a later claim with over naming the session takes its work over for everyon
   ]
   const found = collisionsFor(world({ rows, strip: { third: NOW } }), 7, OPEN)
   expect(found.conflicts.map(p => p.sid)).toEqual(['third'])
-  expect(overOf(found)).toEqual(['third'])
+  expect(overOf(found)).toEqual(['third', 'pie-7-s7.1-new'])
 })
 
 test('branches past the default branch conflict by the slices their subjects name; this session own branches never do', () => {
@@ -131,13 +132,13 @@ test('branches past the default branch conflict by the slices their subjects nam
   expect(conflictLine(found.conflicts[0]!, NOW)).toBe('Slices 7.1, 7.2 already have commits on branch pie-7-big (2 commits not on the default branch, last activity 1 h ago)')
 })
 
-test('a pie branch checked out in another worktree conflicts even with no commits yet, with its uncommitted files', () => {
+test('a slice branch checked out in another worktree conflicts for its slice even with no commits yet, with its uncommitted files', () => {
   const worktrees = [
     { path: '/repo', branch: 'pie-7-s7.1-first', dirty: null },
     { path: '/wt/other', branch: 'pie-7-s7.2-next', dirty: 3 },
   ]
   const found = collisionsFor(world({ worktrees }), 7, OPEN)
-  expect(collisionLines(found, NOW)).toEqual(['Pie 7 is checked out elsewhere on branch pie-7-s7.2-next in worktree /wt/other (3 uncommitted files)'])
+  expect(collisionLines(found, NOW)).toEqual(['Slice 7.2 is checked out elsewhere on branch pie-7-s7.2-next in worktree /wt/other (3 uncommitted files)'])
 })
 
 test('an open PR for the pie or one of its slices conflicts; one for another pie does not', () => {
@@ -185,4 +186,46 @@ test('holdsClaim follows this session own claims and releases; ageWords reads mi
   expect(holdsClaim(rows.slice(0, 2), 'me', 7, null)).toBe(true)
   expect(holdsClaim(rows, 'other', 7, '7.1')).toBe(false)
   expect([ageWords(10000), ageWords(5 * 60000), ageWords(3 * HOUR), ageWords(72 * HOUR)]).toEqual(['just now', '5 min ago', '3 h ago', '3 d ago'])
+})
+
+test('a claim made in this worktree before the session moved to its own branch never hides that branch as a handoff', () => {
+  // Claimed from the primary checkout, then built and pushed on its own branch, opened a PR, and ended.
+  const rows = [
+    row('left', NOW - 5 * HOUR, 'claim', '7.1', { worktree: '/repo' }),
+    row('left', NOW - 4 * HOUR, 'commit', '7.1', { sha: 'ddddddd1', branch: 'pie-7-s7.1-theirs' }),
+  ]
+  const prs = [{ number: 40, title: 'Slice 7.1: first', head: 'pie-7-s7.1-theirs', url: 'u40', t: NOW - HOUR }]
+  const found = collisionsFor(world({ rows, prs, self: { sid: 'me', branch: 'main', worktree: '/repo' } }), 7, ['7.1'])
+  expect(found.handoffs).toEqual([])
+  expect(found.conflicts.map(p => [p.branch, p.pr?.number ?? null])).toEqual([['pie-7-s7.1-theirs', 40]])
+})
+
+test('an approved takeover covers the session, its branch commits, its worktree and its PR', () => {
+  const rows = [
+    row('other', NOW - 3 * HOUR, 'commit', '7.1', { sha: 'eeeeeee1', branch: 'pie-7-big' }),
+    row('me', NOW - HOUR, 'claim', '7.1', { branch: 'pie-7-s7.1-first', over: ['other'] }),
+  ]
+  const commits = [{ sha: 'eeeeeee1', branch: 'pie-7-big', t: NOW - 3 * HOUR, subject: 'feat(pie-7): 7.1 task 1' }]
+  const worktrees = [{ path: '/wt/big', branch: 'pie-7-big', dirty: 0 }]
+  const prs = [{ number: 41, title: 'Pie 7: big', head: 'pie-7-big', url: 'u41', t: NOW }]
+  const heads = [{ branch: 'pie-7-big', sha: 'eeeeeee1', t: NOW - 3 * HOUR }]
+  expect(collisionsFor(world({ rows, commits, worktrees, prs, heads, strip: { other: NOW } }), 7, ['7.1']).conflicts).toEqual([])
+  // A commit after the takeover is new work on that branch, and shows again.
+  const later = [...commits, { sha: 'eeeeeee2', branch: 'pie-7-big', t: NOW - 60000, subject: 'feat(pie-7): 7.1 task 2' }]
+  expect(collisionsFor(world({ rows, commits: later, heads }), 7, ['7.1']).conflicts.map(p => [p.branch, p.commits])).toEqual([['pie-7-big', 1]])
+})
+
+test('a slice claim ignores another slice branch, its commits, its worktree and its PR', () => {
+  expect(branchSlice('pie-7-s7.2-second')).toBe('7.2')
+  expect(branchSlice('pie-7-whole')).toBeNull()
+  const commits = [
+    { sha: 'f1', branch: 'pie-7-s7.2-second', t: NOW - HOUR, subject: 'feat(pie-7): 7.2 second' },
+    { sha: 'f2', branch: 'pie-7-s7.2-second', t: NOW - HOUR, subject: 'wip' },
+  ]
+  const worktrees = [{ path: '/wt/two', branch: 'pie-7-s7.2-second', dirty: 2 }]
+  const prs = [{ number: 42, title: 'Slice 7.2: second', head: 'pie-7-s7.2-second', url: 'u42', t: NOW }]
+  expect(collisionsFor(world({ commits, worktrees, prs }), 7, ['7.1']).conflicts).toEqual([])
+  // Checking the whole pie still sees it, as slice 7.2 work.
+  const all = collisionsFor(world({ commits, worktrees, prs }), 7, OPEN)
+  expect(all.conflicts.map(p => [p.branch, p.slices, p.pieLevel, p.pr?.number ?? null])).toEqual([['pie-7-s7.2-second', ['7.2'], false, 42]])
 })

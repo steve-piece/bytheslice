@@ -85,6 +85,7 @@ export type Party = {
 export type Collisions = { pie: number; conflicts: Party[]; handoffs: Party[]; delivery: string | null }
 
 const SLICE_BRANCH = /(^|\/)pie[-/]\d+[-/]s\d+\.\d+/
+const SLICE_OF_BRANCH = /(^|\/)pie[-/]\d+[-/]s(\d+\.\d+)/
 const PIE_TITLE = /\bpie\s+(\d+)\b/i
 const SLICE_TITLE = /\bslice\s+(\d+)\.(\d+)\b/i
 const SLICE_ID = /^\d+\.\d+$/
@@ -96,6 +97,11 @@ export function shortBranch(ref: string): string {
     .replace(/^refs\/heads\//, '')
     .replace(/^refs\/remotes\/[^/]+\//, '')
     .replace(/^origin\//, '')
+}
+
+/** The slice a slice branch is named for (`pie-7-s7.2-x` reads 7.2), or null for any other branch. Pure. */
+export function branchSlice(branch: string | null): string | null {
+  return SLICE_OF_BRANCH.exec(branch ?? '')?.[2] ?? null
 }
 
 /** Whether a branch name is one pie branch rather than one slice's. Pure. */
@@ -218,8 +224,28 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
 
   const takenOver = (sid: string, branch: string | null, slice: string | null, since: number): boolean =>
     takeovers.some(
-      x => x.t > since && (x.slice === null || slice === null || x.slice === slice) && (x.over.has(sid) || (branch !== null && x.over.has(branch))),
+      x => x.t > since && (x.slice === null || x.slice === slice) && (x.over.has(sid) || (branch !== null && x.over.has(branch))),
     )
+  // A takeover covers a branch it names, and every branch the sessions it names recorded, on every source. A slice
+  // takeover covers that slice only; whole-pie evidence (a pie claim, a pie PR) needs a pie takeover.
+  const sidBranches = new Map<string, Set<string>>()
+  for (const row of world.rows) {
+    const branch = rowBranch(row)
+    if (branch === null || !inPie(row)) continue
+    sidBranches.set(row.sid, (sidBranches.get(row.sid) ?? new Set()).add(branch))
+  }
+  const branchTaken = (branch: string, slice: string | null, since: number): boolean =>
+    takeovers.some(
+      x =>
+        x.t > since &&
+        (x.slice === null || x.slice === slice) &&
+        (x.over.has(branch) || [...x.over].some(name => sidBranches.get(name)?.has(branch) ?? false)),
+    )
+  // Whole-pie evidence on a branch is covered by a pie takeover, or by a takeover of every slice this check is about.
+  const wholeTaken = (branch: string, since: number): boolean =>
+    branchTaken(branch, null, since) || (openSet.size > 0 && [...openSet].every(id => branchTaken(branch, id, since)))
+  // Evidence on a slice branch belongs to that slice: a check of other slices never counts it.
+  const wanted = (id: string): boolean => pieOfSlice(id) === pie && (openSet.size === 0 || openSet.has(id))
 
   const parties = new Map<string, Party>()
   const partyFor = (branch: string | null, sid: string | null): Party => {
@@ -250,7 +276,12 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     // A pie-level claim alone matters while its session lives: an ended one with no open slice left nothing behind.
     const ended = livenessOf(work.sid, lastBySid.get(work.sid) ?? null, world) === 'ended'
     const pieOpen =
-      work.pieClaim && work.pieWork > work.pieDrop && openSet.size > 0 && !(ended && live.length === 0) && !takenOver(work.sid, work.branch, null, work.pieWork)
+      work.pieClaim &&
+      work.pieWork > work.pieDrop &&
+      openSet.size > 0 &&
+      !(ended && live.length === 0) &&
+      !takenOver(work.sid, work.branch, null, work.pieWork) &&
+      ![...openSet].every(id => takenOver(work.sid, work.branch, id, work.pieWork))
     if (live.length === 0 && !pieOpen) continue
     const party = partyFor(work.branch, work.sid)
     party.slices = sortSlices([...party.slices, ...live])
@@ -263,20 +294,22 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
   }
 
   // Source 2: branches with commits past the default branch that name this pie's slices or carry its name.
-  const ownTip = new Set<string>()
   for (const commit of world.commits) {
     const branch = shortBranch(commit.branch)
-    if (own.has(branch)) {
-      ownTip.add(branch)
-      continue
-    }
-    const ids = [...slicesNamed([commit.subject])].filter(id => pieOfSlice(id) === pie && (openSet.size === 0 || openSet.has(id)))
-    const piesBranch = branchPie(branch) === pie
-    if (ids.length === 0 && !piesBranch) continue
+    if (own.has(branch)) continue
+    // A subject naming this pie's slices is evidence for those slices only; one naming none counts for its slice
+    // branch's slice, or for the whole pie on a whole-pie branch.
+    const subjectSlices = [...slicesNamed([commit.subject])].filter(id => pieOfSlice(id) === pie)
+    const bySlice = branchSlice(branch)
+    const ids = (subjectSlices.length > 0 ? subjectSlices : bySlice !== null && pieOfSlice(bySlice) === pie ? [bySlice] : [])
+      .filter(wanted)
+      .filter(id => !branchTaken(branch, id, commit.t))
+    const wholePie = subjectSlices.length === 0 && bySlice === null && branchPie(branch) === pie && !wholeTaken(branch, commit.t)
+    if (ids.length === 0 && !wholePie) continue
     const party = partyFor(branch, null)
     party.slices = sortSlices([...party.slices, ...ids])
     party.commits += 1
-    party.pieLevel ||= piesBranch && ids.length === 0
+    party.pieLevel ||= wholePie
     touch(party, commit.t)
   }
   // A pie branch with nothing past the default branch counts only when another worktree has it checked out.
@@ -284,9 +317,13 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     if (tree.path === world.self.worktree || tree.branch === null) continue
     const branch = shortBranch(tree.branch)
     if (own.has(branch) || branchPie(branch) !== pie) continue
+    const tip = world.heads.find(head => head.branch === branch)?.t ?? null
+    const bySlice = branchSlice(branch)
+    if (bySlice !== null ? !wanted(bySlice) || branchTaken(branch, bySlice, tip ?? 0) : wholeTaken(branch, tip ?? 0)) continue
     const party = partyFor(branch, null)
-    party.pieLevel ||= party.slices.length === 0
-    if (party.lastT === null) touch(party, world.heads.find(head => head.branch === branch)?.t ?? null)
+    if (bySlice !== null) party.slices = sortSlices([...party.slices, bySlice])
+    else party.pieLevel ||= party.slices.length === 0
+    if (party.lastT === null) touch(party, tip)
   }
 
   // Source 3: open PRs for this pie or its slices.
@@ -294,14 +331,19 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     const head = shortBranch(pr.head)
     if (own.has(head)) continue
     const title = SLICE_TITLE.exec(pr.title)
-    const titleSlice = title ? `${title[1]}.${title[2]}` : null
+    const prSlice = title ? `${title[1]}.${title[2]}` : branchSlice(head)
     const titlePie = PIE_TITLE.exec(pr.title)
-    const matches =
-      parties.has(head) || branchPie(head) === pie || (titleSlice !== null && pieOfSlice(titleSlice) === pie) || (titlePie !== null && Number(titlePie[1]) === pie)
-    if (!matches) continue
+    // A PR updates after a takeover (reviews, CI), so any takeover of its branch covers it.
+    if (prSlice !== null ? branchTaken(head, prSlice, Number.NEGATIVE_INFINITY) : wholeTaken(head, Number.NEGATIVE_INFINITY)) continue
+    let slice: string | null = null
+    if (parties.has(head)) slice = prSlice !== null && wanted(prSlice) ? prSlice : null
+    else if (prSlice !== null) {
+      if (!wanted(prSlice)) continue
+      slice = prSlice
+    } else if (branchPie(head) !== pie && !(titlePie !== null && Number(titlePie[1]) === pie)) continue
     const party = partyFor(head, null)
     party.pr = { number: pr.number, url: pr.url }
-    if (titleSlice !== null && pieOfSlice(titleSlice) === pie) party.slices = sortSlices([...party.slices, titleSlice])
+    if (slice !== null) party.slices = sortSlices([...party.slices, slice])
     else if (party.slices.length === 0) party.pieLevel = true
     touch(party, pr.t)
   }
@@ -318,9 +360,12 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     if (party.sid !== null) party.liveness = livenessOf(party.sid, party.lastT, world)
     // This session's own branch or worktree, or an ended session's rows with no branch, commit or PR to point at
     // (rows from before claims, or this chat before a /clear gave it a new id): history to continue, not a conflict.
+    // A claim's worktree is where it was made, maybe a primary checkout it left: it counts only with no branch,
+    // commit or PR elsewhere to point at.
     const onOwn = party.branch !== null && own.has(party.branch)
-    const sameTree = party.worktree !== null && party.worktree === world.self.worktree
-    const nowhere = party.branch === null && party.commits === 0 && party.pr === null && party.liveness === 'ended'
+    const unlocated = party.branch === null && party.commits === 0 && party.pr === null
+    const sameTree = unlocated && party.worktree !== null && party.worktree === world.self.worktree
+    const nowhere = unlocated && party.liveness === 'ended'
     if ((onOwn || sameTree || nowhere) && party.liveness !== 'live') handoffs.push(party)
     else conflicts.push(party)
   }
@@ -633,9 +678,9 @@ export async function writeRelease(
   })
 }
 
-/** What a takeover names: each conflicting session, else its branch. Pure. */
+/** What a takeover names: each conflicting session and its branch, so every source of that work is covered. Pure. */
 export function overOf(found: Collisions): string[] {
-  return [...new Set(found.conflicts.map(party => party.sid ?? party.branch).filter((x): x is string => x !== null))]
+  return [...new Set(found.conflicts.flatMap(party => [party.sid, party.branch]).filter((x): x is string => x !== null))]
 }
 
 export const CLAIM_TOOL = 'bts_claim'

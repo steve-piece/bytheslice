@@ -16,7 +16,7 @@ Run it in the preflight, after `git fetch --prune origin` (remote branches are o
 - **An open PR** for the pie or the slice (title `Pie N` or `Slice N.M`, or a `pie-N-*` head branch), read through `gh` when it is available.
 - **A delivery-mode mismatch:** `delivery.mode: "merge-per-slice"` while this run, or another run on the pie, is on one pie branch.
 
-Work already on the default branch, work released as `deferred` or `abandoned`, and work a later approved claim took over do not count. Another session's work on **this** run's own branch, once that session is no longer live, is a handoff: it is listed, and the run continues from it.
+Work already on the default branch, work released as `deferred` or `abandoned`, and work a later approved claim took over (its ledger rows, branch commits from before the takeover, worktree and PR) do not count. Work on another slice's own branch (`pie-N-sN.M-*`) counts only when that slice is checked. Another session's work on **this** run's own branch, once that session is no longer live, is a handoff: it is listed, and the run continues from it.
 
 ## When there is other work
 
