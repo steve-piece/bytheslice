@@ -10,8 +10,9 @@ import type {
   TurnCompleteInput,
 } from 'claude-code'
 
+import { holdsClaim, runTarget, writeRelease } from './claims.ts'
 import { stripJsonc } from './jsonc.ts'
-import { appendRow, readRows } from './ledger.ts'
+import { appendRow, readRows, sessionId } from './ledger.ts'
 import type { LedgerInput } from './ledger.ts'
 import { gateOf, readActivity, rollup, verifyStartOf } from './ledger-projection.ts'
 import { refreshLedger } from './live.ts'
@@ -489,28 +490,45 @@ export type SkillBaker = { teammateId: string; pie: number | null }
  * carrying `data.teammateId`; a slice already started by that teammate is not
  * recorded again.
  */
-export async function captureSkill($: EngineInterface, name: unknown, baker: SkillBaker | null = null): Promise<LedgerRow[]> {
+export async function captureSkill(
+  $: EngineInterface,
+  name: unknown,
+  baker: SkillBaker | null = null,
+  arg?: unknown,
+  contested = false,
+): Promise<LedgerRow[]> {
   if (typeof name !== 'string' || !BAKERS.test(name.trim()) || (await isLimited($))) return []
   const c = await checklistOf($)
-  const own = baker?.pie == null ? null : c?.pies.find(entry => entry.n === baker.pie && entry.slices.some(s => !s.done)) ?? null
-  const pie = own ?? activePie(c)
-  const slice = own ? own.slices.find(s => !s.done) ?? null : activeSlice(c)
-  if (!pie) return []
   const rows = await readRows($)
+  const own = baker?.pie == null ? null : c?.pies.find(entry => entry.n === baker.pie && entry.slices.some(s => !s.done)) ?? null
+  // The pie the run is on (its argument, its branch, this session's claims), not merely the first open one.
+  const target = own
+    ? null
+    : runTarget(c, { arg, branch: (await git($, ['rev-parse', '--abbrev-ref', 'HEAD']))?.trim() ?? null, rows, sid: await sessionId($) })
+  const pie = own ?? (target ? c?.pies.find(entry => entry.n === target.pie) ?? null : activePie(c))
+  const slice = own
+    ? own.slices.find(s => !s.done) ?? null
+    : target
+      ? pie?.slices.find(s => s.id === target.slice) ?? null
+      : activeSlice(c)
+  if (!pie) return []
   const skill = name.trim().slice(name.trim().lastIndexOf(':') + 1)
   const who = baker ? { teammateId: baker.teammateId } : {}
   const out: LedgerRow[] = []
-  if (!rows.some(row => row.ev === 'pie.started' && row.pie === pie.n)) {
-    const written = await record($, { ev: 'pie.started', pie: pie.n, data: { skill, ...who } })
+  // A contested start (another session's, stopped on other work) never stands in for this one.
+  const real = rows.filter(row => row.data?.contested !== true)
+  if (!real.some(row => row.ev === 'pie.started' && row.pie === pie.n)) {
+    const written = await record($, { ev: 'pie.started', pie: pie.n, data: { skill, ...who, ...(contested ? { contested: true } : {}) } })
     if (written) out.push(written)
   }
   const started = (row: LedgerRow): boolean =>
     row.ev === 'slice.started' && row.slice === slice?.id && (baker === null || row.data?.teammateId === baker.teammateId)
-  if (slice && !rows.some(started)) {
+  if (slice && !real.some(started)) {
     // The head it starts at is where its touched files and replay count from.
     const head = (await git($, ['rev-parse', 'HEAD']))?.trim()
     const at = head && /^[0-9a-f]{7,64}$/.test(head) ? { head } : {}
-    const written = await record($, { ev: 'slice.started', pie: pie.n, slice: slice.id, data: { skill, ...who, ...at } })
+    // A start on other work is intent only, like its contested claim: nobody counts it as work.
+    const written = await record($, { ev: 'slice.started', pie: pie.n, slice: slice.id, data: { skill, ...who, ...at, ...(contested ? { contested: true } : {}) } })
     if (written) out.push(written)
   }
   return out
@@ -560,6 +578,13 @@ export async function recordDoneFlips(
     const totals = rollup(activity, slice, verifyStartOf(rows, slice))
     const rolled = await record($, { ev: 'slice.rollup', pie, slice, data: totals })
     if (rolled) out.push(rolled)
+    // A slice this session claimed and finished is released as done; its work stays visible until it merges.
+    const sid = await sessionId($)
+    if (holdsClaim(rows, sid, pie, slice)) {
+      const branch = (await git($, ['rev-parse', '--abbrev-ref', 'HEAD']))?.trim() ?? null
+      const released = await writeRelease($, { pie, slice, reason: 'done', branch, worktree: await $.session.cwd().catch(() => '.') })
+      if (released) out.push(released)
+    }
   }
   return out
 }

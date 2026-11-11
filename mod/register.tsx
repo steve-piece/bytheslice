@@ -1,5 +1,5 @@
 // mod/register.tsx
-// The Pass hooks module, wiring only: version gate, ledger capture (file edits as path and role only), checks that warn (never refuse), the stall watchdog, the HITL inbox, team mode (roster, teammate turns, idle and done), the cross-session strip, the kitchen and Lobby logging relay, the bts tools, the pass command (replay and history included), pane, replay pane, band and hint.
+// The Pass hooks module, wiring only: version gate, ledger capture (file edits as path and role only), checks that warn (never refuse), the session collision guard (claims and other work on a pie), the stall watchdog, the HITL inbox, team mode (roster, teammate turns, idle and done), the cross-session strip, the kitchen and Lobby logging relay, the bts tools, the pass command (replay and history included), pane, replay pane, band and hint.
 
 import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
@@ -10,6 +10,7 @@ import { primeChecks, reportToModel, trackGit, trackSkill, warnResult } from './
 import { checkFileWrite, checkPush } from './checks-checklist.ts'
 import { checkCommitOnMain, checkFixSpawn, countFix, raiseFixCap } from './checks-git.ts'
 import { checkDrift, checkSpawn, trackSpawn } from './checks-spawn.ts'
+import { clearPendingStart, guardStart, guardWork, isCommit, notePendingStart, pendingArg, resetClaims, serveClaimTool } from './claims-guard.ts'
 import { closeEndedStalls, closeOnReply, isOperatorReply, serveHitl } from './hitl.ts'
 import { startSession } from './ledger.ts'
 import { pollAgents, refreshLedger, startPulse } from './live.ts'
@@ -71,6 +72,7 @@ export const register: Register = on => {
       await startSession($).catch(() => undefined)
       resetTouched()
       resetStrip()
+      resetClaims()
       // Awaited here, so the model has both tools listed by its first turn.
       await registerTools($).catch(() => undefined)
       await $.command
@@ -113,7 +115,11 @@ export const register: Register = on => {
   // Checks judge before the call from atoms only and add any warning to what the
   // model reads after the result. Nothing is refused.
   on('tool.call', { tool: ['Edit', 'Write'] }, async ($, e, next) => {
-    const findings = await checkFileWrite($, e).catch(() => [])
+    const findings = [
+      ...(await checkFileWrite($, e).catch(() => [])),
+      // Other work on the pie, checked at the first write of a stretch of work (a resumed session included).
+      ...(isChecklistPath(e.file_path) ? [] : await guardWork($).catch(() => [])),
+    ]
     const ran = await next(e)
     if (isChecklistPath(e.file_path)) {
       if (!(await isLimited($))) await reload($).catch(() => false)
@@ -129,6 +135,7 @@ export const register: Register = on => {
     const findings = [
       ...(await checkCommitOnMain($, e.command).catch(() => [])),
       ...(await checkPush($, e.command).catch(() => [])),
+      ...(isCommit(e.command) ? await guardWork($).catch(() => []) : []),
     ]
     const ran = await next(e)
     const rows = await captureBash($, e.command, ran).catch(() => [])
@@ -156,6 +163,11 @@ export const register: Register = on => {
     result: await serveWake($, inputOf(e), e.agentId),
   })).catch(() => ({
     result: 'not armed: the Pass could not arm that wake. Nothing was halted.',
+  }))
+
+  // Records a claim or a release and lists the other work on it; it never refuses the start.
+  on('tool.call', { tool: ['mcp__bytheslice__bts_claim', /^mcp__\w*bytheslice\w*__bts_claim$/] }, async ($, e) => ({ result: await serveClaimTool($, inputOf(e)) })).catch(() => ({
+    result: 'not recorded: the Pass could not record that claim; check git branch -a and open PRs by hand before cutting a branch. Nothing was halted.',
   }))
 
   // Records and notifies, then returns at once: the skill's own HITL flow (ask in chat and stop) is what waits.
@@ -208,17 +220,30 @@ export const register: Register = on => {
     const prompt = await next(e)
     await trackSkill($, e.skill).catch(() => null)
     // It names no loop: with a team, the Skill tool call records whose start it was.
-    if (!(await teamActive($).catch(() => false))) await captureSkill($, e.skill).catch(() => [])
+    if (!(await teamActive($).catch(() => false))) {
+      // Raised inside a Skill tool call, it takes that call's arguments; the check comes before any start row.
+      const arg = pendingArg(e.skill)
+      const checked = await guardStart($, e.skill, null, { arg }).catch(() => null)
+      await captureSkill($, e.skill, null, arg, (checked?.lines.length ?? 0) > 0).catch(() => [])
+    }
     return prompt
   }).catch(($, e, next) => next(e))
 
   // In a teammate's loop the start is that teammate's: its pie, its address on the rows.
   on('tool.call', { tool: 'Skill' }, async ($, e, next) => {
-    const ran = await next(e)
+    const arg = (e as { args?: unknown }).args
+    notePendingStart(e.skill, arg)
+    let ran: Awaited<ReturnType<typeof next>>
+    try {
+      ran = await next(e)
+    } finally {
+      clearPendingStart()
+    }
     if (ran.deny === undefined && ran.isError !== true) {
       await trackSkill($, e.skill).catch(() => null)
       const baker = await teammateOf($, e.agentId).catch(() => null)
-      await captureSkill($, e.skill, baker ? { teammateId: baker.teammateId, pie: baker.pie } : null).catch(() => [])
+      const checked = await guardStart($, e.skill, e.agentId ?? null, { teammatePie: baker?.pie ?? null, arg }).catch(() => null)
+      await captureSkill($, e.skill, baker ? { teammateId: baker.teammateId, pie: baker.pie } : null, arg, (checked?.lines.length ?? 0) > 0).catch(() => [])
       if (baker) await refreshTeam($, { force: true }).catch(() => null)
     }
     return ran
@@ -252,7 +277,8 @@ export const register: Register = on => {
     await relay($, 'UserPromptExpansion', inputOf(e)).catch(() => 0)
     const expanded = await next(e)
     await trackSkill($, e.command_name).catch(() => null)
-    await captureSkill($, e.command_name).catch(() => [])
+    const checked = await guardStart($, e.command_name, null, { arg: e.command_args }).catch(() => null)
+    await captureSkill($, e.command_name, null, e.command_args, (checked?.lines.length ?? 0) > 0).catch(() => [])
     return expanded
   }).catch(($, e, next) => next(e))
 

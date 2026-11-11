@@ -18,7 +18,7 @@ const FORMATS = new Set(['json', 'text', 'pr-body']);
 const EVENTS = new Set([
   'pie.started', 'slice.started', 'slice.done', 'verdict', 'commit', 'push', 'merge',
   'hitl.raised', 'hitl.answered', 'note', 'usage', 'slice.rollup', 'warn', 'agent.stalled',
-  'teammate.idle', 'teammate.done', 'edit',
+  'teammate.idle', 'teammate.done', 'edit', 'claim', 'release',
 ]);
 
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);

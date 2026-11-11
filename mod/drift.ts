@@ -60,9 +60,10 @@ export function driftLine(d: StatusDrift): string {
     : `Slice ${d.id} is [x], but none of its ${d.commits} commit${d.commits === 1 ? '' : 's'} reached ${d.base}`
 }
 
-async function git($: EngineInterface, argv: string[]): Promise<string | null> {
+/** Runs git and resolves its stdout, or null when it fails or cannot start. */
+export async function git($: EngineInterface, argv: string[], timeoutMs = 5000): Promise<string | null> {
   try {
-    const run = await $.process.run(['git', ...argv], { timeoutMs: 5000 })
+    const run = await $.process.run(['git', ...argv], { timeoutMs })
     return run.exitCode === 0 ? run.stdout : null
   } catch {
     return null
@@ -70,7 +71,7 @@ async function git($: EngineInterface, argv: string[]): Promise<string | null> {
 }
 
 /** The default branch to compare with: origin's HEAD, else origin/main, main, origin/master, master. */
-async function baseRef($: EngineInterface): Promise<string | null> {
+export async function baseRef($: EngineInterface): Promise<string | null> {
   const head = (await git($, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']))?.trim()
   for (const ref of [head, 'origin/main', 'main', 'origin/master', 'master']) {
     if (ref && (await git($, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])) !== null) return ref
@@ -78,13 +79,12 @@ async function baseRef($: EngineInterface): Promise<string | null> {
   return null
 }
 
-/** Reads the default branch's commits and returns the drift; none outside git. */
-export async function readDrift($: EngineInterface, c: PassChecklist | null, p: PassProjection | null, branch: string | null): Promise<StatusDrift[]> {
-  if (!c || c.layout !== 'pie') return []
+/** The default branch and its newest commits (shas and subjects), or null outside git. */
+export async function readBase($: EngineInterface): Promise<{ base: string; shas: string[]; subjects: string[] } | null> {
   const base = await baseRef($)
-  if (base === null) return []
+  if (base === null) return null
   const log = await git($, ['log', `-n${MERGED_DEPTH}`, '--format=%H %s', base])
-  if (log === null) return []
+  if (log === null) return null
   const shas: string[] = []
   const subjects: string[] = []
   for (const line of log.split('\n')) {
@@ -93,5 +93,19 @@ export async function readDrift($: EngineInterface, c: PassChecklist | null, p: 
     shas.push(line.slice(0, cut))
     subjects.push(line.slice(cut + 1))
   }
-  return statusDrift(c, p, { base, shas, subjects, branch })
+  return { base, shas, subjects }
+}
+
+/** Reads the default branch's commits and returns the drift; none outside git. A base already read is used as is. */
+export async function readDrift(
+  $: EngineInterface,
+  c: PassChecklist | null,
+  p: PassProjection | null,
+  branch: string | null,
+  known?: { base: string; shas: string[]; subjects: string[] } | null,
+): Promise<StatusDrift[]> {
+  if (!c || c.layout !== 'pie') return []
+  const read = known === undefined ? await readBase($) : known
+  if (read === null) return []
+  return statusDrift(c, p, { ...read, branch })
 }

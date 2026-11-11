@@ -45,6 +45,8 @@ export type LedgerEvent =
   | 'teammate.idle'
   | 'teammate.done'
   | 'edit'
+  | 'claim'
+  | 'release'
 
 /** One line of `.bytheslice/ledger.jsonl`: facts only, never a prompt, an answer or a secret. */
 export type LedgerRow = {

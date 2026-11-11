@@ -15,6 +15,8 @@ const branchAtom = atom({ plugin: 'bytheslice', key: 'pass.branch' } as const, n
 const stripAtom = atom({ plugin: 'bytheslice', key: 'pass.strip' } as const, [])
 
 export const STRIP_PREFIX = 'strip:'
+/** A session that ended says so under this prefix (`strip-ended:<projectKey>:<sid>`, its end time), so others can tell ended from idle. */
+export const ENDED_PREFIX = 'strip-ended:'
 /** A session writes its entry at most this often. */
 export const STRIP_WRITE_MS = 10000
 /** Entries older than this belong to a session that ended without saying so. */
@@ -170,10 +172,12 @@ export async function pulseStrip($: EngineInterface, force = false): Promise<Str
   return readStrip($, now)
 }
 
-/** At session end: deletes this session's entry. Never throws. */
+/** At session end: deletes this session's entry and records that it ended. Never throws. */
 export async function clearStrip($: EngineInterface): Promise<void> {
   try {
-    await $.store.delete(stripKey(await keyOf($), await sessionId($)))
+    const [key, sid] = await Promise.all([keyOf($), sessionId($)])
+    await $.store.delete(stripKey(key, sid))
+    await $.store.set(`${ENDED_PREFIX}${key}:${sid}`, await nowOf($))
   } catch {
     // An entry left behind ages out after six hours.
   }

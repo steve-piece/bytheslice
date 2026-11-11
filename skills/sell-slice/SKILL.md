@@ -88,6 +88,7 @@ Each subagent is a **registered plugin agent**; its definition file under `./age
 - `docs/plans/00_master_checklist.md` exists.
 - One or more `docs/plans/stage_<n>_*.md` exist (one slice plan reachable for the active unit).
 - Clean git working tree, OR explicit user OK to proceed dirty.
+- No other session, branch or open PR is on the slice: checked in Phase 0 step 4a with `bts_claim`, before any branch is cut. Other work is a blocking `destructive_operation` HITL ([`references/session-collisions.md`](references/session-collisions.md)).
 - Slice/stage plan files (`docs/plans/stage_*.md`) stay static during this skill: with the Pass mod loaded, a plan write draws a `plan-write-during-bake` warning. Nothing blocks. Production wiring waits for the Phase 4.5 approval; no hook enforces it.
 
 ---
@@ -181,6 +182,7 @@ The skill is an **interactive spine** (Phases 0-3) wrapping two Workflows and on
    This precondition does NOT apply to legacy projects that pre-date the Prep section - those keep the v3 behavior where foundation stages live as `stage_1_*` / `stage_2_*` / `stage_3_*` plan files routed through Workflow A (see Legacy path note in Phase 4).
 3. Identify the **active slice**: first slice/stage with status `Not Started` or `In Progress`, unless the user named one. A slice whose `**Status:**` reads `waiting until <YYYY-MM-DD>: <criterion>` is skipped while that date is ahead (and so is any slice that `depends_on` it); once the date arrives it is the active slice, and the run only checks the date-gated criterion and closes it out (see `../cook-pizzas/references/templates.md` "Calendar-gated criteria").
 4. Confirm git state: `git status --short`, `git rev-parse --abbrev-ref HEAD`. Append the slice's start line (slice id, start time) to the run log `.claude/.bytheslice-state/run-log.md` (gitignored); the soft time budget counts from it. Under the `/sell-pie` loop the conductor already wrote it; do not write a second one.
+4a. **Collision check** ([`references/session-collisions.md`](references/session-collisions.md)). `git fetch --prune origin`, then `bts_claim { slice: "N.M", goal: "<one line>" }` (under the `/sell-pie` loop the conductor already claimed it; do not claim twice). If it lists other work (another session's claim or rows, commits naming the slice on another branch or worktree, an open PR for the slice or its pie, a delivery-mode mismatch), cut no branch and write no code: raise a blocking `destructive_operation` HITL with those facts and stop. On the operator's go-ahead call `bts_claim { slice: "N.M", over: true }`; otherwise `bts_claim { slice: "N.M", release: "abandoned" }`.
 5. Detect `/goal` and `Workflow` availability (per "Workflow availability" above); note the fallback that will apply if either is absent.
 6. Switch to **Plan Mode** before continuing.
 
@@ -253,6 +255,7 @@ Invoke `/goal <full condition string>`. Log: `Slice-completion goal set for slic
 ### Phase 3 - Branch / Worktree Setup
 
 - Branch naming: `feat/stage-<n>-<scope>` | `fix/stage-<n>-<scope>` | `chore/stage-<n>-<scope>` (on a nested checklist, the slice commits land on the **pie branch** when running under `/sell-pie`; standalone `/sell-slice` uses the per-slice branch above).
+- Never cut a branch before the Phase 0 collision check came back clean or the operator answered its HITL.
 - Prefer a git worktree per active slice/pie, cut from the **freshly-fetched `origin/main`** (never local `main`, which may be stale): `git fetch origin` then `git worktree add -b feat/stage-<n>-<scope> <path> origin/main`. Never implement directly on `main`/`master`. Worktree setup, isolation, merge, and cleanup follow [`../cook-pizzas/references/git-worktree-standard.md`](../cook-pizzas/references/git-worktree-standard.md).
 - **Merge-per-slice mode:** the branch is `pie-N-sN.M-<scope>` (on a flat checklist, `feat/stage-<n>-<scope>`), cut from freshly-fetched `origin/main` into its own worktree from the primary checkout (`PRIMARY=$(git worktree list --porcelain | sed -n '1s/^worktree //p')`): `git -C "$PRIMARY" fetch origin`, then `git -C "$PRIMARY" worktree add -b pie-N-sN.M-<scope> <path> origin/main`.
 - **Clean tree at every task boundary.** Each `### Task K` in the slice plan ends with a commit and a push: `feat(pie-N): N.M task K <task name>` (swap `feat` for `fix`/`chore`/`docs` to match the task; on a flat checklist, `feat(stage-N): task K <task name>`). The slice closes with one final commit, `feat(pie-N): N.M <slice name>`, carrying the checklist flip and any fix-loop patches. One slice per PR boundary, task commits inside. A slice may not end with an untracked or modified file it created.

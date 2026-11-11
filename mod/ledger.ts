@@ -30,6 +30,8 @@ const EVENTS: ReadonlySet<string> = new Set<LedgerEvent>([
   'teammate.idle',
   'teammate.done',
   'edit',
+  'claim',
+  'release',
 ])
 
 /** A row as a caller hands it; the writer stamps `v`, `t` and `sid`. */

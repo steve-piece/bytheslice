@@ -50,10 +50,14 @@ test('a baker skill records pie.started and slice.started once each, from any of
   await $.skill.prompt({ skill: 'commit', text: 'not a baker', frontmatter: {}, source: 'built-in' })
   const rows = rowsOf(world)
   expect(rows.map(row => [row.ev, row.pie, row.slice ?? null])).toEqual([
+    ['claim', 5, null],
+    ['claim', 5, '5.1'],
     ['pie.started', 5, null],
     ['slice.started', 5, '5.1'],
   ])
-  expect(rows[0]?.data).toEqual({ skill: 'sell-pie' })
+  expect(rows[2]?.data).toEqual({ skill: 'sell-pie' })
+  // The start is checked, then claimed for other sessions to read: branch, worktree and skill, once per session.
+  expect(rows[1]?.data).toEqual({ branch: 'pie-5-the-pass', worktree: '/repo', skill: 'sell-pie', auto: true })
 })
 
 test('the Skill tool alone records the start where skill prompts pass the plugin by', async ($, on) => {
@@ -62,7 +66,12 @@ test('the Skill tool alone records the start where skill prompts pass the plugin
   on('tool.call', () => ({ result: {} }))
   await start($)
   await $.tool.call({ tool: 'Skill', skill: 'bytheslice:sell-slice' })
-  expect(rowsOf(world).map(row => row.ev)).toEqual(['pie.started', 'slice.started'])
+  // /sell-slice claims its slice only, never the whole pie.
+  expect(rowsOf(world).map(row => [row.ev, row.slice ?? null])).toEqual([
+    ['claim', '5.1'],
+    ['pie.started', null],
+    ['slice.started', '5.1'],
+  ])
 })
 
 test('a slice-verifier report becomes one verdict row with gate, overall, fix targets, re-runs and HEAD', async ($, on) => {
