@@ -200,7 +200,7 @@ export function livenessOf(sid: string, lastT: number | null, world: Pick<Elsewh
 
 type SidWork = {
   sid: string
-  slices: Map<string, { lastWork: number; lastDrop: number; shas: string[] }>
+  slices: Map<string, { lastWork: number; lastDrop: number; lastCommit: number; lastFresh: number; shas: string[] }>
   pieWork: number
   pieDrop: number
   pieClaim: boolean
@@ -286,10 +286,15 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
       }
       continue
     }
-    const slice = work.slices.get(row.slice) ?? { lastWork: Number.NEGATIVE_INFINITY, lastDrop: Number.NEGATIVE_INFINITY, shas: [] }
+    const slice = work.slices.get(row.slice) ?? { lastWork: Number.NEGATIVE_INFINITY, lastDrop: Number.NEGATIVE_INFINITY, lastCommit: Number.NEGATIVE_INFINITY, lastFresh: Number.NEGATIVE_INFINITY, shas: [] }
     if (dropping) slice.lastDrop = Math.max(slice.lastDrop, row.t)
     else if (row.ev !== 'release') slice.lastWork = Math.max(slice.lastWork, row.t)
-    if (row.ev === 'commit' && typeof row.data?.sha === 'string') slice.shas.push(row.data.sha)
+    // A claim, a start or an edit is fresh work; a push, verdict or done flip only follows commits.
+    if (row.ev === 'claim' || row.ev === 'slice.started' || row.ev === 'edit') slice.lastFresh = Math.max(slice.lastFresh, row.t)
+    if (row.ev === 'commit' && typeof row.data?.sha === 'string') {
+      slice.shas.push(row.data.sha)
+      slice.lastCommit = Math.max(slice.lastCommit, row.t)
+    }
     if (row.ev === 'slice.done') work.done.add(row.slice)
     work.slices.set(row.slice, slice)
   }
@@ -330,8 +335,10 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     for (const [id, slice] of work.slices) {
       if (slice.lastWork === Number.NEGATIVE_INFINITY) continue
       if (slice.lastDrop >= slice.lastWork || work.pieDrop >= slice.lastWork) continue
-      // Settled only when every commit it recorded reached the default branch, not when one did.
-      if (named.has(id) || (slice.shas.length > 0 && slice.shas.every(onBase)) || mergedBefore(work.branch, slice.lastWork)) continue
+      // Settled only when every commit it recorded reached the default branch, not when one did, and nothing
+      // (a fresh claim, an edit) came after its last commit: merged commits cover only the work before them.
+      const allMerged = slice.shas.length > 0 && slice.shas.every(onBase) && slice.lastFresh <= slice.lastCommit
+      if (named.has(id) || allMerged || mergedBefore(work.branch, slice.lastWork)) continue
       if (!wanted(id)) continue
       if (takenOver(work.sid, work.branch, id, slice.lastWork)) continue
       live.push(id)

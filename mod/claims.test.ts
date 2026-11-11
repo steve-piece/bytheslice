@@ -394,3 +394,11 @@ test('a worktree with uncommitted edits still counts after its branch earlier PR
   // Clean, the merge settles it.
   expect(collisionsFor(world({ worktrees: [{ ...worktrees[0]!, dirty: 0 }], heads, merged }), 7, ['7.1']).conflicts).toEqual([])
 })
+
+test('a fresh claim or edit after a session merged commits is live work again', () => {
+  const base = { base: 'origin/main', shas: ['old0001'], subjects: ['feat(pie-7): 7.1 task 1'] }
+  const merged = [row('other', NOW - 5 * HOUR, 'commit', '7.1', { sha: 'old0001', branch: 'pie-7-s7.1-old' })]
+  expect(collisionsFor(world({ base, rows: merged, strip: { other: NOW } }), 7, ['7.1']).conflicts).toEqual([])
+  const again = [...merged, row('other', NOW - 10 * 60000, 'claim', '7.1', { branch: 'main' }), row('other', NOW - 60000, 'edit', '7.1')]
+  expect(collisionsFor(world({ base, rows: again, strip: { other: NOW } }), 7, ['7.1']).conflicts.map(p => [p.sid, p.liveness])).toEqual([['other', 'live']])
+})
