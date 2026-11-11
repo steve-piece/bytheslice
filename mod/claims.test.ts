@@ -354,7 +354,8 @@ test('a /sell-slice start elsewhere holds its slice, never the whole pie', () =>
   ]
   expect(collisionsFor(world({ rows, strip: { other: NOW } }), 7, ['7.1']).conflicts).toEqual([])
   expect(collisionsFor(world({ rows, strip: { other: NOW } }), 7, ['7.2']).conflicts.map(p => p.slices)).toEqual([['7.2']])
-  const pie = [row('other', NOW - 60000, 'pie.started', null, { skill: 'sell-pie' })]
+  // A /sell-pie start holds the pie with a branch of that pie on record (6.6.1: a bare old start holds nothing).
+  const pie = [row('other', NOW - 60000, 'pie.started', null, { skill: 'sell-pie', branch: 'pie-7-x' })]
   expect(collisionsFor(world({ rows: pie, strip: { other: NOW } }), 7, ['7.1']).conflicts.map(p => p.pieLevel)).toEqual([true])
 })
 
@@ -403,11 +404,13 @@ test('a fresh claim or edit after a session merged commits is live work again', 
   expect(collisionsFor(world({ base, rows: again, strip: { other: NOW } }), 7, ['7.1']).conflicts.map(p => [p.sid, p.liveness])).toEqual([['other', 'live']])
 })
 
-test('a squash merge naming the pie settles the ledger work on its whole-pie branch too', () => {
+test('a pie-boundary squash settles the pie ledger work on every branch up to when it landed', () => {
   const rows = [row('other', NOW - 5 * HOUR, 'commit', '7.2', { sha: 'orig001', branch: 'pie-7-seven' })]
-  const squash = { base: 'origin/main', shas: ['sq1'], subjects: ['Pie 7: seven (#42)'] }
+  const squash = { base: 'origin/main', shas: ['sq1'], subjects: ['Pie 7: seven (#42)'], times: [NOW - HOUR] }
   expect(collisionsFor(world({ rows, base: squash }), 7, ['7.2']).conflicts).toEqual([])
-  // Work on a slice branch is not covered by a pie squash subject.
+  // A slice branch's work from before the merge is settled too (6.6.1); work after it is new.
   const slice = [row('other', NOW - 5 * HOUR, 'commit', '7.2', { sha: 'orig002', branch: 'pie-7-s7.2-own' })]
-  expect(collisionsFor(world({ rows: slice, base: squash }), 7, ['7.2']).conflicts).toHaveLength(1)
+  expect(collisionsFor(world({ rows: slice, base: squash }), 7, ['7.2']).conflicts).toEqual([])
+  const after = [row('other', NOW - 60000, 'commit', '7.2', { sha: 'new0003', branch: 'pie-7-s7.2-own' })]
+  expect(collisionsFor(world({ rows: after, base: squash }), 7, ['7.2']).conflicts).toHaveLength(1)
 })

@@ -4,7 +4,7 @@
 import type { EngineInterface } from 'claude-code'
 
 import { headsMatch } from './checks.ts'
-import { git, readBase, slicesNamed } from './drift.ts'
+import { boundaryTime, git, isPlanOnly, readBase, slicesNamed, squashSlices } from './drift.ts'
 import { stripJsonc } from './jsonc.ts'
 import { appendRow, primaryRoot, readRows, sessionId } from './ledger.ts'
 import type { LedgerRow } from './ledger.ts'
@@ -47,7 +47,7 @@ export type Elsewhere = {
   rows: readonly LedgerRow[]
   now: number
   /** The default branch and its commits, or null outside git. */
-  base: { base: string; shas: readonly string[]; subjects: readonly string[] } | null
+  base: { base: string; shas: readonly string[]; subjects: readonly string[]; times?: readonly number[] } | null
   commits: readonly RefCommit[]
   heads: readonly RefHead[]
   worktrees: readonly WorktreeEntry[]
@@ -111,10 +111,6 @@ const SLICE_BRANCH = /(^|\/)pie[-/]\d+[-/]s\d+\.\d+/
 const SLICE_OF_BRANCH = /(^|\/)pie[-/]\d+[-/]s(\d+\.\d+)/
 const PIES_TITLE = /\bpies?\s+(\d+(?:\s*(?:,|&|and|to|-)\s*\d+)*)/gi
 const SLICES_TITLE = /\bslices?\s+(\d+\.\d+(?:\s*(?:,|&|and)\s*\d+\.\d+)*)/gi
-/** A PR that only plans work: its title says so and nothing else ties it to a build. */
-const PLAN_TITLE = /\b(plans?|planning|roadmap|checklist|specs?|docs?|special order)\b/i
-/** A squash merge's subject names its PR: `Pie 23: video (#251)`. */
-const SQUASH_SUBJECT = /\(#\d+\)\s*$/
 const SLICE_ID = /^\d+\.\d+$/
 /**
  * The ledger events that are work on a slice. A warning, note or HITL row about one is not, and neither is
@@ -210,6 +206,8 @@ type SidWork = {
   pieWork: number
   pieDrop: number
   pieClaim: boolean
+  /** It started the pie with /sell-pie (`pie.started`), which holds the pie only with a branch of that pie. */
+  pieStarted: boolean
   claimed: boolean
   branch: string | null
   branchT: number
@@ -236,10 +234,13 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
   if (filter !== null && filter.size === 0) return { pie, conflicts: [], handoffs: [], delivery: null }
   // A merged commit is already left out by sha. Only a squash merge (`... (#n)`) proves a whole slice merged:
   // one task of a slice on the default branch says nothing about the slice's other commits.
-  const squashes = (world.base?.subjects ?? []).filter(subject => SQUASH_SUBJECT.test(subject))
-  const named = new Set([...slicesNamed(squashes), ...squashes.flatMap(subject => slicesInTitle(subject))])
-  // A squash merge naming the pie (`Pie 23: ... (#251)`) merged its whole-pie branch.
-  const squashedPie = (world.base?.subjects ?? []).some(subject => SQUASH_SUBJECT.test(subject) && piesInTitle(subject).includes(pie))
+  // A merged commit is already left out by sha. Only a squash merge proves more: a slice squash
+  // (`feat(pie-7): 7.1 first (#40)`, `Slice 7.1: first (#40)`) merged that slice, and a pie-boundary squash
+  // (`Pie 23: Video GIF Posting (#251)`) merged every slice of its pie up to when it landed. A plan commit that
+  // merely names a pie (`chore(plans): add Pie 28 ... (#254)`) merges nothing.
+  const named = new Set((world.base?.subjects ?? []).flatMap(squashSlices))
+  const boundaryAt = boundaryTime(world.base, pie)
+  const squashed = (t: number): boolean => boundaryAt !== null && t <= boundaryAt
   const onBase = (sha: string): boolean => world.base?.shas.some(merged => headsMatch(merged, sha)) ?? false
   const mergedBefore = (branch: string | null, t: number): boolean =>
     branch !== null && (world.merged ?? []).some(m => shortBranch(m.head) === branch && m.t >= t)
@@ -267,7 +268,7 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     if (row.sid === world.self.sid || (!WORK_EVENTS.has(row.ev) && row.ev !== 'release')) continue
     let work = bySid.get(row.sid)
     if (!work) {
-      work = { sid: row.sid, slices: new Map(), pieWork: Number.NEGATIVE_INFINITY, pieDrop: Number.NEGATIVE_INFINITY, pieClaim: false, claimed: false, branch: null, branchT: Number.NEGATIVE_INFINITY, worktree: null, goal: null, goalT: Number.NEGATIVE_INFINITY, done: new Set() }
+      work = { sid: row.sid, slices: new Map(), pieWork: Number.NEGATIVE_INFINITY, pieDrop: Number.NEGATIVE_INFINITY, pieClaim: false, pieStarted: false, claimed: false, branch: null, branchT: Number.NEGATIVE_INFINITY, worktree: null, goal: null, goalT: Number.NEGATIVE_INFINITY, done: new Set() }
       bySid.set(row.sid, work)
     }
     if (branch !== null && row.t >= work.branchT) {
@@ -288,7 +289,10 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
       else if (row.ev !== 'release') {
         work.pieWork = Math.max(work.pieWork, row.t)
         // A /sell-slice start writes pie.started too; only a pie claim or a /sell-pie start holds the whole pie.
-        if (row.ev === 'claim' || (row.ev === 'pie.started' && row.data?.skill !== 'sell-slice')) work.pieClaim = true
+        // A pie claim holds the pie. A /sell-pie start alone (an older plugin wrote one for the first open pie) holds
+        // it only with a branch of that pie on record; a /sell-slice start never does.
+        if (row.ev === 'claim') work.pieClaim = true
+        if (row.ev === 'pie.started' && row.data?.skill !== 'sell-slice') work.pieStarted = true
       }
       continue
     }
@@ -344,9 +348,8 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
       // Settled only when every commit it recorded reached the default branch, not when one did, and nothing
       // (a fresh claim, an edit) came after its last commit: merged commits cover only the work before them.
       const allMerged = slice.shas.length > 0 && slice.shas.every(onBase) && slice.lastFresh <= slice.lastCommit
-      // A squash merge naming the pie (`Pie 7: ... (#42)`) merged its whole-pie branch, ledger rows included.
-      const squashedHere = squashedPie && isPieBranch(work.branch)
-      if (named.has(id) || allMerged || squashedHere || mergedBefore(work.branch, slice.lastWork)) continue
+      // A pie-boundary squash merged every slice of the pie, on any branch, up to when it landed.
+      if (named.has(id) || allMerged || squashed(slice.lastWork) || mergedBefore(work.branch, slice.lastWork)) continue
       if (!wanted(id)) continue
       if (takenOver(work.sid, work.branch, id, slice.lastWork)) continue
       live.push(id)
@@ -354,7 +357,8 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     // A pie-level claim alone matters while its session may still be on it: an ended one left nothing behind.
     const gone = livenessOf(work.sid, lastBySid.get(work.sid) ?? null, world) === 'ended'
     const pieOpen =
-      work.pieClaim &&
+      (work.pieClaim || (work.pieStarted && branchPie(work.branch) === pie)) &&
+      !squashed(work.pieWork) &&
       work.pieWork > work.pieDrop &&
       !(gone && live.length === 0) &&
       !mergedBefore(work.branch, work.pieWork) &&
@@ -376,12 +380,12 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
   // those slices only; one naming none counts for its slice branch's slice, or the whole pie on a whole-pie branch.
   for (const commit of world.commits) {
     const branch = shortBranch(commit.branch)
-    if (own.has(branch) || mergedBefore(branch, commit.t)) continue
+    if (own.has(branch) || mergedBefore(branch, commit.t) || squashed(commit.t)) continue
     const subjectSlices = [...slicesNamed([commit.subject])].filter(id => pieOfSlice(id) === pie)
     const bySlice = branchSlice(branch)
     const ids = (subjectSlices.length > 0 ? subjectSlices : bySlice !== null && pieOfSlice(bySlice) === pie ? [bySlice] : [])
       .filter(id => wanted(id) && !named.has(id) && !branchTaken(branch, id, commit.t))
-    const wholePie = subjectSlices.length === 0 && bySlice === null && branchPie(branch) === pie && !squashedPie && !wholeTaken(branch, commit.t)
+    const wholePie = subjectSlices.length === 0 && bySlice === null && branchPie(branch) === pie && !wholeTaken(branch, commit.t)
     if (ids.length === 0 && !wholePie) continue
     const party = partyFor(branch, null)
     party.slices = sortSlices([...party.slices, ...ids])
@@ -400,7 +404,8 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     // Uncommitted edits are new work: a merge of the branch's committed tip says nothing about them.
     const dirty = (tree.dirty ?? 0) > 0
     if (!dirty && mergedBefore(branch, tip ?? 0)) continue
-    if (bySlice !== null ? !wanted(bySlice) || (!dirty && named.has(bySlice)) || branchTaken(branch, bySlice, tip ?? 0) : (!dirty && squashedPie) || wholeTaken(branch, tip ?? 0)) continue
+    const settled = !dirty && squashed(tip ?? 0)
+    if (bySlice !== null ? !wanted(bySlice) || settled || (!dirty && named.has(bySlice)) || branchTaken(branch, bySlice, tip ?? 0) : settled || wholeTaken(branch, tip ?? 0)) continue
     const party = partyFor(branch, null)
     if (bySlice !== null) party.slices = sortSlices([...party.slices, bySlice])
     else party.pieLevel ||= party.slices.length === 0
@@ -418,7 +423,7 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     const byHead = branchPie(head) === pie
     const byTitle = piesInTitle(pr.title).includes(pie)
     if (!known && !byHead && prSlices.length === 0 && !byTitle) continue
-    if (!known && !byHead && prSlices.length === 0 && PLAN_TITLE.test(pr.title)) continue
+    if (!known && !byHead && prSlices.length === 0 && isPlanOnly(pr.title)) continue
     const slices = prSlices.filter(wanted)
     if (!known && prSlices.length > 0 && slices.length === 0) continue
     // A PR updates after a takeover (reviews, CI), so any takeover of its branch covers it.

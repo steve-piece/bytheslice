@@ -19,6 +19,58 @@ export const MERGED_DEPTH = 3000
 // A conductor commit subject names its slice: `feat(pie-N): N.M task K ...`.
 const SUBJECT_SLICE = /\(pie-\d+\):\s*(\d+\.\d+)\b/g
 
+/** A squash merge's subject ends with its PR number: `Pie 23: video (#251)`. */
+const SQUASH_SUFFIX = /\(#\d+\)\s*$/
+/** A conventional-commit type that plans or documents rather than builds (`chore(plans): ...`), unless scoped to a pie. */
+const PLAN_TYPE = /^\s*(chore|docs?|plans?|specs?)(\((?!pie-\d)[^)]*\))?!?:/i
+/** Words a plan, roadmap, checklist, spec or docs change uses; the same words that mark a planning PR title. */
+const PLAN_WORDS = /\b(plans?|planning|roadmap|checklist|specs?|docs?|special order)\b/i
+
+/** Whether a subject or title only plans or documents, so it is never evidence that a pie was built or merged. Pure. */
+export function isPlanOnly(text: string): boolean {
+  return PLAN_TYPE.test(text) || PLAN_WORDS.test(text)
+}
+
+/**
+ * The pie a pie-boundary squash merge merged: its subject has the boundary
+ * PR's shape, the pie at the start (`Pie 23: Video GIF Posting (#251)`), and is
+ * no plan (`chore(plans): add Pie 28 ... (#254)` merges nothing). Null for any
+ * other subject. Pure.
+ */
+export function boundaryPie(subject: string): number | null {
+  if (!SQUASH_SUFFIX.test(subject) || isPlanOnly(subject)) return null
+  const m = /^\s*pie\s+(\d+)\b/i.exec(subject)
+  return m ? Number(m[1]) : null
+}
+
+/**
+ * The slices a squash merge merged: a conductor subject naming them
+ * (`feat(pie-7): 7.1 first (#40)`), or a slice PR's shape with the slice at the
+ * start (`Slice 7.1: first (#40)`) that is no plan. Pure.
+ */
+export function squashSlices(subject: string): string[] {
+  if (!SQUASH_SUFFIX.test(subject)) return []
+  const ids = new Set(slicesNamed([subject]))
+  const m = /^\s*slice\s+(\d+\.\d+)\b/i.exec(subject)
+  if (m?.[1] !== undefined && !isPlanOnly(subject)) ids.add(m[1])
+  return [...ids]
+}
+
+/**
+ * When the newest pie-boundary squash merge of `pie` landed on the default
+ * branch, `Infinity` when its time is unknown, or null when there is none. Pure.
+ */
+export function boundaryTime(base: { subjects: readonly string[]; times?: readonly number[] } | null, pie: number): number | null {
+  let at: number | null = null
+  base?.subjects.forEach((subject, i) => {
+    if (boundaryPie(subject) !== pie) return
+    const t = base.times?.[i]
+    const when = t !== undefined && Number.isFinite(t) ? t : Number.POSITIVE_INFINITY
+    at = at === null ? when : Math.max(at, when)
+  })
+  return at
+}
+
 /** Slice ids the subjects name. Pure. */
 export function slicesNamed(subjects: readonly string[]): Set<string> {
   const ids = new Set<string>()
@@ -79,21 +131,33 @@ export async function baseRef($: EngineInterface): Promise<string | null> {
   return null
 }
 
-/** The default branch and its newest commits (shas and subjects), or null outside git. */
-export async function readBase($: EngineInterface): Promise<{ base: string; shas: string[]; subjects: string[] } | null> {
-  const base = await baseRef($)
-  if (base === null) return null
-  const log = await git($, ['log', `-n${MERGED_DEPTH}`, '--format=%H %s', base])
-  if (log === null) return null
+/** The default branch as read: its name, its newest commits' shas and subjects, and their commit times (NaN when unread). */
+export type BaseLog = { base: string; shas: string[]; subjects: string[]; times: number[] }
+
+/** Parses `git log --format='%H %ct%x09%s'` output; a line without the time reads its subject with a NaN time. Pure. */
+export function parseBaseLog(base: string, text: string): BaseLog {
   const shas: string[] = []
   const subjects: string[] = []
-  for (const line of log.split('\n')) {
+  const times: number[] = []
+  for (const line of text.split('\n')) {
     const cut = line.indexOf(' ')
     if (cut <= 0) continue
+    const rest = line.slice(cut + 1)
+    const timed = /^(\d{9,11})\t(.*)$/.exec(rest)
     shas.push(line.slice(0, cut))
-    subjects.push(line.slice(cut + 1))
+    subjects.push(timed ? timed[2] ?? '' : rest)
+    times.push(timed ? Number(timed[1]) * 1000 : Number.NaN)
   }
-  return { base, shas, subjects }
+  return { base, shas, subjects, times }
+}
+
+/** The default branch and its newest commits (shas, subjects and times), or null outside git. */
+export async function readBase($: EngineInterface): Promise<BaseLog | null> {
+  const base = await baseRef($)
+  if (base === null) return null
+  const log = await git($, ['log', `-n${MERGED_DEPTH}`, '--format=%H %ct%x09%s', base])
+  if (log === null) return null
+  return parseBaseLog(base, log)
 }
 
 /** Reads the default branch's commits and returns the drift; none outside git. A base already read is used as is. */
@@ -102,7 +166,7 @@ export async function readDrift(
   c: PassChecklist | null,
   p: PassProjection | null,
   branch: string | null,
-  known?: { base: string; shas: string[]; subjects: string[] } | null,
+  known?: BaseLog | { base: string; shas: string[]; subjects: string[] } | null,
 ): Promise<StatusDrift[]> {
   if (!c || c.layout !== 'pie') return []
   const read = known === undefined ? await readBase($) : known
