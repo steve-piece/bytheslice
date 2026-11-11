@@ -16,6 +16,37 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [6.4.0] - 2026-11-11
+
+**The checklist reads true, says when it cannot, and is updated before every PR.** A long-lived client checklist read 21 of 50 slices done in the session banner when 55 of 56 were. The banner read a primary checkout 181 commits behind, and the kitchen, the Pass and the banner each counted the same file differently. All three now share one parse, a format check names the lines none of them can read, and a PR that skips the checklist draws a warning. Nothing blocks. The decisions are recorded in [docs/architecture.md, "The checklist format"](docs/architecture.md#the-checklist-format-64).
+
+### Added
+
+- **Checklist format check** (`mcp/checklist-format.js`), shared by the hooks and the kitchen MCP (`checklistProblems` in its snapshot). Six rules, each reported with its line number: `table-only-pie`, `duplicate-slice`, `unreadable-status`, `status-disagreement`, `unknown-status` and `missing-status`. The text asks for a separate subagent session to repair the lines and tells work unrelated to slices to keep going.
+- **`hooks/checklist-check.sh`**, two warn-only hooks. `PostToolUse` on `Write|Edit|MultiEdit` runs the format check after an edit to the master checklist, once per distinct report per session. `PreToolUse` on `Bash` warns when `gh pr create` (also `gh pr new` and `gh as <user> pr create`) opens a slice-related branch whose diff leaves `docs/plans/00_master_checklist.md` unchanged. Both add context only and always exit 0. The PR check reads the branch named by `--head`/`-H` (an `owner:branch` form too) when one is given, so a PR opened from the primary checkout for another branch (the merge-per-slice closeout) is checked against that branch, not the checkout's `HEAD`.
+- **The same checks on Cursor.** `hooks/hooks-cursor.json` runs both on Cursor's `postToolUse` (the edit check on every tool, the PR check on `Shell`), answering `{"additional_context": ...}` or `{}` on every exit. `additional_context` is the one Cursor output the agent is documented to read on an allowed call, so on Cursor the PR warning arrives just after the PR opens and asks for a follow-up checklist commit on the same branch.
+- **Checklist before every PR.** `/box-it-up` Phase 1 step 5 reconciles the checklist against the branch diff in every mode that opens a PR, universal (hand-rolled) included. `/sell-slice` and `/sell-pie` make the same rule explicit, including for feedback-round, review and CI-fix PRs, where the drift happened.
+- Tests: `tests/checklist-format/` (each parser case and each validator rule), a Baldwin-shaped fixture and a flat v4 fixture (`tests/fixtures/checklist-format/`), parity cases in `tests/pass/parity.test.js` and `mod/checklist.test.ts`, a `hooks/test.sh` block proving the hooks exit 0 with context and never a permission decision (on Cursor too), and 18 new Cursor assertions.
+
+### Changed
+
+- **The banner reads the session's own checkout first.** `bts_checklist_locate` (`hooks/lib/checklist.sh`) reads the worktree the session runs in (the hook input `cwd`), then `git show origin/<default>:docs/plans/00_master_checklist.md`, then the primary checkout, and the banner names the source; a stale checkout reports how many commits behind its default branch it is.
+- **One count everywhere.** The banner counts through the kitchen parse when Node is present, so Prep counts as Pie 1 and its slices count, as in the kitchen and the Pass. A project's banner totals rise by its Prep pie and Prep slices. `shopStatus` in `mcp/kitchen-state.js` follows the same parse.
+- **Pies roll up from their slices** in the banner, as they already did in the kitchen and the Pass. The awk fallback (no Node) rolls up too.
+- The SessionStart hook timeout is 5 seconds (was 3) for the git lookups, on Cursor's `sessionStart` too.
+- **Cursor's banner reads the session's folder.** `shop-status.sh` under `BTS_HOST=cursor` hands `workspace_roots[0]` on as the folder, so a Cursor session in a worktree also reads its own checklist first.
+
+### Fixed
+
+- **A heading's `<!-- Status: Completed -->` note read as open** in the kitchen and the Pass, which stripped comments before reading the status. Both now read it, as the banner did.
+- **A repeated slice could reopen.** When a slice is listed twice, a later entry's `**Status:** Not Started` body line overwrote an earlier `Completed`. Both parsers now keep the furthest status across entries; within one entry the body line still wins.
+- **A pie written only as a markdown table counted no slices.** Its rows now count, from the `Slice` column and the `Status` or `Implementation` column, when the pie has no slice headings. Tables outside a pie and beside slice headings are still ignored.
+- **A slice listed twice counted twice** (a Prep line and its own `### Slice` heading). It counts once, at the furthest status.
+- `Complete` and `Partial` are read as statuses, and a slice id with one letter (`9.2a`) is a slice in every parser.
+- Flat v4 checklists (`## Stage N`, body `**Status:** Completed` lines, the table-only stage file) read as before.
+
+---
+
 ## [6.3.0] - 2026-11-06
 
 **Enabled gates are binding.** The quality gates a project runs are the operator's decision, made at setup. When one fails during a run, agents now fix the code until it passes, even when the cause is a shared design token or a file the slice only consumes, instead of handing it back as an open decision or a follow-up "for the operator's call". It came from a live run where a slice-tester measured an error color at 4.23:1 and a control border at 1.49:1, and the conductor reported both as "out of slice scope, app-wide design tokens, your call". The same run surfaced two Pass false positives, fixed here.
