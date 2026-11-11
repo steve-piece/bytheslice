@@ -13,6 +13,7 @@ import {
   handoffLine,
   holdsClaim,
   isPieBranch,
+  checkScope,
   holdsWork,
   openSlices,
   overOf,
@@ -329,4 +330,19 @@ test('PR titles name every pie and slice they mention, and a planning PR is not 
   expect(collisionsFor(world({ prs: plan }), 7, OPEN).conflicts).toEqual([])
   const build = [{ number: 51, title: 'Pies 6 and 7: shared upload', head: 'feature/upload', url: 'u51', t: NOW }]
   expect(collisionsFor(world({ prs: build }), 7, OPEN).conflicts.map(p => p.pr?.number)).toEqual([51])
+})
+
+test('a rejected start is intent only: its contested slice.started is not work either', () => {
+  const rows = [
+    row('newcomer', NOW - 60000, 'slice.started', '7.1', { skill: 'sell-slice', contested: true }),
+    row('newcomer', NOW - 60000, 'claim', '7.1', { branch: 'pie-7-s7.1-again', contested: true }),
+  ]
+  expect(collisionsFor(world({ rows, strip: { newcomer: NOW } }), 7, OPEN).conflicts).toEqual([])
+})
+
+test('a /sell-slice run is checked for its slice only; a /sell-pie run, or one with no claims yet, for the open pie', () => {
+  const target = { pie: 23, slice: '23.1' }
+  expect(checkScope(CHECKLIST, [row('me', 1, 'claim', '23.1')], 'me', target)).toEqual(['23.1'])
+  expect(checkScope(CHECKLIST, [row('me', 1, 'claim', null), row('me', 1, 'claim', '23.1')].map(r => ({ ...r, pie: 23 })), 'me', target)).toEqual(['23.1', '23.2'])
+  expect(checkScope(CHECKLIST, [], 'me', target)).toEqual(['23.1', '23.2'])
 })

@@ -6,6 +6,7 @@ import type { EngineInterface } from 'claude-code'
 
 import {
   GATE_STEP,
+  checkScope,
   collisionLines,
   collisionsFor,
   holdsClaim,
@@ -37,6 +38,25 @@ const COMMIT = /\bgit\b(?:\s+-C\s+\S+)?[^;&|]*\bcommit\b/
 
 const guarded = new Map<string, number>()
 let lastCheck = Number.NEGATIVE_INFINITY
+// A Skill tool call's arguments, held while it runs: its nested skill prompt fires before the call returns.
+let pending: { skill: string; arg: unknown } | null = null
+
+/** Before a Skill tool call runs: holds its arguments for the skill prompt it raises. */
+export function notePendingStart(skill: unknown, arg: unknown): void {
+  const bare = bakerSkill(skill)
+  pending = bare === null ? null : { skill: bare, arg }
+}
+
+/** The arguments of the Skill tool call now running for this skill, or undefined. */
+export function pendingArg(skill: unknown): unknown {
+  const bare = bakerSkill(skill)
+  return bare !== null && pending?.skill === bare ? pending.arg : undefined
+}
+
+/** After the Skill tool call: forgets its arguments. */
+export function clearPendingStart(): void {
+  pending = null
+}
 
 async function nowOf($: EngineInterface): Promise<number> {
   try {
@@ -74,15 +94,17 @@ async function checklistOf($: EngineInterface): Promise<PassChecklist | null> {
  * teammate's own pie when given), reads the other work, writes this session's
  * claims for the pie (`/sell-pie`) and the slice, contested when other work is
  * there, and reports that work as a `session-collision` warning the model reads
- * as a hidden note. Resolves the lines, or null when there were none, the
- * engine is limited, or another source of the same start already read them.
+ * as a hidden note. A `/sell-slice` start is checked for its slice only.
+ * Resolves `{ lines }` (empty when nothing else is there), or null when the
+ * engine is limited or another source of the same start already read them;
+ * the caller marks the start rows it writes contested when lines are found.
  */
 export async function guardStart(
   $: EngineInterface,
   name: unknown,
   agentId: string | null,
   opts: { teammatePie?: number | null; arg?: unknown } = {},
-): Promise<string[] | null> {
+): Promise<{ lines: string[] } | null> {
   const skill = bakerSkill(name)
   if (skill === null || (await isLimited($))) return null
   const c = await checklistOf($)
@@ -97,7 +119,8 @@ export async function guardStart(
   const key = `${target.pie}|${agentId ?? 'main'}`
   const last = guarded.get(key)
   if (last !== undefined && now - last < GUARD_WINDOW_MS) return null
-  const found = collisionsFor(world, target.pie, openSlices(c, target.pie))
+  const scope = skill === 'sell-slice' && target.slice !== null ? [target.slice] : openSlices(c, target.pie)
+  const found = collisionsFor(world, target.pie, scope)
   const lines = collisionLines(found, world.now)
   // The start is a claim every other session reads, unless other work is there: then it is intent only.
   const ids: (string | null)[] = [...(skill === 'sell-pie' ? [null] : []), ...(target.slice !== null ? [target.slice] : [])]
@@ -115,9 +138,8 @@ export async function guardStart(
   }
   guarded.set(key, now)
   lastCheck = now
-  if (lines.length === 0) return null
-  if ((await checksOn($)) !== null) await reportToModel($, [collisionFinding(target.pie, lines, target.slice, agentId)], agentId)
-  return lines
+  if (lines.length > 0 && (await checksOn($)) !== null) await reportToModel($, [collisionFinding(target.pie, lines, target.slice, agentId)], agentId)
+  return { lines }
 }
 
 /** True for a Bash command that commits. Pure. */
@@ -141,7 +163,7 @@ export async function guardWork($: EngineInterface): Promise<Finding[]> {
   lastCheck = now
   const target = runTarget(c, { branch: world.self.branch, rows: world.rows, sid: world.self.sid })
   if (target === null || holdsWork(world.rows, world.self.sid, target.pie, target.slice)) return []
-  const lines = collisionLines(collisionsFor(world, target.pie, openSlices(c, target.pie)), world.now)
+  const lines = collisionLines(collisionsFor(world, target.pie, checkScope(c, world.rows, world.self.sid, target)), world.now)
   return lines.length === 0 ? [] : [collisionFinding(target.pie, lines, target.slice)]
 }
 
@@ -158,5 +180,6 @@ export async function serveClaimTool($: EngineInterface, input: Record<string, u
 export function resetClaims(): void {
   resetSources()
   guarded.clear()
+  pending = null
   lastCheck = Number.NEGATIVE_INFINITY
 }

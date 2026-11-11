@@ -171,8 +171,12 @@ const rowBranch = (row: LedgerRow): string | null => {
   return typeof value === 'string' && value !== '' && value !== 'HEAD' ? shortBranch(value) : null
 }
 
-/** A claim recorded while other work was on the pie: it states intent and becomes a claim only through `over: true`. */
-export const isContested = (row: LedgerRow): boolean => row.ev === 'claim' && row.data?.contested === true
+/**
+ * A claim (or the start beside it) recorded while other work was on the pie:
+ * it states intent and becomes a claim only through `over: true`, so nobody
+ * counts it as a claim or as work.
+ */
+export const isContested = (row: LedgerRow): boolean => row.data?.contested === true
 
 /** The branches this session's own rows name, plus the one checked out: its own work, never a conflict. Pure. */
 export function ownBranches(world: Pick<Elsewhere, 'self' | 'rows' | 'base'>): Set<string> {
@@ -796,6 +800,22 @@ export function runTarget(
   }
   const pie = activePie(c)
   return pie ? { pie: pie.n, slice: firstOpen(pie.n) } : null
+}
+
+/**
+ * The slices a check of this session's run is about: just its slice when the
+ * run claimed that slice and never the pie as a whole (a `/sell-slice` run),
+ * else the pie's open slices. Pure.
+ */
+export function checkScope(
+  c: PassChecklist | null,
+  rows: readonly LedgerRow[],
+  sid: string,
+  target: { pie: number; slice: string | null },
+): string[] | null {
+  const own = rows.filter(row => row.sid === sid && row.ev === 'claim' && row.pie === target.pie)
+  const sliceOnly = own.length > 0 && own.every(row => row.slice !== undefined)
+  return sliceOnly && target.slice !== null ? [target.slice] : openSlices(c, target.pie)
 }
 
 // ---- Claims ----------------------------------------------------------------

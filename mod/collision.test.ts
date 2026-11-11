@@ -124,11 +124,8 @@ test('bts_claim records the goal and lists the conflicts; over: true records the
   expect(claim).toContain('Before cutting a branch or writing code, raise a destructive_operation HITL')
   const over = String((await $.tool.call({ tool: CLAIM_LISTED, pie: 23, slice: '23.1', over: true })).result)
   expect(over).toContain(`over chat-a, ${A_BRANCH} with the operator's approval`)
-  // The takeover of 23.1 covers A's ledger rows and branch commits for it; A's other five slices and its pie PR still show.
-  const after = await status($)
-  expect(after).toContain('Slices 23.2, 23.3, 23.4, 23.5, 23.6 are also being built by another session (chat-a)')
-  expect(after).toContain('PR 251 open')
-  expect(after.includes('Slices 23.1,')).toBe(false)
+  // The takeover of 23.1 covers A's ledger rows and branch commits for it: this slice run's status no longer stops for them.
+  expect((await status($)).includes('Other work on Pie 23')).toBe(false)
   const released = String((await $.tool.call({ tool: CLAIM_LISTED, slice: '23.1', release: 'abandoned' })).result)
   expect(released).toBe('released Slice 23.1 (abandoned)')
   const mine = rowsOf(world).filter(r => r.sid === SESSION)
@@ -141,6 +138,11 @@ test('bts_claim records the goal and lists the conflicts; over: true records the
   const bad = String((await $.tool.call({ tool: CLAIM_LISTED, slice: 'Slice 23.1', release: 'abandoned' })).result)
   expect(bad.startsWith('bts_claim: "Slice 23.1" is not a slice id')).toBe(true)
   expect(rowsOf(world).filter(r => r.sid === SESSION)).toHaveLength(3)
+  // Asked about the whole pie, A's other five slices and its pie PR still show.
+  const pie = String((await $.tool.call({ tool: CLAIM_LISTED, pie: 23, goal: 'the rest of the pie' })).result)
+  expect(pie).toContain('Slices 23.2, 23.3, 23.4, 23.5, 23.6 are also being built by another session (chat-a)')
+  expect(pie).toContain('PR 251 open')
+  expect(pie.includes('Slices 23.1,')).toBe(false)
 })
 
 test('without gh the branch and ledger facts still show, and the claim says PRs were not checked', async ($, on) => {
@@ -197,4 +199,44 @@ test('back-to-back reads reuse one git snapshot for ten seconds', async ($, on) 
   await status($)
   await status($)
   expect(world.runs.filter(argv => argv[0] === 'git' && argv.includes('--source'))).toHaveLength(1)
+})
+
+test('the skill prompt a Skill tool call raises takes that call arguments, so the start is claimed on Pie 23', async ($, on) => {
+  const { world, start } = incident(on)
+  world.branch = 'main'
+  engineLoops(on)
+  // The engine beneath: running the Skill tool raises the skill prompt before the call returns.
+  on('tool.call', async (_engine, e) => {
+    if (e.tool === 'Skill') await $.skill.prompt({ skill: 'bytheslice:sell-pie', text: 'bake', frontmatter: {}, source: 'plugin' })
+    return { result: {} }
+  })
+  await start($)
+  await $.tool.call({ tool: 'Skill', skill: 'bytheslice:sell-pie', args: '23' })
+  const mine = rowsOf(world).filter(r => r.sid === SESSION && (r.ev === 'claim' || r.ev === 'pie.started' || r.ev === 'slice.started'))
+  expect(mine.every(r => r.pie === 23)).toBe(true)
+  expect(mine.filter(r => r.ev === 'claim')).toHaveLength(2)
+})
+
+test('/sell-slice 23.1 is not stopped by another session working only on 23.2', async ($, on) => {
+  const { world, start } = incident(on)
+  world.branch = 'main'
+  world.files[LEDGER] = ''
+  world.store = {}
+  const run = world.run
+  world.run = argv => {
+    if (argv[0] === 'git' && argv[1] === 'log' && argv.includes('--source')) {
+      return { stdout: `${'c'.padEnd(40, '2')}\trefs/remotes/origin/pie-23-s23.2-upload\t${Math.floor((START_MS - HOUR) / 1000)}\tfeat(pie-23): 23.2 task 1 upload\n` }
+    }
+    if (argv[0] === 'gh') return { stdout: '[]' }
+    return run?.(argv)
+  }
+  engineLoops(on)
+  on('tool.call', () => ({ result: {} }))
+  await start($)
+  await $.tool.call({ tool: 'Skill', skill: 'bytheslice:sell-slice', args: '23.1' })
+  const claims = rowsOf(world).filter(r => r.sid === SESSION && r.ev === 'claim')
+  expect(claims.map(r => [r.slice, (r.data as Record<string, unknown>).contested ?? false])).toEqual([['23.1', false]])
+  expect(rowsOf(world).some(r => r.ev === 'warn')).toBe(false)
+  // The whole-pie view still lists 23.2's branch, for a run that asks about the pie.
+  expect(String((await $.tool.call({ tool: CLAIM_LISTED, pie: 23, goal: 'look' })).result)).toContain('Slice 23.2 already has commits on branch pie-23-s23.2-upload')
 })

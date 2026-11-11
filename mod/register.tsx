@@ -10,7 +10,7 @@ import { primeChecks, reportToModel, trackGit, trackSkill, warnResult } from './
 import { checkFileWrite, checkPush } from './checks-checklist.ts'
 import { checkCommitOnMain, checkFixSpawn, countFix, raiseFixCap } from './checks-git.ts'
 import { checkDrift, checkSpawn, trackSpawn } from './checks-spawn.ts'
-import { guardStart, guardWork, isCommit, resetClaims, serveClaimTool } from './claims-guard.ts'
+import { clearPendingStart, guardStart, guardWork, isCommit, notePendingStart, pendingArg, resetClaims, serveClaimTool } from './claims-guard.ts'
 import { closeEndedStalls, closeOnReply, isOperatorReply, serveHitl } from './hitl.ts'
 import { startSession } from './ledger.ts'
 import { pollAgents, refreshLedger, startPulse } from './live.ts'
@@ -221,21 +221,29 @@ export const register: Register = on => {
     await trackSkill($, e.skill).catch(() => null)
     // It names no loop: with a team, the Skill tool call records whose start it was.
     if (!(await teamActive($).catch(() => false))) {
-      await captureSkill($, e.skill).catch(() => [])
-      await guardStart($, e.skill, null).catch(() => null)
+      // Raised inside a Skill tool call, it takes that call's arguments; the check comes before any start row.
+      const arg = pendingArg(e.skill)
+      const checked = await guardStart($, e.skill, null, { arg }).catch(() => null)
+      await captureSkill($, e.skill, null, arg, (checked?.lines.length ?? 0) > 0).catch(() => [])
     }
     return prompt
   }).catch(($, e, next) => next(e))
 
   // In a teammate's loop the start is that teammate's: its pie, its address on the rows.
   on('tool.call', { tool: 'Skill' }, async ($, e, next) => {
-    const ran = await next(e)
+    const arg = (e as { args?: unknown }).args
+    notePendingStart(e.skill, arg)
+    let ran: Awaited<ReturnType<typeof next>>
+    try {
+      ran = await next(e)
+    } finally {
+      clearPendingStart()
+    }
     if (ran.deny === undefined && ran.isError !== true) {
       await trackSkill($, e.skill).catch(() => null)
       const baker = await teammateOf($, e.agentId).catch(() => null)
-      const arg = (e as { args?: unknown }).args
-      await captureSkill($, e.skill, baker ? { teammateId: baker.teammateId, pie: baker.pie } : null, arg).catch(() => [])
-      await guardStart($, e.skill, e.agentId ?? null, { teammatePie: baker?.pie ?? null, arg }).catch(() => null)
+      const checked = await guardStart($, e.skill, e.agentId ?? null, { teammatePie: baker?.pie ?? null, arg }).catch(() => null)
+      await captureSkill($, e.skill, baker ? { teammateId: baker.teammateId, pie: baker.pie } : null, arg, (checked?.lines.length ?? 0) > 0).catch(() => [])
       if (baker) await refreshTeam($, { force: true }).catch(() => null)
     }
     return ran
@@ -269,8 +277,8 @@ export const register: Register = on => {
     await relay($, 'UserPromptExpansion', inputOf(e)).catch(() => 0)
     const expanded = await next(e)
     await trackSkill($, e.command_name).catch(() => null)
-    await captureSkill($, e.command_name, null, e.command_args).catch(() => [])
-    await guardStart($, e.command_name, null, { arg: e.command_args }).catch(() => null)
+    const checked = await guardStart($, e.command_name, null, { arg: e.command_args }).catch(() => null)
+    await captureSkill($, e.command_name, null, e.command_args, (checked?.lines.length ?? 0) > 0).catch(() => [])
     return expanded
   }).catch(($, e, next) => next(e))
 

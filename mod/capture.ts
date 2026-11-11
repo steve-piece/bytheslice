@@ -490,7 +490,13 @@ export type SkillBaker = { teammateId: string; pie: number | null }
  * carrying `data.teammateId`; a slice already started by that teammate is not
  * recorded again.
  */
-export async function captureSkill($: EngineInterface, name: unknown, baker: SkillBaker | null = null, arg?: unknown): Promise<LedgerRow[]> {
+export async function captureSkill(
+  $: EngineInterface,
+  name: unknown,
+  baker: SkillBaker | null = null,
+  arg?: unknown,
+  contested = false,
+): Promise<LedgerRow[]> {
   if (typeof name !== 'string' || !BAKERS.test(name.trim()) || (await isLimited($))) return []
   const c = await checklistOf($)
   const rows = await readRows($)
@@ -509,17 +515,20 @@ export async function captureSkill($: EngineInterface, name: unknown, baker: Ski
   const skill = name.trim().slice(name.trim().lastIndexOf(':') + 1)
   const who = baker ? { teammateId: baker.teammateId } : {}
   const out: LedgerRow[] = []
-  if (!rows.some(row => row.ev === 'pie.started' && row.pie === pie.n)) {
-    const written = await record($, { ev: 'pie.started', pie: pie.n, data: { skill, ...who } })
+  // A contested start (another session's, stopped on other work) never stands in for this one.
+  const real = rows.filter(row => row.data?.contested !== true)
+  if (!real.some(row => row.ev === 'pie.started' && row.pie === pie.n)) {
+    const written = await record($, { ev: 'pie.started', pie: pie.n, data: { skill, ...who, ...(contested ? { contested: true } : {}) } })
     if (written) out.push(written)
   }
   const started = (row: LedgerRow): boolean =>
     row.ev === 'slice.started' && row.slice === slice?.id && (baker === null || row.data?.teammateId === baker.teammateId)
-  if (slice && !rows.some(started)) {
+  if (slice && !real.some(started)) {
     // The head it starts at is where its touched files and replay count from.
     const head = (await git($, ['rev-parse', 'HEAD']))?.trim()
     const at = head && /^[0-9a-f]{7,64}$/.test(head) ? { head } : {}
-    const written = await record($, { ev: 'slice.started', pie: pie.n, slice: slice.id, data: { skill, ...who, ...at } })
+    // A start on other work is intent only, like its contested claim: nobody counts it as work.
+    const written = await record($, { ev: 'slice.started', pie: pie.n, slice: slice.id, data: { skill, ...who, ...at, ...(contested ? { contested: true } : {}) } })
     if (written) out.push(written)
   }
   return out

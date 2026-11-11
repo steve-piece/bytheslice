@@ -10,7 +10,7 @@ import { ledgerPath } from './ledger.ts'
 import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
 import { activePie, activeSlice, allDone, boxReady, counts, refresh } from './projection.ts'
 import { runningFor } from './rail.tsx'
-import { collisionLines, collisionsFor, handoffLine, holdsWork, openSlices, readElsewhere, registerClaim, runTarget } from './claims.ts'
+import { checkScope, collisionLines, collisionsFor, handoffLine, holdsWork, readElsewhere, registerClaim, runTarget } from './claims.ts'
 import type { Collisions } from './claims.ts'
 import { driftLine, readBase, readDrift } from './drift.ts'
 import type { StatusDrift } from './drift.ts'
@@ -341,7 +341,7 @@ export async function serveStatus($: EngineInterface, input: Record<string, unkn
   // The pie this run is on (its branch, its claims), not merely the first one with an open slice.
   const target = world ? runTarget(checklist, { branch: world.self.branch, rows: world.rows, sid: world.self.sid }) : null
   if (world && target) {
-    collisions = collisionsFor(world, target.pie, openSlices(checklist, target.pie))
+    collisions = collisionsFor(world, target.pie, checkScope(checklist, world.rows, world.self.sid, target))
     holding = holdsWork(world.rows, world.self.sid, target.pie, target.slice)
   }
   return statusReport({ checklist, projection, live, branch, now, team, drift, collisions, holdsWork: holding }, scope)
