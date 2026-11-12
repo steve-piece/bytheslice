@@ -61,8 +61,9 @@ export function bandLine(
   const named = namedWork(c, work)
   // A chat on no slice names none (2026-11-11: every chat of a project showed its first open slice as if it
   // were building it). It still shows an open ask, which is the project's, and its own check warning.
+  // That includes a finished pie's branch with another pie still open, which names no open slice (Codex on #67).
   if (!named) {
-    if (work !== null) return null
+    if (work === undefined) return null
     const bits = [...(hitl > 0 ? [`HITL ${hitl} open`] : []), ...(warning !== null ? [`warn ${warning.code}`] : [])]
     return bits.length > 0 ? { text: bits.join(' · '), dim: false, warn: true } : null
   }

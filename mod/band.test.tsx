@@ -248,3 +248,13 @@ test('a branch switch onto a pie branch names that pie in the band at once (Code
   await $.tool.call({ tool: 'Bash', command: 'git checkout pie-5-the-pass' })
   expect(await band()).toBe('Pie 5 · Slice 5.1 queued')
 })
+
+
+test('on a finished pie\'s branch the band still shows an open HITL and its own warning (Codex on #67)', () => {
+  const c = parseChecklist(CHECKLIST_FIXTURE)
+  const ledger = { hitl: { open: [{ id: 'h1' }] } } as unknown as Parameters<typeof bandLine>[2]
+  const warning = { code: 'commit-on-main', slice: null, t: 0, until: 1 } as unknown as Parameters<typeof bandLine>[4]
+  const finished = { pie: 4, slice: null }
+  expect(bandLine(c, 100, ledger, null, warning, null, 'pie-4-live-kitchen', finished)).toEqual({ text: 'HITL 1 open · warn commit-on-main', dim: false, warn: true })
+  expect(bandLine(c, 100, null, null, null, null, 'pie-4-live-kitchen', finished)).toBe(null)
+})
