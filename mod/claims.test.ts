@@ -441,3 +441,16 @@ test('edits, pushes and commits a session never claimed or started a slice for a
   const onPie = defaulted.map(r => ({ ...r, data: { ...r.data, branch: 'pie-7-s7.1-other' } }))
   expect(collisionsFor(world({ rows: onPie, strip: { slate: NOW } }), 7, OPEN).conflicts.length).toBe(1)
 })
+
+
+test('a released or contested start is not this session\'s work (Codex on #67)', () => {
+  const facts = { branch: 'dk-nba-1111', sid: 'me' }
+  const start = row('me', NOW - 3000, 'slice.started', '23.1', { skill: 'sell-slice' })
+  expect(sessionWork(CHECKLIST, { ...facts, rows: [start] })).toEqual({ pie: 23, slice: '23.1' })
+  const released = [start, row('me', NOW - 2000, 'release', '23.1', { reason: 'abandoned' })]
+  expect(sessionWork(CHECKLIST, { ...facts, rows: released })).toBe(null)
+  const pieRelease = [start, row('me', NOW - 2000, 'release', null, { reason: 'deferred' })].map(r => ({ ...r, pie: 23 }))
+  expect(sessionWork(CHECKLIST, { ...facts, rows: pieRelease })).toBe(null)
+  const contested = [row('me', NOW - 1000, 'slice.started', '23.2', { skill: 'sell-slice', contested: true })]
+  expect(sessionWork(CHECKLIST, { ...facts, rows: contested })).toBe(null)
+})

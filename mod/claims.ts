@@ -872,8 +872,11 @@ export function sessionWork(
     if (row.ev === 'release') {
       held.delete(key)
       if (row.slice === undefined) for (const k of [...held.keys()]) if (k.startsWith(`${row.pie}|`)) held.delete(k)
+      // A release lets go of the start on that slice (or pie) too, or the band keeps naming it (Codex review on #67).
+      if (started && started.pie === row.pie && (row.slice === undefined || started.slice === row.slice)) started = null
     }
-    if (row.ev === 'slice.started') started = row
+    // A contested start is intent only, as its contested claim is (Codex review on #67).
+    if (row.ev === 'slice.started' && !isContested(row)) started = row
   }
   const latest = [...held.values()].sort((a, b) => b.t - a.t)[0] ?? started
   if (latest && typeof latest.pie === 'number') {
