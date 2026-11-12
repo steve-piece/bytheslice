@@ -22,6 +22,7 @@ import {
   parseRunArg,
   piesInTitle,
   runTarget,
+  sessionWork,
   slicesInTitle,
   parsePrs,
   parseRefCommits,
@@ -413,4 +414,43 @@ test('a pie-boundary squash settles the pie ledger work on every branch up to wh
   expect(collisionsFor(world({ rows: slice, base: squash }), 7, ['7.2']).conflicts).toEqual([])
   const after = [row('other', NOW - 60000, 'commit', '7.2', { sha: 'new0003', branch: 'pie-7-s7.2-own' })]
   expect(collisionsFor(world({ rows: after, base: squash }), 7, ['7.2']).conflicts).toHaveLength(1)
+})
+
+
+// ---- 2026-11-11: a chat that claimed nothing is on no slice ---------------------------------------------------
+
+test('a session with no claim, start or pie branch is on no slice; the run target still falls back to the active pie', () => {
+  const facts = { branch: 'dk-nba-1111', rows: [row('other', NOW, 'claim', '23.1')], sid: 'me' }
+  expect(sessionWork(CHECKLIST, facts)).toBe(null)
+  expect(runTarget(CHECKLIST, facts)).toEqual({ pie: 8, slice: '8.6' })
+  expect(sessionWork(CHECKLIST, { ...facts, rows: [row('me', NOW, 'claim', '23.2')] })).toEqual({ pie: 23, slice: '23.2' })
+  expect(sessionWork(CHECKLIST, { ...facts, branch: 'pie-23-s23.1-kinds' })?.slice).toBe('23.1')
+})
+
+test('edits, pushes and commits a session never claimed or started a slice for are not work on it', () => {
+  // Every row of a chat that claimed nothing used to carry the checklist's first open slice (18 chats "on Slice 2.2").
+  const defaulted = [
+    row('slate', NOW - 60000, 'edit', '7.1', { path: 'scripts/board.py' }),
+    row('slate', NOW - 50000, 'push', '7.1', { sha: 'aaaaaaa1', branch: 'dk-nba-1111' }),
+    row('slate', NOW - 40000, 'commit', '7.1', { sha: 'aaaaaaa1', branch: 'dk-nba-1111' }),
+  ]
+  expect(collisionsFor(world({ rows: defaulted, strip: { slate: NOW } }), 7, OPEN).conflicts).toEqual([])
+  // The same rows after a claim on the slice, or on a branch of the pie, are work.
+  const claimed = [row('slate', NOW - 70000, 'claim', '7.1'), ...defaulted]
+  expect(collisionsFor(world({ rows: claimed, strip: { slate: NOW } }), 7, OPEN).conflicts.map(p => p.sid)).toEqual(['slate'])
+  const onPie = defaulted.map(r => ({ ...r, data: { ...r.data, branch: 'pie-7-s7.1-other' } }))
+  expect(collisionsFor(world({ rows: onPie, strip: { slate: NOW } }), 7, OPEN).conflicts.length).toBe(1)
+})
+
+
+test('a released or contested start is not this session\'s work (Codex on #67)', () => {
+  const facts = { branch: 'dk-nba-1111', sid: 'me' }
+  const start = row('me', NOW - 3000, 'slice.started', '23.1', { skill: 'sell-slice' })
+  expect(sessionWork(CHECKLIST, { ...facts, rows: [start] })).toEqual({ pie: 23, slice: '23.1' })
+  const released = [start, row('me', NOW - 2000, 'release', '23.1', { reason: 'abandoned' })]
+  expect(sessionWork(CHECKLIST, { ...facts, rows: released })).toBe(null)
+  const pieRelease = [start, row('me', NOW - 2000, 'release', null, { reason: 'deferred' })].map(r => ({ ...r, pie: 23 }))
+  expect(sessionWork(CHECKLIST, { ...facts, rows: pieRelease })).toBe(null)
+  const contested = [row('me', NOW - 1000, 'slice.started', '23.2', { skill: 'sell-slice', contested: true })]
+  expect(sessionWork(CHECKLIST, { ...facts, rows: contested })).toBe(null)
 })

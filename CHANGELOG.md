@@ -16,6 +16,17 @@ All notable changes to **🍕 ByTheSlice** are tracked here, slice by slice. The
 
 ---
 
+## [6.6.2] - 2026-11-12
+
+**A chat is on a slice only when it says so.** Every chat open in a ByTheSlice project showed the checklist's first open slice above its prompt (`Pie 2 · Slice 2.2 queued`), as if it were building it, and every edit, push, commit and turn it made was recorded on that slice. The collision guard then read those rows as work: on 2026-11-11 one project warned that eighteen unrelated chats were "also building Slice 2.2".
+
+### Fixed
+
+- **A session's pie and slice are its own** (`sessionWork`): its pie or slice branch, else its latest claim still held, else its latest `slice.started` that no later release let go of and that was not contested (a start stopped on other work is intent only). A chat with none of those is on no slice: its band shows nothing (or only `HITL n open` while an ask is open), its status line is cleared, and its rows carry no pie or slice. Kept in a new `pass.work` atom, refreshed with the ledger projection and at once after a claim, a release or a branch move; the status line re-pins when it changes, and only when its text does (`pass.pinned`). A baker start with no argument, branch or claim still targets the first open pie (`runTarget`).
+- **Rows stamped by default are not work.** An `edit`, `push`, `commit` or `merge` row names a slice another session is on only when that session claimed it, started it, recorded a verdict or done flip on it, claimed the pie, or wrote the row on a branch of that pie or slice. Ledgers written before this release clear without editing.
+
+---
+
 ## [6.6.1] - 2026-11-11
 
 **A plan commit is not a merge.** On its first live run the project board read two planned pies as fully merged, because a plan commit whose squash subject merely named them (`chore(plans): add Pie 28 chaptered clip selection (#254)`) was taken for that pie's boundary merge. The same reading in the collision fold hid any real whole-pie branch of those pies from `bts_status`, `bts_claim` and the start guard.

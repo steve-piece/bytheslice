@@ -19,6 +19,7 @@ import {
   writeClaim,
 } from './claims.ts'
 import { checksOn, reportToModel } from './checks.ts'
+import { refreshLedger } from './live.ts'
 import type { Finding } from './checks.ts'
 import { isLimited, refresh } from './projection.ts'
 import type { PassChecklist } from './types'
@@ -124,8 +125,10 @@ export async function guardStart(
   const lines = collisionLines(found, world.now)
   // The start is a claim every other session reads, unless other work is there: then it is intent only.
   const ids: (string | null)[] = [...(skill === 'sell-pie' ? [null] : []), ...(target.slice !== null ? [target.slice] : [])]
+  let wrote = false
   for (const id of ids) {
     if (holdsClaim(world.rows, world.self.sid, target.pie, id)) continue
+    wrote = true
     await writeClaim($, {
       pie: target.pie,
       ...(id === null ? {} : { slice: id }),
@@ -136,6 +139,8 @@ export async function guardStart(
       contested: lines.length > 0,
     })
   }
+  // A claim moves this session's work (`pass.work`), which the band, status line and row stamps read.
+  if (wrote) await refreshLedger($).catch(() => null)
   guarded.set(key, now)
   lastCheck = now
   if (lines.length > 0 && (await checksOn($)) !== null) await reportToModel($, [collisionFinding(target.pie, lines, target.slice, agentId)], agentId)
@@ -172,6 +177,8 @@ export async function serveClaimTool($: EngineInterface, input: Record<string, u
   if ((await checklistOf($)) === null) await refresh($).catch(() => null)
   const c = await checklistOf($)
   const answer = await serveClaim($, input, c)
+  // A claim or a release moves this session's work at once, not at the next projection (Codex review on #67).
+  await refreshLedger($).catch(() => null)
   lastCheck = await nowOf($)
   return answer
 }

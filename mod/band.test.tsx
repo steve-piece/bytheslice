@@ -6,7 +6,7 @@ import { expect, test } from 'claude-code/testing'
 import { bandLine, statusText } from './band.tsx'
 import { parseChecklist } from './checklist.ts'
 import { CHECKLIST_FIXTURE } from './fixtures/checklist.fixture.ts'
-import { ALL_DONE, LEDGER, activeAt52, bandTarget, engineDraws, fixingWorld, hintTarget, stage, V4 } from './testing.tsx'
+import { ALL_DONE, LEDGER, SESSION, activeAt52, bashResult, bandTarget, engineDraws, fixingWorld, hintTarget, stage, V4 } from './testing.tsx'
 
 const SURFACES = ['terminal', 'desktop'] as const
 
@@ -180,4 +180,81 @@ test('a passing verdict leaves the band in its plain style', async ($, on) => {
     expect(line?.props.color).toBeUndefined()
     await ui.unmount()
   }
+})
+
+
+test('a chat on no slice draws no band and pins no slice; a claim names its own slice (2026-11-11)', async ($, on) => {
+  // Every chat of a ByTheSlice project showed the checklist's first open slice above its prompt, as if it were
+  // building it. A chat on an ordinary branch that claimed nothing is on no slice.
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE, branch: 'dk-nba-1111' })
+  engineDraws(on)
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(bandTarget(surface))
+    // The engine's own drawing stands where the band would be.
+    expect((await ui.findAll({ type: 'Text' })).map(line => line.text)).toEqual(['engine'])
+    await ui.unmount()
+  }
+  expect(statusText(parseChecklist(CHECKLIST_FIXTURE), null)).toBe(undefined)
+  world.files[LEDGER] = JSON.stringify({ v: 1, t: 1, sid: SESSION, ev: 'claim', pie: 5, slice: '5.2', data: { goal: 'pane' } }) + '\n'
+  // `/pass reconcile` re-reads the ledger, as every recorded row does.
+  await $.command.run({ command: 'pass', args: 'reconcile', origin: { kind: 'composer' as const }, presentation: { isFullscreen: true, columns: 160 } })
+  const ui = await $.ui.mount(bandTarget('terminal'))
+  expect((await ui.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.2 queued')
+  await ui.unmount()
+  expect(statusText(parseChecklist(CHECKLIST_FIXTURE), { pie: 5, slice: '5.2' })).toBe('P5 S5.2 ✓0/' + parseChecklist(CHECKLIST_FIXTURE)!.pies.find(p => p.n === 5)!.slices.length)
+})
+
+test('a chat on no slice still shows an open HITL, since the ask is the project\'s', () => {
+  const c = parseChecklist(CHECKLIST_FIXTURE)
+  const ledger = { hitl: { open: [{ id: 'h1' }] } } as unknown as Parameters<typeof bandLine>[2]
+  expect(bandLine(c, 100, ledger, null, null, null, 'dk-nba-1111', null)).toEqual({ text: 'HITL 1 open', dim: false, warn: true })
+  expect(bandLine(c, 100, null, null, null, null, 'dk-nba-1111', null)).toBe(null)
+})
+
+test('a claim made mid-session moves the band and the status line at once; its release clears them (Codex on #67)', async ($, on) => {
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE, branch: 'dk-nba-1111' })
+  engineDraws(on)
+  await start($)
+  const band = async () => {
+    const ui = await $.ui.mount(bandTarget('terminal'))
+    const text = (await ui.find({ type: 'Text' }))?.text
+    await ui.unmount()
+    return text
+  }
+  expect(await band()).toBe('engine')
+  expect(world.statuses.at(-1)).toBe(undefined)
+  await $.tool.call({ tool: 'mcp__bytheslice__bts_claim', pie: 5, slice: '5.2', goal: 'the pane' })
+  expect(await band()).toBe('Pie 5 · Slice 5.2 queued')
+  expect(world.statuses.at(-1)?.startsWith('P5 S5.2 ')).toBe(true)
+  await $.tool.call({ tool: 'mcp__bytheslice__bts_claim', pie: 5, slice: '5.2', release: 'abandoned' })
+  expect(await band()).toBe('engine')
+  expect(world.statuses.at(-1)).toBe(undefined)
+})
+
+test('a branch switch onto a pie branch names that pie in the band at once (Codex on #67)', async ($, on) => {
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE, branch: 'dk-nba-1111' })
+  engineDraws(on)
+  on('tool.call', () => bashResult())
+  await start($)
+  const band = async () => {
+    const ui = await $.ui.mount(bandTarget('terminal'))
+    const text = (await ui.find({ type: 'Text' }))?.text
+    await ui.unmount()
+    return text
+  }
+  expect(await band()).toBe('engine')
+  world.branch = 'pie-5-the-pass'
+  await $.tool.call({ tool: 'Bash', command: 'git checkout pie-5-the-pass' })
+  expect(await band()).toBe('Pie 5 · Slice 5.1 queued')
+})
+
+
+test('on a finished pie\'s branch the band still shows an open HITL and its own warning (Codex on #67)', () => {
+  const c = parseChecklist(CHECKLIST_FIXTURE)
+  const ledger = { hitl: { open: [{ id: 'h1' }] } } as unknown as Parameters<typeof bandLine>[2]
+  const warning = { code: 'commit-on-main', slice: null, t: 0, until: 1 } as unknown as Parameters<typeof bandLine>[4]
+  const finished = { pie: 4, slice: null }
+  expect(bandLine(c, 100, ledger, null, warning, null, 'pie-4-live-kitchen', finished)).toEqual({ text: 'HITL 1 open · warn commit-on-main', dim: false, warn: true })
+  expect(bandLine(c, 100, null, null, null, null, 'pie-4-live-kitchen', finished)).toBe(null)
 })

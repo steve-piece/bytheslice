@@ -234,7 +234,11 @@ const MOVES = /\bgit\b[^;&|\n]*?\s(checkout|switch|worktree|merge|rebase|reset|p
 export async function trackGit($: EngineInterface, command: unknown, rows: readonly LedgerRow[]): Promise<void> {
   const moved = typeof command === 'string' && MOVES.test(command)
   if (moved || rows.some(row => row.ev === 'commit')) await readHead($)
-  if (moved) await readBranch($)
+  if (moved) {
+    await readBranch($)
+    // The branch may name a pie or slice: this session's work follows it (Codex review on #67).
+    await refreshLedger($).catch(() => null)
+  }
 }
 
 /** A ByTheSlice skill's start becomes `pass.activeSkill`; any other skill leaves it as it was. */

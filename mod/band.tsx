@@ -5,7 +5,10 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput, RenderPropsOf } from 'claude-code'
 
 import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
-import { activePie, activeSlice, allDone, boxReady, counts } from './projection.ts'
+import { allDone, boxReady, namedWork, pinStatus, statusText } from './projection.ts'
+import type { SessionWork } from './projection.ts'
+
+export { statusText }
 import { PANE_ID } from './rail.tsx'
 import { bakersWord } from './team.ts'
 import type { PassChecklist, PassLive, PassProjection, PassTeam, PassWarning } from './types'
@@ -16,6 +19,7 @@ const liveAtom = atom({ plugin: 'bytheslice', key: 'pass.live' } as const, { at:
 const warningAtom = atom({ plugin: 'bytheslice', key: 'pass.warning' } as const, null)
 const teamAtom = atom({ plugin: 'bytheslice', key: 'pass.team' } as const, { at: 0, bakers: [] })
 const branchAtom = atom({ plugin: 'bytheslice', key: 'pass.branch' } as const, null)
+const workAtom = atom({ plugin: 'bytheslice', key: 'pass.work' } as const, null)
 
 export const NARROW_COLUMNS = 60
 export const DOCK_COLUMNS = 110
@@ -44,6 +48,7 @@ export function bandLine(
   warning: PassWarning | null = null,
   team: PassTeam | null = null,
   branch: string | null = null,
+  work: SessionWork = undefined,
 ): BandLine | null {
   if (!c) return null
   const narrow = bodyColumns < NARROW_COLUMNS
@@ -53,11 +58,19 @@ export function bandLine(
   const asks = (hitl > 0 ? (narrow ? ` HITL ${hitl}` : ` · HITL ${hitl}`) : '') + crew
   if (c.layout === 'stage') return hitl > 0 ? { text: `v4 checklist${asks}`, dim: false, warn: true } : { text: 'v4 checklist', dim: true }
   if (allDone(c)) return { text: `${narrow ? 'all done' : boxReady(c, branch) ? `All pies done · ${READY}` : 'All pies done'}${asks}`, dim: false, ...(hitl > 0 ? { warn: true } : {}) }
-  const pie = activePie(c)
-  const slice = activeSlice(c)
-  if (!pie || !slice) return null
+  const named = namedWork(c, work)
+  // A chat on no slice names none (2026-11-11: every chat of a project showed its first open slice as if it
+  // were building it). It still shows an open ask, which is the project's, and its own check warning.
+  // That includes a finished pie's branch with another pie still open, which names no open slice (Codex on #67).
+  if (!named) {
+    if (work === undefined) return null
+    const bits = [...(hitl > 0 ? [`HITL ${hitl} open`] : []), ...(warning !== null ? [`warn ${warning.code}`] : [])]
+    return bits.length > 0 ? { text: bits.join(' · '), dim: false, warn: true } : null
+  }
+  const { pie, slice } = named
   if (!ledger) {
-    const { done, total } = counts(c)
+    const done = pie.slices.filter(s => s.done).length
+    const total = pie.slices.length
     return narrow
       ? { text: `P${pie.n} S${slice.id} ${done}/${total}`, dim: false }
       : { text: `Pie ${pie.n} · Slice ${slice.id} · ${done}/${total} done`, dim: false }
@@ -80,25 +93,12 @@ export function bandLine(
   return { text: parts.join(' · '), dim: false, warn }
 }
 
-/** The pinned status line (`P5 S5.1 ✓0/8`), or undefined to clear it. */
-export function statusText(c: PassChecklist | null): string | undefined {
-  if (!c) return undefined
-  if (c.layout === 'stage') return 'v4 checklist'
-  if (allDone(c)) return '✓ all done'
-  const pie = activePie(c)
-  const slice = activeSlice(c)
-  if (!pie || !slice) return undefined
-  const { done, total } = counts(c)
-  return `P${pie.n} S${slice.id} ✓${done}/${total}`
-}
-
-/** Pins the status line for a checklist; called after every projection write. */
+/** Pins the status line for a checklist and this session's work; called after every projection write. */
 export function pushStatus($: EngineInterface, c: PassChecklist | null): void {
-  try {
-    $.ui.status(statusText(c))
-  } catch {
-    // A status line that cannot be pinned is not worth failing the refresh for.
-  }
+  void read($, workAtom)
+    .catch(() => null)
+    .then(work => pinStatus($, statusText(c, work)))
+    .catch(() => undefined)
 }
 
 async function paneDocked($: EngineInterface, e: RenderInput<'AbovePrompt'>): Promise<boolean> {
@@ -119,15 +119,16 @@ async function paneDocked($: EngineInterface, e: RenderInput<'AbovePrompt'>): Pr
  */
 export async function drawBand($: EngineInterface, e: RenderInput<'AbovePrompt'>): Promise<RenderElement | null> {
   if (e.props.hasSurvey) return null
-  const [c, ledger, live, warning, team, branch] = await Promise.all([
+  const [c, ledger, live, warning, team, branch, work] = await Promise.all([
     read($, checklistAtom),
     read($, ledgerAtom),
     read($, liveAtom),
     read($, warningAtom),
     read($, teamAtom),
     read($, branchAtom),
+    read($, workAtom).catch(() => null),
   ])
-  const line = bandLine(c, e.props.bodyColumns, ledger, live, warning, team, branch)
+  const line = bandLine(c, e.props.bodyColumns, ledger, live, warning, team, branch, work)
   if (!line) return null
   if (await paneDocked($, e)) return null
   const { Text } = $.ui.resolve(e)

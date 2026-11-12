@@ -18,6 +18,7 @@ const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as co
 const loadedAtAtom = atom({ plugin: 'bytheslice', key: 'pass.loadedAt' } as const, 0)
 const limitedAtom = atom({ plugin: 'bytheslice', key: 'pass.limited' } as const, false)
 const branchAtom = atom({ plugin: 'bytheslice', key: 'pass.branch' } as const, null)
+const pinnedAtom = atom({ plugin: 'bytheslice', key: 'pass.pinned' } as const, null)
 
 /** The active pie: the first pie with an open slice; null when none has one. */
 export function activePie(c: PassChecklist | null): PassPie | null {
@@ -28,6 +29,50 @@ export function activePie(c: PassChecklist | null): PassPie | null {
 /** The active slice: the first open slice of the active pie. */
 export function activeSlice(c: PassChecklist | null): PassSlice | null {
   return activePie(c)?.slices.find(slice => !slice.done) ?? null
+}
+
+/** This session's pie and slice (`pass.work`); undefined means not known, which reads the checklist's active one. */
+export type SessionWork = { pie: number; slice: string | null } | null | undefined
+
+/**
+ * The pie and slice the band and status line name: this session's own work, or with `work` undefined (a pure
+ * caller that knows no session) the checklist's active pie and first open slice. Null when the session is on none.
+ */
+export function namedWork(c: PassChecklist, work: SessionWork): { pie: PassChecklist['pies'][number]; slice: PassChecklist['pies'][number]['slices'][number] } | null {
+  if (work === undefined) {
+    const pie = activePie(c)
+    const slice = activeSlice(c)
+    return pie && slice ? { pie, slice } : null
+  }
+  if (work === null) return null
+  const pie = c.pies.find(p => p.n === work.pie)
+  const slice = pie?.slices.find(s => s.id === work.slice) ?? pie?.slices.find(s => !s.done) ?? null
+  return pie && slice ? { pie, slice } : null
+}
+
+/** The pinned status line (`P5 S5.1 ✓0/8`), or undefined to clear it: cleared for a session on no slice. */
+export function statusText(c: PassChecklist | null, work: SessionWork = undefined): string | undefined {
+  if (!c) return undefined
+  if (c.layout === 'stage') return 'v4 checklist'
+  if (allDone(c)) return '✓ all done'
+  const named = namedWork(c, work)
+  if (!named) return undefined
+  const { pie, slice } = named
+  const done = pie.slices.filter(s => s.done).length
+  return `P${pie.n} S${slice.id} ✓${done}/${pie.slices.length}`
+}
+
+/** Pins the status line to `text` (undefined clears it), skipping a pin of the text already pinned. */
+export async function pinStatus($: EngineInterface, text: string | undefined): Promise<void> {
+  const last = await read($, pinnedAtom).catch(() => null)
+  if (last !== null && last.text === (text ?? null)) return
+  try {
+    $.ui.status(text)
+  } catch {
+    // A status line that cannot be pinned is not worth failing the refresh for.
+    return
+  }
+  await update($, pinnedAtom, () => ({ text: text ?? null })).catch(() => undefined)
 }
 
 /** Slices done and in total for the active pie; zero and zero without one. */
