@@ -359,6 +359,8 @@ declare module 'claude-code' {
       'pass.branch': string | null
       /** The pie and slice this session is on (its claim, its start, its pie or slice branch), or null when none: never the checklist's first open slice. */
       'pass.work': { pie: number; slice: string | null } | null
+      /** The status line text last pinned (null text: cleared), so a re-pin of the same text is skipped; null before the first pin. */
+      'pass.pinned': { text: string | null } | null
       /** The ledger projection, or null before the first read. */
       'pass.ledger': PassProjection | null
       /** Agent id to what its spawn said: type and the pie and slice its label named. */

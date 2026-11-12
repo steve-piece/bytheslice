@@ -5,7 +5,10 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput, RenderPropsOf } from 'claude-code'
 
 import { FIX_CAP, findSlice, lastVerdict } from './ledger-projection.ts'
-import { activePie, activeSlice, allDone, boxReady } from './projection.ts'
+import { allDone, boxReady, namedWork, pinStatus, statusText } from './projection.ts'
+import type { SessionWork } from './projection.ts'
+
+export { statusText }
 import { PANE_ID } from './rail.tsx'
 import { bakersWord } from './team.ts'
 import type { PassChecklist, PassLive, PassProjection, PassTeam, PassWarning } from './types'
@@ -17,25 +20,6 @@ const warningAtom = atom({ plugin: 'bytheslice', key: 'pass.warning' } as const,
 const teamAtom = atom({ plugin: 'bytheslice', key: 'pass.team' } as const, { at: 0, bakers: [] })
 const branchAtom = atom({ plugin: 'bytheslice', key: 'pass.branch' } as const, null)
 const workAtom = atom({ plugin: 'bytheslice', key: 'pass.work' } as const, null)
-
-/** This session's pie and slice (`pass.work`); undefined means not known, which reads the checklist's active one. */
-export type SessionWork = { pie: number; slice: string | null } | null | undefined
-
-/**
- * The pie and slice the band and status line name: this session's own work, or with `work` undefined (a pure
- * caller that knows no session) the checklist's active pie and first open slice. Null when the session is on none.
- */
-function namedWork(c: PassChecklist, work: SessionWork): { pie: PassChecklist['pies'][number]; slice: PassChecklist['pies'][number]['slices'][number] } | null {
-  if (work === undefined) {
-    const pie = activePie(c)
-    const slice = activeSlice(c)
-    return pie && slice ? { pie, slice } : null
-  }
-  if (work === null) return null
-  const pie = c.pies.find(p => p.n === work.pie)
-  const slice = pie?.slices.find(s => s.id === work.slice) ?? pie?.slices.find(s => !s.done) ?? null
-  return pie && slice ? { pie, slice } : null
-}
 
 export const NARROW_COLUMNS = 60
 export const DOCK_COLUMNS = 110
@@ -108,29 +92,12 @@ export function bandLine(
   return { text: parts.join(' · '), dim: false, warn }
 }
 
-/** The pinned status line (`P5 S5.1 ✓0/8`), or undefined to clear it: cleared for a session on no slice. */
-export function statusText(c: PassChecklist | null, work: SessionWork = undefined): string | undefined {
-  if (!c) return undefined
-  if (c.layout === 'stage') return 'v4 checklist'
-  if (allDone(c)) return '✓ all done'
-  const named = namedWork(c, work)
-  if (!named) return undefined
-  const { pie, slice } = named
-  const done = pie.slices.filter(s => s.done).length
-  return `P${pie.n} S${slice.id} ✓${done}/${pie.slices.length}`
-}
-
 /** Pins the status line for a checklist and this session's work; called after every projection write. */
 export function pushStatus($: EngineInterface, c: PassChecklist | null): void {
   void read($, workAtom)
     .catch(() => null)
-    .then(work => {
-      try {
-        $.ui.status(statusText(c, work))
-      } catch {
-        // A status line that cannot be pinned is not worth failing the refresh for.
-      }
-    })
+    .then(work => pinStatus($, statusText(c, work)))
+    .catch(() => undefined)
 }
 
 async function paneDocked($: EngineInterface, e: RenderInput<'AbovePrompt'>): Promise<boolean> {

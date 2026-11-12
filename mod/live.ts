@@ -6,6 +6,7 @@ import type { EngineInterface, Timer } from 'claude-code'
 
 import { sessionWork } from './claims.ts'
 import { readRows, sessionId } from './ledger.ts'
+import { pinStatus, statusText } from './projection.ts'
 import { activityPath, projectLedger, readActivity, roleOf } from './ledger-projection.ts'
 import type { PassLive, PassLiveEntry, PassProjection } from './types'
 
@@ -42,7 +43,11 @@ export async function refreshLedger($: EngineInterface): Promise<PassProjection 
     const projection = projectLedger(rows, activity, checklist, at)
     await update($, ledgerAtom, () => projection)
     const work = sessionWork(checklist, { branch, rows, sid })
+    const before = await read($, workAtom).catch(() => null)
     await update($, workAtom, () => work).catch(() => undefined)
+    // A claim, a release, a start or a branch move changes the work: the status line re-pins at once, not at the
+    // next checklist reload (Codex review on #67).
+    if (JSON.stringify(before) !== JSON.stringify(work)) await pinStatus($, statusText(checklist, work))
     return projection
   } catch {
     return null

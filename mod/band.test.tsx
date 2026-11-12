@@ -6,7 +6,7 @@ import { expect, test } from 'claude-code/testing'
 import { bandLine, statusText } from './band.tsx'
 import { parseChecklist } from './checklist.ts'
 import { CHECKLIST_FIXTURE } from './fixtures/checklist.fixture.ts'
-import { ALL_DONE, LEDGER, SESSION, activeAt52, bandTarget, engineDraws, fixingWorld, hintTarget, stage, V4 } from './testing.tsx'
+import { ALL_DONE, LEDGER, SESSION, activeAt52, bashResult, bandTarget, engineDraws, fixingWorld, hintTarget, stage, V4 } from './testing.tsx'
 
 const SURFACES = ['terminal', 'desktop'] as const
 
@@ -210,4 +210,41 @@ test('a chat on no slice still shows an open HITL, since the ask is the project\
   const ledger = { hitl: { open: [{ id: 'h1' }] } } as unknown as Parameters<typeof bandLine>[2]
   expect(bandLine(c, 100, ledger, null, null, null, 'dk-nba-1111', null)).toEqual({ text: 'HITL 1 open', dim: false, warn: true })
   expect(bandLine(c, 100, null, null, null, null, 'dk-nba-1111', null)).toBe(null)
+})
+
+test('a claim made mid-session moves the band and the status line at once; its release clears them (Codex on #67)', async ($, on) => {
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE, branch: 'dk-nba-1111' })
+  engineDraws(on)
+  await start($)
+  const band = async () => {
+    const ui = await $.ui.mount(bandTarget('terminal'))
+    const text = (await ui.find({ type: 'Text' }))?.text
+    await ui.unmount()
+    return text
+  }
+  expect(await band()).toBe('engine')
+  expect(world.statuses.at(-1)).toBe(undefined)
+  await $.tool.call({ tool: 'mcp__bytheslice__bts_claim', pie: 5, slice: '5.2', goal: 'the pane' })
+  expect(await band()).toBe('Pie 5 · Slice 5.2 queued')
+  expect(world.statuses.at(-1)?.startsWith('P5 S5.2 ')).toBe(true)
+  await $.tool.call({ tool: 'mcp__bytheslice__bts_claim', pie: 5, slice: '5.2', release: 'abandoned' })
+  expect(await band()).toBe('engine')
+  expect(world.statuses.at(-1)).toBe(undefined)
+})
+
+test('a branch switch onto a pie branch names that pie in the band at once (Codex on #67)', async ($, on) => {
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE, branch: 'dk-nba-1111' })
+  engineDraws(on)
+  on('tool.call', () => bashResult())
+  await start($)
+  const band = async () => {
+    const ui = await $.ui.mount(bandTarget('terminal'))
+    const text = (await ui.find({ type: 'Text' }))?.text
+    await ui.unmount()
+    return text
+  }
+  expect(await band()).toBe('engine')
+  world.branch = 'pie-5-the-pass'
+  await $.tool.call({ tool: 'Bash', command: 'git checkout pie-5-the-pass' })
+  expect(await band()).toBe('Pie 5 · Slice 5.1 queued')
 })
