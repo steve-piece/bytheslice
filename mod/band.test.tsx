@@ -6,7 +6,7 @@ import { expect, test } from 'claude-code/testing'
 import { bandLine, statusText } from './band.tsx'
 import { parseChecklist } from './checklist.ts'
 import { CHECKLIST_FIXTURE } from './fixtures/checklist.fixture.ts'
-import { ALL_DONE, LEDGER, activeAt52, bandTarget, engineDraws, fixingWorld, hintTarget, stage, V4 } from './testing.tsx'
+import { ALL_DONE, LEDGER, SESSION, activeAt52, bandTarget, engineDraws, fixingWorld, hintTarget, stage, V4 } from './testing.tsx'
 
 const SURFACES = ['terminal', 'desktop'] as const
 
@@ -180,4 +180,34 @@ test('a passing verdict leaves the band in its plain style', async ($, on) => {
     expect(line?.props.color).toBeUndefined()
     await ui.unmount()
   }
+})
+
+
+test('a chat on no slice draws no band and pins no slice; a claim names its own slice (2026-11-11)', async ($, on) => {
+  // Every chat of a ByTheSlice project showed the checklist's first open slice above its prompt, as if it were
+  // building it. A chat on an ordinary branch that claimed nothing is on no slice.
+  const { world, start } = stage(on, { checklist: CHECKLIST_FIXTURE, branch: 'dk-nba-1111' })
+  engineDraws(on)
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(bandTarget(surface))
+    // The engine's own drawing stands where the band would be.
+    expect((await ui.findAll({ type: 'Text' })).map(line => line.text)).toEqual(['engine'])
+    await ui.unmount()
+  }
+  expect(statusText(parseChecklist(CHECKLIST_FIXTURE), null)).toBe(undefined)
+  world.files[LEDGER] = JSON.stringify({ v: 1, t: 1, sid: SESSION, ev: 'claim', pie: 5, slice: '5.2', data: { goal: 'pane' } }) + '\n'
+  // `/pass reconcile` re-reads the ledger, as every recorded row does.
+  await $.command.run({ command: 'pass', args: 'reconcile', origin: { kind: 'composer' as const }, presentation: { isFullscreen: true, columns: 160 } })
+  const ui = await $.ui.mount(bandTarget('terminal'))
+  expect((await ui.find({ type: 'Text' }))?.text).toBe('Pie 5 · Slice 5.2 queued')
+  await ui.unmount()
+  expect(statusText(parseChecklist(CHECKLIST_FIXTURE), { pie: 5, slice: '5.2' })).toBe('P5 S5.2 ✓0/' + parseChecklist(CHECKLIST_FIXTURE)!.pies.find(p => p.n === 5)!.slices.length)
+})
+
+test('a chat on no slice still shows an open HITL, since the ask is the project\'s', () => {
+  const c = parseChecklist(CHECKLIST_FIXTURE)
+  const ledger = { hitl: { open: [{ id: 'h1' }] } } as unknown as Parameters<typeof bandLine>[2]
+  expect(bandLine(c, 100, ledger, null, null, null, 'dk-nba-1111', null)).toEqual({ text: 'HITL 1 open', dim: false, warn: true })
+  expect(bandLine(c, 100, null, null, null, null, 'dk-nba-1111', null)).toBe(null)
 })

@@ -16,6 +16,7 @@ import {
   bandTarget,
   bashResult,
   endTurn,
+  engineDraws,
   engineLoops,
   ledgerLine,
   ledgerText,
@@ -174,8 +175,11 @@ test('pass checks prints the same warnings as text, and says so when there are n
 })
 
 test('the band takes the warning style for five minutes after a finding, then lets it go', async ($, on) => {
+  // A chat on main that claimed nothing is on no slice (6.6.2): its band is the engine's until its own check
+  // warns, then names only the warning.
   const { clock, start } = stage(on, { checklist: CHECKLIST_FIXTURE, branch: 'main' })
   on('tool.call', () => bashResult())
+  engineDraws(on)
   await start($)
   const draw = async (surface: (typeof SURFACES)[number]) => {
     const band = await $.ui.mount(bandTarget(surface))
@@ -183,19 +187,15 @@ test('the band takes the warning style for five minutes after a finding, then le
     await band.unmount()
     return line
   }
-  for (const surface of SURFACES) expect((await draw(surface))?.props.color).toBeUndefined()
+  for (const surface of SURFACES) expect((await draw(surface))?.text).toBe('engine')
   await $.tool.call({ tool: 'Bash', command: 'git commit -m x' })
   for (const surface of SURFACES) {
     const line = await draw(surface)
-    expect(line?.text).toBe('Pie 5 · Slice 5.1 queued · warn commit-on-main')
+    expect(line?.text).toBe('warn commit-on-main')
     expect(line?.props.color).toBe('warning')
   }
   await clock.advance(4 * 60 * 1000)
   expect((await draw('terminal'))?.props.color).toBe('warning')
   await clock.advance(75 * 1000)
-  for (const surface of SURFACES) {
-    const line = await draw(surface)
-    expect(line?.text).toBe('Pie 5 · Slice 5.1 queued')
-    expect(line?.props.color).toBeUndefined()
-  }
+  for (const surface of SURFACES) expect((await draw(surface))?.text).toBe('engine')
 })

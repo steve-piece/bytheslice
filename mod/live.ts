@@ -4,7 +4,8 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Timer } from 'claude-code'
 
-import { readRows } from './ledger.ts'
+import { sessionWork } from './claims.ts'
+import { readRows, sessionId } from './ledger.ts'
 import { activityPath, projectLedger, readActivity, roleOf } from './ledger-projection.ts'
 import type { PassLive, PassLiveEntry, PassProjection } from './types'
 
@@ -12,6 +13,9 @@ const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as co
 const ledgerAtom = atom({ plugin: 'bytheslice', key: 'pass.ledger' } as const, null)
 const liveAtom = atom({ plugin: 'bytheslice', key: 'pass.live' } as const, { at: 0, agents: [] })
 const agentsAtom = atom({ plugin: 'bytheslice', key: 'pass.agents' } as const, {})
+const branchAtom = atom({ plugin: 'bytheslice', key: 'pass.branch' } as const, null)
+/** The pie and slice this session is on (`claims.sessionWork`), or null when it is on none. */
+const workAtom = atom({ plugin: 'bytheslice', key: 'pass.work' } as const, null)
 
 export const PULSE_MS = 5000
 const ACTIVE = new Set(['pending', 'running', 'waiting'])
@@ -24,17 +28,21 @@ async function nowOf($: EngineInterface): Promise<number> {
   }
 }
 
-/** Reads the ledger, the activity log and the checklist atom, and writes the projection atom. */
+/** Reads the ledger, the activity log and the checklist atom, and writes the projection and this session's work. */
 export async function refreshLedger($: EngineInterface): Promise<PassProjection | null> {
   try {
-    const [rows, activity, checklist, at] = await Promise.all([
+    const [rows, activity, checklist, at, branch, sid] = await Promise.all([
       readRows($),
       readActivity($),
       read($, checklistAtom),
       nowOf($),
+      read($, branchAtom).catch(() => null),
+      sessionId($),
     ])
     const projection = projectLedger(rows, activity, checklist, at)
     await update($, ledgerAtom, () => projection)
+    const work = sessionWork(checklist, { branch, rows, sid })
+    await update($, workAtom, () => work).catch(() => undefined)
     return projection
   } catch {
     return null

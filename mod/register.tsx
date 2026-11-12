@@ -38,10 +38,11 @@ const ledgerAtom = atom({ plugin: 'bytheslice', key: 'pass.ledger' } as const, n
 async function reload($: EngineInterface): Promise<boolean> {
   const before = await read($, checklistAtom).catch(() => null)
   const c = await refresh($)
-  pushStatus($, c)
   await recordDoneFlips($, before, c).catch(() => [])
   await notifyPiesReady($, before, c).catch(() => [])
   await refreshLedger($)
+  // After the ledger: the status line names this session's work, which the refresh just read.
+  pushStatus($, c)
   // The active slice may have moved: its touched files are read on the next pulse.
   markTouched()
   return c !== null

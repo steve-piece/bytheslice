@@ -249,6 +249,26 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     row.pie === pie || (typeof row.slice === 'string' && SLICE_ID.test(row.slice) && pieOfSlice(row.slice) === pie)
   const wanted = (id: string): boolean => pieOfSlice(id) === pie && (filter === null || filter.has(id))
 
+  // An edit, push, commit or merge row names a slice another session is on only when that session said so: a
+  // claim, a slice.started, a verdict or a done flip on it, or a pie claim. Before 6.6.2 every row of a session
+  // that claimed nothing was stamped with the checklist's first open slice, so every chat in a project read as
+  // building it (2026-11-11: 18 sessions "on Slice 2.2"). Such a row is attribution by default, not work.
+  const backed = new Set<string>()
+  for (const row of world.rows) {
+    if (isContested(row) || typeof row.pie !== 'number' && typeof row.slice !== 'string') continue
+    if (row.ev === 'claim' && row.slice === undefined) backed.add(`${row.sid}|pie:${row.pie}`)
+    else if (['claim', 'slice.started', 'verdict', 'slice.done'].includes(row.ev) && typeof row.slice === 'string') backed.add(`${row.sid}|${row.slice}`)
+  }
+  const DEFAULTED = new Set(['edit', 'push', 'commit', 'merge'])
+  const unbacked = (row: LedgerRow): boolean => {
+    if (!DEFAULTED.has(row.ev) || typeof row.slice !== 'string' || !SLICE_ID.test(row.slice)) return false
+    const pieN = pieOfSlice(row.slice)
+    if (backed.has(`${row.sid}|${row.slice}`) || backed.has(`${row.sid}|pie:${pieN}`)) return false
+    // A row recorded on a branch of that pie or slice names it by the branch, which is attribution enough.
+    const branch = rowBranch(row)
+    return branchSlice(branch) !== row.slice && branchPie(branch) !== pieN
+  }
+
   // One pass over the ledger: last activity per session, takeovers, branches per session, and each session's work.
   const lastBySid = new Map<string, number>()
   const takeovers: { t: number; slice: string | null; over: Set<string> }[] = []
@@ -265,7 +285,7 @@ export function collisionsFor(world: Elsewhere, pie: number, open: readonly stri
     if (row.ev === 'release' && row.data?.reason !== 'done') takeovers.push({ t: row.t, slice: row.slice ?? null, over: new Set([row.sid]) })
     const branch = rowBranch(row)
     if (branch !== null) sidBranches.set(row.sid, (sidBranches.get(row.sid) ?? new Set()).add(branch))
-    if (row.sid === world.self.sid || (!WORK_EVENTS.has(row.ev) && row.ev !== 'release')) continue
+    if (row.sid === world.self.sid || (!WORK_EVENTS.has(row.ev) && row.ev !== 'release') || unbacked(row)) continue
     let work = bySid.get(row.sid)
     if (!work) {
       work = { sid: row.sid, slices: new Map(), pieWork: Number.NEGATIVE_INFINITY, pieDrop: Number.NEGATIVE_INFINITY, pieClaim: false, pieStarted: false, claimed: false, branch: null, branchT: Number.NEGATIVE_INFINITY, worktree: null, goal: null, goalT: Number.NEGATIVE_INFINITY, done: new Set() }
@@ -804,14 +824,35 @@ export function runTarget(
   c: PassChecklist | null,
   facts: { arg?: unknown; branch: string | null; rows: readonly LedgerRow[]; sid: string },
 ): { pie: number; slice: string | null } | null {
-  const known = (pie: number) => c?.pies.find(x => x.n === pie) ?? null
-  const firstOpen = (pie: number) => known(pie)?.slices.find(s => !s.done)?.id ?? null
-  const fill = (pie: number, slice: string | null) => (known(pie) ? { pie, slice: slice ?? firstOpen(pie) } : null)
   const arg = parseRunArg(facts.arg)
   if (arg) {
-    const hit = fill(arg.pie, arg.slice)
+    const hit = fillTarget(c, arg.pie, arg.slice)
     if (hit) return hit
   }
+  const own = sessionWork(c, facts)
+  if (own) return own
+  const pie = activePie(c)
+  return pie ? { pie: pie.n, slice: pie.slices.find(s => !s.done)?.id ?? null } : null
+}
+
+function fillTarget(c: PassChecklist | null, pie: number, slice: string | null): { pie: number; slice: string | null } | null {
+  const known = c?.pies.find(x => x.n === pie) ?? null
+  return known ? { pie, slice: slice ?? known.slices.find(s => !s.done)?.id ?? null } : null
+}
+
+/**
+ * The pie and slice THIS session is on, or null: its checked-out branch
+ * (`pie-N-sN.M-*` or `pie-N-*`), else its latest claim still held, else its
+ * latest `slice.started`. Never the checklist's first open slice: a chat that
+ * claimed nothing and sits on no pie branch is on no slice, so its band shows
+ * none and its edits, pushes and turns carry none (the 2026-11-11 bug, where
+ * every chat of a project read and recorded "Slice 2.2"). Pure.
+ */
+export function sessionWork(
+  c: PassChecklist | null,
+  facts: { branch: string | null; rows: readonly LedgerRow[]; sid: string },
+): { pie: number; slice: string | null } | null {
+  const fill = (pie: number, slice: string | null) => fillTarget(c, pie, slice)
   const bySlice = branchSlice(facts.branch)
   if (bySlice !== null) {
     const hit = fill(pieOfSlice(bySlice), bySlice)
@@ -839,8 +880,7 @@ export function runTarget(
     const hit = fill(latest.pie, latest.slice ?? null)
     if (hit) return hit
   }
-  const pie = activePie(c)
-  return pie ? { pie: pie.n, slice: firstOpen(pie.n) } : null
+  return null
 }
 
 /**

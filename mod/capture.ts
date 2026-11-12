@@ -24,6 +24,7 @@ import type { LedgerRow, PassAgentMark, PassChecklist, PassGate } from './types'
 const checklistAtom = atom({ plugin: 'bytheslice', key: 'pass.checklist' } as const, null)
 const limitedAtom = atom({ plugin: 'bytheslice', key: 'pass.limited' } as const, false)
 const agentsAtom = atom({ plugin: 'bytheslice', key: 'pass.agents' } as const, {})
+const workAtom = atom({ plugin: 'bytheslice', key: 'pass.work' } as const, null)
 
 /** How many fix targets a verdict row keeps, and how long each may be. */
 export const TARGETS_KEEP = 10
@@ -276,11 +277,15 @@ async function idle($: EngineInterface): Promise<boolean> {
   return (await isLimited($)) || (await checklistOf($)) === null
 }
 
+/**
+ * The pie and slice a row of this session carries: the session's own work (a claim, a start, a pie or slice
+ * branch; `claims.sessionWork`, kept in `pass.work`), else none. Never the checklist's first open slice, which
+ * stamped every chat of a project with it (the 2026-11-11 bug).
+ */
 async function activeWhere($: EngineInterface): Promise<{ pie?: number; slice?: string }> {
-  const c = await checklistOf($)
-  const pie = activePie(c)
-  const slice = activeSlice(c)
-  return { ...(pie ? { pie: pie.n } : {}), ...(slice ? { slice: slice.id } : {}) }
+  const work = await read($, workAtom).catch(() => null)
+  if (!work) return {}
+  return { pie: work.pie, ...(work.slice ? { slice: work.slice } : {}) }
 }
 
 async function git($: EngineInterface, argv: string[]): Promise<string | null> {
