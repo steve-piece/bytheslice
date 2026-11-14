@@ -74,7 +74,7 @@ async function runtimeSmoke(pluginRoot, projectRoot, serverArgs) {
     assert.ok(port, 'Copied runtime publishes project discovery');
     const page = await get(port, '/');
     assert.equal(page.status, 200);
-    assert.equal(page.body, await fs.readFile(path.join(pluginRoot, 'skills/open-kitchen/kitchen.html'), 'utf8'));
+    assert.equal(page.body, await fs.readFile(path.join(pluginRoot, 'skills/dashboard/kitchen.html'), 'utf8'));
     const state = await get(port, '/state');
     assert.equal(state.status, 200);
     const snapshot = JSON.parse(state.body);
@@ -82,7 +82,7 @@ async function runtimeSmoke(pluginRoot, projectRoot, serverArgs) {
     assert.equal(snapshot.project.setup, 'built');
     assert.ok(snapshot.active.some(agent => agent.aid === 'installed-cook'));
 
-    const helper = require(path.join(pluginRoot, 'skills/open-kitchen/open-kitchen.js'));
+    const helper = require(path.join(pluginRoot, 'skills/dashboard/dashboard.js'));
     assert.equal(await helper.ensureKitchen({ projectRoot, timeoutMs: 1000 }), `http://127.0.0.1:${port}/`);
 
     child.stdin.end([
@@ -122,7 +122,7 @@ test('full plugin installs provide self-contained kitchen runtimes for both host
       for (const reference of ['assets/brand/logo.png', 'docs/architecture.md', 'docs/agents.md', 'docs/pass-mod-spec.md']) {
         assert.deepEqual(await fs.readFile(path.join(pluginRoot, reference)), await fs.readFile(path.join(repoRoot, reference)));
       }
-      await fs.access(path.join(pluginRoot, 'commands/open-kitchen.md'));
+      await fs.access(path.join(pluginRoot, 'commands/dashboard.md'));
       const hooks = JSON.parse(await fs.readFile(path.join(pluginRoot, 'hooks/hooks.json'), 'utf8'));
       for (const groups of Object.values(hooks.hooks)) {
         for (const group of groups) {
@@ -175,17 +175,17 @@ test('plugin dry run leaves both explicitly owned destinations absent', async ()
   });
 });
 
-test('skills mode copies selected open-kitchen files and command without full plugin wiring', async () => {
+test('skills mode copies selected dashboard files and command without full plugin wiring', async () => {
   await temporary(async root => {
     const skillsRoot = path.join(root, 'selected-skills');
-    const result = install(root, ['--mode', 'skills', '--skill', 'open-kitchen', '--skills-dir', skillsRoot]);
+    const result = install(root, ['--mode', 'skills', '--skill', 'dashboard', '--skills-dir', skillsRoot]);
     assert.match(result, /Skills install APPLIED/);
-    await fs.access(path.join(skillsRoot, 'skills/open-kitchen/open-kitchen.js'));
-    await fs.access(path.join(skillsRoot, 'commands/open-kitchen.md'));
+    await fs.access(path.join(skillsRoot, 'skills/dashboard/dashboard.js'));
+    await fs.access(path.join(skillsRoot, 'commands/dashboard.md'));
     for (const missing of ['mcp', 'hooks', 'assets', '.claude-plugin', '.cursor-plugin', 'skills/sell-slice']) {
       await assert.rejects(fs.access(path.join(skillsRoot, missing)));
     }
-    const { ensureKitchen } = require(path.join(skillsRoot, 'skills/open-kitchen/open-kitchen.js'));
+    const { ensureKitchen } = require(path.join(skillsRoot, 'skills/dashboard/dashboard.js'));
     await assert.rejects(ensureKitchen({ projectRoot: root }), /Kitchen server is missing from this plugin installation/);
     await assert.rejects(fs.access(path.join(root, 'claude-plugins')));
     await assert.rejects(fs.access(path.join(root, 'cursor-plugins')));

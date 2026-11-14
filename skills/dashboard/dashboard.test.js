@@ -1,4 +1,4 @@
-// skills/open-kitchen/open-kitchen.test.js
+// skills/dashboard/dashboard.test.js
 // Verify loopback server reuse, bounded startup, safe CLI errors, and project isolation for the kitchen and lobby opener.
 'use strict';
 
@@ -11,11 +11,11 @@ const http = require('node:http');
 const net = require('node:net');
 const { execFile, spawnSync } = require('node:child_process');
 const { promisify } = require('node:util');
-const { ensureKitchen, ensureLobby, parsePort } = require('./open-kitchen');
+const { ensureKitchen, ensureLobby, parsePort } = require('./dashboard');
 const execute = promisify(execFile);
 const portFile = root => path.join(root, '.claude', '.bytheslice-state', 'kitchen', 'port');
 const lobbyPortFile = home => path.join(home, 'lobby', 'port');
-const opener = path.join(__dirname, 'open-kitchen.js');
+const opener = path.join(__dirname, 'dashboard.js');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function fixture(t) {
@@ -137,7 +137,7 @@ test('CLI stdout contains only the verified local URL', async t => {
   const { project } = await fixture(t);
   const port = await serve(t, project);
   await writePort(project, String(port));
-  const result = await execute(process.execPath, [path.join(__dirname, 'open-kitchen.js'), '--project', project]);
+  const result = await execute(process.execPath, [path.join(__dirname, 'dashboard.js'), '--project', project]);
   assert.equal(result.stdout, `http://127.0.0.1:${port}/\n`);
   assert.equal(result.stderr, '');
 });
@@ -145,7 +145,7 @@ test('CLI stdout contains only the verified local URL', async t => {
 test('CLI errors do not echo invalid project arguments', async t => {
   const { base } = await fixture(t);
   const missing = path.join(base, 'private-input-do-not-echo');
-  await assert.rejects(execute(process.execPath, [path.join(__dirname, 'open-kitchen.js'), '--project', missing]),
+  await assert.rejects(execute(process.execPath, [path.join(__dirname, 'dashboard.js'), '--project', missing]),
     error => error.stdout === '' && error.stderr === 'Kitchen project directory is unavailable.\n');
 });
 
@@ -257,7 +257,7 @@ test('CLI --lobby stdout contains only the verified lobby URL', async t => {
 test('CLI rejects --lobby combined with --project or anything else, without echoing input', async t => {
   const { home, base } = await lobbyFixture(t);
   const secret = path.join(base, 'private-input-do-not-echo');
-  const usage = 'Usage: node open-kitchen.js [--project <project-root> | --lobby]\n';
+  const usage = 'Usage: node dashboard.js [--project <project-root> | --lobby]\n';
   for (const args of [['--lobby', '--project', secret], ['--project', secret, '--lobby'], ['--lobby', secret], ['--lobby', '--lobby']]) {
     await assert.rejects(execute(process.execPath, [opener, ...args], { env: { ...process.env, BTS_HOME: home } }),
       error => error.code === 1 && error.stdout === '' && error.stderr === usage, args.join(' '));

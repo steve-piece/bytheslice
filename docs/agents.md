@@ -75,7 +75,7 @@ Bold rows mark the skill each group of agents belongs to.
 
 ## Scene roles and extra instances
 
-The [kitchen roster](../skills/open-kitchen/kitchen.html) groups characters into Opening crew, Test kitchen, Display case, The line, The pass, Back door and Review board. Those scene divisions may differ from the owning skill groups in the table above.
+The [kitchen roster](../skills/dashboard/kitchen.html) groups characters into Opening crew, Test kitchen, Display case, The line, The pass, Back door and Review board. Those scene divisions may differ from the owning skill groups in the table above.
 
 - **Chef Nico** is the orchestrator, the lead session that keeps the line moving. It is not a separately registered plugin agent.
 - **Sal** represents `/box-it-up` at the front window. It is a skill character rather than another registered agent.

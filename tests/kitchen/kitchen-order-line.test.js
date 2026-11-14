@@ -8,7 +8,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 const { buildSnapshot } = require('../../mcp/kitchen-state.js');
-const html = fs.readFileSync(path.join(__dirname, '../../skills/open-kitchen/kitchen.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '../../skills/dashboard/kitchen.html'), 'utf8');
 const normalization = html.slice(html.indexOf('function snapshotOrders('), html.indexOf('let liveLineRoot ='));
 const order = (n, count = 2, status = 'open') => ({ id: `pie-${n}`, pie: n, title: `Order ${n}`, status,
   slices: Array.from({ length: count }, (_, i) => ({ number: `${n}.${i + 1}`, title: `Work ${i + 1}`, status })) });

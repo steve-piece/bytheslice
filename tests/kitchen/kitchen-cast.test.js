@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const html = fs.readFileSync(path.join(__dirname, '../../skills/open-kitchen/kitchen.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '../../skills/dashboard/kitchen.html'), 'utf8');
 const source = html.match(/<script id="kitchen-cast">([\s\S]*?)<\/script>/)[1];
 const row = (aid, type = 'bytheslice:implementer', extra = {}) => ({ aid, type, sid: 'session', label: 'P4 S4.3 build', ...extra });
 const snapshot = (active = [], extra = {}) => ({ project: { root: '/fixture', setup: 'built' }, active, skills: [], recent: [], ...extra });

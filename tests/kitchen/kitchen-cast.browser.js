@@ -8,7 +8,7 @@ const http = require('node:http');
 const path = require('node:path');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
-const html = fs.readFileSync(path.join(__dirname, '../../skills/open-kitchen/kitchen.html'));
+const html = fs.readFileSync(path.join(__dirname, '../../skills/dashboard/kitchen.html'));
 const chrome = process.env.CHROME_EXECUTABLE || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const fixture = (active = [], extra = {}) => ({ project: { root: '/fixture/project', name: 'Fixture project', setup: 'built' },
   active, skills: [], recent: [], pies: [], cursor: 1, ...extra });

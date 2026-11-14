@@ -1,6 +1,6 @@
 # Feature intake block
 
-The rules block `/setup-shop` (Flow B and C) and `rules-assembler` (`/cook-pizzas`) write into the project rules file, and `/open-kitchen` checks for. `node hooks/workflow-nudge.js intake <project root>` copies the text between the markers below into `CLAUDE.md` (or `AGENTS.md` when that is the only rules file), replacing an older copy between the same markers and leaving every other line alone. Edit the block here, never in a project: the next run puts this text back.
+The rules block `/setup-shop` (Flow B and C) and `rules-assembler` (`/cook-pizzas`) write into the project rules file, and `/dashboard` checks for. `node hooks/workflow-nudge.js intake <project root>` copies the text between the markers below into `CLAUDE.md` (or `AGENTS.md` when that is the only rules file), replacing an older copy between the same markers and leaving every other line alone. Edit the block here, never in a project: the next run puts this text back.
 
 `hooks/workflow-nudge.sh` adds this rule as context to a prompt that asks for a new feature (a `/goal` included); nothing refuses a shortcut. See [the hooks README](../../../hooks/README.md#the-workflow-nudge).
 

@@ -38,7 +38,7 @@ Every script that was in this directory at the start of slice 5.4, with the evid
 
 `workflow-nudge.sh` runs `workflow-nudge.js` under Node on `UserPromptSubmit` (without Node it does nothing). It only adds context, and only in three cases: a prompt that opens by asking for a new feature in a project with a master checklist (the Feature intake rule; a `/goal` counts when its text asks for one, a bare `/goal` does not), a prompt that opens with "build Slice N.M" there (the `/sell-slice` route), and an ask for a whole app end to end in a folder with no checklist yet (the `/pizza-party` route). Every other prompt (a question, a fix, a mention of a feature, an agent report or task notice relayed into the session) and every tool call passes untouched.
 
-**Reports.** `node hooks/workflow-nudge.js doctor <root>` prints the Feature intake, Hooks and Checklist lines `/setup-shop` and `/open-kitchen` show; `node hooks/workflow-nudge.js intake <root>` writes the Feature intake block from [`skills/setup-shop/references/feature-intake.md`](../skills/setup-shop/references/feature-intake.md) into `CLAUDE.md` (or an `AGENTS.md`-only project's `AGENTS.md`).
+**Reports.** `node hooks/workflow-nudge.js doctor <root>` prints the Feature intake, Hooks and Checklist lines `/setup-shop` and `/dashboard` show; `node hooks/workflow-nudge.js intake <root>` writes the Feature intake block from [`skills/setup-shop/references/feature-intake.md`](../skills/setup-shop/references/feature-intake.md) into `CLAUDE.md` (or an `AGENTS.md`-only project's `AGENTS.md`).
 
 ## Kitchen activity
 
@@ -46,7 +46,7 @@ Every script that was in this directory at the start of slice 5.4, with the evid
 
 ## Lobby signals
 
-`lobby-signal.sh` feeds the machine-level lobby (`/open-kitchen --lobby`). 5.6.0 added its six `hooks.json` entries, including the plugin's first `UserPromptSubmit` and `Notification` hooks, each with no matcher, a 5 second timeout and a synchronous run. It writes under `${BTS_HOME:-$HOME/.bytheslice}`, never inside a project:
+`lobby-signal.sh` feeds the machine-level lobby (`/dashboard --lobby`). 5.6.0 added its six `hooks.json` entries, including the plugin's first `UserPromptSubmit` and `Notification` hooks, each with no matcher, a 5 second timeout and a synchronous run. It writes under `${BTS_HOME:-$HOME/.bytheslice}`, never inside a project:
 
 | File | Shape |
 |---|---|

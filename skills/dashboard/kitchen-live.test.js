@@ -1,4 +1,4 @@
-// skills/open-kitchen/kitchen-live.test.js
+// skills/dashboard/kitchen-live.test.js
 // Verify visible-only snapshot polling, stable delivery hooks, recovery, and gesture-only loopback browser handoff.
 'use strict';
 

@@ -7,13 +7,13 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { lobbyHome, readLobby, readRegistry } = require('./lobby-state.js');
 
-const PAGE = path.join(__dirname, '../skills/open-kitchen/lobby.html');
+const PAGE = path.join(__dirname, '../skills/dashboard/lobby.html');
 const OPEN_MAX_BYTES = 1024;
 const KITCHEN_URL = /^http:\/\/127\.0\.0\.1:\d{1,5}\/$/;
 
 // Loaded on first use so a copy without the opener still serves the page and /state.
 function defaultEnsureKitchen(options) {
-  return require('../skills/open-kitchen/open-kitchen.js').ensureKitchen(options);
+  return require('../skills/dashboard/dashboard.js').ensureKitchen(options);
 }
 
 function parseOptions(args) {

@@ -10,7 +10,7 @@ const { parseChecklist } = require('./kitchen-state.js');
 // The shared ledger fold; an install without it (a skills-only copy) counts no open HITL rather than failing.
 const ledgerSummary = (() => { try { return require('../scripts/ledger-summary.js'); } catch { return null; } })();
 // The kitchen liveness check; without it every kitchenUrl is null and the page starts kitchens through POST /open.
-const opener = (() => { try { return require('../skills/open-kitchen/open-kitchen.js'); } catch { return null; } })();
+const opener = (() => { try { return require('../skills/dashboard/dashboard.js'); } catch { return null; } })();
 
 /** A signal older than this is a crashed session's leftover, never a live one (crash cleanup, not an idle timer). */
 const SIGNAL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
