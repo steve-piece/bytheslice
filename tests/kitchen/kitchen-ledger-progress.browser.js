@@ -9,7 +9,7 @@ const path = require('node:path');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const summary = require('../../scripts/ledger-summary.js');
 
-const html = fs.readFileSync(process.env.KITCHEN_HTML || path.join(__dirname, '../../skills/open-kitchen/kitchen.html'));
+const html = fs.readFileSync(process.env.KITCHEN_HTML || path.join(__dirname, '../../skills/dashboard/kitchen.html'));
 const chrome = process.env.CHROME_EXECUTABLE || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const SHOTS = (process.argv.find(value => value.startsWith('--shots=')) || '').slice(8);
 const ledger = fs.readFileSync(path.join(__dirname, '../fixtures/pass/ledger.jsonl'), 'utf8');

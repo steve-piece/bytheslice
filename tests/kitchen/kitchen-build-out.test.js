@@ -96,7 +96,7 @@ test('completed Prep scopes explicit piece exemptions and retains their evidence
 });
 
 test('build driver installs once on a presence edge, resets roots, and handles removal and n/a', async () => {
-  const html = await fs.readFile(path.join(__dirname, '../../skills/open-kitchen/kitchen.html'), 'utf8');
+  const html = await fs.readFile(path.join(__dirname, '../../skills/dashboard/kitchen.html'), 'utf8');
   const context = { window: {} }; vm.createContext(context);
   new vm.Script(html.match(/<script id="kitchen-build-out">([\s\S]*?)<\/script>/)[1]).runInContext(context);
   const events = [];
@@ -116,7 +116,7 @@ test('build driver installs once on a presence edge, resets roots, and handles r
 
 // Run the actual scene adapters with deferred actor arrivals, without loading the town renderer.
 async function sceneAdapters() {
-  const html = await fs.readFile(path.join(__dirname, '../../skills/open-kitchen/kitchen.html'), 'utf8');
+  const html = await fs.readFile(path.join(__dirname, '../../skills/dashboard/kitchen.html'), 'utf8');
   const code = html.slice(html.indexOf('const liveAssignments ='), html.indexOf('const castDriver ='));
   const ids = ['bootstrap-runner', 'config-generator', 'platform-walker'];
   const byId = Object.fromEntries(ids.map(id => [id, { id, name: id, type: id, crew: id === 'platform-walker' ? 'door' : 'setup' }]));

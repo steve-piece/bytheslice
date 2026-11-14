@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const html = fs.readFileSync(path.join(__dirname, '../../skills/open-kitchen/kitchen.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '../../skills/dashboard/kitchen.html'), 'utf8');
 const source = html.match(/<script id="kitchen-words">([\s\S]*?)<\/script>/)[1];
 const window = {}; vm.runInNewContext(source, { window });
 const words = window.kitchenWords;

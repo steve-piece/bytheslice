@@ -1,4 +1,4 @@
-// skills/open-kitchen/open-kitchen.js
+// skills/dashboard/dashboard.js
 // Reuse or start a project-matched loopback kitchen server, or the machine-level lobby, and return its verified local URL.
 'use strict';
 
@@ -188,7 +188,7 @@ async function ensureLobby(options = {}) {
   throw new Error('Lobby server did not become ready. Check the plugin installation and try again.');
 }
 
-const USAGE = 'Usage: node open-kitchen.js [--project <project-root> | --lobby]';
+const USAGE = 'Usage: node dashboard.js [--project <project-root> | --lobby]';
 
 async function main(args) {
   let url;

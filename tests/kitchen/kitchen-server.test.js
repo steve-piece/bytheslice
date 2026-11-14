@@ -134,7 +134,7 @@ test('HTTP serves exact page and state routes on loopback with same-origin prote
   const page = await get(session.port, '/');
   assert.equal(page.status, 200);
   assert.match(page.headers['content-type'], /text\/html/);
-  assert.equal(page.body, await fs.readFile(path.resolve(__dirname, '../../skills/open-kitchen/kitchen.html'), 'utf8'));
+  assert.equal(page.body, await fs.readFile(path.resolve(__dirname, '../../skills/dashboard/kitchen.html'), 'utf8'));
   const fromLobby = await get(session.port, '/?lobby=4466&idle=1');
   assert.equal(fromLobby.status, 200, 'the lobby hand-off query string still serves the page');
   assert.equal(fromLobby.body, page.body);

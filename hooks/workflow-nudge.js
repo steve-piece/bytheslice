@@ -9,7 +9,7 @@
 //
 // `node workflow-nudge.js doctor [root]` prints whether the Feature intake rule
 // is in the project rules file and whether the nudge is wired, for /setup-shop
-// and /open-kitchen. `node workflow-nudge.js intake [root]` writes that rule
+// and /dashboard. `node workflow-nudge.js intake [root]` writes that rule
 // (skills/setup-shop/references/feature-intake.md) into CLAUDE.md, or AGENTS.md
 // when it is the only rules file, replacing an older copy in place.
 //
@@ -159,7 +159,7 @@ function intake(rootArg) {
 
 // ---------------------------------------------------------------- doctor
 
-/** The report /setup-shop and /open-kitchen print: intake rule, nudge wiring, checklist. */
+/** The report /setup-shop and /dashboard print: intake rule, nudge wiring, checklist. */
 function doctor(rootArg) {
   const root = path.resolve(rootArg || process.cwd())
   const project = projectOf(root)

@@ -929,7 +929,7 @@ else
   PASS=$((PASS+1)); printf '  ✓ the workflow nudge has no refusal path\n'
 fi
 
-# Doctor: the report /setup-shop and /open-kitchen print
+# Doctor: the report /setup-shop and /dashboard print
 LAST_OUT=$(env -u BTS_HOOKS_DISABLED HOME="$WG_HOME" BTS_HOME="$WG_HOME/.bytheslice" node "$HERE/workflow-nudge.js" doctor "$FIX")
 assert_contains "doctor: intake missing" "Feature intake: MISSING"
 assert_contains "doctor: nudge active" "Hooks: workflow nudge active on UserPromptSubmit"

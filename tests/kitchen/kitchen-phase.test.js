@@ -118,7 +118,7 @@ test('confirmed merge writer keeps one allowlisted record and the reader remains
 
 // Execute the actual phase adapters with deferred actor arrivals, independent of WebGL.
 async function phaseAdapters() {
-  const html = await fs.readFile(path.join(__dirname, '../../skills/open-kitchen/kitchen.html'), 'utf8');
+  const html = await fs.readFile(path.join(__dirname, '../../skills/dashboard/kitchen.html'), 'utf8');
   const code = html.slice(html.indexOf('function phaseActor('), html.indexOf('const castDriver ='));
   const actor = id => ({ meta: { id }, task: '', mode: 'idle', hidden: true, arrivals: [],
     pos: { x: 0, z: 0 }, show(on) { this.hidden = !on; }, sync() {},
@@ -175,7 +175,7 @@ test('only active close-shop creates review stand-ins and actual board agents re
 });
 
 test('manual lighting calls cannot override a live snapshot or redirect its cast', async () => {
-  const html = await fs.readFile(path.join(__dirname, '../../skills/open-kitchen/kitchen.html'), 'utf8');
+  const html = await fs.readFile(path.join(__dirname, '../../skills/dashboard/kitchen.html'), 'utf8');
   const source = html.slice(html.indexOf('function setTod('), html.indexOf("$('#bDawn').onclick"));
   const context = vm.createContext({ sceneMode: 'live', tod: 'dawn' });
   vm.runInContext(source, context);

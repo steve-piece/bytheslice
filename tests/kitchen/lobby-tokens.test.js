@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
-const read = name => fs.readFileSync(path.join(__dirname, '../../skills/open-kitchen', name), 'utf8');
+const read = name => fs.readFileSync(path.join(__dirname, '../../skills/dashboard', name), 'utf8');
 const kitchen = read('kitchen.html');
 const lobby = read('lobby.html');
 const style = html => /<style>([\s\S]*?)<\/style>/.exec(html)[1];
